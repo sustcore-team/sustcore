@@ -13,40 +13,18 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <string.h>
+#include <sbi/sbi.h>
 
-// 目前这部分代码只是调试作用
-
-// 0x10000000 is memory-mapped address of UART according to device tree
-#define UART_ADDR 0x10000000
-
-/*
- * Initialize NS16550A UART
- */
-void uart_init(size_t base_addr) {
-    volatile uint8_t *ptr = (uint8_t *)base_addr;
-    const uint8_t LCR = 0b11;
-
-    ptr[3] = LCR;
-    ptr[2] = 0b1;
-    ptr[1] = 0b1;
-}
-
-static void uart_put(size_t base_addr, uint8_t c) {
-    *(uint8_t *)base_addr = c;
-}
-
-int kputchar(int character) {
-    uart_put(UART_ADDR, (uint8_t)character);
-    return character;
+int kputchar(int ch) {
+    sbi_dbcn_console_write_byte((char)ch);
+    return ch;
 }
 
 int kputs(const char *str) {
-    const char *base = str;
-    while (*str) {
-        kputchar((int)*str);
-        ++str;
-    }
-    return str - base + 1;
+    int len = strlen(str);
+    sbi_dbcn_console_write((umb_t)len, (const void*)str);
+    return len;
 }
 
 /**
@@ -64,8 +42,6 @@ int main(void) {
  * 
  */
 void init(void) {
-    uart_init(UART_ADDR);
-
     kputs("\n");
     init_logger(kputs, "SUSTCore");
 }
@@ -75,6 +51,13 @@ void init(void) {
  * 
  */
 void terminate(void) {
+    SBIRet ret;
+    ret = sbi_shutdown();
+    if (ret.error) {
+        log_error("关机失败!");
+    } 
+    
+    log_error("何意味?关机成功了?!你又是怎么溜达到这来的?!!");
     while(true);
 }
 

@@ -7,9 +7,9 @@ include $(path-script)/helper.mk
 
 target := $(path-kernel)
 
-objects := main.o arch/$(architecture)/entry.o
+objects := main.o 
 
-subdirs :=
+subdirs := ./arch/$(architecture)
 
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
 
@@ -35,7 +35,7 @@ flags-asm :=
 
 args-asm := flags-asm="$(flags-asm)"
 
-args := $(args-ld) $(args-c) $(args-asm) libraries=kerbasec
+args := $(args-ld) $(args-c) $(args-asm) libraries="kerbasec kersbi"
 
 dir := dir-obj="$(path-objects)/kernel/" dir-src="$(path-d)"
 
