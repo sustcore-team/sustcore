@@ -10,7 +10,7 @@ sustcore.img
 bx_enh_dbg.ini
 doc/
 config.mk
-script/run.mk
 setup.sh
 build-setup.sh
 gdb-setup.sh
+.github/
