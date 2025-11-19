@@ -31,9 +31,9 @@ echo -e "\\e[34mbuilding gdb for $TARGET1\\e[0m"
 cd ./$GDB/
 	mkdir -p ./build/$TARGET1/
 	cd ./build/$TARGET1/
-		../configure --target=$TARGET1 --prefix="$PREFIX" --disable-werror
-        make all-gdb -j$BUILD_THREADS
-        make install-gdb
+		../../configure --target=$TARGET1 --prefix="$PREFIX" --disable-werror
+		make all-gdb -j$BUILD_THREADS
+		sudo make install-gdb
 	cd ../../
 cd ../
 
@@ -43,9 +43,9 @@ echo -e "\\e[34mbuilding gdb for $TARGET2\\e[0m"
 cd ./$GDB/
 	mkdir -p ./build/$TARGET2/
 	cd ./build/$TARGET2/
-		../configure --target=$TARGET2 --prefix="$PREFIX" --disable-werror
-        make all-gdb -j$BUILD_THREADS
-        make install-gdb
+		../../configure --target=$TARGET2 --prefix="$PREFIX" --disable-werror
+		make all-gdb -j$BUILD_THREADS
+		sudo make install-gdb
 	cd ../../
 cd ../
 
@@ -55,8 +55,8 @@ echo -e "\\e[34mbuilding gdb for $TARGET3\\e[0m"
 cd ./$GDB/
 	mkdir -p ./build/$TARGET3/
 	cd ./build/$TARGET3/
-		../configure --target=$TARGET3 --prefix="$PREFIX" --disable-werror
-        make all-gdb -j$BUILD_THREADS
-        make install-gdb
+		../../configure --target=$TARGET3 --prefix="$PREFIX" --disable-werror
+		make all-gdb -j$BUILD_THREADS
+		sudo make install-gdb
 	cd ../../
 cd ../
