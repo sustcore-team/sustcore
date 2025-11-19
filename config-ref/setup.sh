@@ -95,7 +95,7 @@ echo -e "\\e[34mbuilding binutils for $TARGET1\\e[0m"
 cd ./$BINUTILS/
 	mkdir -p ./build/$TARGET1/
 	cd ./build/$TARGET1/
-		../configure --target=$TARGET1 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror
+		../../configure --target=$TARGET1 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror
 		make -j$BUILD_THREADS
 		sudo make install
 	cd ../../
@@ -107,7 +107,7 @@ echo -e "\\e[34mbuilding gcc\\e[0m"
 cd ./$GCCV/
     mkdir -p ./build/$TARGET1/
     cd ./build/$TARGET1/
-        ../configure --target=$TARGET1 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
+        ../../configure --target=$TARGET1 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
         make all-gcc -j$BUILD_THREADS
         make all-target-libgcc -j$BUILD_THREADS
         sudo make install-gcc
@@ -121,7 +121,7 @@ echo -e "\\e[34mbuilding binutils for $TARGET2\\e[0m"
 cd ./$BINUTILS/
 	mkdir -p ./build/$TARGET2/
 	cd ./build/$TARGET2/
-		../configure --target=$TARGET2 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror 
+		../../configure --target=$TARGET2 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror 
 		make -j$BUILD_THREADS 
 		sudo make install 
 	cd ../../
@@ -133,7 +133,7 @@ echo -e "\\e[34mbuilding gcc\\e[0m"
 cd ./$GCCV/
     mkdir -p ./build/$TARGET2/
     cd ./build/$TARGET2/
-        ../configure --target=$TARGET2 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers 
+        ../../configure --target=$TARGET2 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers 
         make all-gcc -j$BUILD_THREADS 
         make all-target-libgcc -j$BUILD_THREADS 
         sudo make install-gcc 
@@ -147,7 +147,7 @@ echo -e "\\e[34mbuilding binutils for $TARGET3\\e[0m"
 cd ./$BINUTILS/
 	mkdir -p ./build/$TARGET3/
 	cd ./build/$TARGET3/
-		../configure --target=$TARGET3 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror 
+		../../configure --target=$TARGET3 --prefix="$PREFIX" --with-sysroot --disable-nls --disable-werror
 		make -j$BUILD_THREADS 
 		sudo make install 
 	cd ../../
@@ -159,7 +159,7 @@ echo -e "\\e[34mbuilding gcc\\e[0m"
 cd ./$GCCV/
     mkdir -p ./build/$TARGET3/
     cd ./build/$TARGET3/
-        ../configure --target=$TARGET3 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
+        ../../configure --target=$TARGET3 --prefix="$PREFIX" --disable-nls --enable-languages=c,c++ --without-headers
         make all-gcc -j$BUILD_THREADS
         make all-target-libgcc -j$BUILD_THREADS
         sudo make install-gcc

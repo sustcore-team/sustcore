@@ -12,13 +12,16 @@ echo "输入当前发行版的包管理器（仅输入序号）：
 	3) 其他"
 read packman
 case $packman in
-	1) sudo apt install   libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build flex bison
+	1) sudo apt install   libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build flex bison pip
 	;;
-	2) sudo pacman -S     libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build felx bison
+	2) sudo pacman -S     libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build flex bison pip
 	;;
-	*) echo "暂不支持该发行版，请手动安装 libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build felx（软件包名称可能因发行版而不同）"
+	*) echo "暂不支持该发行版，请手动安装 libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build flex pip（软件包名称可能因发行版而不同）"
 	;;
 esac
+
+echo -e "\\e[34mInstalling python modules for qemu...\\e[0m"
+pip install meson pycotap sphinx sphinx_rtd_theme
 
 export BUILD_THREADS=8
 export QEMU=qemu-10.1.0
@@ -37,7 +40,7 @@ cd ./$QEMU/
 	mkdir -p ./build/
 	cd ./build/
 		../configure --prefix="$PREFIX" --disable-werror
-        make -j$BUILD_THREADS
-        make install
-	cd ../../
+		make -j$BUILD_THREADS
+		sudo make install
+	cd ../
 cd ../
