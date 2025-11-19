@@ -29,3 +29,7 @@
 无参数的函数应写作 `return_type func_name(void)`.
 注意注释含量. 可使用 `make stat_code` 统计代码的注释含量与密度.
 命名应采用语义化命名方案, 可采用熟知缩写.
+
+# 环境配置
+
+参见 [config-ref](./config-ref/README.md)

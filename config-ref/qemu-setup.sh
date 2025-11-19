@@ -20,9 +20,6 @@ case $packman in
 	;;
 esac
 
-echo -e "\\e[34mInstalling python modules for qemu...\\e[0m"
-pip install meson pycotap sphinx sphinx_rtd_theme
-
 export BUILD_THREADS=8
 export QEMU=qemu-10.1.0
 export PREFIX="$HOME/opt/cross"
