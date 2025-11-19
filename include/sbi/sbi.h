@@ -49,7 +49,15 @@ SBIRet sbi_ecall(dword eid, dword fid,
 // Legacy SBI Calls
 //-----------------------
 
-SBIRet sbi_set_timer(qword stime_value);
+/**
+ * @brief 设定定时器
+ * 
+ * (已弃用)
+ * 
+ * @param stime_value 在stime_value时间后触发定时器中断
+ * @return SBIRet 返回值
+ */
+SBIRet sbi_legacy_set_timer(qword stime_value);
 
 /**
  * @brief 向控制台输出一个字符
@@ -59,7 +67,7 @@ SBIRet sbi_set_timer(qword stime_value);
  * @param ch 字符
  * @return SBIRet 返回值
  */
-SBIRet sbi_console_putchar(char ch);
+SBIRet sbi_legacy_console_putchar(char ch);
 
 /**
  * @brief 从控制台获取一个字符
@@ -68,14 +76,14 @@ SBIRet sbi_console_putchar(char ch);
  * 
  * @return SBIRet 返回值
  */
-SBIRet sbi_console_getchar(void);
+SBIRet sbi_legacy_console_getchar(void);
 
 /**
  * @brief 清空IPI
  * 
  * @return SBIRet 返回值
  */
-SBIRet sbi_clear_ipi(void);
+SBIRet sbi_legacy_clear_ipi(void);
 
 /**
  * @brief 发送IPI
@@ -83,7 +91,7 @@ SBIRet sbi_clear_ipi(void);
  * @param hart_mask_ptr hart掩码指针
  * @return SBIRet 返回值
  */
-SBIRet sbi_send_ipi(const void *hart_mask_ptr);
+SBIRet sbi_legacy_send_ipi(const void *hart_mask_ptr);
 
 /**
  * @brief 远程指令缓存刷新
@@ -91,7 +99,7 @@ SBIRet sbi_send_ipi(const void *hart_mask_ptr);
  * @param hart_mask_ptr hart掩码指针
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_fence_i(const void *hart_mask_ptr);
+SBIRet sbi_legacy_remote_fence_i(const void *hart_mask_ptr);
 
 /**
  * @brief 远程虚拟地址刷新
@@ -101,7 +109,7 @@ SBIRet sbi_remote_fence_i(const void *hart_mask_ptr);
  * @param size 大小
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_sfence_vma(const void *hart_mask_ptr, 
+SBIRet sbi_legacy_remote_sfence_vma(const void *hart_mask_ptr, 
                              umb_t start_addr, 
                              umb_t size);
 
@@ -114,7 +122,7 @@ SBIRet sbi_remote_sfence_vma(const void *hart_mask_ptr,
  * @param asid 地址空间标识符
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_sfence_vma_asid(const void *hart_mask_ptr, 
+SBIRet sbi_legacy_remote_sfence_vma_asid(const void *hart_mask_ptr, 
                                  umb_t start_addr, 
                                  umb_t size,
                                  umb_t asid);
@@ -126,7 +134,7 @@ SBIRet sbi_remote_sfence_vma_asid(const void *hart_mask_ptr,
  * 
  * @return SBIRet 返回值
  */
-SBIRet sbi_shutdown(void);
+SBIRet sbi_legacy_shutdown(void);
 
 //-----------------------
 // Base 基础 SBI Calls

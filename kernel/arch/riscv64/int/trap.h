@@ -11,7 +11,23 @@
 
 #pragma once
 
-// 保存所有通用寄存器(应放于ISR入口处)
+#include <sus/attributes.h>
+#include <sus/bits.h>
+#include <arch/riscv64/csr.h>
+
+/**
+ * @brief ISR入口处理宏
+ * 
+ * @param name 函数名
+ * @param scause scause寄存器变量
+ * @param sepc sepc寄存器变量
+ * @param stval stval寄存器变量
+ * @param reglist_ptr 指向保存的寄存器列表指针
+ * @param varsize 为ISR预留的栈空间大小(实际上, 不需要预留太大的栈空间, 因为isr一般是作为执行handler的一个跳板)
+ * 
+ * 保存所有通用寄存器
+ * 应放于ISR入口处
+ */
 #define ISR_ENTRY(name, scause, spec, stval, reglist_ptr, varsize) \
     asm volatile ( \
     /* 第1步：切换栈空间 */\
@@ -88,6 +104,15 @@
     "addi sp, sp, -"#varsize"\n" \
          : "=r"(scause), "=r"(sepc), "=r"(stval), "=r"(reglist_ptr) : : "memory")
 
+/**
+ * @brief ISR出口处理宏
+ * 
+ * @param name 函数名
+ * @param reglist_ptr 指向保存的寄存器列表指针
+ * 
+ * 恢复所有通用寄存器
+ * 应放于ISR出口处
+ */
 #define ISR_EXIT(name, reglist_ptr) \
     asm volatile( \
     /* 第0步：恢复sp */\
@@ -147,22 +172,45 @@
     "sret\n"\
     : : "r"(reglist_ptr) : "memory");
 
+/**
+ * @brief 保存的寄存器列表
+ * 
+ */
 typedef struct {
-    unsigned long regs[31];    // x1 - x31
-    unsigned long sepc;        // 保存的sepc
-    unsigned long sstatus;     // 保存的sstatus
+    umb_t regs[31];    // x1 - x31
+    umb_t sepc;        // 保存的sepc
+    csr_sstatus_t sstatus;     // 保存的sstatus
 } InterruptContextRegisterList;
 
-#define ISR_SERVICE_ATTRIBUTE __attribute__((naked, aligned(4)))
+/**
+ * @brief ISR服务函数属性
+ * 
+ * NAKED: 不生成函数前后缀代码
+ * ALIGNED(4): 对齐到4字节
+ */
+#define ISR_SERVICE_ATTRIBUTE NAKED ALIGNED(4)
 
+
+/**
+ * @brief ISR服务函数开始宏
+ * 
+ * @param name 函数名
+ * @param varsize 为ISR预留的栈空间大小(实际上, 不需要预留太大的栈空间, 因为isr一般是作为执行handler的一个跳板)
+ */
 #define ISR_SERVICE_START(name, varsize) \
-    umb_t scause, sepc, stval; \
+    csr_scause_t scause; \
+    umb_t sepc, stval; \
     InterruptContextRegisterList *reglist_ptr; \
-    ISR_ENTRY(name, scause, sepc, stval, reglist_ptr, varsize)
+    ISR_ENTRY(name, scause.value, sepc, stval, reglist_ptr, varsize)
 
+/**
+ * @brief ISR服务函数结束宏
+ * 
+ * @param name 函数名
+ */
 #define ISR_SERVICE_END(name) \
     do { \
-        if ( (reglist_ptr->sstatus >> 8) & 0x1 ) { \
+        if ( (reglist_ptr->sstatus.spp) ) { \
             reglist_ptr->regs[1] = 0; \
         } \
         ISR_EXIT(name, reglist_ptr); \

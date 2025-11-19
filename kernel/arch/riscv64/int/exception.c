@@ -11,6 +11,7 @@
 
 #include <arch/riscv64/int/exception.h>
 #include <arch/riscv64/int/isr.h>
+#include <arch/riscv64/csr.h>
 
 #include <basec/logger.h>
 
@@ -21,7 +22,7 @@
  * 我们均采取为跳转指令的形式
  * 即 j offset
  */
-__attribute__((aligned(4), section(".text")))
+__attribute__((section(".data.ivt")))
 dword IVT[IVT_ENTRIES] = {};
 
 /**
@@ -75,6 +76,23 @@ static dword emit_ivt_entry(void (*isr_func)(void), int idx) {
 #if IVT_MODE == VECTORED
 
 /**
+ * @brief 默认ISR服务程序(Vectored模式)
+ * 
+ */
+ISR_SERVICE_ATTRIBUTE
+void default_isr(void) {
+    ISR_SERVICE_START(default_isr, 128);
+
+    if (scause.interrupt) {
+        log_info("默认处理程序: 这是一个中断(Vectored模式)");
+    } else {
+        log_info("默认处理程序: 这是一个异常(Vectored模式)");
+    }
+
+    ISR_SERVICE_END(default_isr);
+}
+
+/**
  * @brief 通用ISR服务程序(Vectored模式)
  * 
  */
@@ -82,13 +100,22 @@ ISR_SERVICE_ATTRIBUTE
 void general_isr(void) {
     ISR_SERVICE_START(general_isr, 128);
 
-    if (scause & RISCV_CPU_INTERRUPT_MASK) {
-        log_info("这是一个中断(Vectored模式)");
+    if (scause.interrupt) {
+        log_info("通用处理程序: 这是一个中断(Vectored模式)");
     } else {
         general_exception(scause, sepc, stval, reglist_ptr);
     }
 
     ISR_SERVICE_END(general_isr);
+}
+
+ISR_SERVICE_ATTRIBUTE
+void timer_isr(void) {
+    ISR_SERVICE_START(timer_isr, 128);
+
+    timer_handler(scause, sepc, stval, reglist_ptr);
+
+    ISR_SERVICE_END(timer_isr);
 }
 
 /**
@@ -99,10 +126,10 @@ ISR_SERVICE_ATTRIBUTE
 void test(void) {
     ISR_SERVICE_START(test, 128);
 
-    if (scause & RISCV_CPU_INTERRUPT_MASK) {
-        log_info("这是一个TEST:中断");
+    if (scause.interrupt) {
+        log_info("这是一个TEST:中断:TIMER");
     } else {
-        log_info("这是一个TEST:异常");
+        log_info("这是一个TEST:异常:TIMER");
         general_exception(scause, sepc, stval, reglist_ptr);
     }
 
@@ -122,6 +149,12 @@ void primary_isr(void) {
 
     if (scause & RISCV_CPU_INTERRUPT_MASK) {
         log_info("这是一个中断(Direct模式)");
+        if (scause.cause == 5) {
+            // 计时器中断
+            timer_handler(scause, sepc, stval, reglist_ptr);
+        } else {
+            log_info("无对应中断解决方案: 0x%lx", scause.cause);
+        }
     } else {
         general_exception(scause, sepc, stval, reglist_ptr);
     }
@@ -138,24 +171,26 @@ void init_ivt(void) {
         log_error("错误: IVT地址未对齐!");
         return;
     }
+    csr_stvec_t stvec;
+    stvec.ivt_addr = ivt_addr;
     // 设置为vectored模式
-    umb_t stvec = (ivt_addr & ~0b11) | 0b01;
+    stvec.mode = 0b01;
 
     // 初始化IVT表
     for (int i = 0 ; i < IVT_ENTRIES; i++) {
-        IVT[i] = emit_ivt_entry(general_isr, i);
+        IVT[i] = emit_ivt_entry(default_isr, i);
     }
 
-    // 将0号ISR设置为test函数，作为测试
-    IVT[0] = emit_ivt_entry(test, 0);
+    IVT[0] = emit_ivt_entry(general_isr, 0);
+    IVT[5] = emit_ivt_entry(timer_isr, 5);
 
     // 输出调试信息
-    log_debug("general_isr 地址: 0x%lx", (umb_t)general_isr);
-    log_debug("general_exception 地址: 0x%lx", (umb_t)general_exception);
     log_debug("IVT 地址: 0x%lx", (umb_t)IVT);
 #elif IVT_MODE == DIRECT
+    csr_stvec_t stvec;
+    stvec.ivt_addr = (umb_t)primary_isr;
     // 采用direct模式
-    umb_t stvec = (umb_t)primary_isr;
+    stvec.mode = 0b00;
     if (stvec & 0x3) {
         log_error("错误: stvec地址未对齐!");
         return;
@@ -164,5 +199,11 @@ void init_ivt(void) {
 #endif
 
     // 写入stvec寄存器
-    asm volatile("csrw stvec, %0" : : "r"(stvec));
+    csr_set_stvec(stvec);
+}
+
+void sti(void) {
+    csr_sstatus_t sstatus = csr_get_sstatus();
+    sstatus.sie = 1;
+    csr_set_sstatus(sstatus);
 }

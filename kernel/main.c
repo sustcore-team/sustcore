@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sbi/sbi.h>
 #include <libfdt.h>
+#include <arch/riscv64/int/isr.h>
 #include <arch/riscv64/int/exception.h>
 
 int kputchar(int ch) {
@@ -30,6 +31,7 @@ int kputs(const char *str) {
 }
 
 umb_t hart_id, dtb_ptr;
+void *fdt;
 
 //------------------ 调试libfdt使用-----------
 
@@ -95,26 +97,31 @@ int main(void) {
     log_info("Hart ID: %u", (unsigned int)hart_id);
     log_info("DTB Ptr: 0x%016lx", (unsigned long)dtb_ptr);
 
-    log_info("开始验证设备树...");
-
-    void *fdt = (void *)dtb_ptr;
-    int ret = fdt_check_initial(fdt);
-    if (ret != 0) {
-        log_error("设备树校验失败: %d", ret);
-        return -1;
+    if (fdt != nullptr) {
+        log_info("开始遍历设备树节点...");
+        traverse_nodes(fdt);
+        log_info("设备树节遍历完成!");
+    }
+    else {
+        log_error("设备树指针无效, 跳过!");
     }
 
-    log_info("设备树校验成功!");
-    log_info("开始遍历设备树节点...");
-
-    traverse_nodes(fdt);
-
-    log_info("设备树节遍历完成!");
-
     log_info("开始测试非法指令异常处理...");
-    init_ivt();
     int a = trigger_illegal_instruction();
     log_info("非法指令异常测试结果: %d", a);
+
+    log_info("启用中断...");
+    sti();
+
+    // TODO: 通过设备树获取时钟频率
+    // 正常来说, 我们应该要查询设备树
+    // 但是对QEMU, virt机器的频率始终为10MHz
+    // 所以这里先硬编码为10MHz
+    // 同时, 我们希望2s触发1次时钟中断(调试用)
+    // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
+    init_timer(10000000, 500); // 10MHz
+    log_info("启用时钟中断...");
+    while(true);
 
     return 0;
 }
@@ -125,7 +132,20 @@ int main(void) {
  */
 void init(void) {
     kputs("\n");
+
     init_logger(kputs, "SUSTCore");
+
+    log_info("初始化中断向量表...");
+    init_ivt();
+
+    fdt = (void *)dtb_ptr;
+    log_info("开始验证设备树...");
+    int ret = fdt_check_initial(fdt);
+    if (ret != 0) {
+        log_error("设备树校验失败: %d", ret);
+        fdt = nullptr;
+    }
+    log_info("设备树校验成功!");
 }
 
 /**
@@ -134,7 +154,7 @@ void init(void) {
  */
 void terminate(void) {
     SBIRet ret;
-    ret = sbi_shutdown();
+    ret = sbi_legacy_shutdown();
     if (ret.error) {
         log_error("关机失败!");
     } 

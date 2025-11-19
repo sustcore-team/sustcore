@@ -48,3 +48,9 @@ extern dword IVT[IVT_ENTRIES];
  * 
  */
 void init_ivt(void);
+
+/**
+ * @brief 启用中断
+ * 
+ */
+void sti(void);
