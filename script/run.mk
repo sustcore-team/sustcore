@@ -4,7 +4,7 @@ qemu-args ?= -m size=256m,maxmem=256m \
 			 -serial stdio \
  			 -rtc base=localtime \
  			 -name "Sustcore" \
-			 -machine virt \
+			 -machine virt -d int \
 			 -kernel ./build/bin/kernel/sustcore.bin
 
 qemu-debug ?= -s -S

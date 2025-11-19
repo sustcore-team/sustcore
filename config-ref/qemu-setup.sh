@@ -21,7 +21,7 @@ case $packman in
 esac
 
 export BUILD_THREADS=8
-export QEMU=qemu-10.0.3
+export QEMU=qemu-10.1.0
 export PREFIX="$HOME/opt/cross"
 
 curl https://download.qemu.org/$QEMU.tar.xz --output ./$QEMU.tar.xz
