@@ -1,0 +1,122 @@
+/**
+ * @file sv39.h
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief SV39分页机制
+ * @version alpha-1.0.0
+ * @date 2025-11-20
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
+#pragma once
+
+#include <sus/bits.h>
+#include <sus/attributes.h>
+#include <stddef.h>
+
+enum {
+    RWX_MODE_P   = 0b000, // 指向下一级页表
+    RWX_MODE_R   = 0b001, // 读
+    RWX_MODE_RW  = 0b011, // 读写
+    RWX_MODE_X   = 0b100, // 执行
+    RWX_MODE_RX  = 0b101, // 读执行
+    RWX_MODE_RWX = 0b111  // 读写执行
+};
+
+/**
+ * @brief SV39页表项
+ * 
+ */
+typedef union {
+    umb_t value;
+    struct {
+        umb_t v    : 1;  // [0] Valid 有效位
+        umb_t rwx  : 3;  // [1:3] RWX位
+        umb_t u    : 1;  // [4] User 用户态可访问位
+        umb_t g    : 1;  // [5] Global 全局页位
+        umb_t a    : 1;  // [6] Accessed 访问位
+        umb_t d    : 1;  // [7] Dirty 脏位
+        umb_t rsw  : 2;  // [8:9] Reserved for Software 软件保留位
+        umb_t ppn  : 44; // [10:53] Physical Page Number 物理页号
+        umb_t rsvd : 7;  // [54:60] 保留位
+        umb_t pbmt : 2;  // [61:62] Page-Based Memory Type 基于页的内存类型
+        umb_t np   : 1;  // [63] Not Present 非存在位
+    } PACKED;
+} SV39PTE;
+
+/**
+ * @brief 页大小
+ * 
+ */
+#define SV39_PAGE_SIZE (4096)
+
+/**
+ * @brief SV39页表项数量
+ * 
+ */
+#define SV39_PTE_COUNT (SV39_PAGE_SIZE / sizeof(SV39PTE))
+
+/**
+ * @brief SV39页表
+ * 
+ */
+typedef SV39PTE SV39PT[SV39_PTE_COUNT];
+
+/**
+ * @brief 将物理页号转换为物理地址
+ * 
+ * @param ppn 物理页号
+ * @return void* 物理地址
+ */
+static inline void *ppn2phyaddr(umb_t ppn) {
+    return (void *)(ppn << 12);
+}
+
+/**
+ * @brief 将物理地址转换为物理页号
+ * 
+ * @param phyaddr 物理地址
+ * @return umb_t 物理页号
+ */
+static inline umb_t phyaddr2ppn(void *phyaddr) {
+    return ((umb_t)phyaddr) >> 12;
+}
+
+/**
+ * @brief SV39页表页框分配函数类型
+ * 
+ */
+typedef void*(*Sv39AllocPageFunc)(void);
+
+/**
+ * @brief 初始化SV39页表映射机制
+ * 
+ * @param func 页框分配函数
+ */
+void sv39_mapping_init(Sv39AllocPageFunc func);
+
+/**
+ * @brief 在页表中映射虚拟地址到物理地址
+ * 
+ * @param root 页表根指针
+ * @param vaddr 虚拟地址
+ * @param paddr 物理地址
+ * @param rwx 读写执行权限
+ * @param u 用户态可访问位
+ * @param g 全局页位
+ */
+void sv39_mapping(SV39PTE *root, void *vaddr, void *paddr, umb_t rwx, bool u, bool g);
+
+/**
+ * @brief 在页表中映射一段虚拟地址到物理地址范围
+ * 
+ * @param root 页表根指针
+ * @param vstart 虚拟地址起始
+ * @param pstart 物理地址起始
+ * @param pages 映射大小(多少页)
+ * @param rwx 读写执行权限
+ * @param u 用户态可访问位
+ * @param g 全局页位
+ */
+void sv39_map_range(SV39PTE *root, void *vstart, void *pstart, size_t pages, umb_t rwx, bool u, bool g);

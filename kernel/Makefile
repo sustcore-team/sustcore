@@ -9,7 +9,7 @@ target := $(path-kernel)
 
 objects := main.o 
 
-subdirs := ./arch/$(architecture)
+subdirs := ./mem/ ./arch/$(architecture)/
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)

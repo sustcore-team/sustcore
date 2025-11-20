@@ -179,7 +179,7 @@ void timer_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     clock = csr_get_time();
     clock_ms = clock / (timer_info.freq / 1000);
     clock_ns = clock / (timer_info.freq / 1000000) - clock_ms * 1000;
-    log_info("进入handler的时间: %ld.%3ld ms", clock_ms, clock_ns);
+    log_info("进入handler的时间: %ld.%03ld ms", clock_ms, clock_ns);
 
     // 接下来应当执行时钟中断相关处理
     // 1. 执行进程调度
@@ -190,7 +190,7 @@ void timer_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     clock = csr_get_time();
     clock_ms = clock / (timer_info.freq / 1000);
     clock_ns = clock / (timer_info.freq / 1000000) - clock_ms * 1000;
-    log_info("离开handler的CPU时间: %ld.%3ld ms", clock_ms, clock_ns);
+    log_info("离开handler的CPU时间: %ld.%03ld ms", clock_ms, clock_ns);
 }
 
 void init_timer(umb_t freq, umb_t expected_freq) {

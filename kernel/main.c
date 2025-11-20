@@ -9,15 +9,20 @@
  * 
  */
 
-#include <basec/logger.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include <basec/logger.h>
 #include <sbi/sbi.h>
 #include <libfdt.h>
+
 #include <arch/riscv64/int/isr.h>
 #include <arch/riscv64/int/exception.h>
+
+#include <mem/alloc.h>
+#include <mem/pmm.h>
 
 int kputchar(int ch) {
     sbi_dbcn_console_write_byte((char)ch);
@@ -146,6 +151,11 @@ void init(void) {
         fdt = nullptr;
     }
     log_info("设备树校验成功!");
+
+    log_info("初始化内存分配器...");
+
+    init_allocator();
+    pmm_init(nullptr);
 }
 
 /**

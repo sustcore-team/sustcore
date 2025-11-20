@@ -20,7 +20,7 @@ SECTIONS
     . = ALIGN(4K);
     e_rodata = .;
     s_data = .;
-    .data : { *(.data .data.*) }
+    .data : { *(.data .data.ivt) *(.data .data.*) *(.data .data.heap) }
 
     . = ALIGN(4K);
     s_sdata = .;
