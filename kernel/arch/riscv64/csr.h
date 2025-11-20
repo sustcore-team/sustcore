@@ -144,10 +144,10 @@ typedef union {
 /**
  * @brief 设置STVEC寄存器
  * 
- * @param svect STVEC寄存器
+ * @param stvec STVEC寄存器
  */
-static inline void csr_set_stvec(csr_stvec_t svect) {
-    CSR_SET(stvec, svect.value);
+static inline void csr_set_stvec(csr_stvec_t stvec) {
+    CSR_SET(stvec, stvec.value);
 }
 
 /**
@@ -156,20 +156,20 @@ static inline void csr_set_stvec(csr_stvec_t svect) {
  * @return csr_stvec_t STVEC寄存器
  */
 static inline csr_stvec_t csr_get_stvec(void) {
-    csr_stvec_t svect;
-    CSR_GET(stvec, svect.value);
-    return svect;
+    csr_stvec_t stvec;
+    CSR_GET(stvec, stvec.value);
+    return stvec;
 }
 
 /**
  * @brief 交换STVEC寄存器值
  * 
- * @param svect 新的STVEC寄存器值
+ * @param stvec 新的STVEC寄存器值
  * @return csr_stvec_t 旧的STVEC寄存器值
  */
-static inline csr_stvec_t csr_xchg_stvec(csr_stvec_t svect) {
+static inline csr_stvec_t csr_xchg_stvec(csr_stvec_t stvec) {
     csr_stvec_t old;
-    CSR_XCHG(stvec, svect.value, old.value);
+    CSR_XCHG(stvec, stvec.value, old.value);
     return old;
 }
 
@@ -379,7 +379,7 @@ static inline csr_sscratch_t csr_xchg_sscratch(csr_sscratch_t sscratch) {
 
 /**
  * @brief SEPC寄存器类型
- * 
+ *
  * Supervisor Exception Program Counter Register
  * 
  */
@@ -559,10 +559,10 @@ static inline csr_senvcfg_t csr_xchg_senvcfg(csr_senvcfg_t senvcfg) {
 
 enum {
     SATP_MODE_BARE = 0,    // 物理地址模式
-    SATP_MODE_SV39 = 8,    // 39位虚拟地址
-    SATP_MODE_SV48 = 9,    // 48位虚拟地址
-    SATP_MODE_SV57 = 10,   // 57位虚拟地址
-    SATP_MODE_SV64 = 11    // 64位虚拟地址
+    SATP_MODE_SV39 = 8,    // 39位虚拟地址(512G)
+    SATP_MODE_SV48 = 9,    // 48位虚拟地址(256TB)
+    SATP_MODE_SV57 = 10,   // 57位虚拟地址(128PB)
+    SATP_MODE_SV64 = 11    // 64位虚拟地址(16EB)
 };
 
 /**
