@@ -49,7 +49,18 @@ void init(void) {
 
     arch_init();
 
-    pmm_init(nullptr);
+    MemRegion *const layout = arch_get_memory_layout();
+
+    //遍历layout并打印
+    MemRegion *iter = layout;
+    while (iter != nullptr) {
+        log_info("内存区域: 地址=[0x%p, 0x%p), 大小=0x%lx, 状态=%d",
+            iter->addr, (void *)((char *)iter->addr + iter->size), iter->size, iter->status);
+        iter = iter->next;
+    }
+
+    log_info("初始化物理内存管理器...");
+    pmm_init(layout);
 }
 
 /**

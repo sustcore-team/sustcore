@@ -64,3 +64,23 @@ int vbscanf(BaseCGetcharFunc bgetchar, const char *fmt, va_list args);
  * @return 输入字符数
  */
 int bscanf(BaseCGetcharFunc bgetchar, const char *fmt, ...);
+
+/**
+ * @brief 向str中输出格式化数据
+ * 
+ * @param str 缓存字符串
+ * @param fmt 格式化字符串
+ * @param ... 参数
+ * @return int 输出字符数
+ */
+int ssprintf(char *str, const char *fmt, ...);
+
+// /**
+//  * @brief 从str中输入格式化数据
+//  * 
+//  * @param str 源字符串
+//  * @param fmt 格式化字符串
+//  * @param ... 参数
+//  * @return int 输入字符数
+//  */
+// int sscanf(const char *str, const char *fmt, ...);

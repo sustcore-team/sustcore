@@ -12,10 +12,14 @@
 #pragma once
 
 #include <sus/bits.h>
+#include <stddef.h>
 
 typedef void FDTDesc;
 typedef int FDTNodeDesc;
 typedef int FDTPropDesc;
+
+// 设备树描述符
+extern FDTDesc *fdt;
 
 /**
  * @brief 获取最近的设备错误码
@@ -68,6 +72,15 @@ typedef struct {
     void *ptr;
     int len;
 } FDTPropVal;
+
+/**
+ * @brief FDT寄存器结构体
+ * 
+ */
+typedef struct {
+    void *ptr;
+    size_t size;
+} FDTRegVal;
 
 /**
  * @brief 获得设备树属性值
@@ -142,13 +155,12 @@ int get_reg_region_number(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, 
  * @param prop 设备树属性描述符
  * @param addr_cells 父节点#address-cells
  * @param size_cells 父节点#size-cells
- * @param buffer 存放区域信息的缓冲区
- * @param sizes 存放每个区域大小的数组
+ * @param regions 存放区域信息
  * @param max_regions 最大区域数量
  * @return int 实际读取的区域数量
  */
 int get_device_property_value_as_reg_regions(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, int size_cells,
-    void *buffer, uint64_t *sizes, int max_regions);
+    FDTRegVal *regions, int max_regions);
 
 /**
  * @brief 获取父节点#address-cells

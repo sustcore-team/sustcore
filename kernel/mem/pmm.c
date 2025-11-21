@@ -494,7 +494,7 @@ void pmm_testbench(void) {
     pmm_add_free_pages(blk5, 2);
 }
 
-void pmm_init(PhyscialMemoryLayout *layout) {
+void pmm_init(MemRegion *layout) {
     // TODO: 实现物理内存管理器初始化
 
     // STEP1: 根据layout解析物理内存布局

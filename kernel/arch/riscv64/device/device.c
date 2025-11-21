@@ -59,7 +59,11 @@ FDTNodeDesc get_sub_device(const FDTDesc *fdt, FDTNodeDesc parent, const char *n
     // 遍历并匹配
     fdt_for_each_subnode(child, fdt, parent) {
         const char *node_name = fdt_get_name(fdt, child, NULL);
+        // 形如"name"或"name@addr"均可匹配
         if (strcmp(node_name, name) == 0) {
+            return child;
+        }
+        else if (strncmp(   node_name, name, strlen(name)) == 0 && node_name[strlen(name)] == '@') {
             return child;
         }
     }
@@ -138,7 +142,7 @@ int get_reg_region_number(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, 
 }
 
 int get_device_property_value_as_reg_regions(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, int size_cells,
-    void *buffer, uint64_t *sizes, int max_regions)
+    FDTRegVal *regions, int max_regions)
 {
     FDTPropVal val = get_device_property_value(fdt, prop);
     // 首先计算区域内的cells数, 与每个区域的大小
@@ -156,12 +160,11 @@ int get_device_property_value_as_reg_regions(const FDTDesc *fdt, FDTPropDesc pro
 
     // 开始处理区域内的cells
     const fdt32_t *cells = (const fdt32_t *)val.ptr;
-    uint8_t *buf_ptr = (uint8_t *)buffer;
 
     // 逐区域处理
     for (int i = 0; i < num_regions; i++) {
-        uint64_t address = 0;
-        uint64_t size = 0;
+        umb_t address = 0;
+        umb_t size = 0;
 
         // 解析地址
         for (int j = 0; j < addr_cells; j++) {
@@ -174,9 +177,8 @@ int get_device_property_value_as_reg_regions(const FDTDesc *fdt, FDTPropDesc pro
         }
 
         // 存储地址和大小
-        *((uint64_t *)buf_ptr) = address;
-        buf_ptr += sizeof(uint64_t);
-        sizes[i] = size;
+        regions[i].ptr = (void *)address;
+        regions[i].size = (size_t)size;
     }
 
     return num_regions;
@@ -232,19 +234,19 @@ static void print_property_value(const char *name, const void *value, int len) {
         kprintf("<中断>");
     } else if (strcmp(name, "phandle") == 0 && len == 4) {
         // phandle
-        uint32_t phandle = fdt32_to_cpu(*(const uint32_t *)value);
+        dword phandle = fdt32_to_cpu(*(const dword *)value);
         kprintf("%" PRIu32, phandle);
     } else if (len == 4) {
         // 32位整数
-        uint32_t val = fdt32_to_cpu(*(const uint32_t *)value);
+        dword val = fdt32_to_cpu(*(const dword *)value);
         kprintf("0x%" PRIx32 " (%" PRIu32 ")", val, val);
     } else if (len == 8) {
         // 64位整数
-        uint64_t val = fdt64_to_cpu(*(const uint64_t *)value);
+        qword val = fdt64_to_cpu(*(const qword *)value);
         kprintf("0x%" PRIx64 " (%" PRIu64 ")", val, val);
     } else if (len == 1) {
         // 字节
-        uint8_t val = *(const uint8_t *)value;
+        byte val = *(const byte *)value;
         kprintf("0x%02x (%u)", val, val);
     } else {
         // 二进制数据
@@ -280,8 +282,8 @@ static void print_reg_property(const char *name, int addr_cells, int size_cells,
     kprintf("%s = <\n", name);
 
     for (int i = 0; i < num_regions; i++) {
-        uint64_t address = 0;
-        uint64_t size = 0;
+        qword address = 0;
+        qword size = 0;
 
         // 解析地址
         for (int j = 0; j < addr_cells; j++) {
@@ -374,7 +376,7 @@ static void print_node_recursive(const FDTDesc *fdt, FDTNodeDesc node, int depth
 static void print_memory_reservations(const FDTDesc *fdt) {
     kprintf("/* 内存保留区域 */\n");
 
-    uint64_t address, size;
+    qword address, size;
     int offset = 0;
 
     while (true) {
@@ -455,7 +457,7 @@ void print_device_tree_detailed(const FDTDesc *fdt) {
     // 内存保留区域详细信息
     kprintf("内存保留区域:\n");
     int i = 0;
-    uint64_t address, size;
+    qword address, size;
     while (fdt_get_mem_rsv(fdt, i, &address, &size) >= 0) {
         if (address == 0 && size == 0) break;
         kprintf("  保留区域 %d: 0x%016" PRIx64 " - 0x%016" PRIx64 " (大小: 0x%" PRIx64 " 字节)\n",
