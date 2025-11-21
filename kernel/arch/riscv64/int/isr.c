@@ -74,19 +74,19 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
              stval);
     log_info("reglist_ptr: 0x%lx", reglist_ptr);
 
-    log_info("寄存器状态:");
-    log_info("x 0: 0000000000000000 ; x 1: %016lx ; x 2: %016lx ; x 3: %016lx",
-             reglist_ptr->regs[0], reglist_ptr->regs[1], reglist_ptr->regs[2]);
+    // log_info("寄存器状态:");
+    // log_info("x 0: 0000000000000000 ; x 1: %016lx ; x 2: %016lx ; x 3: %016lx",
+    //          reglist_ptr->regs[0], reglist_ptr->regs[1], reglist_ptr->regs[2]);
 
-    for (int i = 1; i < 8; i++) {
-        log_info("x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx",
-                 i * 4, reglist_ptr->regs[i * 4 - 1], i * 4 + 1,
-                 reglist_ptr->regs[i * 4 + 0], i * 4 + 2,
-                 reglist_ptr->regs[i * 4 + 1], i * 4 + 3,
-                 reglist_ptr->regs[i * 4 + 2]);
-    }
+    // for (int i = 1; i < 8; i++) {
+    //     log_info("x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx",
+    //              i * 4, reglist_ptr->regs[i * 4 - 1], i * 4 + 1,
+    //              reglist_ptr->regs[i * 4 + 0], i * 4 + 2,
+    //              reglist_ptr->regs[i * 4 + 1], i * 4 + 3,
+    //              reglist_ptr->regs[i * 4 + 2]);
+    // }
 
-    log_info("sstatus: 0x%lx", reglist_ptr->sstatus.value);
+    // log_info("sstatus: 0x%lx", reglist_ptr->sstatus.value);
 
     // 输出异常发生特权级
     if (reglist_ptr->sstatus.spp) {

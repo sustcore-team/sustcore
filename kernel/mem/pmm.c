@@ -331,7 +331,7 @@ static bool pmm_add_free_pages(void *paddr, int pages) {
         // 找到当前地址下最大可用阶数
         // order = 0一定能成功, 所以无需处理
         int order = 1;
-        while (order < MAX_BUDDY_ORDER) {
+        while (order <= MAX_BUDDY_ORDER) {
             // 计算一块中的页数与大小
             umb_t block_pages = 1ul << order;
             umb_t block_size  = block_pages << 12;
@@ -425,8 +425,17 @@ void *alloc_page(void) {
     return pmm_fetch_free_memblock(0);
 }
 
+void *alloc_pages_in_order(int order) {
+    if (order > MAX_BUDDY_ORDER) {
+        log_error("alloc_pages_in_order: 无效的页数 2^%d", order);
+        return nullptr;
+    }
+
+    return pmm_fetch_free_memblock(order);
+}
+
 void *alloc_pages(int pagecnt) {
-    if (pagecnt <= 0) {
+    if (pagecnt <= 0 || (pagecnt >> MAX_BUDDY_ORDER) > 1) {
         log_error("alloc_pages: 无效的页数 %d", pagecnt);
         return nullptr;
     }
@@ -450,53 +459,91 @@ void *alloc_pages(int pagecnt) {
         }
     }
 
-    return pmm_fetch_free_memblock(order);
+    // 分配的页地址
+    void *addr = pmm_fetch_free_memblock(order);
+    // 将多余的页送还
+    pmm_add_free_pages(
+        (void *)((umb_t)addr + (pagecnt << 12)),
+        (1ul << order) - pagecnt);
+    return addr;
 }
 
-/**
- * @brief PMM测试程序
- *
- */
-void pmm_testbench(void) {
-    // 测试
-    pmm_add_free_pages((void *)0x2100000, 2);
-    pmm_add_free_pages((void *)0x2201000, 2);
-    pmm_add_free_pages((void *)0x2302000, 9);
+void free_page(void *paddr) {
+    if (((umb_t)paddr % 0x1000) != 0) {
+        log_error("free_page: 地址 %p 非页对齐", paddr);
+        return;
+    }
+    pmm_add_free_memblock(paddr, 0);
+}
 
-    void *blk1 = alloc_pages(2);
-    void *blk2 = alloc_pages(2);
-    void *blk3 = alloc_pages(2);
-    void *blk4 = alloc_pages(2);
-    void *blk5 = alloc_pages(2);
+void free_pages_in_order(void *paddr, int order) {
+    if (((umb_t)paddr % 0x1000) != 0) {
+        log_error("free_pages_in_order: 地址 %p 非页对齐", paddr);
+        return;
+    }
+    if (order < 0) {
+        log_error("free_pages_in_order: 无效的页数 2^%d", order);
+        return;
+    }
+    if (order > MAX_BUDDY_ORDER) {
+        int multiplier = 1 << (order - MAX_BUDDY_ORDER);
+        // 先释放多个最大阶数内存块
+        for (int i = 0; i < multiplier; i++) {
+            pmm_add_free_memblock(
+                (void *)((umb_t)paddr + (i * (1ul << (MAX_BUDDY_ORDER + 12)))),
+                MAX_BUDDY_ORDER);
+        }
+        return;
+    }
+    pmm_add_free_memblock(paddr, order);
+}
 
-    log_info("blk1=%p, blk2=%p, blk3=%p, blk4=%p, blk5=%p", blk1, blk2, blk3,
-             blk4, blk5);
-
-    pmm_add_free_pages(blk1, 2);
-    pmm_add_free_pages(blk2, 2);
-    pmm_add_free_pages(blk3, 2);
-    pmm_add_free_pages(blk4, 2);
-    pmm_add_free_pages(blk5, 2);
+void free_pages(void *paddr, int pagecnt) {
+    if (((umb_t)paddr % 0x1000) != 0) {
+        log_error("free_pages: 地址 %p 非页对齐", paddr);
+        return;
+    }
+    if (pagecnt <= 0) {
+        log_error("free_pages: 无效的页数 %d", pagecnt);
+        return;
+    }
+    pmm_add_free_pages(paddr, pagecnt);
 }
 
 void pmm_init(MemRegion *layout) {
     // TODO: 实现物理内存管理器初始化
 
     // STEP1: 根据layout解析物理内存布局
-    // STEP2: 构造一个全局数组 __HEAP__ 作为初始化阶段的堆内存(大小64MB)
-    // STEP3: 利用 __HEAP__ 实现__primitive_kmalloc__函数,
-    // 设置为初始内存分配函数
 
-    // STEP4: 利用__primitive_kmalloc__初始化Buddy System数据结构
-    // STEP5: 初始化kmalloc函数接口
-    // STEP6: 将kmalloc函数设置为Buddy System使用的内存分配函数
-
+    // 初始化FARL
     for (int i = 0; i <= MAX_BUDDY_ORDER; i++) {
         init_farl(i);
     }
 
-    // 暂时先运行测试程序
-    pmm_testbench();
+    // 加入所有可用的内存区域
+    MemRegion *region = layout;
+    while (region != nullptr) {
+        if (region->status == MEM_REGION_FREE) {
+            // 可用内存区域(4K对齐)
+            umb_t start_addr = (umb_t)region->addr & ~(0xFFF);
+            // 可用页数
+            // 其中, 要考虑对齐后损失的页面数
+            // 其实质为:
+            // ((region->size + region->addr) - start_addr) / PAGE_SIZE
+            // 即(region->end_addr - start_addr) / PAGE_SIZE
+            umb_t pages =
+                (region->size - (start_addr - (umb_t)region->addr)) / PAGE_SIZE;
+
+            // 将其加入物理内存管理器
+            pmm_add_free_pages((void *)start_addr, pages);
+        }
+        // 处理下一个内存区域
+        region = region->next;
+    }
+
+    // 第二次调用allocator初始化
+    // 将内存分配器由__HEAP__升级为完整功能的内核内存分配器
+    init_allocator_stage2();
 }
 
 /**

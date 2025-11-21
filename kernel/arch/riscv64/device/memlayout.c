@@ -14,6 +14,8 @@
 #include <libfdt.h>
 #include <mem/alloc.h>
 #include <sus/arch.h>
+#include <sus/boot.h>
+#include <sus/symbols.h>
 
 /**
  * @brief 向内存区域链表中添加一个新的内存区域
@@ -131,7 +133,12 @@ MemRegion *arch_get_memory_layout(void) {
     // 创建内存区域链表头, 该表头不存储实际内存区域, 只是过渡作用
     MemRegion *head = nullptr;
 
-    // 首先加入所有reserved区域
+    // 首先加入内核所在内存块
+    add_mem_region(&head, &skernel,
+                   (size_t)((umb_t)&ekernel - (umb_t)&skernel) + 1,
+                   MEM_REGION_RESERVED);
+
+    // 再加入所有reserved区域
     for (int i = 0; i < num_reserved_regions; i++) {
         add_mem_region(&head, reserved_regions[i].ptr, reserved_regions[i].size,
                        MEM_REGION_RESERVED);

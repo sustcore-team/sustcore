@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sus/arch.h>
 #include <sus/boot.h>
+#include <sus/symbols.h>
 
 /**
  * @brief 内核主函数
@@ -44,6 +45,14 @@ void init(void) {
     log_info("初始化内存分配器...");
     init_allocator();
 
+    log_info("内核所占内存: [%p, %p]", &skernel, &ekernel);
+    log_info("内核代码段所占内存: [%p, %p]", &s_text, &e_text);
+    log_info("内核只读数据段所占内存: [%p, %p]", &s_rodata, &e_rodata);
+    log_info("内核数据段所占内存: [%p, %p]", &s_data, &e_data);
+    log_info("内核初始化数据段所占内存: [%p, %p]", &s_sdata, &e_sdata);
+    log_info("内核BSS段所占内存: [%p, %p]", &s_bss, &e_bss);
+
+    log_info("初始化架构相关...");
     arch_init();
 
     MemRegion *const layout = arch_get_memory_layout();
