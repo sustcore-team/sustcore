@@ -16,6 +16,8 @@
 #include <sus/attributes.h>
 #include <sus/bits.h>
 
+#define PAGE_SIZE (0x1000)  // 页大小4KB
+
 /**
  * @brief 初始化物理内存管理器
  *
@@ -38,6 +40,37 @@ void *alloc_page(void);
  * @return void* 分配到的物理页起始地址
  */
 void *alloc_pages(int pagecnt);
+
+/**
+ * @brief 分配多个物理页(返回物理页地址)
+ *
+ * @param order 2^order位要分配物理页数
+ * @return void* 分配到的物理页起始地址
+ */
+void *alloc_pages_in_order(int order);
+
+/**
+ * @brief 释放一个物理页
+ * 
+ * @param paddr 物理页地址
+ */
+void free_page(void *paddr);
+
+/**
+ * @brief 释放多个物理页
+ * 
+ * @param paddr 物理页地址
+ * @param pagecnt 物理页数
+ */
+void free_pages(void *paddr, int pagecnt);
+
+/**
+ * @brief 释放多个物理页
+ * 
+ * @param paddr 物理页地址
+ * @param order 2^order个物理页
+ */
+void free_pages_in_order(void *paddr, int order);
 
 /**
  * @brief 将物理地址转换为内核虚拟地址

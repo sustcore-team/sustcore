@@ -80,12 +80,12 @@ void arch_init(void) {
     }
     log_info("设备树校验成功!");
 
-    log_info("打印设备树信息");
-    print_device_tree_detailed(fdt);
+    // log_info("打印设备树信息");
+    // print_device_tree_detailed(fdt);
 
-    log_info("开始测试非法指令异常处理...");
-    int a = trigger_illegal_instruction();
-    log_info("非法指令异常测试结果: %d", a);
+    // log_info("开始测试非法指令异常处理...");
+    // int a = trigger_illegal_instruction();
+    // log_info("非法指令异常测试结果: %d", a);
 
     log_info("启用中断...");
     sti();

@@ -1,5 +1,7 @@
 /* kernel.ld - 确保内核被加载到 OpenSBI 跳转后的地址 */
 ENTRY(_start)
+OUTPUT_ARCH(riscv)
+
 SECTIONS
 {
     . = 0x80200000;
@@ -10,9 +12,9 @@ SECTIONS
         *(.text.entry)
         *(.text .text.*)
         . = ALIGN(4K);
-        e_test = .;
+        e_text = .;
     }
-    
+
     . = ALIGN(4K);
     s_rodata = .;
     .rodata : { *(.rodata .rodata.*) }
@@ -23,6 +25,7 @@ SECTIONS
     .data : { *(.data .data.ivt) *(.data .data.*) *(.data .data.heap) }
 
     . = ALIGN(4K);
+    e_data = .;
     s_sdata = .;
     .sdata : { *(.sdata .sdata.*) }
 
@@ -33,7 +36,7 @@ SECTIONS
 
     . = ALIGN(4K);
     e_bss = .;
-    
+
     .comment : { *(.comment .comment.*) }
     .riscv.attributes : { *(.riscv.attributes .riscv.attributes.*) }
 
