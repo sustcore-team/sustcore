@@ -385,34 +385,45 @@ int sprintf(char *buffer, const char *fmt, ...)  {
     return ret;
 }
 
-/**
- * @brief 使用bgetchar输入
- *
- * @param bgetchar 输入函数
- * @param fmt 格式化字符串
- * @param args 参数
- * @return 输入字符数
- */
-int vbscanf(BaseCGetcharFunc bgetchar, const char *fmt, va_list args) {
-    // TODO
-    return 0;
-}
-
-/**
- * @brief 使用bgetchar输入
- *
- * @param bgetchar 输入函数
- * @param fmt 格式化字符串
- * @param ... 参数
- * @return 输入字符数
- */
-int bscanf(BaseCGetcharFunc bgetchar, const char *fmt, ...) {
+int ssprintf(char *str, const char *fmt, ...) {
     // 初始化可变参数
     va_list lst;
     va_start(lst, fmt);
 
-    int ret = vbscanf(bgetchar, fmt, lst);
+    int ret = __llprintf(str, fmt, lst);
 
     va_end(lst);
     return ret;
 }
+
+// /**
+//  * @brief 使用bgetchar输入
+//  *
+//  * @param bgetchar 输入函数
+//  * @param fmt 格式化字符串
+//  * @param args 参数
+//  * @return 输入字符数
+//  */
+// int vbscanf(BaseCGetcharFunc bgetchar, const char *fmt, va_list args) {
+//     // TODO
+//     return 0;
+// }
+
+// /**
+//  * @brief 使用bgetchar输入
+//  *
+//  * @param bgetchar 输入函数
+//  * @param fmt 格式化字符串
+//  * @param ... 参数
+//  * @return 输入字符数
+//  */
+// int bscanf(BaseCGetcharFunc bgetchar, const char *fmt, ...) {
+//     // 初始化可变参数
+//     va_list lst;
+//     va_start(lst, fmt);
+
+//     int ret = vbscanf(bgetchar, fmt, lst);
+
+//     va_end(lst);
+//     return ret;
+// }

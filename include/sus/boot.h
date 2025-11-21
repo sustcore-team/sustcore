@@ -36,3 +36,12 @@ int kputchar(int ch);
  * @return int 写入的字符数
  */
 int kputs(const char *str);
+
+/**
+ * @brief 内核printf
+ * 
+ * @param format 格式字符串
+ * @param ... 可变参数
+ * @return int 写入的字符数
+ */
+int kprintf(const char *format, ...);

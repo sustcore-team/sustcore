@@ -208,18 +208,28 @@ char *strncat(char *restrict dst, const char *restrict src, int count) {
 	return dst;
 }
 
-// 分割字符串
-// TMD这玩意谁tmd爱写谁tmd写去
-char *strtok(char *restrict str, const char *restrict split) {
-	//TODO: 摆烂啦哈哈哈哈不写啦
-	return NULL;
-}
+// // 分割字符串
+// // TMD这玩意谁tmd爱写谁tmd写去
+// char *strtok(char *restrict str, const char *restrict split) {
+// 	//TODO: 摆烂啦哈哈哈哈不写啦
+// 	return NULL;
+// }
 
 // 从src中复制size个字节到dst中
 // 注意, dst与src内存区域可能重叠 不能施加restrict
 void *memmove(void *dst, const void *src, size_t size) {
 	// 判断是正向复制还是反向复制
-	// TODO: 我懒得写
+	if (dst < src) {
+		// 正向复制
+		for (size_t i = 0 ; i < size ; i ++) {
+			*(char *)(dst + i) = *(char *)(src + i);
+		}
+	} else if (dst > src) {
+		// 反向复制
+		for (size_t i = size ; i > 0 ; i --) {
+			*(char *)(dst + i - 1) = *(char *)(src + i - 1);
+		}
+	}
 	return dst;
 }
 
@@ -250,6 +260,7 @@ void *memchr(const void *restrict str, char ch, int count) {
 		if (*_str == ch) {
 			return _str;
 		}
+		_str ++;
 		count --;
 	}
 	// 未查找到

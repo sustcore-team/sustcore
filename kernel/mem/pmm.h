@@ -13,9 +13,8 @@
 
 #include <sus/bits.h>
 #include <sus/attributes.h>
+#include <sus/arch.h>
 #include <stddef.h>
-
-typedef void PhyscialMemoryLayout;
 
 /**
  * @brief 初始化物理内存管理器
@@ -23,7 +22,7 @@ typedef void PhyscialMemoryLayout;
  * @param layout 物理内存布局
  * 
  */
-void pmm_init(PhyscialMemoryLayout *layout);
+void pmm_init(MemRegion *layout);
 
 /**
  * @brief 分配一个物理页(返回物理页地址)

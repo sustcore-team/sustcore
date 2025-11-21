@@ -19,40 +19,30 @@
 
 #include <arch/riscv64/int/isr.h>
 #include <arch/riscv64/int/exception.h>
+#include <arch/riscv64/device/device.h>
+#include <arch/riscv64/device/misc.h>
 
-//------------------ 调试libfdt使用-----------
-
-/* 基础验证 */
-int fdt_check_initial(void *fdt) {
-    /* 检查魔数 */
-    if (fdt_magic(fdt) != FDT_MAGIC) {
-        return -FDT_ERR_BADMAGIC;
-    }
-    
-    /* 检查版本兼容性 */
-    if (fdt_version(fdt) < FDT_FIRST_SUPPORTED_VERSION) {
-        return -FDT_ERR_BADVERSION;
-    }
-    
-    /* 完整检查 */
-    return fdt_check_header(fdt);
+int kputchar(int ch) {
+    sbi_dbcn_console_write_byte((char)ch);
+    return ch;
 }
 
-/** 遍历节点 */
-void traverse_nodes(void *fdt) {
-    int node, depth = 0;
-    
-    /* 从根节点开始遍历 */
-    for (node = fdt_next_node(fdt, -1, &depth);
-         node >= 0;
-         node = fdt_next_node(fdt, node, &depth)) {
-        
-        const char *name = fdt_get_name(fdt, node, NULL);
-        log_debug("Node: %s (depth: %d)", name, depth);
-    }
+int kputs(const char *str) {
+    int len = strlen(str);
+    sbi_dbcn_console_write((umb_t)len, (const void*)str);
+    return len;
 }
 
-//------------------ 调试libfdt使用-----------
+int kprintf(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    // 使用vbprintf实现
+    int len = vbprintf(kputs, format, args);
+
+    va_end(args);
+    return len;
+}
 
 //------------------ 调试异常处理程序 --------
 
@@ -74,44 +64,26 @@ int trigger_illegal_instruction(void) {
 
 //------------------ 调试异常处理程序 --------
 
-int kputchar(int ch) {
-    sbi_dbcn_console_write_byte((char)ch);
-    return ch;
-}
-
-int kputs(const char *str) {
-    int len = strlen(str);
-    sbi_dbcn_console_write((umb_t)len, (const void*)str);
-    return len;
-}
-
+FDTDesc *fdt;
 umb_t hart_id, dtb_ptr;
-void *fdt;
 
 void arch_init(void) {
-    log_info("初始化中断向量表...");
-    init_ivt();
-
-    fdt = (void *)dtb_ptr;
-    log_info("开始验证设备树...");
-    int ret = fdt_check_initial(fdt);
-    if (ret != 0) {
-        log_error("设备树校验失败: %d", ret);
-        fdt = nullptr;
-    }
-    log_info("设备树校验成功!");
-
     log_info("Hart ID: %u", (unsigned int)hart_id);
     log_info("DTB Ptr: 0x%016lx", (unsigned long)dtb_ptr);
 
-    if (fdt != nullptr) {
-        log_info("开始遍历设备树节点...");
-        traverse_nodes(fdt);
-        log_info("设备树节遍历完成!");
+    log_info("初始化中断向量表...");
+    init_ivt();
+
+    log_info("开始验证并初始化设备树...");
+    fdt = device_check_initial(dtb_ptr);
+    if (fdt == nullptr) {
+        log_error("设备树校验失败");
     }
-    else {
-        log_error("设备树指针无效, 跳过!");
-    }
+    log_info("设备树校验成功!");
+
+    log_info("打印设备树信息");
+    print_device_tree_detailed(fdt);
+
 
     log_info("开始测试非法指令异常处理...");
     int a = trigger_illegal_instruction();
@@ -120,13 +92,16 @@ void arch_init(void) {
     log_info("启用中断...");
     sti();
 
-    // TODO: 通过设备树获取时钟频率
-    // 正常来说, 我们应该要查询设备树
-    // 但是对QEMU, virt机器的频率始终为10MHz
-    // 所以这里先硬编码为10MHz
-    // 同时, 我们希望2s触发1次时钟中断(调试用)
+    // 我们希望2s触发1次时钟中断(调试用)
     // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
-    init_timer(10000000, 500); // 10MHz
+    int freq = get_clock_freq_hz();
+    if (freq < 0){
+        //使用QEMU virt机器的默认值10MHz
+        freq = 10000000;
+        log_error("获取时钟频率失败, 使用默认值 %d Hz", freq);
+    }
+    log_info("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000, freq / 1000000);
+    init_timer(freq, 500);
     log_info("启用时钟中断...");
 }
 
