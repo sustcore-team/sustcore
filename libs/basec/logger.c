@@ -10,8 +10,8 @@
  *
  */
 
-#include <basec/logger.h>
 #include <basec/baseio.h>
+#include <basec/logger.h>
 #include <stddef.h>
 
 // 日志名
@@ -44,12 +44,27 @@ static void __log__(LogLevel level, const char *msg) {
     const char *level_s = "";
 
     // 获取日志等级
-    switch(level) {
-    case INFO:    {level_s = "INFO";    break;}
-    case WARNING: {level_s = "WARNING"; break;}
-    case ERROR:   {level_s = "ERROR";   break;}
-    case FATAL:   {level_s = "FATAL";   break;}
-    case DEBUG:   {level_s = "DEBUG";   break;}
+    switch (level) {
+        case INFO: {
+            level_s = "INFO";
+            break;
+        }
+        case WARNING: {
+            level_s = "WARNING";
+            break;
+        }
+        case ERROR: {
+            level_s = "ERROR";
+            break;
+        }
+        case FATAL: {
+            level_s = "FATAL";
+            break;
+        }
+        case DEBUG: {
+            level_s = "DEBUG";
+            break;
+        }
     }
 
     __llog__(logger_name, level_s, msg);

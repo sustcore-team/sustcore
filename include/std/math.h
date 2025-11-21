@@ -16,19 +16,19 @@
 #define HUGE_VAL (__builtin_huge_val())
 
 /** 圆周率 */
-#define CONSTANT_PI     (3.14159265358979323846)
+#define CONSTANT_PI    (3.14159265358979323846)
 /** e */
-#define CONSTANT_E      (2.71828182845904523536)
+#define CONSTANT_E     (2.71828182845904523536)
 /** 黄金分割比例 */
-#define CONSTANT_PHI    (0.61803398874989484820)
+#define CONSTANT_PHI   (0.61803398874989484820)
 /** 费根鲍姆常数 */
-#define CONSTANT_DELTA  (4.66920160910299067185)
+#define CONSTANT_DELTA (4.66920160910299067185)
 
-double sin(double x); // 正弦
-double cos(double x); // 余弦
-double atanh(double x); // 反双曲正切
-double ln(double x); // 自然对数
-double exp(double x); // e^x
-double pow(double x, double y); // x^y
-double sqrt(double x); // 开方
-double fabs(double x); // 绝对值
+double sin(double x);            // 正弦
+double cos(double x);            // 余弦
+double atanh(double x);          // 反双曲正切
+double ln(double x);             // 自然对数
+double exp(double x);            // e^x
+double pow(double x, double y);  // x^y
+double sqrt(double x);           // 开方
+double fabs(double x);           // 绝对值

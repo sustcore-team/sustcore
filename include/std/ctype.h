@@ -12,7 +12,6 @@
 
 #pragma once
 
-
 /**
  * @brief 判断字符是否为空白字符（空格、制表符等）
  * @param ch 要判断的字符

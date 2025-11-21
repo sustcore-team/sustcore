@@ -4,33 +4,34 @@
  * @brief 内存布局
  * @version alpha-1.0.0
  * @date 2025-11-21
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
-#include <sus/arch.h>
-#include <mem/alloc.h>
 #include <arch/riscv64/device/device.h>
 #include <basec/logger.h>
 #include <libfdt.h>
+#include <mem/alloc.h>
+#include <sus/arch.h>
 
 /**
  * @brief 向内存区域链表中添加一个新的内存区域
- * 
+ *
  * 我们有意将该链表维护成一个有序链表
- * 
+ *
  * @param root 链表头指针
  * @param addr 地址
  * @param size 大小
  * @param status 状态
  */
-static void add_mem_region(MemRegion **root, void *addr, size_t size, int status) {
+static void add_mem_region(MemRegion **root, void *addr, size_t size,
+                           int status) {
     MemRegion *region = (MemRegion *)kmalloc(sizeof(MemRegion));
-    region->addr = addr;
-    region->size = size;
-    region->status = status;
-    region->next = nullptr;
+    region->addr      = addr;
+    region->size      = size;
+    region->status    = status;
+    region->next      = nullptr;
 
     // 插入链表(有意将其作为有序链表)
     if (*root == nullptr) {
@@ -45,17 +46,16 @@ static void add_mem_region(MemRegion **root, void *addr, size_t size, int status
         if (last == nullptr) {
             // 应当被放置在链表头
             region->next = *root;
-            *root = region;
+            *root        = region;
         } else {
             // last -> next => last -> region -> next
-            last->next = region;
+            last->next   = region;
             region->next = iter;
         }
     }
 }
 
-MemRegion *arch_get_memory_layout(void)
-{
+MemRegion *arch_get_memory_layout(void) {
     // 首先读取 /memory@<base>/reg 属性
     FDTNodeDesc root = get_device_root(fdt);
 
@@ -77,8 +77,8 @@ MemRegion *arch_get_memory_layout(void)
 
     // 目前假设最多有8个内存区域
     FDTRegVal regions[8];
-    int num_regions = get_device_property_value_as_reg_regions(fdt, prop_reg, addr_cells, size_cells,
-        regions, 32);
+    int num_regions = get_device_property_value_as_reg_regions(
+        fdt, prop_reg, addr_cells, size_cells, regions, 32);
     if (num_regions <= 0) {
         log_error("无效的/memory@<base>/reg属性, 无法获取内存布局");
         return nullptr;
@@ -92,12 +92,12 @@ MemRegion *arch_get_memory_layout(void)
 
     // 再读取reserved-memory节点下的保留内存区域
     FDTNodeDesc reserved_mem = get_sub_device(fdt, root, "reserved-memory");
-    addr_cells = fdt_address_cells(fdt, reserved_mem);
-    size_cells = fdt_size_cells(fdt, reserved_mem);
+    addr_cells               = fdt_address_cells(fdt, reserved_mem);
+    size_cells               = fdt_size_cells(fdt, reserved_mem);
 
     const char *resv_name_base = "mmode_resv";
     // 处理mmode_resv($i) (0 <= i < 16)
-    for (int i = 0 ; i < 16 ; i ++) {
+    for (int i = 0; i < 16; i++) {
         char resv_name[32];
         ssprintf(resv_name, "%s%d", resv_name_base, i);
         FDTNodeDesc resv_node = get_sub_device(fdt, reserved_mem, resv_name);
@@ -113,14 +113,15 @@ MemRegion *arch_get_memory_layout(void)
         }
 
         // 读取保留区域
-        int tmp_num = get_device_property_value_as_reg_regions(fdt, resv_prop_reg, addr_cells, size_cells,
-            tmp_resereved_regions, 8);
+        int tmp_num = get_device_property_value_as_reg_regions(
+            fdt, resv_prop_reg, addr_cells, size_cells, tmp_resereved_regions,
+            8);
         if (tmp_num <= 0) {
             continue;
         }
 
         // 依次复制
-        for (int j = 0 ; j < tmp_num ; j ++) {
+        for (int j = 0; j < tmp_num; j++) {
             reserved_regions[num_reserved_regions] = tmp_resereved_regions[j];
             num_reserved_regions++;
         }
@@ -131,29 +132,26 @@ MemRegion *arch_get_memory_layout(void)
     MemRegion *head = nullptr;
 
     // 首先加入所有reserved区域
-    for (int i = 0 ; i < num_reserved_regions ; i ++) {
-        add_mem_region(
-            &head,
-            reserved_regions[i].ptr,
-            reserved_regions[i].size,
-            MEM_REGION_RESERVED
-        );
+    for (int i = 0; i < num_reserved_regions; i++) {
+        add_mem_region(&head, reserved_regions[i].ptr, reserved_regions[i].size,
+                       MEM_REGION_RESERVED);
     }
 
     // 然后加入所有可用内存区域(即regions中不与reserved_regions冲突的区域)
-    for (int i = 0 ; i < num_regions ; i ++) {
+    for (int i = 0; i < num_regions; i++) {
         umb_t region_start = (umb_t)regions[i].ptr;
-        umb_t region_end = region_start + (umb_t)regions[i].size;
+        umb_t region_end   = region_start + (umb_t)regions[i].size;
 
         // 检查该区域是否与已有的保留区域冲突
         MemRegion *current = head;
-        bool conflict = false;
+        bool conflict      = false;
         while (current != nullptr) {
             // 保留区域[reserved_start, reserved_end)
             umb_t reserved_start = (umb_t)current->addr;
-            umb_t reserved_end = reserved_start + (umb_t)current->size;
+            umb_t reserved_end   = reserved_start + (umb_t)current->size;
 
-            // 检查[region_start, region_end)与[reserved_start, reserved_end)是否有交集
+            // 检查[region_start, region_end)与[reserved_start,
+            // reserved_end)是否有交集
             if (region_start < reserved_end && reserved_start < region_end) {
                 conflict = true;
                 break;
@@ -166,11 +164,11 @@ MemRegion *arch_get_memory_layout(void)
             // 将冲突部分剔除, 分块加入链表
             umb_t curr_start = region_start;
             // 由于我们有意将链表维护成有序链表, 因此可以直接遍历链表
-            current = head;
+            current          = head;
             while (curr_start < region_end && current != nullptr) {
                 // 保留区域[reserved_start, reserved_end)
                 umb_t reserved_start = (umb_t)current->addr;
-                umb_t reserved_end = reserved_start + (umb_t)current->size;
+                umb_t reserved_end   = reserved_start + (umb_t)current->size;
 
                 // 四种情况
                 // 全包含
@@ -183,50 +181,51 @@ MemRegion *arch_get_memory_layout(void)
                 // reserved_end <= curr_start || region_end <= reserved_start
 
                 // 全包含
-                if (curr_start <= reserved_start && reserved_end <= region_end) {
+                if (curr_start <= reserved_start && reserved_end <= region_end)
+                {
                     log_debug("可用内存区域[%p, %p)全包含保留区域[%p, %p)",
-                              curr_start, region_end,
-                              reserved_start, reserved_end);
+                              curr_start, region_end, reserved_start,
+                              reserved_end);
                     // 添加[curr_start, reserved_start)
                     if (curr_start < reserved_start) {
-                        add_mem_region(
-                            &head,
-                            (void *)curr_start,
-                            (size_t)(reserved_start - curr_start),
-                            MEM_REGION_FREE
-                        );
+                        add_mem_region(&head, (void *)curr_start,
+                                       (size_t)(reserved_start - curr_start),
+                                       MEM_REGION_FREE);
                     }
                     // 移动curr_start到reserved_end
                     curr_start = reserved_end;
                 }
                 // 前端重叠
-                else if (reserved_start < curr_start && curr_start < reserved_end && reserved_end < region_end) {
+                else if (reserved_start < curr_start &&
+                         curr_start < reserved_end && reserved_end < region_end)
+                {
                     log_debug("可用内存区域[%p, %p)前端重叠保留区域[%p, %p)",
-                              curr_start, region_end,
-                              reserved_start, reserved_end);
+                              curr_start, region_end, reserved_start,
+                              reserved_end);
                     // 移动curr_start到reserved_end
                     curr_start = reserved_end;
                     // 前端无处适合添加
                 }
                 // 后端重叠
-                else if (curr_start < reserved_start && reserved_start < region_end && region_end < reserved_end) {
+                else if (curr_start < reserved_start &&
+                         reserved_start < region_end &&
+                         region_end < reserved_end)
+                {
                     log_debug("可用内存区域[%p, %p)后端重叠保留区域[%p, %p)",
-                              curr_start, region_end,
-                              reserved_start, reserved_end);
+                              curr_start, region_end, reserved_start,
+                              reserved_end);
                     // 添加[curr_start, reserved_start)
                     if (curr_start < reserved_start) {
-                        add_mem_region(
-                            &head,
-                            (void *)curr_start,
-                            (size_t)(reserved_start - curr_start),
-                            MEM_REGION_FREE
-                        );
+                        add_mem_region(&head, (void *)curr_start,
+                                       (size_t)(reserved_start - curr_start),
+                                       MEM_REGION_FREE);
                     }
                     // 处理完毕
                     curr_start = region_end;
                 }
                 // 全不包含
-                else {
+                else
+                {
                     // 全不包含
                     // 继续检查下一个保留区域
                 }
@@ -235,23 +234,15 @@ MemRegion *arch_get_memory_layout(void)
 
             // 处理剩余部分
             if (curr_start < region_end) {
-                add_mem_region(
-                    &head,
-                    (void *)curr_start,
-                    (size_t)(region_end - curr_start),
-                    MEM_REGION_FREE
-                );
+                add_mem_region(&head, (void *)curr_start,
+                               (size_t)(region_end - curr_start),
+                               MEM_REGION_FREE);
             }
             continue;
         }
 
         // 无冲突
-        add_mem_region(
-            &head,
-            regions[i].ptr,
-            regions[i].size,
-            MEM_REGION_FREE
-        );
+        add_mem_region(&head, regions[i].ptr, regions[i].size, MEM_REGION_FREE);
     }
 
     // 头指向的下一个区域就是实际的内存区域链表头

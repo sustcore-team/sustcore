@@ -28,7 +28,7 @@ char *uitoa(unsigned int val, char *buffer, int base) {
     // 特殊情况
     if (val == 0) {
         *buffer = '0';
-        buffer ++;
+        buffer++;
         *buffer = '\0';
         return ret;
     }
@@ -41,16 +41,16 @@ char *uitoa(unsigned int val, char *buffer, int base) {
         // 保存该位数字
         _buffer[cnt] = digits[val % base];
 
-        cnt ++;
+        cnt++;
 
         // 右移一个base进制位
         val /= base;
     }
 
     // 恢复原顺序
-    for (int i = cnt - 1; i >=  0 ; i --) {
+    for (int i = cnt - 1; i >= 0; i--) {
         *buffer = _buffer[i];
-        buffer ++;
+        buffer++;
     }
 
     return ret;
@@ -71,14 +71,14 @@ char *itoa(int val, char *buffer, int base) {
     // 特殊情况判断
     if (val == 0) {
         *buffer = '0';
-        buffer ++;
+        buffer++;
         *buffer = '\0';
         return ret;
     }
 
     if (val < 0) {
         *buffer = '-';
-        buffer ++;
+        buffer++;
         val = -val;
     }
 

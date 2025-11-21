@@ -4,23 +4,21 @@
  * @brief RISCV64启动程序
  * @version alpha-1.0.0
  * @date 2025-11-21
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
-#include <sus/bits.h>
-#include <sus/arch.h>
-#include <sus/boot.h>
-
-#include <libfdt.h>
-#include <basec/logger.h>
-#include <sbi/sbi.h>
-
-#include <arch/riscv64/int/isr.h>
-#include <arch/riscv64/int/exception.h>
 #include <arch/riscv64/device/device.h>
 #include <arch/riscv64/device/misc.h>
+#include <arch/riscv64/int/exception.h>
+#include <arch/riscv64/int/isr.h>
+#include <basec/logger.h>
+#include <libfdt.h>
+#include <sbi/sbi.h>
+#include <sus/arch.h>
+#include <sus/bits.h>
+#include <sus/boot.h>
 
 int kputchar(int ch) {
     sbi_dbcn_console_write_byte((char)ch);
@@ -29,7 +27,7 @@ int kputchar(int ch) {
 
 int kputs(const char *str) {
     int len = strlen(str);
-    sbi_dbcn_console_write((umb_t)len, (const void*)str);
+    sbi_dbcn_console_write((umb_t)len, (const void *)str);
     return len;
 }
 
@@ -47,17 +45,18 @@ int kprintf(const char *format, ...) {
 //------------------ 调试异常处理程序 --------
 
 // 触发非法指令异常
-__attribute__((noinline))
-int trigger_illegal_instruction(void) {
-    asm volatile (".word 0x00000000");  // 全零是非法指令
-    asm volatile (".word 0x000000FF");  // 自定义非法指令
+__attribute__((noinline)) int trigger_illegal_instruction(void) {
+    asm volatile(".word 0x00000000");  // 全零是非法指令
+    asm volatile(".word 0x000000FF");  // 自定义非法指令
     int a = 2, b = 20;
-    asm volatile (
+    asm volatile(
         "mv t0, %1\n"
         "mv t1, %2\n"
         ".word 0x00FF00FF\n"
-        "mv %0, t0\n" 
-        : "=r"(a) : "r"(a), "r"(b) : "t0", "t1");  // 自定义非法指令2
+        "mv %0, t0\n"
+        : "=r"(a)
+        : "r"(a), "r"(b)
+        : "t0", "t1");  // 自定义非法指令2
     log_info("计算结果: %d", a);
     return -1;
 }
@@ -84,7 +83,6 @@ void arch_init(void) {
     log_info("打印设备树信息");
     print_device_tree_detailed(fdt);
 
-
     log_info("开始测试非法指令异常处理...");
     int a = trigger_illegal_instruction();
     log_info("非法指令异常测试结果: %d", a);
@@ -95,12 +93,13 @@ void arch_init(void) {
     // 我们希望2s触发1次时钟中断(调试用)
     // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
     int freq = get_clock_freq_hz();
-    if (freq < 0){
-        //使用QEMU virt机器的默认值10MHz
+    if (freq < 0) {
+        // 使用QEMU virt机器的默认值10MHz
         freq = 10000000;
         log_error("获取时钟频率失败, 使用默认值 %d Hz", freq);
     }
-    log_info("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000, freq / 1000000);
+    log_info("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000,
+             freq / 1000000);
     init_timer(freq, 500);
     log_info("启用时钟中断...");
 }
@@ -111,10 +110,10 @@ void arch_terminate(void) {
     if (ret.error) {
         log_error("关机失败!");
         return;
-    } 
+    }
 
     log_error("此处不应当被执行到!");
-    while(true);
+    while (true);
 }
 
 void c_setup(void) {
