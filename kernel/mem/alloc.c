@@ -4,13 +4,14 @@
  * @brief 分配器
  * @version alpha-1.0.0
  * @date 2025-11-20
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
-#include <mem/alloc.h>
 #include <basec/logger.h>
+#include <mem/alloc.h>
+#include <sus/attributes.h>
 #include <sus/bits.h>
 
 typedef void *(*KAllocator)(size_t size);
@@ -18,25 +19,25 @@ typedef void (*KDeallocator)(void *ptr);
 
 /**
  * @brief Kernel内存分配器
- * 
+ *
  */
 static KAllocator __kmalloc__ = nullptr;
 
 /**
  * @brief Kernel内存释放器
- * 
+ *
  */
 static KDeallocator __kfree__ = nullptr;
 
 /**
  * @brief 设置内存分配器/释放器
- * 
+ *
  * @param alloc 内存分配器
  * @param free_func 内存释放器
  */
 static void set_dual_allocator(KAllocator allocator, KDeallocator deallocator) {
     __kmalloc__ = allocator;
-    __kfree__ = deallocator;
+    __kfree__   = deallocator;
 }
 
 void *kmalloc(size_t size) {
@@ -57,12 +58,12 @@ void kfree(void *ptr) {
 
 /**
  * @brief HEAP内存块
- * 
+ *
  */
-__attribute__((section(".data.heap")))
-static byte __HEAP__[16 * 1024 * 1024]; // 16MB初始化堆内存
-static byte *__HEAP_TAIL__ = &__HEAP__[sizeof(__HEAP__) - 1]; // 堆内存尾
-static byte *heap_ptr = nullptr; // 当前堆内存分配指针
+SECTION(.data.heap)
+static byte __HEAP__[16 * 1024 * 1024];  // 16MB初始化堆内存
+static byte *__HEAP_TAIL__ = &__HEAP__[sizeof(__HEAP__) - 1];  // 堆内存尾
+static byte *heap_ptr      = nullptr;  // 当前堆内存分配指针
 
 void *__primitive_kmalloc__(size_t size) {
     if (heap_ptr + size > __HEAP_TAIL__) {
@@ -71,8 +72,8 @@ void *__primitive_kmalloc__(size_t size) {
     }
 
     // 分配堆内存
-    void *ptr = heap_ptr;
-    heap_ptr += size;
+    void *ptr  = heap_ptr;
+    heap_ptr  += size;
     return ptr;
 }
 
@@ -91,5 +92,6 @@ void init_allocator(void) {
 void init_allocator_stage2(void) {
     // 输出stage1的堆使用情况
     log_info("__HEAP__: %p, size: %u bytes", __HEAP__, sizeof(__HEAP__));
-    log_info("heap_ptr: %p, used: %u KB", heap_ptr, (heap_ptr - __HEAP__) / 1024);
+    log_info("heap_ptr: %p, used: %u KB", heap_ptr,
+             (heap_ptr - __HEAP__) / 1024);
 }

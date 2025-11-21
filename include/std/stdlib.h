@@ -4,16 +4,16 @@
  * @brief stdlib.h
  * @version alpha-1.0.0
  * @date 2025-11-18
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #pragma once
 
-#include <stdint.h>
 #include <limits.h>
+#include <stdint.h>
 
-unsigned long int strtoul(const char *restrict str, char ** endptr, int base);
+unsigned long int strtoul(const char *restrict str, char **endptr, int base);
 
-//WIP
+// WIP

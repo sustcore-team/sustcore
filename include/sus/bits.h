@@ -4,9 +4,9 @@
  * @brief 不同位长的bit
  * @version alpha-1.0.0
  * @date 2025-11-17
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #pragma once
@@ -34,15 +34,15 @@ typedef uint32_t b32;
 typedef uint64_t b64;
 
 // 获取机器位数
-#if BITS==16
+#if BITS == 16
 /** 机器位数 */
 typedef b16 machine_bits;
 typedef int16_t signed_machine_bits;
-#elif BITS==32
+#elif BITS == 32
 /** 机器位数 */
 typedef b32 machine_bits;
 typedef int32_t signed_machine_bits;
-#elif BITS==64
+#elif BITS == 64
 /** 机器位数 */
 typedef b64 machine_bits;
 typedef int64_t signed_machine_bits;

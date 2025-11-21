@@ -4,40 +4,40 @@
  * @brief 物理内存管理器实现
  * @version alpha-1.0.0
  * @date 2025-11-20
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
-#include <mem/pmm.h>
-#include <mem/alloc.h>
 #include <basec/logger.h>
+#include <mem/alloc.h>
+#include <mem/pmm.h>
 
 /**
  * @brief Buddy System空闲内存块结构体
- * 
+ *
  * 使用有序双向链表
- * 
+ *
  * 从head->tail按照指向的内存地址升序排列
- * 
+ *
  */
 typedef struct __PMMFreeArea__ {
-    umb_t order;        // 内存块阶数
-    void *paddr;       // 该空闲内存块的物理地址
-    struct __PMMFreeArea__ *prev; // 指向上一个空闲内存块
-    struct __PMMFreeArea__ *next; // 指向下一个空闲内存块
+    umb_t order;                   // 内存块阶数
+    void *paddr;                   // 该空闲内存块的物理地址
+    struct __PMMFreeArea__ *prev;  // 指向上一个空闲内存块
+    struct __PMMFreeArea__ *next;  // 指向下一个空闲内存块
 } PMMFreeArea;
 
-#define MAX_BUDDY_ORDER 15 // 最大伙伴阶数 (2^15 * 4KB = 128MB)
+#define MAX_BUDDY_ORDER 15  // 最大伙伴阶数 (2^15 * 4KB = 128MB)
 
 /**
  * @brief Buddy System空闲内存块链表头
- * 
+ *
  * free_area_head[order] 指向阶数为order的空闲内存块链表头
  * 其代表 2^order 个连续空闲页框
- * 
+ *
  * 从head->tail按照指向的内存地址升序排列
- * 
+ *
  */
 static PMMFreeArea *free_area_head[MAX_BUDDY_ORDER + 1] = {};
 
@@ -56,7 +56,7 @@ static PMMFreeArea *free_area_tail[MAX_BUDDY_ORDER + 1] = {};
 
 /**
  * @brief 初始化FARL链表
- * 
+ *
  * @param order 初始化order阶FARL链表
  */
 static void init_farl(int order) {
@@ -75,7 +75,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
     // 是则向后合并 ; 否则向前合并
 
     const umb_t block_size = 1ul << (area->order + 12);
-    bool forward = (((umb_t)area->paddr) % ((block_size << 1))) != 0;
+    bool forward           = (((umb_t)area->paddr) % ((block_size << 1))) != 0;
     // 向前合并
     if (forward) {
         // 前驱
@@ -92,7 +92,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
             // 从链表中移除area和prev
             // prev2 -> prev -> area -> next
             PMMFreeArea *prev2 = prev->prev;
-            PMMFreeArea *next = area->next;
+            PMMFreeArea *next  = area->next;
 
             // 分类讨论
             // prev2 -> prev -> area -> next 与
@@ -104,16 +104,16 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
                 // prev2 -> prev -> area -> next 变为
                 // prev2 -> next
                 prev2->next = next;
-                next->prev = prev2;
+                next->prev  = prev2;
             } else if (prev2 == nullptr && next != nullptr) {
                 // null -> prev -> area -> next 变为
                 // head = next
-                next->prev = nullptr;
+                next->prev                  = nullptr;
                 free_area_head[area->order] = next;
             } else if (prev2 != nullptr && next == nullptr) {
                 // prev2 -> prev -> area -> null 变为
                 // tail = prev2
-                prev2->next = nullptr;
+                prev2->next                 = nullptr;
                 free_area_tail[area->order] = prev2;
             } else {
                 // null -> prev -> area -> null 变为
@@ -122,14 +122,13 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
                 free_area_tail[area->order] = nullptr;
             }
 
-            log_debug ("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
-                      prev->paddr,
-                      (void *)((umb_t)prev->paddr + (1ul << (prev->order + 12))),
-                      area->paddr,
-                      (void *)((umb_t)area->paddr + (1ul << (area->order + 12))),
-                      prev->paddr,
-                      (void *)((umb_t)area->paddr + (1ul << (area->order + 12)))
-                    );
+            log_debug(
+                "将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)", prev->paddr,
+                (void *)((umb_t)prev->paddr + (1ul << (prev->order + 12))),
+                area->paddr,
+                (void *)((umb_t)area->paddr + (1ul << (area->order + 12))),
+                prev->paddr,
+                (void *)((umb_t)area->paddr + (1ul << (area->order + 12))));
 
             // 释放area
             kfree(area);
@@ -144,8 +143,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
             // 以避免递归调用
             return prev;
         }
-    }
-    else {
+    } else {
         // 向后合并
         PMMFreeArea *next = area->next;
         if (next == nullptr) {
@@ -158,7 +156,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
         if (neighbor) {
             // 从链表中移除area和next
             // prev -> area -> next -> next2
-            PMMFreeArea *prev = area->prev;
+            PMMFreeArea *prev  = area->prev;
             PMMFreeArea *next2 = next->next;
             // 分类讨论
             // prev -> area -> next -> next2 与
@@ -168,17 +166,17 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
             if (prev != nullptr && next2 != nullptr) {
                 // prev -> area -> next -> next2 变为
                 // prev -> next2
-                prev->next = next2;
+                prev->next  = next2;
                 next2->prev = prev;
             } else if (prev == nullptr && next2 != nullptr) {
                 // null -> area -> next -> next2 变为
                 // head = next2
-                next2->prev = nullptr;
+                next2->prev                 = nullptr;
                 free_area_head[area->order] = next2;
             } else if (prev != nullptr && next2 == nullptr) {
                 // prev -> area -> next -> null 变为
                 // tail = prev
-                prev->next = nullptr;
+                prev->next                  = nullptr;
                 free_area_tail[area->order] = prev;
             } else {
                 // null -> area -> next -> null 变为
@@ -187,15 +185,13 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
                 free_area_tail[area->order] = nullptr;
             }
 
-            
-            log_debug ("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
-                      area->paddr,
-                      (void *)((umb_t)area->paddr + (1ul << (area->order + 12))),
-                      next->paddr,
-                      (void *)((umb_t)next->paddr + (1ul << (next->order + 12))),
-                      area->paddr,
-                      (void *)((umb_t)next->paddr + (1ul << (next->order + 12)))
-                    );
+            log_debug(
+                "将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)", area->paddr,
+                (void *)((umb_t)area->paddr + (1ul << (area->order + 12))),
+                next->paddr,
+                (void *)((umb_t)next->paddr + (1ul << (next->order + 12))),
+                area->paddr,
+                (void *)((umb_t)next->paddr + (1ul << (next->order + 12))));
 
             // 释放next
             kfree(next);
@@ -217,7 +213,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
 
 /**
  * @brief 向FARL中添加一个空闲内存块
- * 
+ *
  * @param order 阶数
  * @param paddr 物理地址
  * @return PMMFreeArea* 若不为空, 则应继续尝试合并
@@ -231,8 +227,8 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
         // 链表为空
         free_area_head[order] = new_area;
         free_area_tail[order] = new_area;
-        new_area->prev = nullptr;
-        new_area->next = nullptr;
+        new_area->prev        = nullptr;
+        new_area->next        = nullptr;
         return nullptr;
     }
 
@@ -246,10 +242,10 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
 
     if (cur == nullptr) {
         // 插入到链表尾
-        PMMFreeArea *tail = free_area_tail[order];
-        tail->next = new_area;
-        new_area->prev = tail;
-        new_area->next = nullptr;
+        PMMFreeArea *tail     = free_area_tail[order];
+        tail->next            = new_area;
+        new_area->prev        = tail;
+        new_area->next        = nullptr;
         free_area_tail[order] = new_area;
         return farl_try_merge(new_area);
     }
@@ -259,10 +255,10 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
     // 如果prev为nullptr
     if (prev == nullptr) {
         // 插入到链表头
-        PMMFreeArea *head = free_area_head[order];
-        head->prev = new_area;
-        new_area->next = head;
-        new_area->prev = nullptr;
+        PMMFreeArea *head     = free_area_head[order];
+        head->prev            = new_area;
+        new_area->next        = head;
+        new_area->prev        = nullptr;
         free_area_head[order] = new_area;
         return farl_try_merge(new_area);
     }
@@ -271,17 +267,17 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
     // prev -> cur(prev <- cur)
     // 变为
     // prev -> new_area -> cur(prev <- new_area <- cur)
-    prev->next = new_area;
+    prev->next     = new_area;
     new_area->next = cur;
 
     new_area->prev = prev;
-    cur->prev = new_area;
+    cur->prev      = new_area;
     return farl_try_merge(new_area);
 }
 
 /**
  * @brief 添加一个空闲内存块到物理内存管理器
- * 
+ *
  * @param paddr 物理地址
  * @param order 阶数
  * @return true 添加成功
@@ -291,23 +287,20 @@ static bool pmm_add_free_memblock(void *paddr, int order) {
     // 判断是否 2^order(页) 对齐
     const umb_t block_size = 1ul << (order + 12);
     if (((umb_t)paddr % block_size) != 0) {
-        log_error("pmm_add_free_memblock: 地址 %p 非 %lu 对齐",
-                  paddr,
+        log_error("pmm_add_free_memblock: 地址 %p 非 %lu 对齐", paddr,
                   block_size);
         return false;
     }
 
-    log_debug ("添加了内存块 [%p, %p), 阶数=%d",
-              paddr,
-              (void *)((umb_t)paddr + block_size),
-              order);
+    log_debug("添加了内存块 [%p, %p), 阶数=%d", paddr,
+              (void *)((umb_t)paddr + block_size), order);
 
     // 构造FreeArea对象记录
     PMMFreeArea *area = kmalloc(sizeof(PMMFreeArea));
-    area->order = order;
-    area->paddr = paddr;
-    area->prev = nullptr;
-    area->next = nullptr;
+    area->order       = order;
+    area->paddr       = paddr;
+    area->prev        = nullptr;
+    area->next        = nullptr;
 
     PMMFreeArea *merged = farl_insert(area);
     while (merged != nullptr) {
@@ -318,7 +311,7 @@ static bool pmm_add_free_memblock(void *paddr, int order) {
 
 /**
  * @brief 添加多个空闲页到物理内存管理器
- * 
+ *
  * @param paddr 物理地址
  * @param pages 页数
  * @return true 添加成功
@@ -341,33 +334,34 @@ static bool pmm_add_free_pages(void *paddr, int pages) {
         while (order < MAX_BUDDY_ORDER) {
             // 计算一块中的页数与大小
             umb_t block_pages = 1ul << order;
-            umb_t block_size = block_pages << 12;
+            umb_t block_size  = block_pages << 12;
             // 地址对齐且不超过剩余页数
             if ((addr % block_size) == 0 && block_pages <= remain) {
-                order ++;
+                order++;
             } else {
                 break;
             }
         }
         // 当break时, 至少上一个order是可用的
-        order --;
+        order--;
         // 插入该阶数的块(addr, addr + 2^order * 4KB - 1)
         if (!pmm_add_free_memblock((void *)addr, order)) {
-            log_error("pmm_add_free_pages: 添加内存块失败 addr=%p order=%d", (void *)addr, order);
+            log_error("pmm_add_free_pages: 添加内存块失败 addr=%p order=%d",
+                      (void *)addr, order);
             return false;
         }
-        umb_t block_pages = 1ul << order;
+        umb_t block_pages  = 1ul << order;
         // 处理(addr + 2^order * 4KB, addr + pages * 4KB - 1)部分
-        addr += block_pages << 12;
+        addr              += block_pages << 12;
         // 减少剩余需要加入的块
-        remain -= block_pages;
+        remain            -= block_pages;
     }
     return true;
 }
 
 /**
  * @brief 从物理内存管理器中获取一个空闲内存块
- * 
+ *
  * @param order 内存块阶数
  * @return void* 内存块地址
  */
@@ -390,28 +384,26 @@ static void *pmm_fetch_free_memblock(int order) {
 
         // 将高一阶内存块拆分为两个低一阶内存块
         umb_t block_size = 1ul << (order + 12);
-        void *buddy1 = higher_block;
-        void *buddy2 = (void *)((umb_t)higher_block + block_size);
+        void *buddy1     = higher_block;
+        void *buddy2     = (void *)((umb_t)higher_block + block_size);
 
-        log_debug("将[%p, %p)拆分为[%p, %p)和[%p, %p)",
-                 higher_block,
-                 (void *)((umb_t)higher_block + block_size * 2),
-                 buddy1, (void *)((umb_t)buddy1 + block_size),
-                 buddy2, (void *)((umb_t)buddy2 + block_size));
+        log_debug("将[%p, %p)拆分为[%p, %p)和[%p, %p)", higher_block,
+                  (void *)((umb_t)higher_block + block_size * 2), buddy1,
+                  (void *)((umb_t)buddy1 + block_size), buddy2,
+                  (void *)((umb_t)buddy2 + block_size));
 
         // 留下buddy2, 返回buddy1
         paddr = buddy1;
         pmm_add_free_memblock(buddy2, order);
-    }
-    else {
+    } else {
         // 从链表头取出一个内存块
         PMMFreeArea *area = free_area_head[order];
-        paddr = area->paddr;
+        paddr             = area->paddr;
 
         // 从链表中移除area
         PMMFreeArea *next = area->next;
         if (next != nullptr) {
-            next->prev = nullptr;
+            next->prev            = nullptr;
             free_area_head[order] = next;
         } else {
             // 只有一个节点
@@ -423,10 +415,8 @@ static void *pmm_fetch_free_memblock(int order) {
         kfree(area);
     }
 
-    log_debug ("分配了内存块 [%p, %p), 阶数=%d",
-              paddr,
-              (void *)((umb_t)paddr + (1ul << (order + 12))),
-              order);
+    log_debug("分配了内存块 [%p, %p), 阶数=%d", paddr,
+              (void *)((umb_t)paddr + (1ul << (order + 12))), order);
 
     return paddr;
 }
@@ -444,23 +434,17 @@ void *alloc_pages(int pagecnt) {
     int order = 0;
     // 计算所需的最小order
     switch (pagecnt) {
-        case 1:
-            order = 0;
-            break;
-        case 2:
-            order = 1;
-            break;
+        case 1:  order = 0; break;
+        case 2:  order = 1; break;
         case 3:
-        case 4:
-            order = 2;
-            break;
+        case 4:  order = 2; break;
         default: {
             order = 3;
             while (order <= MAX_BUDDY_ORDER) {
                 if ((1ul << order) >= pagecnt) {
                     break;
                 }
-                order ++;
+                order++;
             }
             break;
         }
@@ -471,7 +455,7 @@ void *alloc_pages(int pagecnt) {
 
 /**
  * @brief PMM测试程序
- * 
+ *
  */
 void pmm_testbench(void) {
     // 测试
@@ -485,7 +469,8 @@ void pmm_testbench(void) {
     void *blk4 = alloc_pages(2);
     void *blk5 = alloc_pages(2);
 
-    log_info("blk1=%p, blk2=%p, blk3=%p, blk4=%p, blk5=%p", blk1, blk2, blk3, blk4, blk5);
+    log_info("blk1=%p, blk2=%p, blk3=%p, blk4=%p, blk5=%p", blk1, blk2, blk3,
+             blk4, blk5);
 
     pmm_add_free_pages(blk1, 2);
     pmm_add_free_pages(blk2, 2);
@@ -499,7 +484,8 @@ void pmm_init(MemRegion *layout) {
 
     // STEP1: 根据layout解析物理内存布局
     // STEP2: 构造一个全局数组 __HEAP__ 作为初始化阶段的堆内存(大小64MB)
-    // STEP3: 利用 __HEAP__ 实现__primitive_kmalloc__函数, 设置为初始内存分配函数
+    // STEP3: 利用 __HEAP__ 实现__primitive_kmalloc__函数,
+    // 设置为初始内存分配函数
 
     // STEP4: 利用__primitive_kmalloc__初始化Buddy System数据结构
     // STEP5: 初始化kmalloc函数接口
@@ -515,7 +501,7 @@ void pmm_init(MemRegion *layout) {
 
 /**
  * @brief 将物理地址转换为内核虚拟地址
- * 
+ *
  * @param paddr 物理地址
  * @return void* 内核虚拟地址
  */

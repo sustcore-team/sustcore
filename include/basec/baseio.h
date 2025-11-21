@@ -18,12 +18,12 @@
 /**
  * @brief 输出函数
  */
-typedef int(*BaseCPutsFunc)(const char *);
+typedef int (*BaseCPutsFunc)(const char *);
 
 /**
  * @brief 输入函数
  */
-typedef char(*BaseCGetcharFunc)(void);
+typedef char (*BaseCGetcharFunc)(void);
 
 /**
  * @brief 使用bputs输出
@@ -67,7 +67,7 @@ int bscanf(BaseCGetcharFunc bgetchar, const char *fmt, ...);
 
 /**
  * @brief 向str中输出格式化数据
- * 
+ *
  * @param str 缓存字符串
  * @param fmt 格式化字符串
  * @param ... 参数
@@ -77,7 +77,7 @@ int ssprintf(char *str, const char *fmt, ...);
 
 // /**
 //  * @brief 从str中输入格式化数据
-//  * 
+//  *
 //  * @param str 源字符串
 //  * @param fmt 格式化字符串
 //  * @param ... 参数

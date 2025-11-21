@@ -20,7 +20,8 @@
  * @param base_file 源文件
  * @param line 行
  */
-void assertion_failure(const char *expression, const char *file, const char *base_file, int line);
+void assertion_failure(const char *expression, const char *file,
+                       const char *base_file, int line);
 /**
  * @brief 崩溃断言
  *
@@ -29,7 +30,8 @@ void assertion_failure(const char *expression, const char *file, const char *bas
  * @param base_file 源文件
  * @param line 行
  */
-void panic_failure(const char *expression, const char *file, const char *base_file, int line);
+void panic_failure(const char *expression, const char *file,
+                   const char *base_file, int line);
 /**
  * @brief 崩溃
  *
@@ -40,15 +42,17 @@ void panic(const char *format, ...);
 
 // 不开启DEBUG
 #ifdef NDEBUG
-    /** 断言 */
-    #define assert(expression) ((void)0)
-    /** 崩溃断言 */
-    #define panic_assert(expression) ((void)0)
+/** 断言 */
+#define assert(expression)       ((void)0)
+/** 崩溃断言 */
+#define panic_assert(expression) ((void)0)
 #else
-    /** 断言 */
-    #define assert(expression) if (! (expression)) \
-        assertion_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
-    /** 崩溃断言 */
-    #define panic_assert(expression) if (! (expression)) \
-        panic_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
+/** 断言 */
+#define assert(expression) \
+    if (!(expression))     \
+    assertion_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
+/** 崩溃断言 */
+#define panic_assert(expression) \
+    if (!(expression))           \
+    panic_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
 #endif

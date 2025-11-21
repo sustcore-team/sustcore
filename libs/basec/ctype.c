@@ -4,16 +4,17 @@
  * @brief ctypes.h函数实现
  * @version alpha-1.0.0
  * @date 2025-11-17
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #include <ctype.h>
 
 /** 是否为空格字符 */
 int isspace(int ch) {
-    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' || ch == '\f';
+    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' ||
+           ch == '\f';
 }
 
 /** 是否为大写字母 */
@@ -53,22 +54,23 @@ int iscntrl(int ch) {
 
 /** 是否为可打印字符 */
 int isprint(int ch) {
-    return (! iscntrl(ch));
+    return (!iscntrl(ch));
 }
 
 /** 是否为可打印字符(非空格) */
 int isgraph(int ch) {
-    return isprint(ch) && (! isspace(ch));
+    return isprint(ch) && (!isspace(ch));
 }
 
 /** 是否为标点符号 */
 int ispunct(int ch) {
-    return isgraph(ch) && (! isalnum(ch));
+    return isgraph(ch) && (!isalnum(ch));
 }
 
 /** 是否为十六进制字符 */
 int isxdigit(int ch) {
-    return isalnum(ch) || ((ch >= 'a' && ch <= 'F') || (ch >= 'A' && ch <= 'F'));
+    return isalnum(ch) ||
+           ((ch >= 'a' && ch <= 'F') || (ch >= 'A' && ch <= 'F'));
 }
 
 /** 是否为八进制字符 */
