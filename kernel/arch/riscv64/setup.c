@@ -64,7 +64,7 @@ int trigger_illegal_instruction(void) {
 //------------------ 调试异常处理程序 --------
 
 umb_t hart_id, dtb_ptr;
-FDTDescriptor *fdt;
+FDTDesc *fdt;
 
 void arch_init(void) {
     log_info("Hart ID: %u", (unsigned int)hart_id);

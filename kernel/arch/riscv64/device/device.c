@@ -28,8 +28,8 @@ int device_get_errno(void) {
     return errno;
 }
 
-FDTDescriptor *device_check_initial(void *dtb_ptr) {
-    FDTDescriptor *fdt = (FDTDescriptor *)dtb_ptr;
+FDTDesc *device_check_initial(void *dtb_ptr) {
+    FDTDesc *fdt = (FDTDesc *)dtb_ptr;
 
     /* 检查魔数 */
     if (fdt_magic(fdt) != FDT_MAGIC) {
@@ -48,6 +48,154 @@ FDTDescriptor *device_check_initial(void *dtb_ptr) {
     if (errno != 0)
         return nullptr;
     return fdt;
+}
+
+FDTNodeDesc get_device_root(const FDTDesc *fdt) {
+    return 0;
+}
+
+FDTNodeDesc get_sub_device(const FDTDesc *fdt, FDTNodeDesc parent, const char *name) {
+    FDTNodeDesc child;
+    // 遍历并匹配
+    fdt_for_each_subnode(child, fdt, parent) {
+        const char *node_name = fdt_get_name(fdt, child, NULL);
+        if (strcmp(node_name, name) == 0) {
+            return child;
+        }
+    }
+    return -1; // 未找到
+}
+
+FDTPropDesc get_device_property(const FDTDesc *fdt, FDTNodeDesc node, const char *name) {
+    FDTPropDesc prop;
+    // 遍历并匹配
+    fdt_for_each_property_offset(prop, fdt, node) {
+        const char *prop_name;
+        fdt_getprop_by_offset(fdt, prop, &prop_name, NULL);
+        if (strcmp(prop_name, name) == 0) {
+            return prop;
+        }
+    }
+    return -1; // 未找到
+}
+
+FDTPropVal get_device_property_value(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val;
+    const char *prop_name;
+    val.ptr = (void *)fdt_getprop_by_offset(fdt, prop, &prop_name, &val.len);
+    return val;
+}
+
+const char *get_device_property_value_as_string(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    return (const char *)val.ptr;
+}
+
+byte get_device_property_value_as_byte(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    if (val.len >= 1) {
+        return *(const byte *)val.ptr;
+    }
+    return 0;
+}
+
+word get_device_property_value_as_word(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    if (val.len >= sizeof(word)) {
+        return *(const word *)val.ptr;
+    }
+    return 0;
+}
+
+dword get_device_property_value_as_dword(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    if (val.len >= sizeof(dword)) {
+        return *(const dword *)val.ptr;
+    }
+    return 0;
+}
+
+qword get_device_property_value_as_qword(const FDTDesc *fdt, FDTPropDesc prop) {
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    if (val.len >= sizeof(qword)) {
+        return *(const qword *)val.ptr;
+    }
+    return 0;
+}
+
+int get_reg_region_number(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, int size_cells)
+{
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    int cells_per_region = addr_cells + size_cells;
+    int bytes_per_region = cells_per_region * sizeof(fdt32_t);
+
+    if (val.len % bytes_per_region != 0) {
+        return -1; // 无效的 reg 属性长度
+    }
+
+    int num_regions = val.len / bytes_per_region;
+    return num_regions;
+}
+
+int get_device_property_value_as_reg_regions(const FDTDesc *fdt, FDTPropDesc prop, int addr_cells, int size_cells,
+    void *buffer, uint64_t *sizes, int max_regions)
+{
+    FDTPropVal val = get_device_property_value(fdt, prop);
+    // 首先计算区域内的cells数, 与每个区域的大小
+    int cells_per_region = addr_cells + size_cells;
+    int bytes_per_region = cells_per_region * sizeof(fdt32_t);
+
+    if (val.len % bytes_per_region != 0) {
+        return -1; // 无效的 reg 属性长度
+    }
+
+    int num_regions = val.len / bytes_per_region;
+    if (num_regions > max_regions) {
+        num_regions = max_regions; // 限制最大区域数量
+    }
+
+    // 开始处理区域内的cells
+    const fdt32_t *cells = (const fdt32_t *)val.ptr;
+    uint8_t *buf_ptr = (uint8_t *)buffer;
+
+    // 逐区域处理
+    for (int i = 0; i < num_regions; i++) {
+        uint64_t address = 0;
+        uint64_t size = 0;
+
+        // 解析地址
+        for (int j = 0; j < addr_cells; j++) {
+            address = (address << 32) | fdt32_to_cpu(cells[i * cells_per_region + j]);
+        }
+
+        // 解析大小
+        for (int j = 0; j < size_cells; j++) {
+            size = (size << 32) | fdt32_to_cpu(cells[i * cells_per_region + addr_cells + j]);
+        }
+
+        // 存储地址和大小
+        *((uint64_t *)buf_ptr) = address;
+        buf_ptr += sizeof(uint64_t);
+        sizes[i] = size;
+    }
+
+    return num_regions;
+}
+
+int get_parent_address_cells(const FDTDesc *fdt, FDTNodeDesc node) {
+    int addr_cells = fdt_address_cells(fdt, fdt_parent_offset(fdt, node));
+    if (addr_cells < 0) {
+        addr_cells = 2; // 默认值
+    }
+    return addr_cells;
+}
+
+int get_parent_size_cells(const FDTDesc *fdt, FDTNodeDesc node) {
+    int size_cells = fdt_size_cells(fdt, fdt_parent_offset(fdt, node));
+    if (size_cells < 0) {
+        size_cells = 2; // 默认值
+    }
+    return size_cells;
 }
 
 // 设备树打印:打印缩进
@@ -115,9 +263,47 @@ static void print_property_value(const char *name, const void *value, int len) {
     }
 }
 
+static void print_reg_property(const char *name, int addr_cells, int size_cells, FDTPropVal prop_reg, int depth) {
+    int cells_per_region = addr_cells + size_cells;
+    int bytes_per_region = cells_per_region * sizeof(fdt32_t);
+
+    if (prop_reg.len % bytes_per_region != 0) {
+        print_indent(depth);
+        kprintf("%s = 无效的 reg 属性长度\n", name);
+        return;
+    }
+
+    int num_regions = prop_reg.len / bytes_per_region;
+    const fdt32_t *cells = (const fdt32_t *)prop_reg.ptr;
+
+    print_indent(depth);
+    kprintf("%s = <\n", name);
+
+    for (int i = 0; i < num_regions; i++) {
+        uint64_t address = 0;
+        uint64_t size = 0;
+
+        // 解析地址
+        for (int j = 0; j < addr_cells; j++) {
+            address = (address << 32) | fdt32_to_cpu(cells[i * cells_per_region + j]);
+        }
+
+        // 解析大小
+        for (int j = 0; j < size_cells; j++) {
+            size = (size << 32) | fdt32_to_cpu(cells[i * cells_per_region + addr_cells + j]);
+        }
+
+        print_indent(depth + 1);
+        kprintf("  区域 %d: 地址 = 0x%016x, 大小 = 0x%016x \n",
+            i, address, size);
+    }
+    print_indent(depth);
+    kprintf(">;\n");
+}
+
 // 递归打印节点及其所有属性
-static void print_node_recursive(const FDTDescriptor *fdt, int nd_off, int depth) {
-    const char *node_name = fdt_get_name(fdt, nd_off, NULL);
+static void print_node_recursive(const FDTDesc *fdt, FDTNodeDesc node, int depth) {
+    const char *node_name = fdt_get_name(fdt, node, NULL);
 
     // 打印节点名称
     print_indent(depth);
@@ -126,17 +312,22 @@ static void print_node_recursive(const FDTDescriptor *fdt, int nd_off, int depth
     else
         kprintf("%s {\n", node_name);
 
-    int prop_off, child_off;
+    FDTPropDesc prop;
+    FDTNodeDesc child;
 
     // 遍历并打印所有属性
-    fdt_for_each_property_offset(prop_off, fdt, nd_off) {
+    fdt_for_each_property_offset(prop, fdt, node) {
         // 获得属性
         const char *prop_name;
         const void *prop_value;
         int prop_len;
 
-        prop_value = fdt_getprop_by_offset(fdt, prop_off, 
-                                              &prop_name, &prop_len);
+        prop_value = fdt_getprop_by_offset(fdt, prop, &prop_name, &prop_len);
+
+        if (strcmp(prop_name, "reg") == 0) {
+            // 暂时跳过
+            continue;
+        }
 
         // 打印属性名称和值
         if (prop_value) {
@@ -151,9 +342,28 @@ static void print_node_recursive(const FDTDescriptor *fdt, int nd_off, int depth
         }
     }
 
+    FDTPropDesc prop_regs = get_device_property(fdt, node, "reg");
+    if (prop_regs != -1) {
+        // 获取父节点的#address-cells和#size-cells
+        FDTNodeDesc parent = fdt_parent_offset(fdt, node);
+        if (parent >= 0) {
+            int addr_cells = fdt_address_cells(fdt, parent);
+            int size_cells = fdt_size_cells(fdt, parent);
+
+            if (addr_cells <= 0) {
+                addr_cells = 2; // 默认值
+            }
+            if (size_cells <= 0) {
+                size_cells = 2; // 默认值
+            }
+
+            print_reg_property("reg", addr_cells, size_cells, get_device_property_value(fdt, prop_regs), depth + 1);
+        }
+    }
+
     // 递归处理所有子节点
-    fdt_for_each_subnode(child_off, fdt, nd_off) {
-        print_node_recursive(fdt, child_off, depth + 1);
+    fdt_for_each_subnode(child, fdt, node) {
+        print_node_recursive(fdt, child, depth + 1);
     }
 
     print_indent(depth);
@@ -161,7 +371,7 @@ static void print_node_recursive(const FDTDescriptor *fdt, int nd_off, int depth
 }
 
 // 打印内存保留区域
-static void print_memory_reservations(const FDTDescriptor *fdt) {
+static void print_memory_reservations(const FDTDesc *fdt) {
     kprintf("/* 内存保留区域 */\n");
 
     uint64_t address, size;
@@ -184,24 +394,25 @@ static void print_memory_reservations(const FDTDescriptor *fdt) {
 }
 
 // 统计函数
-static void count_nodes_props(const FDTDescriptor *fdt, int nd_off, int *nodes, int *props) {
+static void count_nodes_props(const FDTDesc *fdt, FDTNodeDesc node, int *nodes, int *props) {
     (*nodes)++;
     
+    FDTPropDesc prop;
+    FDTNodeDesc child;
+
     // 遍历属性
-    int prop_offset;
-    fdt_for_each_property_offset(prop_offset, fdt, nd_off) {
+    fdt_for_each_property_offset(prop, fdt, node) {
         (*props)++;
     }
     
     // 递归遍历子节点
-    int child_offset;
-    fdt_for_each_subnode(child_offset, fdt, nd_off) {
-        count_nodes_props(fdt, child_offset, nodes, props);
+    fdt_for_each_subnode(child, fdt, node) {
+        count_nodes_props(fdt, child, nodes, props);
     }
 }
 
 // 主函数：打印整个设备树的所有信息
-void print_entire_device_tree(const FDTDescriptor *fdt) {
+void print_entire_device_tree(const FDTDesc *fdt) {
     // 检查设备树有效性
     if (fdt_check_header(fdt) != 0) {
         log_error("无效的二进制设备树\n");
@@ -215,10 +426,11 @@ void print_entire_device_tree(const FDTDescriptor *fdt) {
     print_memory_reservations(fdt);
     
     // 打印根节点及其所有子节点
-    print_node_recursive(fdt, 0, 0);
+    print_node_recursive(fdt, get_device_root(fdt), 0);
 }
 
-void print_device_tree_detailed(const FDTDescriptor *fdt) {
+// 附加功能
+void print_device_tree_detailed(const FDTDesc *fdt) {
     if (fdt_check_header(fdt) != 0) {
         log_error("无效的二进制设备树\n");
         return;
@@ -260,7 +472,7 @@ void print_device_tree_detailed(const FDTDescriptor *fdt) {
     int total_nodes = 0;
     int total_properties = 0;
     
-    count_nodes_props(fdt, 0, &total_nodes, &total_properties);
+    count_nodes_props(fdt, get_device_root(fdt), &total_nodes, &total_properties);
     kprintf("  总节点数: %d\n", total_nodes);
     kprintf("  总属性数: %d\n", total_properties);
     kprintf("\n");
