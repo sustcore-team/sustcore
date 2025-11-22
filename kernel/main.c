@@ -11,6 +11,7 @@
 
 #include <basec/logger.h>
 #include <mem/alloc.h>
+#include <mem/kmem.h>
 #include <mem/pmm.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -19,7 +20,6 @@
 #include <sus/arch.h>
 #include <sus/boot.h>
 #include <sus/symbols.h>
-#include <mem/kmem.h>
 
 /**
  * @brief 内核主函数
@@ -61,7 +61,7 @@ void kernel_paging_setup(MemRegion *const layout) {
 
     // 根据layout找到地址上界upper_bound
     void *upper_bound = nullptr;
-    MemRegion *iter = layout;
+    MemRegion *iter   = layout;
     while (iter != nullptr) {
         void *end_addr =
             (void *)(((umb_t)iter->addr + iter->size + PAGE_SIZE - 1) &
@@ -74,26 +74,28 @@ void kernel_paging_setup(MemRegion *const layout) {
     log_info("内存地址上界:   %p", upper_bound);
     // 对[0, upper_bound)作恒等映射
     mem_maps_range_to(root, (void *)0x0, (void *)0x0,
-                         (umb_t)upper_bound / PAGE_SIZE, RWX_MODE_RWX, false,
-                         true);
+                      (umb_t)upper_bound / PAGE_SIZE, RWX_MODE_RWX, false,
+                      true);
 
     // 把内核部分映射到高地址
     umb_t kernel_pages =
         ((umb_t)&ekernel - (umb_t)&skernel + PAGE_SIZE - 1) / PAGE_SIZE;
 
     log_info("内核地址偏移:      %p", (umb_t)KERNEL_VA_OFFSET);
-    void *kernel_vaddr_start = (void *)(((umb_t)&skernel) + (umb_t)KERNEL_VA_OFFSET);
+    void *kernel_vaddr_start =
+        (void *)(((umb_t)&skernel) + (umb_t)KERNEL_VA_OFFSET);
     log_info("内核虚拟地址空间: [%p, %p)", kernel_vaddr_start,
              (void *)((umb_t)kernel_vaddr_start + kernel_pages * PAGE_SIZE));
 
     // 首先映射代码段
-    void *text_vaddr_start = (void *)(((umb_t)&s_text) + (umb_t)KERNEL_VA_OFFSET);
+    void *text_vaddr_start =
+        (void *)(((umb_t)&s_text) + (umb_t)KERNEL_VA_OFFSET);
     umb_t text_pages =
         ((umb_t)&e_text - (umb_t)&s_text + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核代码段虚拟地址空间: [%p, %p)", text_vaddr_start,
              (void *)((umb_t)text_vaddr_start + text_pages * PAGE_SIZE));
     mem_maps_range_to(root, text_vaddr_start, (void *)&s_text, text_pages,
-                         RWX_MODE_RX, false, true);
+                      RWX_MODE_RX, false, true);
 
     // 接着映射ivt
     void *ivt_vaddr_start = (void *)(((umb_t)&s_ivt) + (umb_t)KERNEL_VA_OFFSET);
@@ -102,33 +104,36 @@ void kernel_paging_setup(MemRegion *const layout) {
     log_info("内核IVT段虚拟地址空间: [%p, %p)", ivt_vaddr_start,
              (void *)((umb_t)ivt_vaddr_start + ivt_pages * PAGE_SIZE));
     mem_maps_range_to(root, ivt_vaddr_start, (void *)&s_ivt, ivt_pages,
-                         RWX_MODE_RWX, false, true);
+                      RWX_MODE_RWX, false, true);
 
     // 再映射只读数据段
-    void *rodata_vaddr_start = (void *)(((umb_t)&s_rodata) + (umb_t)KERNEL_VA_OFFSET);
+    void *rodata_vaddr_start =
+        (void *)(((umb_t)&s_rodata) + (umb_t)KERNEL_VA_OFFSET);
     umb_t rodata_pages =
         ((umb_t)&e_rodata - (umb_t)&s_rodata + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核只读数据段虚拟地址空间: [%p, %p)", rodata_vaddr_start,
              (void *)((umb_t)rodata_vaddr_start + rodata_pages * PAGE_SIZE));
     mem_maps_range_to(root, rodata_vaddr_start, (void *)&s_rodata, rodata_pages,
-                         RWX_MODE_R, false, true);
+                      RWX_MODE_R, false, true);
 
     // 最后映射数据段, 初始数据段与BSS段
-    void *data_vaddr_start = (void *)(((umb_t)&s_data) + (umb_t)KERNEL_VA_OFFSET);
+    void *data_vaddr_start =
+        (void *)(((umb_t)&s_data) + (umb_t)KERNEL_VA_OFFSET);
     umb_t data_pages =
         ((umb_t)&e_data - (umb_t)&s_data + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核数据段虚拟地址空间: [%p, %p)", data_vaddr_start,
              (void *)((umb_t)data_vaddr_start + data_pages * PAGE_SIZE));
     mem_maps_range_to(root, data_vaddr_start, (void *)&s_data, data_pages,
-                         RWX_MODE_RW, false, true);
+                      RWX_MODE_RW, false, true);
     // 初始数据段
-    void *sdata_vaddr_start = (void *)(((umb_t)&s_sdata) + (umb_t)KERNEL_VA_OFFSET);
+    void *sdata_vaddr_start =
+        (void *)(((umb_t)&s_sdata) + (umb_t)KERNEL_VA_OFFSET);
     umb_t sdata_pages =
         ((umb_t)&e_sdata - (umb_t)&s_sdata + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核初始化数据段虚拟地址空间: [%p, %p)", sdata_vaddr_start,
              (void *)((umb_t)sdata_vaddr_start + sdata_pages * PAGE_SIZE));
     mem_maps_range_to(root, sdata_vaddr_start, (void *)&s_sdata, sdata_pages,
-                         RWX_MODE_RW, false, true);
+                      RWX_MODE_RW, false, true);
 
     // BSS段
     void *bss_vaddr_start = (void *)(((umb_t)&s_bss) + (umb_t)KERNEL_VA_OFFSET);
@@ -137,16 +142,17 @@ void kernel_paging_setup(MemRegion *const layout) {
     log_info("内核BSS段虚拟地址空间: [%p, %p)", bss_vaddr_start,
              (void *)((umb_t)bss_vaddr_start + bss_pages * PAGE_SIZE));
     mem_maps_range_to(root, bss_vaddr_start, (void *)&s_bss, bss_pages,
-                         RWX_MODE_RW, false, true);
+                      RWX_MODE_RW, false, true);
 
     // 剩余部分
-    void *misc_vaddr_start = (void *)(((umb_t)&s_misc) + (umb_t)KERNEL_VA_OFFSET);
+    void *misc_vaddr_start =
+        (void *)(((umb_t)&s_misc) + (umb_t)KERNEL_VA_OFFSET);
     umb_t misc_pages =
         ((umb_t)&ekernel - (umb_t)&s_misc + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核剩余部分虚拟地址空间: [%p, %p)", misc_vaddr_start,
              (void *)((umb_t)misc_vaddr_start + misc_pages * PAGE_SIZE));
     mem_maps_range_to(root, misc_vaddr_start, (void *)&s_misc, misc_pages,
-                         RWX_MODE_R, false, true);
+                      RWX_MODE_R, false, true);
 
     // 切换根页表
     mem_switch_root(root);
@@ -180,6 +186,9 @@ void pre_init(void) {
     arch_pre_init();
 }
 
+void test(void);
+extern dword IVT[];
+
 void post_init(void) {
     // 首先, 重新设置logger的函数指针
     init_logger(kputs, "SUSTCore");
@@ -192,8 +201,13 @@ void post_init(void) {
     log_info("后初始化架构相关...");
     arch_post_init();
 
-    // 最后执行main与terminate
+    // 进行IVT只读化
+    PagingTab root          = mem_root();
+    mem_modify_page_range_to_rx(root, &s_ivt, &e_ivt);
+    flush_tlb();
+    log_info("IVT段已只读化!");
 
+    // 最后执行main与terminate
     main();
 
     terminate();
