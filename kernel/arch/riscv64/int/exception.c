@@ -21,7 +21,7 @@
  * 我们均采取为跳转指令的形式
  * 即 j offset
  */
-SECTION(.data.ivt)
+SECTION(.ivt)
 dword IVT[IVT_ENTRIES] = {};
 
 /**

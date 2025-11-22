@@ -74,9 +74,9 @@ void sv39_maps_to(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     pte->g     = g;
     pte->ppn   = phyaddr2ppn(paddr);
 
-    log_info("sv39_maps_to: 映射4KB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
-             vaddr, (void *)((umb_t)vaddr + SV39_4K_PAGE_SIZE), paddr,
-             (void *)((umb_t)paddr + SV39_4K_PAGE_SIZE));
+    // log_debug("sv39_maps_to: 映射4KB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
+    //          vaddr, (void *)((umb_t)vaddr + SV39_4K_PAGE_SIZE), paddr,
+    //          (void *)((umb_t)paddr + SV39_4K_PAGE_SIZE));
 }
 
 void sv39_maps_to_2m(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
@@ -118,9 +118,9 @@ void sv39_maps_to_2m(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     pte->g     = g;
     pte->ppn   = phyaddr2ppn(paddr);
 
-    log_info("sv39_maps_to_2m: 映射2MB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
-             vaddr, (void *)((umb_t)vaddr + SV39_2M_PAGE_SIZE), paddr,
-             (void *)((umb_t)paddr + SV39_2M_PAGE_SIZE));
+    // log_debug("sv39_maps_to_2m: 映射2MB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
+    //          vaddr, (void *)((umb_t)vaddr + SV39_2M_PAGE_SIZE), paddr,
+    //          (void *)((umb_t)paddr + SV39_2M_PAGE_SIZE));
 }
 
 void sv39_maps_to_1g(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
@@ -146,9 +146,9 @@ void sv39_maps_to_1g(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     pte->g     = g;
     pte->ppn   = phyaddr2ppn(paddr);
 
-    log_info("sv39_maps_to_1g: 映射1GB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
-             vaddr, (void *)((umb_t)vaddr + SV39_1G_PAGE_SIZE), paddr,
-             (void *)((umb_t)paddr + SV39_1G_PAGE_SIZE));
+    // log_debug("sv39_maps_to_1g: 映射1GB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
+    //          vaddr, (void *)((umb_t)vaddr + SV39_1G_PAGE_SIZE), paddr,
+    //          (void *)((umb_t)paddr + SV39_1G_PAGE_SIZE));
 }
 
 void sv39_maps_range_to(SV39PT root, void *vstart, void *pstart, size_t pages,

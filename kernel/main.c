@@ -86,8 +86,67 @@ void kernel_paging_setup(MemRegion *const layout) {
     log_info("内核虚拟地址空间: [%p, %p)", kernel_vaddr_start,
              (void *)((umb_t)kernel_vaddr_start + kernel_pages * PAGE_SIZE));
 
-    mem_maps_range_to(root, kernel_vaddr_start, (&skernel),
-                         kernel_pages, RWX_MODE_RWX, false, true);
+    // 首先映射代码段
+    void *text_vaddr_start = (void *)(((umb_t)&s_text) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t text_pages =
+        ((umb_t)&e_text - (umb_t)&s_text + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核代码段虚拟地址空间: [%p, %p)", text_vaddr_start,
+             (void *)((umb_t)text_vaddr_start + text_pages * PAGE_SIZE));
+    mem_maps_range_to(root, text_vaddr_start, (void *)&s_text, text_pages,
+                         RWX_MODE_RX, false, true);
+
+    // 接着映射ivt
+    void *ivt_vaddr_start = (void *)(((umb_t)&s_ivt) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t ivt_pages =
+        ((umb_t)&e_ivt - (umb_t)&s_ivt + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核IVT段虚拟地址空间: [%p, %p)", ivt_vaddr_start,
+             (void *)((umb_t)ivt_vaddr_start + ivt_pages * PAGE_SIZE));
+    mem_maps_range_to(root, ivt_vaddr_start, (void *)&s_ivt, ivt_pages,
+                         RWX_MODE_RWX, false, true);
+
+    // 再映射只读数据段
+    void *rodata_vaddr_start = (void *)(((umb_t)&s_rodata) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t rodata_pages =
+        ((umb_t)&e_rodata - (umb_t)&s_rodata + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核只读数据段虚拟地址空间: [%p, %p)", rodata_vaddr_start,
+             (void *)((umb_t)rodata_vaddr_start + rodata_pages * PAGE_SIZE));
+    mem_maps_range_to(root, rodata_vaddr_start, (void *)&s_rodata, rodata_pages,
+                         RWX_MODE_R, false, true);
+
+    // 最后映射数据段, 初始数据段与BSS段
+    void *data_vaddr_start = (void *)(((umb_t)&s_data) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t data_pages =
+        ((umb_t)&e_data - (umb_t)&s_data + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核数据段虚拟地址空间: [%p, %p)", data_vaddr_start,
+             (void *)((umb_t)data_vaddr_start + data_pages * PAGE_SIZE));
+    mem_maps_range_to(root, data_vaddr_start, (void *)&s_data, data_pages,
+                         RWX_MODE_RW, false, true);
+    // 初始数据段
+    void *sdata_vaddr_start = (void *)(((umb_t)&s_sdata) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t sdata_pages =
+        ((umb_t)&e_sdata - (umb_t)&s_sdata + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核初始化数据段虚拟地址空间: [%p, %p)", sdata_vaddr_start,
+             (void *)((umb_t)sdata_vaddr_start + sdata_pages * PAGE_SIZE));
+    mem_maps_range_to(root, sdata_vaddr_start, (void *)&s_sdata, sdata_pages,
+                         RWX_MODE_RW, false, true);
+
+    // BSS段
+    void *bss_vaddr_start = (void *)(((umb_t)&s_bss) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t bss_pages =
+        ((umb_t)&e_bss - (umb_t)&s_bss + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核BSS段虚拟地址空间: [%p, %p)", bss_vaddr_start,
+             (void *)((umb_t)bss_vaddr_start + bss_pages * PAGE_SIZE));
+    mem_maps_range_to(root, bss_vaddr_start, (void *)&s_bss, bss_pages,
+                         RWX_MODE_RW, false, true);
+
+    // 剩余部分
+    void *misc_vaddr_start = (void *)(((umb_t)&s_misc) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t misc_pages =
+        ((umb_t)&ekernel - (umb_t)&s_misc + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核剩余部分虚拟地址空间: [%p, %p)", misc_vaddr_start,
+             (void *)((umb_t)misc_vaddr_start + misc_pages * PAGE_SIZE));
+    mem_maps_range_to(root, misc_vaddr_start, (void *)&s_misc, misc_pages,
+                         RWX_MODE_R, false, true);
 
     // 切换根页表
     mem_switch_root(root);
