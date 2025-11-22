@@ -28,6 +28,14 @@ extern void *skernel, *ekernel;
 extern void *s_text, *e_text;
 
 /**
+ * @brief IVT起始/结束处位置
+ *
+ * 注意, 该符号指向该位置, 但该符号本身值不为该位置
+ *
+ */
+extern void *s_ivt, *e_ivt;
+
+/**
  * @brief 只读数据段起始/结束处位置
  *
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
@@ -58,3 +66,9 @@ extern void *s_sdata, *e_sdata;
  *
  */
 extern void *s_bss, *e_bss;
+
+/**
+ * @brief 内核剩余部分起始处位置
+ *
+ */
+extern void *s_misc;

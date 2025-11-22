@@ -27,7 +27,7 @@ enum {
     EXCEPTION_ECALL_S            = 9,   // 监管模式环境调用
     EXCEPTION_RESERVED_0         = 10,  // 保留
     EXCEPTION_RESERVED_1         = 11,  // 保留
-    EXCEPTION_INST_PAGE_FAULT    = 12,  // 指令页错误
+    EXCEPTION_INST_PAGE_FAULT    = 12,  // 取指页错误
     EXCEPTION_LOAD_PAGE_FAULT    = 13,  // 加载页错误
     EXCEPTION_RESERVED_2         = 14,  // 保留
     EXCEPTION_STORE_PAGE_FAULT   = 15,  // 存储页错误
@@ -52,7 +52,7 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
                                    "监管模式环境调用",
                                    "保留",
                                    "保留",
-                                   "指令页错误",
+                                   "取指页错误",
                                    "加载页错误",
                                    "保留",
                                    "存储页错误",

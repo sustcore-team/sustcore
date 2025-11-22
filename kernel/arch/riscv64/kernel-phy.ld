@@ -12,32 +12,53 @@ SECTIONS
     s_text = .;
     .text : AT(PHY_BASE_ADDRESS) {
         *(.text.entry)
-        *(.text .text.*)
+        *(.text)
         . = ALIGN(4K);
         e_text = .;
     }
 
     . = ALIGN(4K);
+    s_ivt = .;
+    .ivt : {
+        *(.ivt .ivt.*)
+        . = ALIGN(4K);
+        e_ivt = .;
+    }
+
+    . = ALIGN(4K);
     s_rodata = .;
-    .rodata : { *(.rodata .rodata.*) }
+    .rodata : {
+        *(.rodata .rodata.*)
+        . = ALIGN(4K);
+        e_rodata = .;
+    }
 
     . = ALIGN(4K);
-    e_rodata = .;
     s_data = .;
-    .data : { *(.data .data.ivt) *(.data .data.*) *(.data .data.heap) }
+    .data : {
+        *(.data .data.*) *(.data.heap)
+        . = ALIGN(4K);
+        e_data = .;
+    }
 
     . = ALIGN(4K);
-    e_data = .;
     s_sdata = .;
-    .sdata : { *(.sdata .sdata.*) }
+    .sdata : {
+        *(.sdata .sdata.*)
+        . = ALIGN(4K);
+        e_sdata = .;
+    }
 
     . = ALIGN(4K);
-    e_sdata = .;
     s_bss = .;
-    .bss : { *(.bss .bss.*) }
+    .bss : {
+        *(.bss .bss.*)
+        . = ALIGN(4K);
+        e_bss = .;
+    }
 
     . = ALIGN(4K);
-    e_bss = .;
+    s_misc = .;
 
     .comment : { *(.comment .comment.*) }
     .riscv.attributes : { *(.riscv.attributes .riscv.attributes.*) }
