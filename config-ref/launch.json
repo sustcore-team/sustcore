@@ -20,6 +20,23 @@
                 "engineLogging": false
             },
             "MIMode": "gdb"
+        },
+        {
+            "name": "kernel-debug-phy",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerPath": "riscv64-unknown-elf-gdb",
+            "miDebuggerServerAddress": "127.0.0.1:1234",
+            "program": "${workspaceFolder}/build/bin/kernel/sustcore-phy.bin",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "logging": {
+                "engineLogging": false
+            },
+            "MIMode": "gdb"
         }
     ]
 }

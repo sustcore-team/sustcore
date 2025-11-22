@@ -23,10 +23,12 @@
 #if PAGING_MODE == SV39
 
 #include <arch/riscv64/mem/sv39.h>
+#include <arch/riscv64/csr.h>
 
 // 相关类型设置
-#define PTEntry   SV39PTE
-#define PagingTab SV39PT
+typedef SV39PTE PTEntry;
+typedef SV39PT PagingTab;
+typedef SV39LargablePTE LargablePTEntry;
 
 // 相关常量设置
 #define ENTRIES_PER_PAGING_TAB SV39_PTE_COUNT
@@ -34,11 +36,26 @@
 // 相关函数设置
 #define mapping_init() sv39_mapping_init()
 #define mem_root()     sv39_mapping_root()
+#define mem_construct_root() construct_sv39_mapping_root()
+// maps_to 函数总是只映射单页
 #define mem_maps_to(root, vaddr, paddr, rwx, u, g) \
     sv39_maps_to(root, vaddr, paddr, rwx, u, g)
+// maps_range_to 可以合理调整选择映射大页
 #define mem_maps_range_to(root, vstart, pstart, pages, rwx, u, g) \
-    sv39_maps_range_to(root, vstart, pstart, pages, rwx, u, g)
+    sv39_maps_range_to(root, vstart, pstart, pages, rwx, u, g, false)
+// mem_maps_pagewise_range_to 逐小页面映射
+#define mem_maps_pagewise_range_to(root, vstart, pstart, pages, rwx, u, g) \
+    sv39_maps_range_to(root, vstart, pstart, pages, rwx, u, g, true)
 #define mem_get_page(root, vaddr) sv39_get_pte(root, vaddr)
+
+#define mem_switch_root(root)                  \
+    do {                                     \
+        csr_satp_t new_satp;                 \
+        new_satp.mode = SATP_MODE_SV39;      \
+        new_satp.asid = 0;                   \
+        new_satp.ppn  = phyaddr2ppn(root);  \
+        csr_set_satp(new_satp);              \
+    } while (0)
 
 #define addr_v2p(root, vaddr) ppn2phyaddr(sv39_get_pte(root, vaddr)->ppn)
 
@@ -54,7 +71,7 @@
 // 是否存在
 #define PAGE_P(entry) (PAGE_VALID(entry) && (!(entry)->np))
 
-// RWX位是否有效\
+// RWX位是否有效
 // rwx != 0 且 rwx.w => rwx.r
 #define PAGE_RWX_VALID(entry)                    \
     (PAGE_VALID(entry) && ((entry)->rwx != 0) && \

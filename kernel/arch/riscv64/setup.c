@@ -66,12 +66,9 @@ __attribute__((noinline)) int trigger_illegal_instruction(void) {
 FDTDesc *fdt;
 umb_t hart_id, dtb_ptr;
 
-void arch_init(void) {
+void arch_pre_init(void) {
     log_info("Hart ID: %u", (unsigned int)hart_id);
     log_info("DTB Ptr: 0x%016lx", (unsigned long)dtb_ptr);
-
-    log_info("初始化中断向量表...");
-    init_ivt();
 
     log_info("开始验证并初始化设备树...");
     fdt = device_check_initial(dtb_ptr);
@@ -79,6 +76,11 @@ void arch_init(void) {
         log_error("设备树校验失败");
     }
     log_info("设备树校验成功!");
+}
+
+void arch_post_init(void) {
+    log_info("初始化中断向量表...");
+    init_ivt();
 
     // log_info("打印设备树信息");
     // print_device_tree_detailed(fdt);

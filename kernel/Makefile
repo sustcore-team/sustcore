@@ -6,6 +6,7 @@ include $(path-script)/helper.mk
 .PHONY: build
 
 target := $(path-kernel)
+target-phy := $(path-kernel-phy)
 
 objects := main.o 
 
@@ -17,6 +18,7 @@ include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
 flags-ld := -z max-page-size=0x100 -nostdlib
 
 args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/arch/$(architecture)/kernel.ld"
+args-phy-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/arch/$(architecture)/kernel-phy.ld"
 
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
@@ -38,8 +40,10 @@ flags-asm :=
 args-asm := flags-asm="$(flags-asm)"
 
 args := $(args-ld) $(args-c) $(args-asm) libraries="kerbasec kersbi fdt"
+args-phy := $(args-phy-ld) $(args-c) $(args-asm) libraries="kerbasec kersbi fdt"
 
 dir := dir-obj="$(path-objects)/kernel/" dir-src="$(path-d)"
 
 build:
 	$(q)$(MAKE) $(builder-k)=$(target) architecture=$(architecture) objects="$(objects)" $(dir) $(args) $(target)
+	$(q)$(MAKE) $(builder-k)=$(target-phy) architecture=$(architecture) objects="$(objects)" $(dir) $(args-phy) $(target-phy)

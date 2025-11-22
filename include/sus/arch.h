@@ -15,10 +15,16 @@
 #include <stddef.h>
 
 /**
- * @brief 架构特定初始化
+ * @brief 架构特定预初始化(内核页表未构建)
  *
  */
-void arch_init(void);
+void arch_pre_init(void);
+
+/**
+ * @brief 架构特定后初始化(内核页表构建完成)
+ *
+ */
+void arch_post_init(void);
 
 /**
  * @brief 架构特定收尾操作

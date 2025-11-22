@@ -186,13 +186,13 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
                     if (qualifier == QUAL_LONG || qualifier == QUAL_NORMAL ||
                         qualifier == QUAL_SHORT)
                     {
-                        int val = va_arg(args, int);
+                        unsigned long long val = va_arg(args, unsigned long long);
                         // 小于0则取相反数并设置符号标记
                         if (val < 0) {
                             has_sign = true;
                             val      = -val;
                         }
-                        itoa(val, _buffer, 10);
+                        lltoa(val, _buffer, 10);
                     }
                     break;
                 }
@@ -201,8 +201,8 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
                     if (qualifier == QUAL_LONG || qualifier == QUAL_NORMAL ||
                         qualifier == QUAL_SHORT)
                     {
-                        unsigned int val = va_arg(args, unsigned int);
-                        uitoa(val, _buffer, 10);
+                        unsigned long long val = va_arg(args, unsigned long long);
+                        ulltoa(val, _buffer, 10);
                     }
                     break;
                 }
@@ -211,8 +211,8 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
                     if (qualifier == QUAL_LONG || qualifier == QUAL_NORMAL ||
                         qualifier == QUAL_SHORT)
                     {
-                        unsigned int val = va_arg(args, unsigned int);
-                        uitoa(val, _buffer, 8);
+                        unsigned long long val = va_arg(args, unsigned long long);
+                        ulltoa(val, _buffer, 8);
                     }
                     break;
                 }
@@ -221,8 +221,8 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
                     if (qualifier == QUAL_LONG || qualifier == QUAL_NORMAL ||
                         qualifier == QUAL_SHORT)
                     {
-                        unsigned int val = va_arg(args, unsigned int);
-                        uitoa(val, _buffer, 16);
+                        unsigned long long val = va_arg(args, unsigned long long);
+                        ulltoa(val, _buffer, 16);
 
                         // 若大写
                         if (flag & FLAG_UPPER) {

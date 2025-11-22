@@ -41,3 +41,11 @@ void init_allocator(void);
  *
  */
 void init_allocator_stage2(void);
+
+/**
+ * @brief 初始化分配器第三阶段
+ *
+ * 应当由post_init在内核页表被设置完成后调用
+ *
+ */
+void init_allocator_stage3(void);

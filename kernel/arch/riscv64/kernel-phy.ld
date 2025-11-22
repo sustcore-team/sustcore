@@ -1,7 +1,7 @@
-/* kernel.ld - 确保内核被加载到 OpenSBI 跳转后的地址 */
+/* kernel-phy.ld - 调试用, 在内核进入高地址段前发挥作用 */
 ENTRY(_start)
 OUTPUT_ARCH(riscv)
-BASE_ADDRESS = 0xffffffff80200000;
+BASE_ADDRESS = 0x80200000;
 PHY_BASE_ADDRESS = 0x80200000;
 
 SECTIONS

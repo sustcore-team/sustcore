@@ -23,6 +23,9 @@ _start:
     sd a1, 0(t1)
     # 设置栈指针
     la sp, boot_stack_top
+    # 由于还未设置内核页表, 需要将sp转换为物理地址
+    # li t2, 0Xffffffff00000000
+    # sub sp, sp, t2
     # 跳转到 Rust/C 主函数
     call c_setup
 

@@ -12,9 +12,6 @@
 
 #include <basec/tostring.h>
 
-// 数字表
-static const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
-
 /**
  * @brief 无符号整型转字符串
  *
@@ -24,6 +21,7 @@ static const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
  * @return 字符串
  */
 char *uitoa(unsigned int val, char *buffer, int base) {
+    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
     char *ret = buffer;
     // 特殊情况
     if (val == 0) {
@@ -65,6 +63,83 @@ char *uitoa(unsigned int val, char *buffer, int base) {
  * @return 字符串
  */
 char *itoa(int val, char *buffer, int base) {
+    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+    // 保存起始位置
+    char *ret = buffer;
+
+    // 特殊情况判断
+    if (val == 0) {
+        *buffer = '0';
+        buffer++;
+        *buffer = '\0';
+        return ret;
+    }
+
+    if (val < 0) {
+        *buffer = '-';
+        buffer++;
+        val = -val;
+    }
+
+    // 正整数
+    uitoa(val, buffer, base);
+
+    return ret;
+}
+
+/**
+ * @brief 无符号整型转字符串
+ *
+ * @param val 值
+ * @param buffer 缓存
+ * @param base 进制
+ * @return 字符串
+ */
+char *ulltoa(unsigned long long val, char *buffer, int base) {
+    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
+    char *ret = buffer;
+    // 特殊情况
+    if (val == 0) {
+        *buffer = '0';
+        buffer++;
+        *buffer = '\0';
+        return ret;
+    }
+
+    char _buffer[12];
+    int cnt = 0;
+
+    // val仍大于0
+    while (val > 0) {
+        // 保存该位数字
+        const char *_digits = digits;
+        _buffer[cnt] = digits[val % base];
+
+        cnt++;
+
+        // 右移一个base进制位
+        val /= base;
+    }
+
+    // 恢复原顺序
+    for (int i = cnt - 1; i >= 0; i--) {
+        *buffer = _buffer[i];
+        buffer++;
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 整型转字符串
+ *
+ * @param val 值
+ * @param buffer 缓存
+ * @param base 进制
+ * @return 字符串
+ */
+char *lltoa(long long val, char *buffer, int base) {
+    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
     // 保存起始位置
     char *ret = buffer;
 

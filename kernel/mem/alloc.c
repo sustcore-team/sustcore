@@ -750,7 +750,15 @@ static void *__stage2_kmalloc__(size_t size) {
 void __stage2_kfree__(void *ptr) {
     AllocInfo *info = match_alloc_info(ptr);
     if (info == nullptr) {
-        log_error("__stage2_kfree__: 未找到匹配的分配信息 ptr=%p", ptr);
+        // 如果在HEAP范围内 可能是stage1分配的内存
+        if ((umb_t)ptr >= (umb_t)__HEAP__ &&
+            (umb_t)ptr <  (umb_t)__HEAP_TAIL__) {
+            __primitive_kfree__(ptr);
+            log_info("__stage2_kfree__: 转接到stage1释放内存 ptr=%p", ptr);
+        }
+        else {
+            log_error("__stage2_kfree__: 未找到匹配的分配信息 ptr=%p", ptr);
+        }
         return;
     }
     if (info->is_page) {

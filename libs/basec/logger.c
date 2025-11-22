@@ -22,7 +22,8 @@ static BaseCPutsFunc logger_puts;
 
 void init_logger(BaseCPutsFunc bputs, const char *name) {
     bprintf(bputs, "[BCL Logger/INFO]为[%s]初始化日志器中.\n", name);
-
+    void *addr = (void  *)bputs;
+    unsigned long long addr_val = (unsigned long long)addr;
     // 初始化
     logger_name = name;
     logger_puts = bputs;
@@ -30,6 +31,7 @@ void init_logger(BaseCPutsFunc bputs, const char *name) {
 
 // 最初级log
 void __llog__(const char *name, const char *level, const char *msg) {
+    unsigned long long addr = (unsigned long long)msg;
     bprintf(logger_puts, "[%s/%s]%s\n", name, level, msg);
 }
 
@@ -40,34 +42,30 @@ void __llog__(const char *name, const char *level, const char *msg) {
  * @param msg 日志消息
  */
 static void __log__(LogLevel level, const char *msg) {
-    // 日志等级字符串
-    const char *level_s = "";
-
     // 获取日志等级
     switch (level) {
         case INFO: {
-            level_s = "INFO";
-            break;
+            __llog__(logger_name, "INFO", msg);
+            return;
         }
         case WARNING: {
-            level_s = "WARNING";
-            break;
+            __llog__(logger_name, "WARNING", msg);
+            return;
         }
         case ERROR: {
-            level_s = "ERROR";
-            break;
+            __llog__(logger_name, "ERROR", msg);
+            return;
         }
         case FATAL: {
-            level_s = "FATAL";
-            break;
+            __llog__(logger_name, "FATAL", msg);
+            return;
         }
         case DEBUG: {
-            level_s = "DEBUG";
-            break;
+            __llog__(logger_name, "DEBUG", msg);
+            return;
         }
     }
-
-    __llog__(logger_name, level_s, msg);
+    __llog__(logger_name, "UNKNOWN", msg);
 }
 
 /**

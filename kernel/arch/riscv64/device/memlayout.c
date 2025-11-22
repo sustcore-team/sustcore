@@ -135,7 +135,7 @@ MemRegion *arch_get_memory_layout(void) {
 
     // 首先加入内核所在内存块
     add_mem_region(&head, &skernel,
-                   (size_t)((umb_t)&ekernel - (umb_t)&skernel) + 1,
+                   (size_t)((umb_t)&ekernel - (umb_t)&skernel),
                    MEM_REGION_RESERVED);
 
     // 再加入所有reserved区域
