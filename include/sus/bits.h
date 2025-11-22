@@ -55,3 +55,7 @@ typedef int64_t signed_machine_bits;
 /** 机器位数 */
 typedef machine_bits umb_t;
 typedef signed_machine_bits smb_t;
+
+// 逻辑运算符 a=>b 的实现
+// a=>b 即为 (!a | b)
+#define BOOL_IMPLIES(a, b) ((!(a)) | (b))
