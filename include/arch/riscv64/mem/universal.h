@@ -22,3 +22,5 @@ enum {
     RWX_MASK_W   = 0b010,  // 写掩码
     RWX_MASK_X   = 0b100,  // 执行掩码
 };
+
+#define flush_tlb() asm volatile("sfence.vma")

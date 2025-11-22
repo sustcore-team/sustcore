@@ -118,7 +118,8 @@ void sv39_maps_to_2m(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     pte->g     = g;
     pte->ppn   = phyaddr2ppn(paddr);
 
-    // log_debug("sv39_maps_to_2m: 映射2MB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
+    // log_debug("sv39_maps_to_2m: 映射2MB大页 vaddr=[%p, %p) to paddr=[%p,
+    // %p)",
     //          vaddr, (void *)((umb_t)vaddr + SV39_2M_PAGE_SIZE), paddr,
     //          (void *)((umb_t)paddr + SV39_2M_PAGE_SIZE));
 }
@@ -146,7 +147,8 @@ void sv39_maps_to_1g(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     pte->g     = g;
     pte->ppn   = phyaddr2ppn(paddr);
 
-    // log_debug("sv39_maps_to_1g: 映射1GB大页 vaddr=[%p, %p) to paddr=[%p, %p)",
+    // log_debug("sv39_maps_to_1g: 映射1GB大页 vaddr=[%p, %p) to paddr=[%p,
+    // %p)",
     //          vaddr, (void *)((umb_t)vaddr + SV39_1G_PAGE_SIZE), paddr,
     //          (void *)((umb_t)paddr + SV39_1G_PAGE_SIZE));
 }
@@ -200,6 +202,85 @@ void sv39_maps_range_to(SV39PT root, void *vstart, void *pstart, size_t pages,
             vaddr            = (void *)((umb_t)vaddr + SV39_PAGE_SIZE);
             paddr            = (void *)((umb_t)paddr + SV39_PAGE_SIZE);
             pages_remaining -= 1;
+        }
+    }
+}
+
+int sv39_modify_page_flags(SV39PT root, void *vaddr, int mask, umb_t rwx,
+                           bool u, bool g) {
+    // 将vaddr分解为三级页表索引
+    umb_t vpn[3];
+    umb_t va = (umb_t)vaddr;
+    vpn[0]   = (va >> 12) & 0x1FF;
+    vpn[1]   = (va >> 21) & 0x1FF;
+    vpn[2]   = (va >> 30) & 0x1FF;
+
+    int lvl = -1;
+
+    // 搜索第一级页表
+    SV39PTE *pte = &root[vpn[2]];
+    // 搜索第二级, 第三级
+    for (int level = 2; level > 0; level--) {
+        // 如果是无效页表项
+        if (!(pte->v)) {
+            log_error("sv39_modify_page_flags: 页表项无效!");
+            return -1;
+        }
+        if (pte->rwx != RWX_MODE_P) {
+            // 这是一个大页
+            lvl = level;
+            break;
+        }
+        // 取其中相应的下一级页表项
+        pte = &((SV39PTE *)ppn2phyaddr(pte->ppn))[vpn[level - 1]];
+    }
+
+    if (pte == nullptr || !(pte->v) || (pte->rwx == RWX_MODE_P)) {
+        log_error("sv39_modify_page_flags: 页表项无效!");
+        return -1;
+    }
+
+    lvl = (lvl == -1) ? 0 : lvl;
+
+    // 修改页表项标志
+    if (mask & 1) {
+        pte->rwx = rwx;
+    }
+    if (mask & 2) {
+        pte->u = u;
+    }
+    if (mask & 4) {
+        pte->g = g;
+    }
+
+    return lvl;
+}
+
+void sv39_modify_page_range_flags(SV39PT root, void *vstart, void *vend,
+                                  int mask, umb_t rwx, bool u, bool g) {
+    while ((umb_t)vstart < (umb_t)vend) {
+        int lvl = sv39_modify_page_flags(root, vstart, mask, rwx, u, g);
+        switch (lvl) {
+            case -1:
+                log_error("sv39_modify_page_range_flags: 修改页面标志失败!");
+                // 修改失败, 直接返回
+                return;
+            case 0:
+                // 4KB页面
+                vstart = (void *)((umb_t)vstart + SV39_4K_PAGE_SIZE);
+                break;
+            case 1:
+                // 2MB页面
+                vstart = (void *)((umb_t)vstart + SV39_2M_PAGE_SIZE);
+                break;
+            case 2:
+                // 1GB页面
+                vstart = (void *)((umb_t)vstart + SV39_1G_PAGE_SIZE);
+                break;
+            default:
+                // 不可能发生
+                log_error("sv39_modify_page_range_flags: 未知页面级别!");
+                return;
         }
     }
 }

@@ -179,6 +179,34 @@ void sv39_maps_range_to(SV39PT root, void *vstart, void *pstart, size_t pages,
                         umb_t rwx, bool u, bool g, bool pagewise);
 
 /**
+ * @brief SV39修改页面标志
+ * 
+ * @param root  页表根指针
+ * @param vaddr 虚拟地址
+ * @param mask  修改掩码(&1: 修改rwx ; &2: 修改u ; &4: 修改g)
+ * @param rwx   读写执行权限
+ * @param u     用户态可访问位
+ * @param g     全局页位
+ * @return int  修改的页面级别
+ */
+int sv39_modify_page_flags(SV39PT root, void *vaddr, int mask, umb_t rwx,
+                            bool u, bool g);
+
+/**
+ * @brief SV39修改页面标志
+ * 
+ * @param root   页表根指针
+ * @param vstart 虚拟地址起始处
+ * @param vend   虚拟地址结束处
+ * @param mask   修改掩码(&1: 修改rwx ; &2: 修改u ; &4: 修改g)
+ * @param rwx    读写执行权限
+ * @param u      用户态可访问位
+ * @param g      全局页位
+ */
+void sv39_modify_page_range_flags(SV39PT root, void *vstart, void *vend,
+                                  int mask, umb_t rwx, bool u, bool g);
+
+/**
  * @brief 获得页面项
  *
  * @param root 页表根
