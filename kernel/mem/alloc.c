@@ -468,7 +468,7 @@ static AllocInfo *alloc_info_head = nullptr;
 
 /**
  * @brief 空闲的分配信息链表头
- * 
+ *
  */
 static AllocInfo *empty_alloc_info_head = nullptr;
 
@@ -523,13 +523,13 @@ static void extend_empty_alloc_infos(const int extend_count) {
     empty_alloc_info_head       = &info[extend_count - 1];
 
     // 退出拓展状态
-    extending_empty_alloc_infos = false;
-    empty_alloc_info_count += extend_count;
+    extending_empty_alloc_infos  = false;
+    empty_alloc_info_count      += extend_count;
 }
 
 /**
  * @brief 获得空闲分配信息
- * 
+ *
  * @return AllocInfo* 分配信息指针
  */
 static AllocInfo *get_empty_alloc_info(void) {
@@ -557,7 +557,7 @@ static AllocInfo *get_empty_alloc_info(void) {
 
 /**
  * @brief 添加分配信息到使用列表
- * 
+ *
  * @param info 分配信息指针
  */
 static void add_alloc_info(AllocInfo *info) {
@@ -573,14 +573,14 @@ static void add_alloc_info(AllocInfo *info) {
 
     // 添加到列表头
     alloc_info_head->last = info;
-    info->next = alloc_info_head;
-    info->last = nullptr;
-    alloc_info_head = info;
+    info->next            = alloc_info_head;
+    info->last            = nullptr;
+    alloc_info_head       = info;
 }
 
 /**
  * @brief 添加小块内存分配信息
- * 
+ *
  * @param start 起始位置
  * @param end 结束位置
  */
@@ -592,15 +592,15 @@ static void add_small_alloc_info(HeapLocation start, HeapLocation end) {
     }
 
     // 填充信息
-    info->is_page    = false;
-    info->start      = start;
-    info->end        = end;
+    info->is_page = false;
+    info->start   = start;
+    info->end     = end;
     add_alloc_info(info);
 }
 
 /**
  * @brief 添加页分配信息
- * 
+ *
  * @param start_page 起始页
  * @param page_count 页数量
  */
@@ -620,7 +620,7 @@ static void add_page_alloc_info(void *start_page, int page_count) {
 
 /**
  * @brief 释放分配信息
- * 
+ *
  * @param info 分配信息指针
  */
 static void release_page_alloc_info(AllocInfo *info) {
@@ -629,7 +629,7 @@ static void release_page_alloc_info(AllocInfo *info) {
         return;
     }
     // 将其标记为未使用
-    info->is_used = false;
+    info->is_used   = false;
     AllocInfo *prev = info->last;
     // 移出使用列表
     if (prev == nullptr) {
@@ -658,7 +658,8 @@ static void release_page_alloc_info(AllocInfo *info) {
 // 匹配分配信息
 static AllocInfo *match_alloc_info(void *addr) {
     // 遍历分配信息链表
-    for (AllocInfo *info = alloc_info_head; info != nullptr; info = info->next) {
+    for (AllocInfo *info = alloc_info_head; info != nullptr; info = info->next)
+    {
         if (info->is_page) {
             // 大页分配
             if (info->start_page == addr) {
@@ -667,7 +668,7 @@ static AllocInfo *match_alloc_info(void *addr) {
         } else {
             // 小块分配
             void *start_addr = (void *)((umb_t)info->start.idx->heap_pages +
-                                       info->start.offset);
+                                        info->start.offset);
             if (addr == start_addr) {
                 return info;
             }
@@ -760,9 +761,8 @@ void __stage2_kfree__(void *ptr) {
         // 标记为未使用
         unmark_dirty(info->start, info->end);
         // 更新空闲dword数量
-        size_t freed_dwords =
-            (info->end.offset - info->start.offset) / 4 + 1;
-        heap_free_dwords += freed_dwords;
+        size_t freed_dwords  = (info->end.offset - info->start.offset) / 4 + 1;
+        heap_free_dwords    += freed_dwords;
     }
     // 释放分配信息
     release_page_alloc_info(info);

@@ -462,9 +462,8 @@ void *alloc_pages(int pagecnt) {
     // 分配的页地址
     void *addr = pmm_fetch_free_memblock(order);
     // 将多余的页送还
-    pmm_add_free_pages(
-        (void *)((umb_t)addr + (pagecnt << 12)),
-        (1ul << order) - pagecnt);
+    pmm_add_free_pages((void *)((umb_t)addr + (pagecnt << 12)),
+                       (1ul << order) - pagecnt);
     return addr;
 }
 

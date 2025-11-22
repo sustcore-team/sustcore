@@ -11,18 +11,10 @@
 
 #pragma once
 
+#include <arch/riscv64/mem/universal.h>
 #include <stddef.h>
 #include <sus/attributes.h>
 #include <sus/bits.h>
-
-enum {
-    RWX_MODE_P   = 0b000,  // 指向下一级页表
-    RWX_MODE_R   = 0b001,  // 读
-    RWX_MODE_RW  = 0b011,  // 读写
-    RWX_MODE_X   = 0b100,  // 执行
-    RWX_MODE_RX  = 0b101,  // 读执行
-    RWX_MODE_RWX = 0b111   // 读写执行
-};
 
 /**
  * @brief SV39页表项
@@ -61,7 +53,7 @@ typedef union {
  * @brief SV39页表
  *
  */
-typedef SV39PTE SV39PT[SV39_PTE_COUNT];
+typedef SV39PTE *SV39PT;
 
 /**
  * @brief 将物理页号转换为物理地址
@@ -84,17 +76,17 @@ static inline umb_t phyaddr2ppn(void *phyaddr) {
 }
 
 /**
- * @brief SV39页表页框分配函数类型
- *
- */
-typedef void *(*Sv39AllocPageFunc)(void);
-
-/**
  * @brief 初始化SV39页表映射机制
  *
- * @param func 页框分配函数
  */
-void sv39_mapping_init(Sv39AllocPageFunc func);
+void sv39_mapping_init(void);
+
+/**
+ * @brief 获得SV39根页表
+ *
+ * @return SV39PT SV39根页表
+ */
+SV39PT sv39_mapping_root(void);
 
 /**
  * @brief 在页表中映射虚拟地址到物理地址
@@ -106,7 +98,7 @@ void sv39_mapping_init(Sv39AllocPageFunc func);
  * @param u 用户态可访问位
  * @param g 全局页位
  */
-void sv39_mapping(SV39PTE *root, void *vaddr, void *paddr, umb_t rwx, bool u,
+void sv39_maps_to(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
                   bool g);
 
 /**
@@ -120,5 +112,14 @@ void sv39_mapping(SV39PTE *root, void *vaddr, void *paddr, umb_t rwx, bool u,
  * @param u 用户态可访问位
  * @param g 全局页位
  */
-void sv39_map_range(SV39PTE *root, void *vstart, void *pstart, size_t pages,
-                    umb_t rwx, bool u, bool g);
+void sv39_maps_range_to(SV39PT root, void *vstart, void *pstart, size_t pages,
+                        umb_t rwx, bool u, bool g);
+
+/**
+ * @brief 获得页面项
+ *
+ * @param root 页表根
+ * @param vaddr 虚拟地址
+ * @return SV39PTE* 页面项
+ */
+SV39PTE *sv39_get_pte(SV39PT root, void *vaddr);
