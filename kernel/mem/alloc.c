@@ -11,6 +11,7 @@
 
 #include <basec/logger.h>
 #include <mem/alloc.h>
+#include <mem/kmem.h>
 #include <mem/pmm.h>
 #include <sus/attributes.h>
 #include <sus/bits.h>
@@ -190,13 +191,13 @@ static size_t heap_free_dwords = 0;
  */
 static bool alloc_heap_page() {
     // 首先请求一个order 5内存块
-    void *new_heap_pages = alloc_pages_in_order(5);
+    void *new_heap_pages = PA2KHEAPA(alloc_pages_in_order(5));
     if (new_heap_pages == nullptr) {
         log_error("alloc_heap_page: 无法分配新的堆页");
         return false;
     }
     // 再请求一个页来管理这些页里的pages
-    void *new_bitmap_page = alloc_page();
+    void *new_bitmap_page = PA2KHEAPA(alloc_page());
     if (new_bitmap_page == nullptr) {
         log_error("alloc_heap_page: 无法分配新的位图页");
         // 释放之前分配的堆页
@@ -687,7 +688,7 @@ static void *__stage2_kmalloc__(size_t size) {
     if (size >= 4096) {
         // 将其向上对齐至page, 并分配page
         size_t needed_pages = (size + 4095) / 4096;
-        void *addr          = alloc_pages(needed_pages);
+        void *addr          = PA2KHEAPA(alloc_pages(needed_pages));
         if (addr == nullptr) {
             log_error("__stage2_kmalloc__: 大页分配失败 size=%u", size);
             return nullptr;
@@ -751,12 +752,11 @@ void __stage2_kfree__(void *ptr) {
     AllocInfo *info = match_alloc_info(ptr);
     if (info == nullptr) {
         // 如果在HEAP范围内 可能是stage1分配的内存
-        if ((umb_t)ptr >= (umb_t)__HEAP__ &&
-            (umb_t)ptr <  (umb_t)__HEAP_TAIL__) {
+        if ((umb_t)ptr >= (umb_t)__HEAP__ && (umb_t)ptr < (umb_t)__HEAP_TAIL__)
+        {
             __primitive_kfree__(ptr);
             log_info("__stage2_kfree__: 转接到stage1释放内存 ptr=%p", ptr);
-        }
-        else {
+        } else {
             log_error("__stage2_kfree__: 未找到匹配的分配信息 ptr=%p", ptr);
         }
         return;
@@ -777,6 +777,10 @@ void __stage2_kfree__(void *ptr) {
 }
 
 void init_allocator_stage2(void) {
+    // 更新stage1的heap指针, 令其使用高段地址
+    __HEAP_TAIL__ = &__HEAP__[sizeof(__HEAP__) - 1];
+    heap_ptr      = PA2KA(heap_ptr);
+
     // 先初始化堆页索引链表
     heap_idx_head = heap_idx_tail = nullptr;
     if (!alloc_heap_page()) {

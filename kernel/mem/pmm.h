@@ -26,6 +26,15 @@
 void pmm_init(MemRegion *layout);
 
 /**
+ * @brief 物理内存管理器后期初始化
+ *
+ * 在post_init阶段调用.
+ * 将PMM的数据结构迁移到高地址处.
+ *
+ */
+void pmm_post_init(void);
+
+/**
  * @brief 分配一个物理页(返回物理页地址)
  *
  * @return void* 分配到的物理页地址
@@ -70,11 +79,3 @@ void free_pages(void *paddr, int pagecnt);
  * @param order 2^order个物理页
  */
 void free_pages_in_order(void *paddr, int order);
-
-/**
- * @brief 将物理地址转换为内核虚拟地址
- *
- * @param paddr 物理地址
- * @return void* 内核虚拟地址
- */
-void *paddr2kaddr(void *paddr);

@@ -11,6 +11,7 @@
 
 #include <basec/logger.h>
 #include <mem/alloc.h>
+#include <mem/kmem.h>
 #include <mem/pmm.h>
 
 /**
@@ -510,8 +511,6 @@ void free_pages(void *paddr, int pagecnt) {
 }
 
 void pmm_init(MemRegion *layout) {
-    // TODO: 实现物理内存管理器初始化
-
     // STEP1: 根据layout解析物理内存布局
 
     // 初始化FARL
@@ -539,19 +538,31 @@ void pmm_init(MemRegion *layout) {
         // 处理下一个内存区域
         region = region->next;
     }
-
-    // 第二次调用allocator初始化
-    // 将内存分配器由__HEAP__升级为完整功能的内核内存分配器
-    init_allocator_stage2();
 }
 
-/**
- * @brief 将物理地址转换为内核虚拟地址
- *
- * @param paddr 物理地址
- * @return void* 内核虚拟地址
- */
-void *paddr2kaddr(void *paddr) {
-    // 默认为恒等映射
-    return paddr;
+void pmm_post_init(void) {
+    // 遍历所有FARL链表
+    for (int order = 0; order <= MAX_BUDDY_ORDER; order++) {
+        if (free_area_head[order] == nullptr) {
+            continue;
+        }
+        // 将表头迁移到高地址
+        // 由于这部分是在stage1分配器下分配的, 因此应迁移到Kernel处而非Kheap处
+        // 更新链表中所有节点的地址
+        log_debug("pmm_post_init: 迁移PMMFreeArea链表 阶数=%d", order);
+        free_area_head[order] = PA2KA(free_area_head[order]);
+        free_area_tail[order] = PA2KA(free_area_tail[order]);
+        PMMFreeArea *iter     = free_area_head[order];
+        while (iter != nullptr) {
+            // 更新prev和next指针
+            if (iter->prev != nullptr) {
+                iter->prev = PA2KA(iter->prev);
+            }
+            if (iter->next != nullptr) {
+                iter->next = PA2KA(iter->next);
+            }
+            // 链表遍历操作, 例行公事
+            iter = iter->next;
+        }
+    }
 }

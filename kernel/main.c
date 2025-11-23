@@ -71,6 +71,9 @@ void kernel_paging_setup(MemRegion *const layout) {
         }
         iter = iter->next;
     }
+
+    kfree(layout);
+
     log_info("内存地址上界:   %p", upper_bound);
     // 对[0, upper_bound)作恒等映射
     mem_maps_range_to(root, (void *)0x0, (void *)0x0,
@@ -193,16 +196,19 @@ void post_init(void) {
     // 首先, 重新设置logger的函数指针
     init_logger(kputs, "SUSTCore");
 
-    // 进入分配器的第三阶段
     // 让PMM重新设置其数据结构
     // 使得新的分配数据位于高地址处
+    pmm_post_init();
+
+    // 进入分配器的第二阶段
+    init_allocator_stage2();
 
     // 然后进行后初始化工作
     log_info("后初始化架构相关...");
     arch_post_init();
 
     // 进行IVT只读化
-    PagingTab root          = mem_root();
+    PagingTab root = mem_root();
     mem_modify_page_range_to_rx(root, &s_ivt, &e_ivt);
     flush_tlb();
     log_info("IVT段已只读化!");
