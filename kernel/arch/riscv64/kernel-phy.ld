@@ -13,9 +13,9 @@ SECTIONS
     .text : AT(PHY_BASE_ADDRESS) {
         *(.text.entry)
         *(.text)
-        . = ALIGN(4K);
-        e_text = .;
     }
+    . = ALIGN(4K);
+    e_text = .;
 
     . = ALIGN(4K);
     s_ivt = .;
@@ -31,6 +31,14 @@ SECTIONS
         *(.rodata .rodata.*)
         . = ALIGN(4K);
         e_rodata = .;
+    }
+
+    . = ALIGN(4K);
+    s_sbss = .;
+    .sbss : {
+        *(.sbss .sbss.*)
+        . = ALIGN(4K);
+        e_sbss = .;
     }
 
     . = ALIGN(4K);

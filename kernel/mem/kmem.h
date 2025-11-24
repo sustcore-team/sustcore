@@ -12,6 +12,9 @@
 #pragma once
 
 #include <stddef.h>
+#include <sus/attributes.h>
+
+extern bool post_init_flag;
 
 /**
  * @brief 内核虚拟地址偏移
@@ -25,10 +28,11 @@
 /**
  * @brief 内核物理内存虚拟地址偏移
  *
- * @note 与KERNEL_VA_OFFSET不同之处在于, 该偏移用于内核堆.
+ * @note 与KERNEL_VA_OFFSET不同之处在于, 该偏移用于内核访问的物理地址.
  *
  */
-#define KHEAP_VA_OFFSET (size_t)(0xFFFF'FFC0'0000'0000ULL)
+#define KPHY_VA_OFFSET (size_t)(0xFFFF'FFC0'0000'0000ULL)
 
-#define KHEAPA2PA(ka) ((void *)((size_t)(ka) - KHEAP_VA_OFFSET))
-#define PA2KHEAPA(pa) ((void *)((size_t)(pa) + KHEAP_VA_OFFSET))
+// 在post init阶段后才需要区分物理地址和内核使用的物理地址
+#define KPA2PA(ka) (post_init_flag ? ((void *)((size_t)(ka) - KPHY_VA_OFFSET)) : (ka))
+#define PA2KPA(pa) (post_init_flag ? ((void *)((size_t)(pa) + KPHY_VA_OFFSET)) : (pa))

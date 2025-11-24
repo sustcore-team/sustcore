@@ -191,13 +191,13 @@ static size_t heap_free_dwords = 0;
  */
 static bool alloc_heap_page() {
     // 首先请求一个order 5内存块
-    void *new_heap_pages = PA2KHEAPA(alloc_pages_in_order(5));
+    void *new_heap_pages = PA2KPA(alloc_pages_in_order(5));
     if (new_heap_pages == nullptr) {
         log_error("alloc_heap_page: 无法分配新的堆页");
         return false;
     }
     // 再请求一个页来管理这些页里的pages
-    void *new_bitmap_page = PA2KHEAPA(alloc_page());
+    void *new_bitmap_page = PA2KPA(alloc_page());
     if (new_bitmap_page == nullptr) {
         log_error("alloc_heap_page: 无法分配新的位图页");
         // 释放之前分配的堆页
@@ -688,7 +688,7 @@ static void *__stage2_kmalloc__(size_t size) {
     if (size >= 4096) {
         // 将其向上对齐至page, 并分配page
         size_t needed_pages = (size + 4095) / 4096;
-        void *addr          = PA2KHEAPA(alloc_pages(needed_pages));
+        void *addr          = PA2KPA(alloc_pages(needed_pages));
         if (addr == nullptr) {
             log_error("__stage2_kmalloc__: 大页分配失败 size=%u", size);
             return nullptr;

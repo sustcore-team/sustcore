@@ -60,6 +60,14 @@ extern void *s_data, *e_data;
 extern void *s_sdata, *e_sdata;
 
 /**
+ * @brief 初始化BSS段起始/结束处位置
+ *
+ * 注意, 该符号指向该位置, 但该符号本身值不为该位置
+ *
+ */
+extern void *s_sbss, *e_sbss;
+
+/**
  * @brief BSS段起始/结束处位置
  *
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置

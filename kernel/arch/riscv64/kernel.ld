@@ -29,9 +29,17 @@ SECTIONS
     s_rodata = .;
     .rodata : {
         *(.rodata .rodata.*)
+        . = ALIGN(4K);
+        e_rodata = .;
     }
+
     . = ALIGN(4K);
-    e_rodata = .;
+    s_sbss = .;
+    .sbss : {
+        *(.sbss .sbss.*)
+        . = ALIGN(4K);
+        e_sbss = .;
+    }
 
     . = ALIGN(4K);
     s_data = .;
