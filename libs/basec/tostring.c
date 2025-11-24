@@ -22,7 +22,7 @@
  */
 char *uitoa(unsigned int val, char *buffer, int base) {
     const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
-    char *ret = buffer;
+    char *ret          = buffer;
     // 特殊情况
     if (val == 0) {
         *buffer = '0';
@@ -63,7 +63,6 @@ char *uitoa(unsigned int val, char *buffer, int base) {
  * @return 字符串
  */
 char *itoa(int val, char *buffer, int base) {
-    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
     // 保存起始位置
     char *ret = buffer;
 
@@ -97,7 +96,7 @@ char *itoa(int val, char *buffer, int base) {
  */
 char *ulltoa(unsigned long long val, char *buffer, int base) {
     const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
-    char *ret = buffer;
+    char *ret          = buffer;
     // 特殊情况
     if (val == 0) {
         *buffer = '0';
@@ -112,9 +111,7 @@ char *ulltoa(unsigned long long val, char *buffer, int base) {
     // val仍大于0
     while (val > 0) {
         // 保存该位数字
-        const char *_digits = digits;
         _buffer[cnt] = digits[val % base];
-
         cnt++;
 
         // 右移一个base进制位
@@ -139,7 +136,6 @@ char *ulltoa(unsigned long long val, char *buffer, int base) {
  * @return 字符串
  */
 char *lltoa(long long val, char *buffer, int base) {
-    const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
     // 保存起始位置
     char *ret = buffer;
 

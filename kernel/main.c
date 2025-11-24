@@ -152,7 +152,8 @@ void kernel_paging_setup(MemRegion *const layout) {
                       RWX_MODE_RW, false, true);
 
     // SBSS段
-    void *sbss_vaddr_start = (void *)(((umb_t)&s_sbss) + (umb_t)KERNEL_VA_OFFSET);
+    void *sbss_vaddr_start =
+        (void *)(((umb_t)&s_sbss) + (umb_t)KERNEL_VA_OFFSET);
     umb_t sbss_pages =
         ((umb_t)&e_sbss - (umb_t)&s_sbss + PAGE_SIZE - 1) / PAGE_SIZE;
     log_info("内核SBSS段虚拟地址空间: [%p, %p)", sbss_vaddr_start,

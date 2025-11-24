@@ -75,8 +75,10 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
     log_info("reglist_ptr: 0x%lx", reglist_ptr);
 
     // log_info("寄存器状态:");
-    // log_info("x 0: 0000000000000000 ; x 1: %016lx ; x 2: %016lx ; x 3: %016lx",
-    //          reglist_ptr->regs[0], reglist_ptr->regs[1], reglist_ptr->regs[2]);
+    // log_info("x 0: 0000000000000000 ; x 1: %016lx ; x 2: %016lx ; x 3:
+    // %016lx",
+    //          reglist_ptr->regs[0], reglist_ptr->regs[1],
+    //          reglist_ptr->regs[2]);
 
     // for (int i = 1; i < 8; i++) {
     //     log_info("x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx ; x%2d: %016lx",
@@ -145,6 +147,7 @@ void paging_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
              scause.value, sepc, stval);
 
     log_info("异常页地址: 0x%016lx", stval);
+    while (true);
 
     // 接下来应该执行页异常相关处理
     // 1. 检查地址是否合法

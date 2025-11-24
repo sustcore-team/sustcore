@@ -34,5 +34,7 @@ extern bool post_init_flag;
 #define KPHY_VA_OFFSET (size_t)(0xFFFF'FFC0'0000'0000ULL)
 
 // 在post init阶段后才需要区分物理地址和内核使用的物理地址
-#define KPA2PA(ka) (post_init_flag ? ((void *)((size_t)(ka) - KPHY_VA_OFFSET)) : (ka))
-#define PA2KPA(pa) (post_init_flag ? ((void *)((size_t)(pa) + KPHY_VA_OFFSET)) : (pa))
+#define KPA2PA(ka) \
+    (post_init_flag ? ((void *)((size_t)(ka) - KPHY_VA_OFFSET)) : (ka))
+#define PA2KPA(pa) \
+    (post_init_flag ? ((void *)((size_t)(pa) + KPHY_VA_OFFSET)) : (pa))

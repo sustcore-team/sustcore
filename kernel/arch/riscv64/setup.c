@@ -15,11 +15,11 @@
 #include <arch/riscv64/int/isr.h>
 #include <basec/logger.h>
 #include <libfdt.h>
+#include <mem/kmem.h>
 #include <sbi/sbi.h>
 #include <sus/arch.h>
 #include <sus/bits.h>
 #include <sus/boot.h>
-#include <mem/kmem.h>
 
 int kputchar(int ch) {
     sbi_dbcn_console_write_byte((char)ch);
@@ -37,8 +37,9 @@ int post_init_kputs(const char *str) {
         int len = strlen(str);
         sbi_dbcn_console_write((umb_t)len, (const void *)str);
         return len;
-    }
-    else if ((void *)str >= (void *)KPHY_VA_OFFSET && (void *)str < (void *)KERNEL_VA_OFFSET) {
+    } else if ((void *)str >= (void *)KPHY_VA_OFFSET &&
+               (void *)str < (void *)KERNEL_VA_OFFSET)
+    {
         int len = strlen(str);
         sbi_dbcn_console_write((umb_t)len, (const void *)KPA2PA(str));
         return len;

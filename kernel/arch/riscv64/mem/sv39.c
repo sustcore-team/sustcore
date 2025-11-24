@@ -12,9 +12,9 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/mem/sv39.h>
 #include <basec/logger.h>
+#include <mem/kmem.h>
 #include <mem/pmm.h>
 #include <string.h>
-#include <mem/kmem.h>
 
 void sv39_mapping_init(void) {}
 
