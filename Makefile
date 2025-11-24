@@ -30,6 +30,7 @@ arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(pa
 build:
 	$(q)$(MAKE) -f $(path-e)/libs/basec/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/libs/sbi/Makefile $(arg-basic) $@
+	$(q)$(MAKE) -f $(path-e)/libs/kmod/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
 	
 	$(call prepare, $(path-attach))
