@@ -14,6 +14,11 @@
 
 #include <stddef.h>
 
+#define x86         -1
+#define x86_64      0
+#define riscv64     1
+#define loongarch64 2
+
 /**
  * @brief 架构特定预初始化(内核页表未构建)
  *

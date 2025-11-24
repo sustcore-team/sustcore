@@ -68,6 +68,12 @@ SECTIONS
     . = ALIGN(4K);
     s_misc = .;
 
+    s_attach_license = .;
+    .attach.license : {
+        *(.attach.license)
+        e_attach_license = .;
+    }
+
     .comment : { *(.comment .comment.*) }
     .riscv.attributes : { *(.riscv.attributes .riscv.attributes.*) }
 

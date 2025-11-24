@@ -17,8 +17,8 @@ dir-src ?=
 
 # 目标文件目录
 dir-obj ?=
-
-build-objects := $(foreach obj, $(objects), $(dir-obj)/$(obj))
+build-objects := $(foreach obj, $(objects), $(dir-obj)/$(obj)) \
+				 $(foreach attachment, $(attachments), $(dir-obj)/attachment/$(attachment))
 
 # 架构(x86 x86_64 riscv loongrach)
 architecture ?= riscv

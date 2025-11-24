@@ -27,6 +27,21 @@
  * @return int
  */
 int main(void) {
+    // 读取attach.license段
+    size_t license_size =
+        (size_t)((umb_t)&e_attach_license - (umb_t)&s_attach_license);
+    license_size = license_size > 2048 ?
+            2048 :
+            license_size;
+    char *license_str = (char *)kmalloc(license_size + 1);
+    memcpy(license_str, &s_attach_license, license_size);
+    license_str[license_size] = '\0';
+    log_info("内核附加文件: license");
+    log_info("----- BEGIN LICENSE -----");
+    kprintf("%s\n", license_str);
+    log_info("-----  END LICENSE  -----");
+    kfree(license_str);
+
     log_info("Hello RISCV World!");
 
     while (true);

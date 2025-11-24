@@ -321,7 +321,8 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
  * @return 输出字符数
  */
 int vbprintf(BaseCPutsFunc bputs, const char *fmt, va_list args) {
-    char buffer[512];
+    // TODO: 优化为分块输出
+    static char buffer[8192];
 
     int ret = __llprintf(buffer, fmt, args);
     bputs(buffer);

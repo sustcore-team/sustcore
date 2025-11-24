@@ -14,8 +14,6 @@ endif
 endif
 endif
 
-arch-include ?= riscv.mk
-
-defs-c += -D__ARCHITECTURE__=$(architecture)
+arch-include ?= riscv64.mk
 
 include $(path-script)/build/arch/$(arch-include)

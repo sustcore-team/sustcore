@@ -9,6 +9,7 @@ include $(path-script)/build/asm.mk
 include $(path-script)/build/c.mk
 include $(path-script)/build/ld.mk
 include $(path-script)/build/ar.mk
+include $(path-script)/build/attach.mk
 
 include $(path-script)/build/arch.mk
 include $(path-script)/build/compilers.mk

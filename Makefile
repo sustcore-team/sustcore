@@ -32,6 +32,8 @@ build:
 	$(q)$(MAKE) -f $(path-e)/libs/sbi/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
 	
+	$(call prepare, $(path-attach))
+	$(q)$(copy) ./LICENSE $(path-attach)/license
 # 	$(q)$(MAKE) -f $(path-e)/loader/grub/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@
 
