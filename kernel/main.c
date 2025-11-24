@@ -46,6 +46,8 @@ void terminate(void) {
 
 void post_init(void);
 
+umb_t phymem_sz = 0;
+
 /**
  * @brief 内核页表设置
  *
@@ -72,13 +74,15 @@ void kernel_paging_setup(MemRegion *const layout) {
         iter = iter->next;
     }
 
+    // 将此作为物理内存大小
+    phymem_sz = (umb_t)upper_bound;
+
     kfree(layout);
 
     log_info("内存地址上界:   %p", upper_bound);
     // 对[0, upper_bound)作恒等映射
-    mem_maps_range_to(root, (void *)0x0, (void *)0x0,
-                      (umb_t)upper_bound / PAGE_SIZE, RWX_MODE_RWX, false,
-                      true);
+    mem_maps_range_to(root, (void *)0x0, (void *)0x0, phymem_sz / PAGE_SIZE,
+                      RWX_MODE_RWX, false, true);
 
     // 把内核部分映射到高地址
     umb_t kernel_pages =
@@ -147,6 +151,15 @@ void kernel_paging_setup(MemRegion *const layout) {
     mem_maps_range_to(root, bss_vaddr_start, (void *)&s_bss, bss_pages,
                       RWX_MODE_RW, false, true);
 
+    // SBSS段
+    void *sbss_vaddr_start = (void *)(((umb_t)&s_sbss) + (umb_t)KERNEL_VA_OFFSET);
+    umb_t sbss_pages =
+        ((umb_t)&e_sbss - (umb_t)&s_sbss + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核SBSS段虚拟地址空间: [%p, %p)", sbss_vaddr_start,
+             (void *)((umb_t)sbss_vaddr_start + sbss_pages * PAGE_SIZE));
+    mem_maps_range_to(root, sbss_vaddr_start, (void *)&s_sbss, sbss_pages,
+                      RWX_MODE_RW, false, true);
+
     // 剩余部分
     void *misc_vaddr_start =
         (void *)(((umb_t)&s_misc) + (umb_t)KERNEL_VA_OFFSET);
@@ -156,6 +169,14 @@ void kernel_paging_setup(MemRegion *const layout) {
              (void *)((umb_t)misc_vaddr_start + misc_pages * PAGE_SIZE));
     mem_maps_range_to(root, misc_vaddr_start, (void *)&s_misc, misc_pages,
                       RWX_MODE_R, false, true);
+
+    // 内核物理地址空间映射
+    void *kphy_vaddr_start = (void *)(((umb_t)0x0) + (umb_t)KPHY_VA_OFFSET);
+    umb_t kphy_pages       = ((umb_t)upper_bound + PAGE_SIZE - 1) / PAGE_SIZE;
+    log_info("内核物理地址空间映射: [%p, %p)", kphy_vaddr_start,
+             (void *)((umb_t)kphy_vaddr_start + kphy_pages * PAGE_SIZE));
+    mem_maps_range_to(root, kphy_vaddr_start, (void *)0x0, kphy_pages,
+                      RWX_MODE_RWX, false, true);
 
     // 切换根页表
     mem_switch_root(root);
@@ -184,6 +205,7 @@ void pre_init(void) {
     log_info("内核数据段所占内存: [%p, %p]", &s_data, &e_data);
     log_info("内核初始化数据段所占内存: [%p, %p]", &s_sdata, &e_sdata);
     log_info("内核BSS段所占内存: [%p, %p]", &s_bss, &e_bss);
+    log_info("内核SBSS段所占内存: [%p, %p]", &s_sbss, &e_sbss);
 
     log_info("预初始化架构相关...");
     arch_pre_init();
@@ -192,7 +214,21 @@ void pre_init(void) {
 void test(void);
 extern dword IVT[];
 
+bool post_init_flag = false;
+
 void post_init(void) {
+    // 设置post_init标志
+    post_init_flag = true;
+
+    // 移动sp到高位内存
+    // 首先读取sp
+    umb_t sp;
+    __asm__ volatile("mv %0, sp" : "=r"(sp));
+    // 计算新的sp位置
+    umb_t new_sp = sp + (umb_t)KERNEL_VA_OFFSET;
+    // 设置sp
+    __asm__ volatile("mv sp, %0" ::"r"(new_sp));
+
     // 首先, 重新设置logger的函数指针
     init_logger(kputs, "SUSTCore");
 
@@ -212,6 +248,13 @@ void post_init(void) {
     mem_modify_page_range_to_rx(root, &s_ivt, &e_ivt);
     flush_tlb();
     log_info("IVT段已只读化!");
+
+    // 将低位内存用户态化
+    mem_modify_page_range_u(root, (void *)0x0,
+                            (void *)(phymem_sz & ~(PAGE_SIZE - 1)), true);
+    flush_tlb();
+    log_info("低位内存[%p, %p)已用户态化!", (void *)0x0,
+             (void *)(phymem_sz & ~(PAGE_SIZE - 1)));
 
     // 最后执行main与terminate
     main();

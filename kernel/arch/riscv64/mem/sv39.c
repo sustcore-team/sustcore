@@ -14,6 +14,7 @@
 #include <basec/logger.h>
 #include <mem/pmm.h>
 #include <string.h>
+#include <mem/kmem.h>
 
 void sv39_mapping_init(void) {}
 
@@ -29,7 +30,7 @@ SV39PT sv39_mapping_root(void) {
         log_error("sv39_mapping_root: 根页表不为SV39模式!");
         return nullptr;
     }
-    return ppn2phyaddr(satp.ppn);
+    return PA2KPA(ppn2phyaddr(satp.ppn));
 }
 
 void sv39_maps_to(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
@@ -63,7 +64,8 @@ void sv39_maps_to(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
             return;
         }
         // 取其中相应的下一级页表项
-        pte = &((SV39PTE *)ppn2phyaddr(pte->ppn))[vpn[level - 1]];
+        // 应该使用PA2KPA进行转换
+        pte = &((SV39PTE *)PA2KPA(ppn2phyaddr(pte->ppn)))[vpn[level - 1]];
     }
 
     // 设置最终页表项
@@ -108,7 +110,7 @@ void sv39_maps_to_2m(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
         return;
     }
     // 取其中相应的下一级页表项
-    pte = &((SV39PTE *)ppn2phyaddr(pte->ppn))[vpn[0]];
+    pte = &((SV39PTE *)PA2KPA(ppn2phyaddr(pte->ppn)))[vpn[0]];
 
     // 设置最终页表项
     pte->value = 0;
@@ -306,7 +308,7 @@ SV39LargablePTE sv39_get_pte(SV39PT root, void *vaddr) {
             return (SV39LargablePTE){.entry = pte, .level = level};
         }
         // 取其中相应的下一级页表项
-        pte = &((SV39PTE *)ppn2phyaddr(pte->ppn))[vpn[level - 1]];
+        pte = &((SV39PTE *)PA2KPA(ppn2phyaddr(pte->ppn)))[vpn[level - 1]];
     }
 
     return (SV39LargablePTE){.entry = pte, .level = 0};
