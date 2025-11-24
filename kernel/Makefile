@@ -12,7 +12,7 @@ objects := main.o
 deps := main.d
 attachments := license.attachment.o
 
-subdirs := ./mem/ ./arch/$(architecture)/
+subdirs := ./mem/ ./task/ ./arch/$(architecture)/
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)

@@ -20,6 +20,7 @@
 #include <sus/arch.h>
 #include <sus/boot.h>
 #include <sus/symbols.h>
+#include <task/proc.h>
 
 /**
  * @brief 内核主函数
@@ -250,6 +251,11 @@ void post_init(void) {
     flush_tlb();
     log_info("低位内存[%p, %p)已用户态化!", (void *)0x0,
              (void *)(phymem_sz & ~(PAGE_SIZE - 1)));
+    umb_t *ustack = kmalloc(POOL_SIZE * 4096);
+    ProcessControlBlock *pool =
+        (ProcessControlBlock *)kmalloc(POOL_SIZE * sizeof(ProcessControlBlock));
+
+    proc_init(ustack, pool);
 
     // 最后执行main与terminate
     main();
