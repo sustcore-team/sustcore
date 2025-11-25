@@ -14,6 +14,8 @@
 #include <sus/bits.h>
 
 #define POOL_SIZE 3
+
+
 // Saved registers for kernel context switches.
 typedef struct Context {
     umb_t ra;
@@ -45,7 +47,7 @@ typedef struct ProcessControlBlock {
     umb_t pid;
     ProcState state;
     Context ctx;
-    umb_t *stack;
+    umb_t *kstack;       // 内核栈
     // TODO
 
 } ProcessControlBlock;
@@ -58,9 +60,15 @@ typedef struct ProcessControlBlock {
  */
 void __switch(Context *old, Context *new);
 
-void proc_init(umb_t *ustack, ProcessControlBlock *pool);
+/**
+ * @brief 初始化进程管理系统
+ */
+void proc_init(void);
 
 /**
  * @brief 调度器 - 从当前进程切换到下一个就绪进程
  */
 void schedule(void);
+
+void worker(void);
+

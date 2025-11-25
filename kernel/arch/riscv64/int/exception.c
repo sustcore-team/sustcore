@@ -13,6 +13,7 @@
 #include <arch/riscv64/int/exception.h>
 #include <arch/riscv64/int/isr.h>
 #include <basec/logger.h>
+#include <task/proc.h>
 
 #if IVT_MODE == VECTORED
 /**
@@ -111,6 +112,7 @@ void timer_isr(void) {
 
     timer_handler(scause, sepc, stval, reglist_ptr);
 
+    schedule();
     ISR_SERVICE_END(timer_isr);
 }
 
