@@ -13,9 +13,10 @@ SECTIONS
     .text : AT(PHY_BASE_ADDRESS) {
         *(.text.entry)
         *(.text)
+        *(.text.*)
+        . = ALIGN(4K);
+        e_text = .;
     }
-    . = ALIGN(4K);
-    e_text = .;
 
     . = ALIGN(4K);
     s_ivt = .;
@@ -29,38 +30,26 @@ SECTIONS
     s_rodata = .;
     .rodata : {
         *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
         . = ALIGN(4K);
         e_rodata = .;
     }
 
     . = ALIGN(4K);
-    s_sbss = .;
-    .sbss : {
-        *(.sbss .sbss.*)
-        . = ALIGN(4K);
-        e_sbss = .;
-    }
-
-    . = ALIGN(4K);
     s_data = .;
     .data : {
-        *(.data .data.*) *(.data.heap)
+        *(.data .data.*)
+        *(.sdata .sdata.*)
+        *(.data.heap)
         . = ALIGN(4K);
         e_data = .;
-    }
-
-    . = ALIGN(4K);
-    s_sdata = .;
-    .sdata : {
-        *(.sdata .sdata.*)
-        . = ALIGN(4K);
-        e_sdata = .;
     }
 
     . = ALIGN(4K);
     s_bss = .;
     .bss : {
         *(.bss .bss.*)
+        *(.sbss .sbss.*)
         . = ALIGN(4K);
         e_bss = .;
     }
@@ -68,6 +57,7 @@ SECTIONS
     . = ALIGN(4K);
     s_misc = .;
 
+    . = ALIGN(4K);
     s_attach_license = .;
     .attach.license : {
         *(.attach.license)

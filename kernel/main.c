@@ -147,15 +147,6 @@ void kernel_paging_setup(MemRegion *const layout) {
              (void *)((umb_t)data_vaddr_start + data_pages * PAGE_SIZE));
     mem_maps_range_to(root, data_vaddr_start, (void *)&s_data, data_pages,
                       RWX_MODE_RW, false, true);
-    // 初始数据段
-    void *sdata_vaddr_start =
-        (void *)(((umb_t)&s_sdata) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t sdata_pages =
-        ((umb_t)&e_sdata - (umb_t)&s_sdata + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核初始化数据段虚拟地址空间: [%p, %p)", sdata_vaddr_start,
-             (void *)((umb_t)sdata_vaddr_start + sdata_pages * PAGE_SIZE));
-    mem_maps_range_to(root, sdata_vaddr_start, (void *)&s_sdata, sdata_pages,
-                      RWX_MODE_RW, false, true);
 
     // BSS段
     void *bss_vaddr_start = (void *)(((umb_t)&s_bss) + (umb_t)KERNEL_VA_OFFSET);
@@ -164,16 +155,6 @@ void kernel_paging_setup(MemRegion *const layout) {
     log_info("内核BSS段虚拟地址空间: [%p, %p)", bss_vaddr_start,
              (void *)((umb_t)bss_vaddr_start + bss_pages * PAGE_SIZE));
     mem_maps_range_to(root, bss_vaddr_start, (void *)&s_bss, bss_pages,
-                      RWX_MODE_RW, false, true);
-
-    // SBSS段
-    void *sbss_vaddr_start =
-        (void *)(((umb_t)&s_sbss) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t sbss_pages =
-        ((umb_t)&e_sbss - (umb_t)&s_sbss + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核SBSS段虚拟地址空间: [%p, %p)", sbss_vaddr_start,
-             (void *)((umb_t)sbss_vaddr_start + sbss_pages * PAGE_SIZE));
-    mem_maps_range_to(root, sbss_vaddr_start, (void *)&s_sbss, sbss_pages,
                       RWX_MODE_RW, false, true);
 
     // 剩余部分
@@ -219,9 +200,7 @@ void pre_init(void) {
     log_info("内核代码段所占内存: [%p, %p]", &s_text, &e_text);
     log_info("内核只读数据段所占内存: [%p, %p]", &s_rodata, &e_rodata);
     log_info("内核数据段所占内存: [%p, %p]", &s_data, &e_data);
-    log_info("内核初始化数据段所占内存: [%p, %p]", &s_sdata, &e_sdata);
     log_info("内核BSS段所占内存: [%p, %p]", &s_bss, &e_bss);
-    log_info("内核SBSS段所占内存: [%p, %p]", &s_sbss, &e_sbss);
 
     log_info("预初始化架构相关...");
     arch_pre_init();
