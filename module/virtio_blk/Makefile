@@ -6,10 +6,10 @@ include $(path-script)/helper.mk
 
 .PHONY: build
 
-target := $(path-bin)/libs/$(architecture)/libkmod.a
+target := $(path-bin)/mods/$(architecture)/virtio_blk.mod
 
-objects := startup.o rpc.o alloc.o syscall.o device.o
-deps := startup.d rpc.d alloc.d syscall.d device.d
+objects := main.o
+deps := main.d
 
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
@@ -23,10 +23,13 @@ defs-c :=
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 
-args := $(args-c)
-args-kernel  := $(args-c-kernel)
+flags-ld := -z max-page-size=0x100 -nostdlib
+
+args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/virtio_blk.ld"
+
+args := $(args-c) $(args-ld) libraries="kerbasec kmod"
 
 dir := dir-obj="$(path-objects)/kmod/$(architecture)" dir-src="$(path-d)"
 
 build:
-	$(q)$(MAKE) $(builder-s)=$(target) architecture=$(architecture) deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
+	$(q)$(MAKE) $(builder-m)=$(target) architecture=$(architecture) deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
