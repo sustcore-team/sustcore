@@ -4,9 +4,9 @@
  * @brief 内核模块启动文件
  * @version alpha-1.0.0
  * @date 2025-11-25
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #include <kmod/syscall.h>
@@ -14,8 +14,17 @@
 
 extern int kmod_main(void);
 
+static Capability device_cap;
+
+Capability sa_get_device(void) {
+    return device_cap;
+}
+
 void init(int heap_ptr) {
     // 初始化堆指针
+    device_cap = (Capability){
+        .raw = 0x00000000,  // TODO: 从系统参数获取设备能力
+    };
 }
 
 void terminate(int code) {

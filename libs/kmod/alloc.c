@@ -4,15 +4,15 @@
  * @brief 内存分配器实现
  * @version alpha-1.0.0
  * @date 2025-11-25
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #include <alloc.h>
-#include <sus/bits.h>
-#include <sus/attributes.h>
 #include <basec/logger.h>
+#include <sus/attributes.h>
+#include <sus/bits.h>
 
 #define PAGE_SIZE (4096)
 
@@ -20,8 +20,8 @@ static void *heap_start = nullptr, *heap_end = nullptr;
 
 // 从堆中分配页
 void *alloc_pages(size_t num_pages) {
-    void *addr = heap_end;
-    heap_end += num_pages * PAGE_SIZE;
+    void *addr  = heap_end;
+    heap_end   += num_pages * PAGE_SIZE;
     return addr;
 }
 
@@ -396,7 +396,7 @@ static bool extending_empty_alloc_infos = false;
 
 /**
  * @brief 添加空闲分配信息
- * 
+ *
  * @param extend_count 拓展数量
  * @param addr 分配信息地址
  */
@@ -404,7 +404,7 @@ static void __extend_empty_alloc_infos(const int extend_count, void *addr) {
     // 说明正在拓展状态
     extending_empty_alloc_infos = true;
     // 分配内存用于新的分配信息
-    AllocInfo *info = (AllocInfo *)addr;
+    AllocInfo *info             = (AllocInfo *)addr;
 
     // 初始化这些分配信息
     for (int i = 0; i < extend_count; i++) {
@@ -444,7 +444,8 @@ static void __extend_empty_alloc_infos(const int extend_count, void *addr) {
  * @param info 空闲分配信息
  */
 static void extend_empty_alloc_infos(const int extend_count) {
-    __extend_empty_alloc_infos(extend_count, malloc(sizeof(AllocInfo) * extend_count));
+    __extend_empty_alloc_infos(extend_count,
+                               malloc(sizeof(AllocInfo) * extend_count));
 }
 
 /**
@@ -684,7 +685,7 @@ void free(void *ptr) {
 
 /**
  * @brief 初始化内存分配器
- * 
+ *
  * @param heap_ptr 堆指针
  */
 void init_malloc(void *heap_ptr) {
@@ -695,18 +696,20 @@ void init_malloc(void *heap_ptr) {
     void *initial_page = alloc_pages(1);
 
     // 分配初始堆页
-    void *bitmap_page = alloc_pages(1);
-    void *heap_pages  = alloc_pages(32);
+    void *bitmap_page        = alloc_pages(1);
+    void *heap_pages         = alloc_pages(32);
     HeapPageIdx *initial_idx = (HeapPageIdx *)initial_page;
     initial_idx->bitmap_page = bitmap_page;
     initial_idx->heap_pages  = heap_pages;
 
     // 加入到链表中
-    initial_idx->next       = nullptr;
-    initial_idx->last       = nullptr;
+    initial_idx->next = nullptr;
+    initial_idx->last = nullptr;
     heap_idx_head = heap_idx_tail = initial_idx;
 
     // 剩余的空间用来存放分配信息
     void *first_alloc_info_addr = (void *)(initial_page + sizeof(HeapPageIdx));
-    __extend_empty_alloc_infos((PAGE_SIZE - sizeof(HeapPageIdx)) / sizeof(AllocInfo), first_alloc_info_addr);
+    __extend_empty_alloc_infos(
+        (PAGE_SIZE - sizeof(HeapPageIdx)) / sizeof(AllocInfo),
+        first_alloc_info_addr);
 }
