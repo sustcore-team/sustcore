@@ -1,1 +1,1 @@
-objects += ./task/proc.o ./task/pid.o
+objects += ./task/proc.o
