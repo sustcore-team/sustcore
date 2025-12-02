@@ -36,6 +36,7 @@ typedef struct PCB {
 } PCB;
 
 extern PCB *proc_pool[NPROG];
+extern PCB *cur_proc;
 extern PCB *init_proc;
 
 /**
@@ -57,5 +58,7 @@ void proc_init(void);
 RegCtx *schedule(RegCtx *old);
 
 PCB *alloc_proc(void);
+
+RegCtx *exit_current_task();
 
 __attribute__((section(".ptest1"))) void worker(void);

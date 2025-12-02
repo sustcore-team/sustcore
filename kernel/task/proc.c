@@ -17,12 +17,12 @@
 #include <mem/pmm.h>
 #include <string.h>
 #include <sus/boot.h>
+#include <sus/ctx.h>
 #include <sus/paging.h>
 #include <sus/symbols.h>
-#include <sus/ctx.h>
 #include <task/pid.h>
 
-static PCB *cur_proc;
+PCB *cur_proc;
 
 PCB *proc_pool[NPROG];
 PCB *init_proc = NULL;
@@ -50,16 +50,16 @@ void proc_init(void) {
 
         // 1. 分配一页作为用户栈 (alloc_page 返回物理地址)
         umb_t user_stack_pa = (umb_t)alloc_page();
-        
+
         // 2. 获取内核虚拟地址以便清空栈内容
         void *user_stack_kva = PA2KPA(user_stack_pa);
         memset(user_stack_kva, 0, PAGE_SIZE);
-        
+
         // 3. 栈向下增长，所以 SP 指向页面末尾
         p->ctx->regs[1] = user_stack_pa + PAGE_SIZE;
 
-        log_info("proc %d user stack: PA=0x%lx, SP=0x%lx", 
-                 i, user_stack_pa, p->ctx->regs[1]);
+        log_info("proc %d user stack: PA=0x%lx, SP=0x%lx", i, user_stack_pa,
+                 p->ctx->regs[1]);
 
         // ra
         p->ctx->regs[0]      = 0;
@@ -70,7 +70,6 @@ void proc_init(void) {
 
         proc_pool[i] = p;
     }
-
 
     for (size_t i = 0; i < 2; i++) {
         if (p == NULL) {
@@ -121,7 +120,6 @@ void dealloc_proc(PCB *proc, umb_t pid) {
     }
 }
 
-
 /**
  * @brief 调度器 - 选择下一个就绪进程进行切换
  *
@@ -131,6 +129,7 @@ void dealloc_proc(PCB *proc, umb_t pid) {
 RegCtx *schedule(RegCtx *old) {
     PCB *next = NULL;
     log_debug("schedule: 当前进程 pid=%d", cur_proc ? cur_proc->pid : -1);
+    log_debug("current state: %d", cur_proc ? cur_proc->state : -1);
     if (cur_proc == NULL) {
         for (size_t i = 0; i < NPROG; i++) {
             if (proc_pool[i] && proc_pool[i]->state == READY) {
@@ -164,16 +163,24 @@ RegCtx *schedule(RegCtx *old) {
 
     // 如果没找到其他 READY 的进程，就继续运行当前进程
     if (next == NULL) {
+        if (cur_proc->state == ZOMBIE) {
+            log_info("所有进程运行完毕");
+            while (1) {}
+        }
         log_debug("调度: 无其他就绪进程，继续运行当前进程(pid=%d)",
                   cur_proc->pid);
+
         return old;
     }
 
     // 更新进程状态
     PCB *prev = cur_proc;
-    cur_proc                  = next;
+    cur_proc  = next;
 
-    prev->state = READY;
+    if (prev->state != ZOMBIE) {
+        prev->state = READY;
+    }
+
     next->state = RUNNING;
 
     log_debug("调度: 从进程 (pid=%d) 切换到进程 (pid=%d)", prev->pid,
@@ -182,7 +189,27 @@ RegCtx *schedule(RegCtx *old) {
     return next->ctx;
 }
 
+RegCtx *exit_current_task() {
+    if (cur_proc == NULL) {
+        log_error("exit_current_task: 当前没有运行的进程");
+        return NULL;
+    }
+    cur_proc->state = ZOMBIE;
+
+    RegCtx *next_ctx = schedule(cur_proc->ctx);
+
+    return next_ctx;
+}
+
 __attribute__((section(".ptest1"), used)) void worker(void) {
+    // syscall(SYS_EXIT, 0);
+    asm volatile(
+        "mv a7, %0\n"
+        "mv a0, %1\n"
+        "ecall\n"
+        :
+        : "r"(93), "r"(0)
+        : "a0", "a7");
     // 纯净的循环，不依赖任何内核数据
     while (1) {
         // 简单的忙等待，防止被编译器优化掉

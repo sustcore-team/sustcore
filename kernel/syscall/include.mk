@@ -1,0 +1,1 @@
+objects += ./syscall/syscall.o

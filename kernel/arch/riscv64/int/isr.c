@@ -13,6 +13,7 @@
 #include <arch/riscv64/int/trap.h>
 #include <basec/logger.h>
 #include <sbi/sbi.h>
+#include <syscall/syscall.h>
 
 enum {
     EXCEPTION_INST_MISALIGNED    = 0,   // 指令地址不对齐
@@ -98,6 +99,9 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
     }
 
     switch (scause.cause) {
+        case EXCEPTION_ECALL_U:
+            syscall_handler(scause, sepc, stval, reglist_ptr);
+            break;
         case EXCEPTION_ILLEGAL_INST:
             illegal_instruction_handler(scause, sepc, stval, reglist_ptr);
             break;
@@ -176,12 +180,10 @@ void timer_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     clock_ns = clock / (timer_info.freq / 1000000) - clock_ms * 1000;
     log_info("进入handler的时间: %ld.%03ld ms", clock_ms, clock_ns);
 
-    
     // Step 1: 重新设置下一次时钟中断
     sbi_legacy_set_timer(csr_get_time() + timer_info.increasment);
 
     log_info("已设置下一次时钟中断");
-
 
     // clock    = csr_get_time();
     // clock_ms = clock / (timer_info.freq / 1000);
