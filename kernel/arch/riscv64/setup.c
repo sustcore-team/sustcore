@@ -118,7 +118,7 @@ void arch_post_init(void) {
     log_info("启用中断...");
     sti();
 
-    // 我们希望2s触发1次时钟中断(调试用)
+    // 我们希望500ms触发1次时钟中断(调试用)
     // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
     int freq = get_clock_freq_hz();
     if (freq < 0) {
@@ -128,7 +128,7 @@ void arch_post_init(void) {
     }
     log_info("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000,
              freq / 1000000);
-    init_timer(freq, 500);
+    init_timer(freq, 2000);
     log_info("启用时钟中断...");
 }
 

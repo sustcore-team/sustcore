@@ -23,7 +23,7 @@ include $(path-script)/run.mk
 path-bin := $(path-e)/build/bin/
 path-objects := $(path-e)/build/objects/
 
-arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects)
+arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects) q=$(q)
 
 -include $(path-script)/config.mk
 
@@ -36,6 +36,9 @@ build:
 	$(call prepare, $(path-attach))
 	$(q)$(copy) ./LICENSE $(path-attach)/license
 # 	$(q)$(MAKE) -f $(path-e)/loader/grub/Makefile $(arg-basic) $@
+	$(q)$(MAKE) -f $(path-e)/module/virtio_blk/Makefile $(arg-basic) $@
+	$(q)$(MAKE) -f $(path-e)/module/test/Makefile $(arg-basic) $@
+
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@
 
 mount:

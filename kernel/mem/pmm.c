@@ -9,10 +9,15 @@
  *
  */
 
-#include <basec/logger.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
 #include <mem/pmm.h>
+
+#ifdef DLOG_PMM
+#define DISABLE_LOGGING
+#endif
+
+#include <basec/logger.h>
 
 /**
  * @brief Buddy System空闲内存块结构体
@@ -435,33 +440,42 @@ void *alloc_pages_in_order(int order) {
     return pmm_fetch_free_memblock(order);
 }
 
-void *alloc_pages(int pagecnt) {
-    if (pagecnt <= 0 || (pagecnt >> MAX_BUDDY_ORDER) > 1) {
-        log_error("alloc_pages: 无效的页数 %d", pagecnt);
-        return nullptr;
-    }
-
-    int order = 0;
-    // 计算所需的最小order
+int pages2order(int pagecnt) {
     switch (pagecnt) {
-        case 1:  order = 0; break;
-        case 2:  order = 1; break;
+        case 1:  return 0;
+        case 2:  return 1;
         case 3:
-        case 4:  order = 2; break;
+        case 4:  return 2;
         default: {
-            order = 3;
+            int order = 3;
             while (order <= MAX_BUDDY_ORDER) {
                 if ((1ul << order) >= pagecnt) {
                     break;
                 }
                 order++;
             }
-            break;
+            return order;
         }
     }
+}
+
+void *alloc_pages(int pagecnt) {
+    if (pagecnt <= 0 || (pagecnt >> MAX_BUDDY_ORDER) > 1) {
+        log_error("alloc_pages: 无效的页数 %d", pagecnt);
+        return nullptr;
+    }
+
+    // 计算所需的最小order
+    int order = pages2order(pagecnt);
 
     // 分配的页地址
     void *addr = pmm_fetch_free_memblock(order);
+
+    // 如果页为空
+    if (addr == nullptr) {
+        return nullptr;
+    }
+
     // 将多余的页送还
     pmm_add_free_pages((void *)((umb_t)addr + (pagecnt << 12)),
                        (1ul << order) - pagecnt);

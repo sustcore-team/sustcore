@@ -14,7 +14,7 @@
 #include <arch/riscv64/int/isr.h>
 #include <basec/logger.h>
 #include <stddef.h>
-#include <task/proc.h>
+#include <task/scheduler.h>
 
 #if IVT_MODE == VECTORED
 /**
@@ -111,10 +111,11 @@ ISR_SERVICE_ATTRIBUTE
 void timer_isr(void) {
     ISR_SERVICE_START(timer_isr, 128);
 
-    timer_handler(scause, sepc, stval, reglist_ptr);
-    if (cur_proc == NULL) {
-        reglist_ptr = schedule(reglist_ptr);
+    if (cur_proc != nullptr) {
+        schedule(&reglist_ptr);
     }
+
+    timer_handler(scause, sepc, stval, reglist_ptr);
 
     ISR_SERVICE_END(timer_isr);
 }

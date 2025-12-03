@@ -11,41 +11,43 @@
 
 #pragma once
 
-// #include <include/arch/riscv64/int/trap.h>
 #include <sus/bits.h>
-#include <sus/ctx.h>
-#include <task/pid.h>
-
-#define POOL_SIZE 2
-#define NPROG     2
-
-typedef enum {
-    READY   = 0,
-    RUNNING = 1,
-    BLOCKED = 2,
-    ZOMBIE  = 3,
-    UNUSED  = 4,
-} ProcState;
-
-typedef struct PCB {
-    pid_t pid;
-    ProcState state;
-    RegCtx *ctx;
-    umb_t *kstack;  // 内核栈
-    // TODO
-} PCB;
-
-extern PCB *proc_pool[NPROG];
-extern PCB *cur_proc;
-extern PCB *init_proc;
+#include <task/task_struct.h>
 
 /**
- * @brief 实现 context switch
+ * @brief 进程链表
  *
- * @param old  旧进程 context 结构体指针
- * @param new  新进程 context 结构体指针
  */
-// void __switch(RegCtx *old, RegCtx *new);
+extern PCB *proc_list_head;
+extern PCB *proc_list_tail;
+// 进程链表操作宏
+#define PROC_LIST proc_list_head, proc_list_tail, next, prev
+
+/**
+ * @brief 空进程
+ *
+ */
+extern PCB empty_proc;
+
+// 进程就绪队列级别
+#define RP_LEVELS (4)
+
+/**
+ * @brief 当前进程
+ *
+ */
+extern PCB *cur_proc;
+
+// 就绪队列链表
+extern PCB *rp_list_heads[RP_LEVELS];
+extern PCB *rp_list_tails[RP_LEVELS];
+
+// 就绪队列操作宏
+#define RP_LIST(level) rp_list_heads[level], rp_list_tails[level], snext, sprev
+
+// 我们希望rp3队列中的进程按照run_time从小到大排序
+#define RP3_LIST \
+    rp_list_heads[3], rp_list_tails[3], snext, sprev, run_time, ascending
 
 /**
  * @brief 初始化进程池
@@ -53,12 +55,35 @@ extern PCB *init_proc;
 void proc_init(void);
 
 /**
- * @brief 调度器 - 从当前进程切换到下一个就绪进程
+ * @brief 清理PCB相关资源
+ *
+ * @param p PCB指针
  */
-RegCtx *schedule(RegCtx *old);
+void terminate_pcb(PCB *p);
 
-PCB *alloc_proc(void);
+/**
+ * @brief 初始化PCB
+ *
+ * @param p PCB
+ * @param rp_level RP级别
+ */
+void init_pcb(PCB *p, int rp_level);
 
-RegCtx *exit_current_task();
-
-__attribute__((section(".ptest1"))) void worker(void);
+/**
+ * @brief 新建进程
+ *
+ * @param pgd 页表根地址
+ * @param code_start 代码段起始地址
+ * @param code_end 代码段结束地址
+ * @param data_start 数据段起始地址
+ * @param data_end 数据段结束地址
+ * @param stack_start 栈段起始地址
+ * @param heap_start 堆段起始地址
+ * @param entrypoint 进程入口点
+ * @param rp_level RP级别
+ * @param parent 父进程指针
+ * @return PCB* 新进程PCB指针
+ */
+PCB *new_task(void *pgd, void *code_start, void *code_end, void *data_start,
+              void *data_end, void *stack_start, void *heap_start,
+              void *entrypoint, int rp_level, PCB *parent);

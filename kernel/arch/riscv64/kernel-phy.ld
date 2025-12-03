@@ -56,13 +56,6 @@ SECTIONS
     . = ALIGN(4K);
     s_misc = .;
 
-    s_ptest1 = .;
-    .ptest1 : {
-        KEEP(*(.ptest1))
-        . = ALIGN(4K);
-        e_ptest1 = .;
-    }
-    
     . = ALIGN(4K);
     s_rodata = .;
     .rodata : {
@@ -77,6 +70,13 @@ SECTIONS
     .attach.license : {
         *(.attach.license)
         e_attach_license = .;
+    }
+
+    . = ALIGN(4K);
+    s_attach_test = .;
+    .attach.test : {
+        *(.attach.test)
+        e_attach_test = .;
     }
 
     .comment : { *(.comment .comment.*) }

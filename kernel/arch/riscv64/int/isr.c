@@ -14,6 +14,7 @@
 #include <basec/logger.h>
 #include <sbi/sbi.h>
 #include <syscall/syscall.h>
+#include <task/scheduler.h>
 
 enum {
     EXCEPTION_INST_MISALIGNED    = 0,   // 指令地址不对齐
@@ -99,9 +100,14 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
     }
 
     switch (scause.cause) {
-        case EXCEPTION_ECALL_U:
+        case EXCEPTION_ECALL_U: {
             syscall_handler(scause, sepc, stval, reglist_ptr);
+            // 进行系统调用后的处理
+            after_syscall(&reglist_ptr);
+            // 增加sepc以跳过ecall指令
+            reglist_ptr->sepc += 4;
             break;
+        }
         case EXCEPTION_ILLEGAL_INST:
             illegal_instruction_handler(scause, sepc, stval, reglist_ptr);
             break;

@@ -357,6 +357,8 @@ typedef struct
 #define EM_RH32		38	/* TRW RH-32 */
 #define EM_RCE		39	/* Motorola RCE */
 #define EM_ARM		40	/* ARM */
+#define EM_IA64		62	/* ARM */
+#define EM_AMD_X86_64		50	/* ARM */
 
 #define EM_L10M		180	/* Intel L10M */
 #define EM_K10M		181	/* Intel K10M */
@@ -366,6 +368,7 @@ typedef struct
 #define EM_AMDGPU	224	/* AMD GPU */
 				/* reserved 225-242 */
 #define EM_RISCV	243	/* RISC-V */
+#define EM_LOONGARCH	258	/* LOONGARCH */
 #define EM_ALPHA	0x9026
 
 /* Legal values for e_version (version).  */
@@ -414,3 +417,8 @@ typedef struct
 #define NT_PRFPXREG	20		/* Contains copy of fprxregset struct */
 
 #define NT_VERSION	1		/* Contains a version string.  */
+
+/* Values for p_flags. */
+#define PF_X		0x1	/* Executable. */
+#define PF_W		0x2	/* Writable. */
+#define PF_R		0x4	/* Readable. */

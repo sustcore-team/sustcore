@@ -214,3 +214,10 @@ void sv39_modify_page_range_flags(SV39PT root, void *vstart, void *vend,
  * @return SV39LargablePTE* 页面项
  */
 SV39LargablePTE sv39_get_pte(SV39PT root, void *vaddr);
+
+/**
+ * @brief 打印SV39页表映射布局
+ *
+ * @param root 页表根指针
+ */
+void sv39_print_mapping_layout(SV39PT root);

@@ -13,11 +13,7 @@
 #pragma once
 
 #include <stddef.h>
-
-#define x86         -1
-#define x86_64      0
-#define riscv64     1
-#define loongarch64 2
+#include <arch/arch.h>
 
 /**
  * @brief 架构特定预初始化(内核页表未构建)
@@ -64,3 +60,9 @@ typedef struct __MemRegion__ {
  * @return MemRegion* 内存区域链表头指针
  */
 MemRegion *arch_get_memory_layout(void);
+
+#if __ARCHITECTURE__ == riscv64
+#include <arch/riscv64/constants.h>
+#elif __ARCHITECTURE__ == x86_64
+#elif __ARCHITECTURE__ == loongarch64
+#endif

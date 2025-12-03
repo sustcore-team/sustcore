@@ -72,6 +72,12 @@ extern void *s_misc;
 extern void *s_attach_license, *e_attach_license;
 
 /**
+ * @brief 内核附加文件:test.mod 起始/结束处位置
+ *
+ */
+extern void *s_attach_test, *e_attach_test;
+
+/**
  * @brief 存放临时用户态代码
  * 
  */

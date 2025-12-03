@@ -9,7 +9,9 @@
  *
  */
 
+#include <arch/riscv64/paging.h>
 #include <basec/logger.h>
+#include <elfloader.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
 #include <mem/pmm.h>
@@ -21,7 +23,6 @@
 #include <sus/boot.h>
 #include <sus/symbols.h>
 #include <task/proc.h>
-#include <arch/riscv64/paging.h>
 
 /**
  * @brief 内核主函数
@@ -32,9 +33,7 @@ int main(void) {
     // 读取attach.license段
     size_t license_size =
         (size_t)((umb_t)&e_attach_license - (umb_t)&s_attach_license);
-    license_size = license_size > 2048 ?
-            2048 :
-            license_size;
+    license_size      = license_size > 2048 ? 2048 : license_size;
     char *license_str = (char *)kmalloc(license_size + 1);
     memcpy(license_str, &s_attach_license, license_size);
     license_str[license_size] = '\0';
@@ -46,7 +45,48 @@ int main(void) {
 
     log_info("Hello RISCV World!");
 
-    log_info("开始调度第一个进程...");
+    // 显示ELF文件信息
+    program_info test_prog = load_elf_program(&s_attach_test);
+    log_info("ELF程序信息:");
+    log_info("  入口点: %p", test_prog.entrypoint);
+    log_info("  代码段: [%p, %p)", test_prog.text_start, test_prog.text_end);
+    log_info("  数据段: [%p, %p)", test_prog.data_start, test_prog.data_end);
+    log_info("  程序整体: [%p, %p)", test_prog.program_start,
+             test_prog.program_end);
+
+    // 创建测试进程
+    PCB *p = new_task(test_prog.pgd, test_prog.text_start, test_prog.text_end,
+             test_prog.data_start, test_prog.data_end,
+             test_prog.program_start,  // 栈起始地址
+             test_prog.program_end,    // 堆起始地址
+             test_prog.entrypoint, 2, nullptr);
+
+    // 输出各项信息
+    log_info("创建测试进程完成: PID=%d", p->pid);
+    log_info("  代码段: [%p, %p)", p->segments.code_start,
+             p->segments.code_end);
+    log_info("  数据段: [%p, %p)", p->segments.data_start,
+             p->segments.data_end);
+    log_info("  栈段: [%p, %p)", p->segments.stack_start,
+             p->segments.stack_end);
+    log_info("  堆段: [%p, %p)", p->segments.heap_start, p->segments.heap_end);
+    log_info("  入口点: %p", p->entrypoint);
+    log_info("  内核栈: %p", p->kstack);
+    log_info("  上下文: %p", p->ctx);
+    log_info("  初始ip: %p", *p->ip);
+    log_info("  初始sp: %p", *p->sp);
+    log_info("  rp级别: %d", p->rp_level);
+    log_info("  页表: %p", p->segments.pgd);
+    log_info("页表布局如下:");
+    mem_display_mapping_layout(p->segments.pgd);
+
+    log_info("启动进程调度器...");
+
+    // 将cur_proc设置为empty_proc, 从而开始进程调度
+    cur_proc = &empty_proc;
+
+    // log_info("进程调度测试");
+    // proc_test();
 
     while (true);
 
@@ -65,124 +105,31 @@ void terminate(void) {
 
 void post_init(void);
 
-umb_t phymem_sz = 0;
-
 /**
  * @brief 内核页表设置
  *
  */
 void kernel_paging_setup(MemRegion *const layout) {
-    log_info("初始化分页机制...");
-    mapping_init();
-    log_info("分页机制初始化完成!");
-
-    // 首先构造一个根页表
-    PagingTab root = mem_construct_root();
-    log_info("构造根页表完成: %p", root);
-
-    // 根据layout找到地址上界upper_bound
-    void *upper_bound = nullptr;
-    MemRegion *iter   = layout;
-    while (iter != nullptr) {
-        void *end_addr =
-            (void *)(((umb_t)iter->addr + iter->size + PAGE_SIZE - 1) &
-                     ~(PAGE_SIZE - 1));
-        if (end_addr > upper_bound) {
-            upper_bound = end_addr;
-        }
-        iter = iter->next;
-    }
-
-    // 将此作为物理内存大小
-    phymem_sz = (umb_t)upper_bound;
-
+    // 初始化内核分页信息
+    setup_kernel_paging(layout);
     kfree(layout);
 
-    log_info("内存地址上界:   %p", upper_bound);
-    // 对[0, upper_bound)作恒等映射
+    // 构造根页表
+    void *root = mem_construct_root();
+    log_info("构造根页表完成: %p", root);
+
+    // 创建内核分页
+    create_kernel_paging(root);
+
+    // 对[0, upper_bound)作恒等映射(U-Mode)
     mem_maps_range_to(root, (void *)0x0, (void *)0x0, phymem_sz / PAGE_SIZE,
-                      RWX_MODE_RWX, false, true);
-
-    // 把内核部分映射到高地址
-    umb_t kernel_pages =
-        ((umb_t)&ekernel - (umb_t)&skernel + PAGE_SIZE - 1) / PAGE_SIZE;
-
-    log_info("内核地址偏移:      %p", (umb_t)KERNEL_VA_OFFSET);
-    void *kernel_vaddr_start =
-        (void *)(((umb_t)&skernel) + (umb_t)KERNEL_VA_OFFSET);
-    log_info("内核虚拟地址空间: [%p, %p)", kernel_vaddr_start,
-             (void *)((umb_t)kernel_vaddr_start + kernel_pages * PAGE_SIZE));
-
-    // 首先映射代码段
-    void *text_vaddr_start =
-        (void *)(((umb_t)&s_text) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t text_pages =
-        ((umb_t)&e_text - (umb_t)&s_text + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核代码段虚拟地址空间: [%p, %p)", text_vaddr_start,
-             (void *)((umb_t)text_vaddr_start + text_pages * PAGE_SIZE));
-    mem_maps_range_to(root, text_vaddr_start, (void *)&s_text, text_pages,
-                      RWX_MODE_RX, false, true);
-
-    // 接着映射ivt
-    void *ivt_vaddr_start = (void *)(((umb_t)&s_ivt) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t ivt_pages =
-        ((umb_t)&e_ivt - (umb_t)&s_ivt + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核IVT段虚拟地址空间: [%p, %p)", ivt_vaddr_start,
-             (void *)((umb_t)ivt_vaddr_start + ivt_pages * PAGE_SIZE));
-    mem_maps_range_to(root, ivt_vaddr_start, (void *)&s_ivt, ivt_pages,
-                      RWX_MODE_RWX, false, true);
-
-    // 再映射只读数据段
-    void *rodata_vaddr_start =
-        (void *)(((umb_t)&s_rodata) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t rodata_pages =
-        ((umb_t)&e_rodata - (umb_t)&s_rodata + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核只读数据段虚拟地址空间: [%p, %p)", rodata_vaddr_start,
-             (void *)((umb_t)rodata_vaddr_start + rodata_pages * PAGE_SIZE));
-    mem_maps_range_to(root, rodata_vaddr_start, (void *)&s_rodata, rodata_pages,
-                      RWX_MODE_R, false, true);
-
-    // 最后映射数据段, 初始数据段与BSS段
-    void *data_vaddr_start =
-        (void *)(((umb_t)&s_data) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t data_pages =
-        ((umb_t)&e_data - (umb_t)&s_data + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核数据段虚拟地址空间: [%p, %p)", data_vaddr_start,
-             (void *)((umb_t)data_vaddr_start + data_pages * PAGE_SIZE));
-    mem_maps_range_to(root, data_vaddr_start, (void *)&s_data, data_pages,
-                      RWX_MODE_RW, false, true);
-
-    // BSS段
-    void *bss_vaddr_start = (void *)(((umb_t)&s_bss) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t bss_pages =
-        ((umb_t)&e_bss - (umb_t)&s_bss + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核BSS段虚拟地址空间: [%p, %p)", bss_vaddr_start,
-             (void *)((umb_t)bss_vaddr_start + bss_pages * PAGE_SIZE));
-    mem_maps_range_to(root, bss_vaddr_start, (void *)&s_bss, bss_pages,
-                      RWX_MODE_RW, false, true);
-
-    // 剩余部分
-    void *misc_vaddr_start =
-        (void *)(((umb_t)&s_misc) + (umb_t)KERNEL_VA_OFFSET);
-    umb_t misc_pages =
-        ((umb_t)&ekernel - (umb_t)&s_misc + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核剩余部分虚拟地址空间: [%p, %p)", misc_vaddr_start,
-             (void *)((umb_t)misc_vaddr_start + misc_pages * PAGE_SIZE));
-    mem_maps_range_to(root, misc_vaddr_start, (void *)&s_misc, misc_pages,
-                      RWX_MODE_RX, false, true);
-
-    // 内核物理地址空间映射
-    void *kphy_vaddr_start = (void *)(((umb_t)0x0) + (umb_t)KPHY_VA_OFFSET);
-    umb_t kphy_pages       = ((umb_t)upper_bound + PAGE_SIZE - 1) / PAGE_SIZE;
-    log_info("内核物理地址空间映射: [%p, %p)", kphy_vaddr_start,
-             (void *)((umb_t)kphy_vaddr_start + kphy_pages * PAGE_SIZE));
-    mem_maps_range_to(root, kphy_vaddr_start, (void *)0x0, kphy_pages,
                       RWX_MODE_RWX, false, true);
 
     // 切换根页表
     mem_switch_root(root);
     log_info("根页表切换完成!");
 
+    // 计算post_init函数在内核虚拟地址空间中的地址
     void *post_init_vaddr = (void *)PA2KA(post_init);
     typedef void (*TestFuncType)(void);
     TestFuncType post_init_func = (TestFuncType)post_init_vaddr;
@@ -211,9 +158,6 @@ void pre_init(void) {
 }
 
 void test(void);
-extern dword IVT[];
-
-bool post_init_flag = false;
 
 void post_init(void) {
     // 设置post_init标志

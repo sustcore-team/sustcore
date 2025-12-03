@@ -11,6 +11,12 @@
 
 #pragma once
 
-#include <arch/riscv64/ctx.h>
+#include <sus/arch.h>
 
-typedef InterruptContextRegisterList RegCtx;
+struct PCBStruct;
+typedef struct PCBStruct PCB;
+
+#if __ARCHITECTURE__ == riscv64
+#include <arch/riscv64/ctx.h>
+#include <arch/riscv64/task.h>
+#endif

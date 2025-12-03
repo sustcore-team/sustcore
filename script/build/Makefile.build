@@ -24,9 +24,9 @@ ifeq ($(mode), k)
 $(target): $(build-objects)
 	$(call prepare, $@, $^)
 	$(call ld-link, $@, $^)
-# static-library
-else
+endif
 
+# static-library
 ifeq ($(mode), s)
 
 $(target): $(build-objects)
@@ -34,5 +34,12 @@ $(target): $(build-objects)
 	$(call ar-link, $@, $^)
 
 endif
+
+# module
+ifeq ($(mode), m)
+
+$(target): $(build-objects)
+	$(call prepare, $@, $^)
+	$(call ld-link, $@, $^)
 
 endif
