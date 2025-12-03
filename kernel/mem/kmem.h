@@ -17,7 +17,7 @@
 #include <sus/bits.h>
 
 extern bool post_init_flag;
-extern dword phymem_sz;
+extern size_t phymem_sz;
 extern void *upper_bound;
 
 /**

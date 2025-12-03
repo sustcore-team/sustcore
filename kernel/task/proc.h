@@ -41,8 +41,10 @@ extern PCB *cur_proc;
 // 就绪队列链表
 extern PCB *rp_list_heads[RP_LEVELS];
 extern PCB *rp_list_tails[RP_LEVELS];
+
 // 就绪队列操作宏
 #define RP_LIST(level) rp_list_heads[level], rp_list_tails[level], snext, sprev
+
 // 我们希望rp3队列中的进程按照run_time从小到大排序
 #define RP3_LIST \
     rp_list_heads[3], rp_list_tails[3], snext, sprev, run_time, ascending
@@ -60,9 +62,28 @@ void proc_init(void);
 void terminate_pcb(PCB *p);
 
 /**
- * @brief 进程测试
+ * @brief 初始化PCB
  *
+ * @param p PCB
+ * @param rp_level RP级别
  */
-void proc_test(void);
+void init_pcb(PCB *p, int rp_level);
 
-__attribute__((section(".ptest1"))) void worker(void);
+/**
+ * @brief 新建进程
+ *
+ * @param pgd 页表根地址
+ * @param code_start 代码段起始地址
+ * @param code_end 代码段结束地址
+ * @param data_start 数据段起始地址
+ * @param data_end 数据段结束地址
+ * @param stack_start 栈段起始地址
+ * @param heap_start 堆段起始地址
+ * @param entrypoint 进程入口点
+ * @param rp_level RP级别
+ * @param parent 父进程指针
+ * @return PCB* 新进程PCB指针
+ */
+PCB *new_task(void *pgd, void *code_start, void *code_end, void *data_start,
+              void *data_end, void *stack_start, void *heap_start,
+              void *entrypoint, int rp_level, PCB *parent);

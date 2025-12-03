@@ -44,7 +44,7 @@ typedef struct {
     // 数据段地址
     void *data_start;
     void *data_end;
-    // 栈段地址
+    // 栈段地址(其地址为[stack_end, stack_start)生长方向向下])
     void *stack_start;
     void *stack_end;
     // 堆段地址
@@ -61,6 +61,13 @@ typedef struct PCBStruct {
     struct PCBStruct *sprev;
     struct PCBStruct *snext;
 
+    // 形成进程树结构
+    struct PCBStruct *parent;
+    struct PCBStruct *children_head;
+    struct PCBStruct *children_tail;
+    struct PCBStruct *sibling_prev;
+    struct PCBStruct *sibling_next;
+
     // PID
     pid_t pid;
     // 进程状态
@@ -75,6 +82,8 @@ typedef struct PCBStruct {
     void *entrypoint;
     // 进程ip寄存器
     void **ip;
+    // 进程sp寄存器
+    void **sp;
 
     // 进程优先级
     int rp_level;
@@ -114,3 +123,6 @@ typedef struct PCBStruct {
     // 进程运行时间统计(只有Daemon队列使用) (ms)
     int run_time;
 } PCB;
+
+#define CHILDREN_LIST(task) \
+    task->children_head, task->children_tail, sibling_next, sibling_prev

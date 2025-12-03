@@ -11,6 +11,8 @@
 
 #include <basec/logger.h>
 #include <sus/list_helper.h>
+#include <sus/paging.h>
+#include <mem/kmem.h>
 #include <task/scheduler.h>
 
 /**
@@ -93,7 +95,8 @@ void schedule(RegCtx **ctx) {
         return;
     }
 
-    log_debug("schedule: 当前进程 pid=%d, state=%d", cur_proc ? cur_proc->pid : -1, cur_proc ? cur_proc->state : -1);
+    log_debug("schedule: 当前进程 pid=%d, state=%d",
+              cur_proc ? cur_proc->pid : -1, cur_proc ? cur_proc->state : -1);
 
     // 更新当前进程的上下文
     cur_proc->ctx = *ctx;
@@ -192,7 +195,10 @@ void schedule(RegCtx **ctx) {
     }
 
     // 切换到下一个进程
-    *ctx = next->ctx;
+    *ctx = cur_proc->ctx;
+
+    // 更新页表
+    mem_switch_root(KPA2PA(cur_proc->segments.pgd));
 
     // TODO: 更新页表与其它控制寄存器
 }

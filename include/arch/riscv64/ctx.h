@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include <sus/bits.h>
 #include <arch/riscv64/csr.h>
+#include <sus/bits.h>
 
 /**
  * @brief 保存的寄存器列表
@@ -24,4 +24,7 @@ typedef struct {
     csr_sstatus_t sstatus;  // 保存的sstatus
 } InterruptContextRegisterList;
 
-// typedef InterruptContextRegisterList RegCtx;
+typedef InterruptContextRegisterList RegCtx;
+
+#define CTX_PC(ctx) ((ctx)->sepc)
+#define CTX_SP(ctx) ((ctx)->regs[1])

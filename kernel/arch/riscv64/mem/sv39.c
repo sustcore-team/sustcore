@@ -313,3 +313,168 @@ SV39LargablePTE sv39_get_pte(SV39PT root, void *vaddr) {
 
     return (SV39LargablePTE){.entry = pte, .level = 0};
 }
+
+static void print_mapping(void *vaddr, void *paddr, size_t size) {
+    // 注意, 高位为1时要作sign-extend处理
+    if (((umb_t)vaddr >> 38) & 1) {
+        vaddr = (void *)((0xFFFF'FFC0'0000'000ul) | (umb_t)vaddr);
+    }
+    if (((umb_t)paddr >> 38) & 1) {
+        paddr = (void *)((0xFFFF'FFC0'0000'000ul) | (umb_t)paddr);
+    }
+    log_info("[%p, %p) => [%p, %p)", vaddr, (void *)((umb_t)vaddr + size),
+             paddr, (void *)((umb_t)paddr + size));
+}
+
+static bool continue_segment(void *vaddr1, void *paddr1, void *vaddr2,
+                             void *paddr2, size_t size) {
+    return (((umb_t)vaddr1 + size) == (umb_t)vaddr2) &&
+           (((umb_t)paddr1 + size) == (umb_t)paddr2);
+}
+
+// 打印SV39页表映射布局
+void sv39_print_mapping_layout(SV39PT root) {
+    // 目前遇到的最长连续映射段
+    void *seg_vstart = nullptr;
+    void *seg_pstart = nullptr;
+    size_t seg_size  = 0;
+
+    if (root == nullptr) {
+        log_info("sv39_print_mapping_layout: 页表根为空!");
+        return;
+    }
+
+    // 遍历三级页表
+    for (umb_t vpn2 = 0; vpn2 < SV39_PTE_COUNT; vpn2++) {
+        SV39PTE *pte2 = &root[vpn2];
+        // 无效页表项
+        if (!(pte2->v)) {
+            // 如果有未打印的段, 则打印
+            if (seg_size > 0) {
+                print_mapping(seg_vstart, seg_pstart, seg_size);
+                seg_size   = 0;
+                seg_vstart = seg_pstart = nullptr;
+            }
+            continue;
+        }
+        // 1GB大页
+        if (pte2->rwx != RWX_MODE_P) {
+            void *vaddr = (void *)((vpn2 << 30));
+            void *paddr = ppn2phyaddr(pte2->ppn);
+            if (seg_vstart == nullptr) {
+                // 开始新的段
+                seg_vstart = vaddr;
+                seg_pstart = paddr;
+                seg_size   = SV39_1G_PAGE_SIZE;
+                continue;
+            }
+
+            // 检查是否可以合并到当前段
+            if (continue_segment(seg_vstart, seg_pstart, vaddr, paddr,
+                                 seg_size))
+            {
+                seg_size += SV39_1G_PAGE_SIZE;
+            } else {
+                // 打印当前段
+                if (seg_size > 0) {
+                    print_mapping(seg_vstart, seg_pstart, seg_size);
+                    seg_size   = 0;
+                    seg_vstart = seg_pstart = nullptr;
+                }
+                // 开始新的段
+                seg_vstart = vaddr;
+                seg_pstart = paddr;
+                seg_size   = SV39_1G_PAGE_SIZE;
+            }
+            continue;
+        }
+        // 二级页表
+        SV39PT pgt1 = (SV39PT)PA2KPA(ppn2phyaddr(pte2->ppn));
+        for (umb_t vpn1 = 0; vpn1 < SV39_PTE_COUNT; vpn1++) {
+            SV39PTE *pte1 = &pgt1[vpn1];
+            // 无效页表项
+            if (!(pte1->v)) {
+                // 如果有未打印的段, 则打印
+                if (seg_size > 0) {
+                    print_mapping(seg_vstart, seg_pstart, seg_size);
+                    seg_size   = 0;
+                    seg_vstart = seg_pstart = nullptr;
+                }
+                continue;
+            }
+            // 2MB大页
+            if (pte1->rwx != RWX_MODE_P) {
+                void *vaddr = (void *)((vpn2 << 30) | (vpn1 << 21));
+                void *paddr = ppn2phyaddr(pte1->ppn);
+                if (seg_vstart == nullptr) {
+                    // 开始新的段
+                    seg_vstart = vaddr;
+                    seg_pstart = paddr;
+                    seg_size   = SV39_2M_PAGE_SIZE;
+                    continue;
+                }
+                // 检查是否可以合并到当前段
+                if (continue_segment(seg_vstart, seg_pstart, vaddr, paddr,
+                                     seg_size))
+                {
+                    seg_size += SV39_2M_PAGE_SIZE;
+                } else {
+                    // 打印当前段
+                    if (seg_size > 0) {
+                        print_mapping(seg_vstart, seg_pstart, seg_size);
+                        seg_size   = 0;
+                        seg_vstart = seg_pstart = nullptr;
+                    }
+                    // 开始新的段
+                    seg_vstart = vaddr;
+                    seg_pstart = paddr;
+                    seg_size   = SV39_2M_PAGE_SIZE;
+                }
+                continue;
+            }
+            // 三级页表
+            SV39PT pgt0 = (SV39PT)PA2KPA(ppn2phyaddr(pte1->ppn));
+            for (umb_t vpn0 = 0; vpn0 < SV39_PTE_COUNT; vpn0++) {
+                SV39PTE *pte0 = &pgt0[vpn0];
+                // 无效页表项
+                if (!(pte0->v)) {
+                    // 如果有未打印的段, 则打印
+                    if (seg_size > 0) {
+                        print_mapping(seg_vstart, seg_pstart, seg_size);
+                        seg_size   = 0;
+                        seg_vstart = seg_pstart = nullptr;
+                    }
+                    continue;
+                }
+                // 4KB小页
+                void *vaddr =
+                    (void *)((vpn2 << 30) | (vpn1 << 21) | (vpn0 << 12));
+                void *paddr = ppn2phyaddr(pte0->ppn);
+                if (seg_vstart == nullptr) {
+                    // 开始新的段
+                    seg_vstart = vaddr;
+                    seg_pstart = paddr;
+                    seg_size   = SV39_4K_PAGE_SIZE;
+                    continue;
+                }
+                // 检查是否可以合并到当前段
+                if (continue_segment(seg_vstart, seg_pstart, vaddr, paddr,
+                                     seg_size))
+                {
+                    seg_size += SV39_4K_PAGE_SIZE;
+                } else {
+                    // 打印当前段
+                    if (seg_size > 0) {
+                        print_mapping(seg_vstart, seg_pstart, seg_size);
+                        seg_size   = 0;
+                        seg_vstart = seg_pstart = nullptr;
+                    }
+                    // 开始新的段
+                    seg_vstart = vaddr;
+                    seg_pstart = paddr;
+                    seg_size   = SV39_4K_PAGE_SIZE;
+                }
+            }
+        }
+    }
+}

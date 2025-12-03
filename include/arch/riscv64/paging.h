@@ -100,6 +100,8 @@ typedef SV39LargablePTE LargablePTEntry;
 
 #define mem_get_page(root, vaddr) sv39_get_pte(root, vaddr)
 
+#define mem_display_mapping_layout(root) sv39_print_mapping_layout(root)
+
 // 切换页表根
 #define mem_switch_root(root)              \
     do {                                   \
