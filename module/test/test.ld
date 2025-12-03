@@ -1,13 +1,13 @@
-/* virtio_blk.ld */
+/* test.ld */
 ENTRY(_start)
 OUTPUT_ARCH(riscv)
 BASE_ADDRESS = 0x82000000;
 
 SECTIONS
 {
+    . = BASE_ADDRESS;
     s_text = .;
     .text : AT(BASE_ADDRESS) {
-        *(.text.entry)
         *(.text)
         *(.text.*)
         . = ALIGN(4K);

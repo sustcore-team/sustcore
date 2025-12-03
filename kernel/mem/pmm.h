@@ -79,3 +79,11 @@ void free_pages(void *paddr, int pagecnt);
  * @param order 2^order个物理页
  */
 void free_pages_in_order(void *paddr, int order);
+
+/**
+ * @brief 计算需要的阶数以容纳指定页数
+ *
+ * @param pagecnt 页数
+ * @return int 阶数
+ */
+int pages2order(int pagecnt);

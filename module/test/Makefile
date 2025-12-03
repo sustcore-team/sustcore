@@ -2,11 +2,12 @@ include $(global-env)
 
 include $(path-script)/env/local.mk
 
+include $(path-script)/tool.mk
 include $(path-script)/helper.mk
 
 .PHONY: build
 
-target := $(path-bin)/mods/$(architecture)/virtio_blk.mod
+target := $(path-bin)/mods/$(architecture)/test.mod
 
 objects := main.o
 deps := main.d
@@ -25,7 +26,7 @@ args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 
 flags-ld := -z max-page-size=0x100 -nostdlib
 
-args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/virtio_blk.ld"
+args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/test.ld"
 
 args := $(args-c) $(args-ld) libraries="basec kmod"
 
@@ -33,3 +34,4 @@ dir := dir-obj="$(path-objects)/kmod/$(architecture)" dir-src="$(path-d)"
 
 build:
 	$(q)$(MAKE) $(builder-m)=$(target) architecture=$(architecture) deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
+	$(q)$(copy) $(target) $(path-attach)/test.mod

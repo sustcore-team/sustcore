@@ -12,9 +12,13 @@
 #pragma once
 
 #include <stddef.h>
+#include <sus/arch.h>
 #include <sus/attributes.h>
+#include <sus/bits.h>
 
 extern bool post_init_flag;
+extern dword phymem_sz;
+extern void *upper_bound;
 
 /**
  * @brief 内核虚拟地址偏移
@@ -27,7 +31,7 @@ extern bool post_init_flag;
 
 /**
  * @brief 内核物理内存虚拟地址偏移
- * 
+ *
  * 40'0000'0000 => 5F'FFFF'FFFF (128GB)
  *
  * @note 与KERNEL_VA_OFFSET不同之处在于, 该偏移用于内核访问的物理地址.
@@ -41,3 +45,17 @@ extern bool post_init_flag;
 
 #define PA2KPA(pa) \
     (post_init_flag ? ((void *)((size_t)(pa) + KPHY_VA_OFFSET)) : (pa))
+
+/**
+ * @brief 内核页表设置
+ *
+ * @param layout 内存布局
+ */
+void setup_kernel_paging(MemRegion *const layout);
+
+/**
+ * @brief 构造内核分页
+ *
+ * @param root 根页表指针
+ */
+void create_kernel_paging(void *root);

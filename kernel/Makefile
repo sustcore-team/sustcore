@@ -8,9 +8,9 @@ include $(path-script)/helper.mk
 target := $(path-kernel)
 target-phy := $(path-kernel-phy)
 
-objects := main.o
-deps := main.d
-attachments := license.attachment.o
+objects := main.o elfloader.o
+deps := main.d elfloader.d
+attachments := license.attachment.o test.mod.attachment.o
 
 subdirs := ./mem/ ./task/ ./arch/$(architecture)/ ./syscall/
 
@@ -33,7 +33,7 @@ flags-c += -g -mcmodel=medany
 include-third_party-c := -I$(path-third_party)/include/ -I$(path-third_party)/include/libfdt/ -I$(path-third_party)/include/std/
 include-c := -I$(path-include) -I$(path-include)/std/ $(include-third_party-c) -I$(path-d) -I$(path-include)/arch/
 
-defs-c :=
+defs-c := -DDLOG_PMM
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 

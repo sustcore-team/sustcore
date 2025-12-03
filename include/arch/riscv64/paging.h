@@ -112,6 +112,8 @@ typedef SV39LargablePTE LargablePTEntry;
 
 #define addr_v2p(root, vaddr) ppn2phyaddr(sv39_get_pte(root, vaddr)->ppn)
 
+#define mem_pte_dst(entry) ppn2phyaddr((entry)->ppn)
+
 // 页面是否有效
 #define PAGE_VALID(entry) ((entry != nullptr) && (entry)->v)
 
@@ -138,6 +140,8 @@ typedef SV39LargablePTE LargablePTEntry;
 
 #define PAGE_RWX_X(entry) \
     ((PAGE_RWX_VALID(entry)) && (((entry)->rwx) & RWX_MASK_X))
+
+#define PAGE_SIZE_BY_LEVEL(level) (1ul << (12 + 9 * (level)))
 
 #elif PAGING_MODE == SV48
 

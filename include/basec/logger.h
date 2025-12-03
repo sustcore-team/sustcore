@@ -49,6 +49,16 @@ typedef enum {
     DEBUG
 } LogLevel;
 
+#ifdef DISABLE_LOGGING
+
+#define log_info(fmt, ...)
+#define log_warn(fmt, ...)
+#define log_error(fmt, ...)
+#define log_fatal(fmt, ...)
+#define log_debug(fmt, ...)
+
+#else
+
 /**
  * @brief 输出信息
  *
@@ -83,3 +93,5 @@ void log_fatal(const char *fmt, ...);
  * @param fmt 日志消息格式化字符串
  */
 void log_debug(const char *fmt, ...);
+
+#endif

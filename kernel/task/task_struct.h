@@ -44,12 +44,6 @@ typedef struct {
     // 数据段地址
     void *data_start;
     void *data_end;
-    // 只读数据段地址
-    void *rodata_start;
-    void *rodata_end;
-    // BSS段地址
-    void *bss_start;
-    void *bss_end;
     // 栈段地址
     void *stack_start;
     void *stack_end;

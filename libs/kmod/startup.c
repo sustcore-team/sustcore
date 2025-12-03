@@ -9,6 +9,7 @@
  *
  */
 
+#include <alloc.h>
 #include <kmod/syscall.h>
 #include <sus/bits.h>
 
@@ -20,8 +21,9 @@ Capability sa_get_device(void) {
     return device_cap;
 }
 
-void init(int heap_ptr) {
+void init(umb_t heap_ptr) {
     // 初始化堆指针
+    init_malloc((void *)heap_ptr);
     device_cap = (Capability){
         .raw = 0x00000000,  // TODO: 从系统参数获取设备能力
     };
@@ -41,8 +43,8 @@ void terminate(int code) {
 }
 
 void _start(void) {
-    // 根据约定, r1寄存器保存heap指针
-    register umb_t heap_ptr asm("r1");
+    // 根据约定, a0寄存器保存heap指针
+    register umb_t heap_ptr asm("a0");
     init(heap_ptr);
     // 调用主函数
     int ret = kmod_main();

@@ -19,7 +19,7 @@
 void sv39_mapping_init(void) {}
 
 SV39PT construct_sv39_mapping_root(void) {
-    SV39PT root = (SV39PT)alloc_page();
+    SV39PT root = PA2KPA((SV39PT)alloc_page());
     memset(root, 0, SV39_4K_PAGE_SIZE);
     return root;
 }
