@@ -14,25 +14,6 @@
 #include <basec/baseio.h>
 #include <string.h>
 
-void __yield__() {
-    asm volatile(
-        "mv a7, %0\n"
-        "ecall\n"
-        :
-        : "r"(SYS_YIELD)
-        : "a0", "a7");
-}
-
-void __log__(const char *msg) {
-    asm volatile(
-        "mv a7, %0\n"
-        "mv a0, %1\n"
-        "ecall\n"
-        :
-        : "r"(SYS_LOG), "r"(msg)
-        : "a0", "a7");
-}
-
 bool test_prime(int k) {
     if (k <= 1) return false;
     for (int i = 2 ; i * i <= k ; i ++) {
@@ -50,46 +31,42 @@ bool test_square(int k) {
 }
 
 void test1(void) {
-    char buffer[256];
-    for (int i = 3000'0000 ; i < 4000'0000 ; i ++) {
+    for (int i = 2'0000 ; i < 2'2500 ; i ++) {
         if (test_square(i)) {
-            int len = ssprintf(buffer, "Square: %d", i);
-            buffer[len] = '\0';
-            __log__(buffer);
+            printf("找到一个平方数: %d\n", i);
         }
+        // 强行延长运行视角 使效果更明显
+        for (volatile int j = 0 ; j < 40000 ; j ++);
     }
 }
 
 void test2(void) {
-    char buffer[256];
-    for (int i = 4000'0000 ; i < 5000'0000 ; i ++) {
+    for (int i = 2'2500 ; i < 2'5000 ; i ++) {
         if (test_square(i)) {
-            int len = ssprintf(buffer, "Square: %d", i);
-            buffer[len] = '\0';
-            __log__(buffer);
+            printf("找到一个平方数: %d\n", i);
         }
+        // 强行延长运行视角 使效果更明显
+        for (volatile int j = 0 ; j < 40000 ; j ++);
     }
 }
 
 void test3(void) {
-    char buffer[256];
-    for (int i = 5000'0000 ; i < 6000'0000 ; i ++) {
+    for (int i = 2'5000 ; i < 2'7500 ; i ++) {
         if (test_square(i)) {
-            int len = ssprintf(buffer, "Square: %d", i);
-            buffer[len] = '\0';
-            __log__(buffer);
+            printf("找到一个平方数: %d\n", i);
         }
+        // 强行延长运行视角 使效果更明显
+        for (volatile int j = 0 ; j < 40000 ; j ++);
     }
 }
 
 void test4(void) {
-    char buffer[256];
-    for (int i = 6000'0000 ; i < 7000'0000 ; i ++) {
+    for (int i = 2'7500 ; i < 3'0000 ; i ++) {
         if (test_square(i)) {
-            int len = ssprintf(buffer, "Square: %d", i);
-            buffer[len] = '\0';
-            __log__(buffer);
+            printf("找到一个平方数: %d\n", i);
         }
+        // 强行延长运行视角 使效果更明显
+        for (volatile int j = 0 ; j < 40000 ; j ++);
     }
 }
 
@@ -97,9 +74,7 @@ extern umb_t arg[8];
 
 int kmod_main(void) {
     umb_t pid = arg[1];
-    char buffer[256];
-    ssprintf(buffer, "测试模块启动! PID=%d", pid);
-    __log__(buffer);
+    printf("测试模块启动! PID=%d\n", pid);
     switch (pid)
     {
     case 1:
@@ -115,6 +90,5 @@ int kmod_main(void) {
         test4();
         break;
     }
-    while (true);
     return 0;
 }

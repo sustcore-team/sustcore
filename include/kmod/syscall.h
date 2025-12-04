@@ -22,6 +22,12 @@
 void exit(int code);
 
 /**
+ * @brief 让出CPU，主动让调度器调度其他进程
+ * 
+ */
+void yield(void);
+
+/**
  * @brief 唤醒指定进程
  *
  * @param pid 进程ID(实际上是进程能力)

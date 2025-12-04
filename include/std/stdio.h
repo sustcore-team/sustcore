@@ -31,3 +31,20 @@ int vsprintf(char *buffer, const char *fmt, va_list args);
  * @return 输出字符数
  */
 int sprintf(char *buffer, const char *fmt, ...);
+
+/**
+ * @brief 格式化输出到标准输出
+ * 
+ * @param fmt 格式化字符串
+ * @param ... 可变参数
+ * @return int 输出的字符数
+ */
+int printf(const char *fmt, ...);
+
+/**
+ * @brief 输出字符串到标准输出
+ * 
+ * @param str 要输出的字符串
+ * @return int 输出的字符数
+ */
+int puts(const char *str);

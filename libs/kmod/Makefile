@@ -8,8 +8,8 @@ include $(path-script)/helper.mk
 
 target := $(path-bin)/libs/$(architecture)/libkmod.a
 
-objects := startup.o rpc.o alloc.o syscall.o device.o
-deps := startup.d rpc.d alloc.d syscall.d device.d
+objects := startup.o rpc.o alloc.o syscall.o device.o stdio.o
+deps := startup.d rpc.d alloc.d syscall.d device.d stdio.d
 
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \

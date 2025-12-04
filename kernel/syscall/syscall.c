@@ -15,11 +15,12 @@
 #include <sus/syscall.h>
 #include <mem/alloc.h>
 #include <syscall/uaccess.h>
+#include <sus/boot.h>
 
 void sys_exit(umb_t exit_code)
 {
     cur_proc->state = PS_ZOMBIE;
-    log_info("进程调用 exit 系统调用, 退出码: %lu", exit_code);
+    log_info("进程%d调用 exit 系统调用, 退出码: %lu", cur_proc->pid, exit_code);
 }
 
 void sys_yield()
@@ -39,6 +40,21 @@ void sys_log(const char *msg) {
     kfree(kmsg);
 }
 
+// TODO: 这个功能本应交给对应驱动
+// 但目前还没有实现串口驱动, 先放在这里
+int sys_write_serial(const char *msg) {
+    int len = ua_strlen(msg);
+    char *kmsg = (char *)kmalloc(len + 1);
+    if (kmsg == nullptr) {
+        log_info("sys_write_serial: 分配内核缓冲区失败");
+        return 0;
+    }
+    ua_strcpy(kmsg, msg);
+    int ret = kputs(kmsg);
+    kfree(kmsg);
+    return ret;
+}
+
 umb_t syscall_handler(int sysno, RegCtx *ctx, ArgumentGetter arg_getter)
 {
     switch(sysno) {
@@ -51,6 +67,9 @@ umb_t syscall_handler(int sysno, RegCtx *ctx, ArgumentGetter arg_getter)
         case SYS_LOG:
             sys_log((const char *)arg_getter(ctx, 0));
             return 0;
+        case SYS_WRITE_SERIAL:
+            int ret = sys_write_serial((const char *)arg_getter(ctx, 0));
+            return ret;
         default:
             log_info("未知系统调用号: %d", sysno);
             return (umb_t)(-1);

@@ -18,7 +18,6 @@ SECTIONS
         e_text = .;
     }
 
-    
     s_ivt = .;
     .ivt : {
         *(.ivt .ivt.*)

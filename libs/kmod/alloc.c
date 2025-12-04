@@ -27,7 +27,7 @@ void *alloc_pages(size_t num_pages) {
 
 // 从堆中释放页
 void free_pages(void *addr, size_t num_pages) {
-    // 暂不支持释放页
+    // 不需要释放
 }
 
 /**
