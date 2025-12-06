@@ -57,15 +57,6 @@ SECTIONS
     s_misc = .;
 
     . = ALIGN(4K);
-    s_rodata = .;
-    .rodata : {
-        *(.rodata .rodata.*)
-        *(.srodata .srodata.*)
-        . = ALIGN(4K);
-        e_rodata = .;
-    }
-
-    . = ALIGN(4K);
     s_attach_license = .;
     .attach.license : {
         *(.attach.license)
@@ -79,6 +70,7 @@ SECTIONS
         e_attach_test = .;
     }
 
+    . = ALIGN(4K);
     .comment : { *(.comment .comment.*) }
     .riscv.attributes : { *(.riscv.attributes .riscv.attributes.*) }
 

@@ -28,6 +28,20 @@ void exit(int code);
 void yield(void);
 
 /**
+ * @brief 获得当前进程的PID
+ * 
+ * @return 当前进程的PID
+ */
+int get_current_pid(void);
+
+/**
+ * @brief 创建当前进程的副本
+ * 
+ * @return int 新进程的PID, 子进程返回0
+ */
+int fork(void);
+
+/**
  * @brief 唤醒指定进程
  *
  * @param pid 进程ID(实际上是进程能力)

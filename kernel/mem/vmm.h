@@ -71,3 +71,15 @@ void memcpy_u2k(void *root, void *dest_kaddr, void *src_vaddr, size_t size);
  * @param size 大小
  */
 void memset_u(void *root, void *vaddr, int byte, size_t size);
+
+/**
+ * @brief 用户空间内存比较
+ * 
+ * @param root1 页表根指针1
+ * @param vaddr1 虚拟地址1
+ * @param root2 页表根指针2
+ * @param vaddr2 虚拟地址2
+ * @param size 大小
+ * @return int 比较结果
+ */
+int memcmp_u2u(void *root1, void *vaddr1, void *root2, void *vaddr2, size_t size);

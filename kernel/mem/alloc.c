@@ -693,7 +693,8 @@ static void *__stage2_kmalloc__(size_t size) {
     if (size >= 4096) {
         // 将其向上对齐至page, 并分配page
         size_t needed_pages = (size + 4095) / 4096;
-        void *addr          = PA2KPA(alloc_pages(needed_pages));
+        void *paddr = alloc_pages(needed_pages);
+        void *addr          = PA2KPA(paddr);
         if (addr == nullptr) {
             log_error("__stage2_kmalloc__: 大页分配失败 size=%u", size);
             return nullptr;
@@ -768,7 +769,7 @@ void __stage2_kfree__(void *ptr) {
     }
     if (info->is_page) {
         // 大页分配
-        free_pages(info->start_page, info->page_count);
+        free_pages(KPA2PA(info->start_page), info->page_count);
     } else {
         // 小块分配
         // 标记为未使用

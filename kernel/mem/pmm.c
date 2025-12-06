@@ -483,6 +483,10 @@ void *alloc_pages(int pagecnt) {
 }
 
 void free_page(void *paddr) {
+    if (paddr >= (void *)KPHY_VA_OFFSET) {
+        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        return;
+    }
     if (((umb_t)paddr % 0x1000) != 0) {
         log_error("free_page: 地址 %p 非页对齐", paddr);
         return;
@@ -491,6 +495,10 @@ void free_page(void *paddr) {
 }
 
 void free_pages_in_order(void *paddr, int order) {
+    if (paddr >= (void *)KPHY_VA_OFFSET) {
+        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        return;
+    }
     if (((umb_t)paddr % 0x1000) != 0) {
         log_error("free_pages_in_order: 地址 %p 非页对齐", paddr);
         return;
@@ -513,6 +521,10 @@ void free_pages_in_order(void *paddr, int order) {
 }
 
 void free_pages(void *paddr, int pagecnt) {
+    if (paddr >= (void *)KPHY_VA_OFFSET) {
+        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        return;
+    }
     if (((umb_t)paddr % 0x1000) != 0) {
         log_error("free_pages: 地址 %p 非页对齐", paddr);
         return;

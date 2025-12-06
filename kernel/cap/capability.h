@@ -51,7 +51,8 @@ typedef struct CapStruct {
     struct CapStruct *next;
 } Capability;
 
-#define CHILDREN_CAP_LIST(cap) cap->children_head, cap->children_tail, snext, sprev
+#define CHILDREN_CAP_LIST(cap) \
+    cap->children_head, cap->children_tail, snext, sprev
 
 #define CSPACE_ITEMS (256)
 
@@ -77,17 +78,9 @@ Capability *fetch_cap(PCB *pcb, CapPtr ptr);
  */
 CapPtr insert_cap(PCB *pcb, Capability *cap);
 
-// PCB能力
-typedef struct {
-    // yield进程的能力
-    bool priv_yield;
-    // exit进程的能力
-    bool priv_exit;
-} PCBCapPriv;
-
 /**
  * @brief 构造能力
- * 
+ *
  * @param p 在p内构造能力
  * @param type 能力类型
  * @param cap_data 能力数据
@@ -95,29 +88,3 @@ typedef struct {
  * @return CapPtr 能力指针
  */
 CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv);
-
-/**
- * @brief 构造PCB能力
- * 
- * @param p    在p内构造一个PCB能力
- * @param pcb  构造的能力指向pcb
- * @param priv 控制权限
- * @return CapPtr 能力指针
- */
-CapPtr create_pcb_cap(PCB *p, PCB *pcb, PCBCapPriv priv);
-
-/**
- * @brief 将进程切换到yield状态
- * 
- * @param p 当前进程的PCB
- * @param ptr 能力指针
- */
-void pcb_cap_yield(PCB *p, CapPtr ptr);
-
-/**
- * @brief 退出进程
- * 
- * @param p 当前进程的PCB
- * @param ptr 能力指针
- */
-void pcb_cap_exit(PCB *p, CapPtr ptr);

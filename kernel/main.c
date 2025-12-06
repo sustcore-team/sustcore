@@ -58,52 +58,46 @@ int main(void) {
     memcpy(license_str, &s_attach_license, license_size);
     license_str[license_size] = '\0';
     log_info("内核附加文件: license");
-    log_info("----- BEGIN LICENSE -----");
+    kprintf("----- BEGIN LICENSE -----\n");
     kprintf("%s\n", license_str);
-    log_info("-----  END LICENSE  -----");
+    kprintf("-----  END LICENSE  -----\n");
     kfree(license_str);
 
     log_info("Hello RISCV World!");
 
-    // 显示ELF文件信息
-    for (int i = 0 ; i < 4 ; i ++) {
-        log_info("-----------加载第%d次ELF程序-----------", i + 1);
-        program_info test_prog = load_elf_program(&s_attach_test);
-        log_info("ELF程序信息:");
-        log_info("  入口点: %p", test_prog.entrypoint);
-        log_info("  代码段: [%p, %p)", test_prog.text_start, test_prog.text_end);
-        log_info("  数据段: [%p, %p)", test_prog.data_start, test_prog.data_end);
-        log_info("  程序整体: [%p, %p)", test_prog.program_start,
-                test_prog.program_end);
+    program_info test_prog = load_elf_program(&s_attach_test);
+    log_info("ELF程序信息:");
+    log_info("  入口点: %p", test_prog.entrypoint);
+    log_info("  代码段: [%p, %p)", test_prog.text_start, test_prog.text_end);
+    log_info("  数据段: [%p, %p)", test_prog.data_start, test_prog.data_end);
+    log_info("  程序整体: [%p, %p)", test_prog.program_start,
+            test_prog.program_end);
 
-        // 创建测试进程
-        PCB *p = new_task(test_prog.pgd, test_prog.text_start, test_prog.text_end,
-                test_prog.data_start, test_prog.data_end,
-                test_prog.program_start,  // 栈起始地址
-                test_prog.program_end,    // 堆起始地址
-                test_prog.entrypoint, 2, nullptr);
+    // 创建测试进程
+    PCB *p = new_task(test_prog.pgd, test_prog.text_start, test_prog.text_end,
+            test_prog.data_start, test_prog.data_end,
+            test_prog.program_start,  // 栈起始地址
+            test_prog.program_end,    // 堆起始地址
+            test_prog.entrypoint, 2, nullptr);
 
-        arch_setup_argument(p, 2, p->pid); // 设置第2个参数为pid
-
-        // 输出各项信息
-        log_info("创建测试进程完成: PID=%d", p->pid);
-        log_info("  代码段: [%p, %p)", p->segments.code_start,
-                p->segments.code_end);
-        log_info("  数据段: [%p, %p)", p->segments.data_start,
-                p->segments.data_end);
-        log_info("  栈段: [%p, %p)", p->segments.stack_start,
-                p->segments.stack_end);
-        log_info("  堆段: [%p, %p)", p->segments.heap_start, p->segments.heap_end);
-        log_info("  入口点: %p", p->entrypoint);
-        log_info("  内核栈: %p", p->kstack);
-        log_info("  上下文: %p", p->ctx);
-        log_info("  初始ip: %p", *p->ip);
-        log_info("  初始sp: %p", *p->sp);
-        log_info("  rp级别: %d", p->rp_level);
-        log_info("  页表: %p(paddr:%p)", p->segments.pgd, KPA2PA(p->segments.pgd));
-        log_info("页表布局如下:");
-        mem_display_mapping_layout(p->segments.pgd);
-    }
+    // 输出各项信息
+    log_info("创建测试进程完成: PID=%d", p->pid);
+    log_info("  代码段: [%p, %p)", p->segments.text_start,
+            p->segments.text_end);
+    log_info("  数据段: [%p, %p)", p->segments.data_start,
+            p->segments.data_end);
+    log_info("  栈段: [%p, %p)", p->segments.stack_start,
+            p->segments.stack_end);
+    log_info("  堆段: [%p, %p)", p->segments.heap_start, p->segments.heap_end);
+    log_info("  入口点: %p", p->entrypoint);
+    log_info("  内核栈: %p", p->kstack);
+    log_info("  上下文: %p", p->ctx);
+    log_info("  初始ip: %p", *p->ip);
+    log_info("  初始sp: %p", *p->sp);
+    log_info("  rp级别: %d", p->rp_level);
+    log_info("  页表: %p(paddr:%p)", p->segments.pgd, KPA2PA(p->segments.pgd));
+    log_info("页表布局如下:");
+    mem_display_mapping_layout(p->segments.pgd);
 
     log_info("启动进程调度器...");
 

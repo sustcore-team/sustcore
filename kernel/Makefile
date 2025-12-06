@@ -12,7 +12,7 @@ objects := main.o elfloader.o
 deps := main.d elfloader.d
 attachments := license.attachment.o test.mod.attachment.o
 
-subdirs := ./mem/ ./task/ ./arch/$(architecture)/ ./syscall/
+subdirs := ./mem/ ./task/ ./arch/$(architecture)/ ./syscall/ ./cap/
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
@@ -33,7 +33,7 @@ flags-c += -g -mcmodel=medany
 include-third_party-c := -I$(path-third_party)/include/ -I$(path-third_party)/include/libfdt/ -I$(path-third_party)/include/std/
 include-c := -I$(path-include) -I$(path-include)/std/ $(include-third_party-c) -I$(path-d) -I$(path-include)/arch/
 
-defs-c := -DDLOG_PMM -DDLOG_TASK
+defs-c := -DDLOG_PMM -DDLOG_TASK -DDISABLE_LOGGING
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 

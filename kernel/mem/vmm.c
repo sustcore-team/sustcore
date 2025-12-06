@@ -208,6 +208,45 @@ void memset_u(void *root, void *vaddr, int byte, size_t size) {
     }
 }
 
+/**
+ * @brief 用户空间内存比较
+ * 
+ * @param root1 页表根指针1
+ * @param vaddr1 虚拟地址1
+ * @param root2 页表根指针2
+ * @param vaddr2 虚拟地址2
+ * @param size 大小
+ * @return int 比较结果
+ */
+int memcmp_u2u(void *root1, void *vaddr1, void *root2, void *vaddr2, size_t size)
+{
+    // 设置一个临时缓冲区
+    void *temp_buf1 = kmalloc(size);
+    if (temp_buf1 == nullptr) {
+        log_error("memcmp_u2u: 分配临时缓冲区1失败 size=%lu", size);
+        return -1;
+    }
+    void *temp_buf2 = kmalloc(size);
+    if (temp_buf2 == nullptr) {
+        log_error("memcmp_u2u: 分配临时缓冲区2失败 size=%lu", size);
+        kfree(temp_buf1);
+        return -1;
+    }
+
+    // 从用户空间复制到临时缓冲区
+    memcpy_u2k(root1, temp_buf1, vaddr1, size);
+    memcpy_u2k(root2, temp_buf2, vaddr2, size);
+
+    // 进行比较
+    int result = memcmp(temp_buf1, temp_buf2, size);
+
+    // 释放临时缓冲区
+    kfree(temp_buf1);
+    kfree(temp_buf2);
+
+    return result;
+}
+
 void ua_start_access(void) {
     csr_sstatus_t sstatus = csr_get_sstatus();
     sstatus.sum = 1;  // 允许S-MODE访问U-MODE内存

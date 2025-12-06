@@ -73,8 +73,8 @@ void init_pcb(PCB *p, int rp_level);
  * @brief 新建进程
  *
  * @param pgd 页表根地址
- * @param code_start 代码段起始地址
- * @param code_end 代码段结束地址
+ * @param text_start 代码段起始地址
+ * @param text_end 代码段结束地址
  * @param data_start 数据段起始地址
  * @param data_end 数据段结束地址
  * @param stack_start 栈段起始地址
@@ -84,6 +84,14 @@ void init_pcb(PCB *p, int rp_level);
  * @param parent 父进程指针
  * @return PCB* 新进程PCB指针
  */
-PCB *new_task(void *pgd, void *code_start, void *code_end, void *data_start,
+PCB *new_task(void *pgd, void *text_start, void *text_end, void *data_start,
               void *data_end, void *stack_start, void *heap_start,
               void *entrypoint, int rp_level, PCB *parent);
+
+/**
+ * @brief fork进程
+ * 
+ * @param parent 被fork的父进程
+ * @return PCB* 新进程PCB指针
+ */
+PCB *fork_task(PCB *parent);

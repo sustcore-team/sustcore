@@ -70,6 +70,7 @@ SECTIONS
         e_attach_test = .;
     }
 
+    . = ALIGN(4K);
     .comment : { *(.comment .comment.*) }
     .riscv.attributes : { *(.riscv.attributes .riscv.attributes.*) }
 

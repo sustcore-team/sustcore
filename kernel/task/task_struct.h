@@ -14,9 +14,9 @@
 
 #include <sus/bits.h>
 #include <sus/ctx.h>
-#include <task/capability.h>
+#include <cap/capability.h>
 
-typedef umb_t pid_t;
+typedef int pid_t;
 
 static pid_t PIDALLOC = 1;
 
@@ -41,8 +41,8 @@ typedef struct {
     // 页表根地址
     void *pgd;
     // 代码段地址
-    void *code_start;
-    void *code_end;
+    void *text_start;
+    void *text_end;
     // 数据段地址
     void *data_start;
     void *data_end;
@@ -52,6 +52,8 @@ typedef struct {
     // 堆段地址
     void *heap_start;
     void *heap_end;
+    // copy-on-write标志
+    bool cow;
 } MMInfo;
 
 typedef struct PCBStruct {
