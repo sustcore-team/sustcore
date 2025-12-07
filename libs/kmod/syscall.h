@@ -14,6 +14,12 @@
 #include <sus/capability.h>
 
 /**
+ * @brief 初始化PID-能力哈希表
+ * 
+ */
+void init_proc_cap_table(void);
+
+/**
  * @brief 获得能力对应的进程ID
  * 
  * @param cap 进程能力

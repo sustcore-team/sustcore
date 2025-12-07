@@ -157,6 +157,12 @@ bool on_write_rx_page_fault(TM *tm, void *vaddr);
 bool on_execute_rw_page_fault(TM *tm, void *vaddr);
 
 /**
+ * @brief 为指定虚拟地址释放页
+ * 
+ */
+void free_pages_for(void *root, void *vaddr, size_t pages);
+
+/**
  * @brief 从用户空间复制内存到用户空间
  *
  * @param dst_tm 目标进程内存信息

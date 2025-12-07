@@ -13,6 +13,7 @@
 #include <startup.h>
 #include <kmod/syscall.h>
 #include <sus/bits.h>
+#include <syscall.h>
 
 extern int kmod_main(void);
 
@@ -70,6 +71,10 @@ void _start(void) {
     umb_t heap_ptr = arg[1];
 
     init(heap_ptr);
+
+    init_proc_cap_table();
+    insert_proc_cap(get_current_pid(), pcb_cap);
+
     // 调用主函数
     int ret = kmod_main();
     // 结束

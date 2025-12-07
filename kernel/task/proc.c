@@ -89,6 +89,70 @@ void terminate_tcb(TCB *t) {
     log_debug("terminate_tcb: 线程 (tid=%d) 资源清理完成", t->tid);
 }
 
+/**
+ * @brief 将能力从进程的cspace中移除
+ *
+ * @param cap 能力
+ */
+void remove_from_cspace(Capability *cap) {
+    PCB *p = cap->pcb;
+    if (p->cap_spaces == nullptr) {
+        log_error("remove_from_cspace: 进程的cap_spaces未初始化 (pid=%d)",
+                  p->pid);
+        return;
+    }
+    if (p->cap_spaces[cap->cap_ptr.cspace] == nullptr) {
+        log_error(
+            "remove_from_cspace: 进程的cspace未初始化 (pid=%d, cspace=%d)",
+            p->pid, cap->cap_ptr.cspace);
+        return;
+    }
+    if (p->cap_spaces[cap->cap_ptr.cspace][cap->cap_ptr.cindex] != cap) {
+        log_error(
+            "remove_from_cspace: 进程的cspace中对应位置的能力不匹配 (pid=%d, "
+            "cspace=%d, cindex=%d)",
+            p->pid, cap->cap_ptr.cspace, cap->cap_ptr.cindex);
+        return;
+    }
+    p->cap_spaces[cap->cap_ptr.cspace][cap->cap_ptr.cindex] = nullptr;
+}
+
+/**
+ * @brief 递归清除能力树
+ *
+ * TODO: 避免无限递归
+ *
+ * @param cap 能力节点
+ */
+void terminate_cap_tree(Capability *cap) {
+    // 递归删除子节点
+    Capability *child;
+    foreach_list(child, CHILDREN_CAP_LIST(cap)) {
+        terminate_cap_tree(child);
+    }
+    // 从进程能力链表中移除
+    list_remove(cap, CAPABILITY_LIST(cap->pcb));
+    // 释放cap_priv
+    if (cap->cap_priv != nullptr) {
+        kfree(cap->cap_priv);
+        cap->cap_priv = nullptr;
+    }
+
+    remove_from_cspace(cap);
+
+    // 释放能力结构体
+    kfree(cap);
+}
+
+void terminate_caps(PCB *p) {
+    // 遍历其所有的能力, 对每个能力遍历这个能力的派生树
+    // 把树上的能力全部删除
+    Capability *cap_node;
+    foreach_list(cap_node, CAPABILITY_LIST(p)) {
+        terminate_cap_tree(cap_node);
+    }
+}
+
 void terminate_pcb(PCB *p) {
     if (p == nullptr) {
         log_error("kill_pcb: 传入的PCB指针为空");
@@ -110,6 +174,9 @@ void terminate_pcb(PCB *p) {
 
     // 从进程链表中移除
     list_remove(p, PROC_LIST);
+
+    // 删除其派生出的能力
+    terminate_caps(p);
 
     log_debug("terminate_pcb: 进程 (pid=%d) 资源清理完成", p->pid);
 }
@@ -253,8 +320,8 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
     // 初始化进程
     // 设置128MB的堆
     add_vma(p->tm, heap, 32768 * PAGE_SIZE, VMAT_HEAP);
-    // 预分配4KB
-    alloc_pages_for(p->tm, heap, 1, RWX_MODE_RW, true);
+    // 预分配64KB
+    alloc_pages_for(p->tm, heap, 16, RWX_MODE_RW, true);
 
     // 添加主线程栈到VMA
     // 主线程栈大小64KB(从stack向下增长)

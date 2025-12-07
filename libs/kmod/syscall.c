@@ -13,6 +13,7 @@
 #include <sus/syscall.h>
 #include <sus/list_helper.h>
 #include <startup.h>
+#include <alloc.h>
 
 umb_t syscall(int sysno, umb_t arg0, umb_t arg1, umb_t arg2, umb_t arg3, umb_t arg4, umb_t arg5, umb_t arg6)
 {
@@ -100,6 +101,13 @@ static ProcCapNode *proc_cap_table_tail[PROC_CAP_TABLE_SIZE] = {};
 
 #define PROC_CAP_LIST(pid) proc_cap_table_head[HASH_PID(pid)], proc_cap_table_tail[HASH_PID(pid)], next, prev
 
+void init_proc_cap_table(void) {
+	for (int i = 0; i < PROC_CAP_TABLE_SIZE; i++) {
+		proc_cap_table_head[i] = nullptr;
+		proc_cap_table_tail[i] = nullptr;
+	}
+}
+
 CapPtr get_proc_cap(int pid) {
 	ProcCapNode *node;
 	foreach_list(node, PROC_CAP_LIST(pid)) {
@@ -124,16 +132,18 @@ void insert_proc_cap(int pid, CapPtr cap) {
 		}
 	}
 	// 不存在, 插入新节点
-	ProcCapNode *node = (ProcCapNode *)kmalloc(sizeof(ProcCapNode));
+	node = (ProcCapNode *)malloc(sizeof(ProcCapNode));
 	node->pid = pid;
 	node->cap = cap;
+	node->next = node->prev = nullptr;
 	list_push_back(node, PROC_CAP_LIST(pid));
 }
 
 int fork(void) {
 	CapPtr cap;
-	int pid;
-	cap.val = syscall_2(SYS_FORK, pcb_cap.val, 0, 0, 0, 0, 0, 0, (umb_t *)&pid);
+	smb_t _pid;
+	cap.val = syscall_2(SYS_FORK, pcb_cap.val, 0, 0, 0, 0, 0, 0, (umb_t *)&_pid);
+	int pid = (int)_pid;
 	// 将cap与pid插入表中
 	insert_proc_cap(pid, cap);
 	// 将pid与cap对应起来

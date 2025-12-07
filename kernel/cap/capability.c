@@ -62,6 +62,11 @@ CapPtr insert_cap(PCB *pcb, Capability *cap) {
         return INVALID_CAP_PTR;
     }
 
+    if (pcb == nullptr) {
+        log_error("insert_cap: pcb不能为空!");
+        return INVALID_CAP_PTR;
+    }
+
     // PCB中无CSpaces
     if (pcb->cap_spaces == nullptr) {
         log_error("insert_cap: PCB块中无CSpaces");
@@ -99,6 +104,10 @@ CapPtr insert_cap(PCB *pcb, Capability *cap) {
 }
 
 CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv) {
+    if (p == nullptr) {
+        log_error("create_cap: PCB不能为空!");
+        return INVALID_CAP_PTR;
+    }
     if (cap_data == nullptr) {
         log_error("create_cap: 能力数据为空!");
         return INVALID_CAP_PTR;
@@ -114,6 +123,7 @@ CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv) {
     list_init(CHILDREN_CAP_LIST(cap));
     // 设置能力属性
     cap->type     = type;
+    cap->pcb      = p;
     cap->cap_data = cap_data;
     cap->cap_priv = cap_priv;
     // 插入能力到PCB

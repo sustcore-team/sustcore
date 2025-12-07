@@ -107,6 +107,8 @@ static size_t heap_free_dwords = 0;
  *
  */
 static bool alloc_heap_page() {
+    printf("alloc_heap_page: 分配新的堆页");
+
     // 首先分配32个页作为堆页
     void *new_heap_pages = alloc_pages(32);
 
@@ -653,6 +655,14 @@ void *malloc(size_t size) {
     // 更新空闲dword数量
     heap_free_dwords -= needed_dwords;
 
+    if (heap_free_dwords < 20) {
+        // 及时分配新的堆页
+        if (!alloc_heap_page()) {
+            log_error("malloc: 无法分配新的堆页");
+            return nullptr;
+        }
+    }
+
     // 将其记录在分配记录中
     add_small_alloc_info(loc, end_loc);
 
@@ -698,9 +708,12 @@ void init_malloc(void *heap_ptr) {
     // 分配初始堆页
     void *bitmap_page        = alloc_pages(1);
     void *heap_pages         = alloc_pages(32);
+    // 作为heap_page_idx使用
     HeapPageIdx *initial_idx = (HeapPageIdx *)initial_page;
     initial_idx->bitmap_page = bitmap_page;
     initial_idx->heap_pages  = heap_pages;
+    // 增加free dwords
+    heap_free_dwords += 32768;
 
     // 加入到链表中
     initial_idx->next = nullptr;
