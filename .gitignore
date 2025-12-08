@@ -8,7 +8,6 @@ bochsrc.bxrc
 bochsrc
 sustcore.img
 bx_enh_dbg.ini
-doc/
 config.mk
 config-ref/*/
 config-ref/*.tar.xz
