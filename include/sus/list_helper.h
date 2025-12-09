@@ -129,6 +129,35 @@
     for (x = (head); x != nullptr; x = x->next)
 #define foreach_ordered_list(x, list) __foreach_ordered_list(x, list)
 
+// 查找第一个不满足cmp(node->field, target)的节点
+// 即如果cmp为ascending, 则找到第一个大于等于target的节点
+#define __ordered_list_find(target, found, head, tail, next, prev, field, cmp) \
+    do {                                                                       \
+        found             = nullptr;                                           \
+        typeof(head) curr = head;                                              \
+        while (curr != nullptr) {                                              \
+            if (cmp(curr->field, target)) {                                    \
+                found = curr;                                                  \
+                break;                                                         \
+            }                                                                  \
+            curr = curr->next;                                                 \
+        }                                                                      \
+    } while (0)
+#define ordered_list_find(target, found, list) \
+    __ordered_list_find(target, found, list)
+
+#define __ordered_list_findeq(target, found, equ, head, tail, next, prev, \
+                              field, cmp)                                 \
+    do {                                                                  \
+        __ordered_list_find(target, found, head, tail, next, prev, field, \
+                            cmp);                                         \
+        if (found != nullptr && !equ(found->field, target)) {             \
+            found = nullptr;                                              \
+        }                                                                 \
+    } while (0)
+#define ordered_list_findeq(target, found, equ, list) \
+    __ordered_list_findeq(target, found, equ, list)
+
 // 计算长度
 #define __ordered_list_length(len, head, tail, next, prev, field, cmp) \
     do {                                                               \
@@ -212,48 +241,49 @@
 #define ordered_list_remove(node, list) __ordered_list_remove(node, list)
 
 // 弹出有序链表头节点
-#define __ordered_list_pop_front(node, head, tail, next, prev, field, cmp) \
-    do {                                                                 \
-        if (head == nullptr) {                                           \
-            node = nullptr;                                              \
-        } else {                                                         \
-            node = head;                                                 \
+#define __ordered_list_pop_front(node, head, tail, next, prev, field, cmp)   \
+    do {                                                                     \
+        if (head == nullptr) {                                               \
+            node = nullptr;                                                  \
+        } else {                                                             \
+            node = head;                                                     \
             __ordered_list_remove(node, head, tail, next, prev, field, cmp); \
-        }                                                                \
+        }                                                                    \
     } while (0)
 #define ordered_list_pop_front(node, list) __ordered_list_pop_front(node, list)
 
 // 弹出有序链表尾节点
-#define __ordered_list_pop_back(node, head, tail, next, prev, field, cmp) \
-    do {                                                                \
-        if (tail == nullptr) {                                          \
-            node = nullptr;                                             \
-        } else {                                                        \
-            node = tail;                                                \
+#define __ordered_list_pop_back(node, head, tail, next, prev, field, cmp)    \
+    do {                                                                     \
+        if (tail == nullptr) {                                               \
+            node = nullptr;                                                  \
+        } else {                                                             \
+            node = tail;                                                     \
             __ordered_list_remove(node, head, tail, next, prev, field, cmp); \
-        }                                                               \
+        }                                                                    \
     } while (0)
 #define ordered_list_pop_back(node, list) __ordered_list_pop_back(node, list)
 
 // 判断有序链表是否为空
-#define __ordered_list_is_empty(head, tail, next, prev, field, cmp) ((head) == nullptr)
-#define ordered_list_is_empty(list)                     __ordered_list_is_empty(list)
+#define __ordered_list_is_empty(head, tail, next, prev, field, cmp) \
+    ((head) == nullptr)
+#define ordered_list_is_empty(list) __ordered_list_is_empty(list)
 
 // 判断有序链表有序性是否被破坏 (调试用)
 #define __ordered_list_is_sorted(head, tail, next, prev, field, cmp, sorted) \
-    do {                                                               \
-        sorted = true;                                         \
-        if (head != nullptr) {                                      \
-            typeof(head) curr = head;                               \
-            while (curr->next != nullptr) {                         \
-                if (!cmp(curr->field, curr->next->field)) {         \
-                    sorted = false;                                 \
-                    break;                                          \
-                }                                                   \
-                curr = curr->next;                                  \
-            }                                                       \
-        }                                                           \
-    } while(0)
+    do {                                                                     \
+        sorted = true;                                                       \
+        if (head != nullptr) {                                               \
+            typeof(head) curr = head;                                        \
+            while (curr->next != nullptr) {                                  \
+                if (!cmp(curr->field, curr->next->field)) {                  \
+                    sorted = false;                                          \
+                    break;                                                   \
+                }                                                            \
+                curr = curr->next;                                           \
+            }                                                                \
+        }                                                                    \
+    } while (0)
 #define ordered_list_is_sorted(list) __ordered_list_is_sorted(list)
 
 // 接下来是一些辅助宏，用于比较

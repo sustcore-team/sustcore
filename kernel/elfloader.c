@@ -166,7 +166,7 @@ int rwx_to_page_mode(bool r, bool w, bool x) {
 
 void load_elf_segment(Elf64_Phdr *phdr, void *elf_base_addr,
                       program_info *prog_info) {
-    if (prog_info->pgd == nullptr) {
+    if (prog_info->tm->pgd == nullptr) {
         log_error("load_elf_segment: program_info的pgd未设置");
         return;
     }
@@ -194,25 +194,19 @@ void load_elf_segment(Elf64_Phdr *phdr, void *elf_base_addr,
         return;
     }
 
-    // 如果是rw段, 且prog_info中data段未设置, 则设置data段信息
-    if (r && w && !x && prog_info->data_start == nullptr) {
-        prog_info->data_start = (void *)(phdr->p_vaddr);
-        prog_info->data_end   = (void *)(phdr->p_vaddr + phdr->p_memsz);
-        log_info("数据段设置为 [%p, %p)", prog_info->data_start,
-                 prog_info->data_end);
+    VMAType type = VMAT_NONE;
+
+    if (r & w & !x) {
+        type = VMAT_DATA;
+    } else if (r & !w & x) {
+        type = VMAT_CODE;
     }
 
-    // 如果是rx段, 且prog_info中text段未设置, 则设置text段信息
-    if (r && !w && x && prog_info->text_start == nullptr) {
-        prog_info->text_start = (void *)(phdr->p_vaddr);
-        prog_info->text_end   = (void *)(phdr->p_vaddr + phdr->p_memsz);
-        log_info("代码段设置为 [%p, %p)", prog_info->text_start,
-                 prog_info->text_end);
-    }
-
-    // 在pgd中分配内存存放该段
+    // 根据rwx权限向TM中添加VMA
+    add_vma(prog_info->tm, (void *)(phdr->p_vaddr), phdr->p_memsz, type);
+    // 分配内存存放该段
     int pages = (phdr->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
-    alloc_pages_for(prog_info->pgd, (void *)(phdr->p_vaddr), pages, rwx_code,
+    alloc_pages_for(prog_info->tm, (void *)(phdr->p_vaddr), pages, rwx_code,
                     true);
 
     // 计算源地址与目标地址
@@ -220,7 +214,7 @@ void load_elf_segment(Elf64_Phdr *phdr, void *elf_base_addr,
     void *dest_addr = (void *)(phdr->p_vaddr);
 
     // 复制文件段内容到内存
-    memcpy_k2u(prog_info->pgd, dest_addr, src_addr, phdr->p_filesz);
+    memcpy_k2u(prog_info->tm, dest_addr, src_addr, phdr->p_filesz);
 
     char rwx_str[8];
     to_rwx_string(phdr->p_flags, rwx_str);
@@ -229,7 +223,7 @@ void load_elf_segment(Elf64_Phdr *phdr, void *elf_base_addr,
 
     // 如果内存大小大于文件大小, 则将剩余部分清零
     if (phdr->p_memsz > phdr->p_filesz) {
-        memset_u(prog_info->pgd, (void *)((umb_t)dest_addr + phdr->p_filesz), 0,
+        memset_u(prog_info->tm, (void *)((umb_t)dest_addr + phdr->p_filesz), 0,
                  phdr->p_memsz - phdr->p_filesz);
     }
 
@@ -274,8 +268,8 @@ program_info load_elf_program(void *elf_base_addr) {
     }
 
     // 分配页表
-    prog_info->pgd = setup_paging_table();
-    if (prog_info->pgd == nullptr) {
+    prog_info->tm = setup_task_memory();
+    if (prog_info->tm->pgd == nullptr) {
         log_error("load_elf_program: 无法分配页表");
         return __prog_info;
     }

@@ -206,8 +206,8 @@ void schedule(RegCtx **ctx, int time_gap) {
 
     // 更新页表
     log_info("切换页表到进程 (pid=%d) 的页表 %p", cur_proc->pid,
-             cur_proc->segments.pgd);
-    mem_switch_root(KPA2PA(cur_proc->segments.pgd));
+             cur_proc->tm->pgd);
+    mem_switch_root(KPA2PA(cur_proc->tm->pgd));
 
     // TODO: 更新页表与其它控制寄存器
 }

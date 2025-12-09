@@ -15,6 +15,7 @@
 #include <sus/bits.h>
 #include <sus/ctx.h>
 #include <cap/capability.h>
+#include <mem/vmm.h>
 
 typedef int pid_t;
 
@@ -35,26 +36,6 @@ typedef enum {
     PS_UNUSED    = 6,
     PS_YIELD     = 7
 } ProcState;
-
-// 进程内存信息
-typedef struct {
-    // 页表根地址
-    void *pgd;
-    // 代码段地址
-    void *text_start;
-    void *text_end;
-    // 数据段地址
-    void *data_start;
-    void *data_end;
-    // 栈段地址(其地址为[stack_end, stack_start)生长方向向下])
-    void *stack_start;
-    void *stack_end;
-    // 堆段地址
-    void *heap_start;
-    void *heap_end;
-    // copy-on-write标志
-    bool cow;
-} MMInfo;
 
 typedef struct PCBStruct {
     // 形成链表结构
@@ -81,7 +62,7 @@ typedef struct PCBStruct {
     // 内核栈指针
     void *kstack;
     // 进程内存信息
-    MMInfo segments;
+    TM *tm;
     // 进程入口点
     void *entrypoint;
     // 进程ip寄存器

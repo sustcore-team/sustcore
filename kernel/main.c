@@ -22,27 +22,26 @@
 #include <sus/arch.h>
 #include <sus/boot.h>
 #include <sus/symbols.h>
+#include <sus/list_helper.h>
 #include <task/proc.h>
 
 void assertion_failure(const char *expression, const char *file,
-                       const char *base_file, int line)
-{
-    log_error("In %s(from %s), line %d, assert failed: %s ", file, base_file, line, expression);
+                       const char *base_file, int line) {
+    log_error("In %s(from %s), line %d, assert failed: %s ", file, base_file,
+              line, expression);
 }
 
 void panic_failure(const char *expression, const char *file,
-                   const char *base_file, int line)
-{
-    log_error("In %s(from %s), line %d, assert failed: %s ", file, base_file, line, expression);
+                   const char *base_file, int line) {
+    log_error("In %s(from %s), line %d, assert failed: %s ", file, base_file,
+              line, expression);
     while (true);
 }
 
-void panic(const char *format, ...)
-{
+void panic(const char *format, ...) {
     log_error("PANIC!");
     while (true);
 }
-
 
 /**
  * @brief 内核主函数
@@ -51,53 +50,62 @@ void panic(const char *format, ...)
  */
 int main(void) {
     // 读取attach.license段
-    size_t license_size =
-        (size_t)((umb_t)&e_attach_license - (umb_t)&s_attach_license);
-    license_size      = license_size > 2048 ? 2048 : license_size;
-    char *license_str = (char *)kmalloc(license_size + 1);
-    memcpy(license_str, &s_attach_license, license_size);
-    license_str[license_size] = '\0';
-    log_info("内核附加文件: license");
-    kprintf("----- BEGIN LICENSE -----\n");
-    kprintf("%s\n", license_str);
-    kprintf("-----  END LICENSE  -----\n");
-    kfree(license_str);
+    // size_t license_size =
+    //     (size_t)((umb_t)&e_attach_license - (umb_t)&s_attach_license);
+    // license_size      = license_size > 2048 ? 2048 : license_size;
+    // char *license_str = (char *)kmalloc(license_size + 1);
+    // memcpy(license_str, &s_attach_license, license_size);
+    // license_str[license_size] = '\0';
+    // log_info("内核附加文件: license");
+    // kprintf("----- BEGIN LICENSE -----\n");
+    // kprintf("%s\n", license_str);
+    // kprintf("-----  END LICENSE  -----\n");
+    // kfree(license_str);
 
-    log_info("Hello RISCV World!");
+    log_info("Hello RISCV World!!");
 
     program_info test_prog = load_elf_program(&s_attach_test);
     log_info("ELF程序信息:");
     log_info("  入口点: %p", test_prog.entrypoint);
-    log_info("  代码段: [%p, %p)", test_prog.text_start, test_prog.text_end);
-    log_info("  数据段: [%p, %p)", test_prog.data_start, test_prog.data_end);
     log_info("  程序整体: [%p, %p)", test_prog.program_start,
-            test_prog.program_end);
+             test_prog.program_end);
 
     // 创建测试进程
-    PCB *p = new_task(test_prog.pgd, test_prog.text_start, test_prog.text_end,
-            test_prog.data_start, test_prog.data_end,
-            test_prog.program_start,  // 栈起始地址
-            test_prog.program_end,    // 堆起始地址
-            test_prog.entrypoint, 2, nullptr);
+    PCB *p = new_task(test_prog.tm,             // 进程内存信息
+                      test_prog.program_start,  // 栈起始地址
+                      test_prog.program_end,    // 堆起始地址
+                      test_prog.entrypoint, 2, nullptr);
 
     // 输出各项信息
     log_info("创建测试进程完成: PID=%d", p->pid);
-    log_info("  代码段: [%p, %p)", p->segments.text_start,
-            p->segments.text_end);
-    log_info("  数据段: [%p, %p)", p->segments.data_start,
-            p->segments.data_end);
-    log_info("  栈段: [%p, %p)", p->segments.stack_start,
-            p->segments.stack_end);
-    log_info("  堆段: [%p, %p)", p->segments.heap_start, p->segments.heap_end);
     log_info("  入口点: %p", p->entrypoint);
+    // 遍历VMA
+    VMA *vma;
+    foreach_ordered_list(vma, TM_VMA_LIST(p->tm))
+    {
+        const char *type_str[] = {
+            "VMAT_NONE",
+            "VMAT_CODE",
+            "VMAT_DATA",
+            "VMAT_STACK",
+            "VMAT_HEAP",
+            "VMAT_MMAP",
+            "VMAT_SHARE_RW",
+            "VMAT_SHARE_RO",
+            "VMAT_SHARE_RX",
+            "VMAT_SHARE_RWX"
+        };
+        log_info("  VMA: vaddr=%p size=%lu type=%s", vma->vaddr, vma->size,
+                type_str[vma->type]);
+    }
     log_info("  内核栈: %p", p->kstack);
     log_info("  上下文: %p", p->ctx);
     log_info("  初始ip: %p", *p->ip);
     log_info("  初始sp: %p", *p->sp);
     log_info("  rp级别: %d", p->rp_level);
-    log_info("  页表: %p(paddr:%p)", p->segments.pgd, KPA2PA(p->segments.pgd));
+    log_info("  页表: %p(paddr:%p)", p->tm->pgd, KPA2PA(p->tm->pgd));
     log_info("页表布局如下:");
-    mem_display_mapping_layout(p->segments.pgd);
+    mem_display_mapping_layout(p->tm->pgd);
 
     log_info("启动进程调度器...");
 

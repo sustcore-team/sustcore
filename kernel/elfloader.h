@@ -12,6 +12,7 @@
 #pragma once
 
 #include <elf.h>
+#include <mem/vmm.h>
 
 /**
  * @brief 显示ELF文件头信息
@@ -21,14 +22,10 @@
 void display_elf_headers(Elf64_Ehdr *header);
 
 typedef struct {
-    // 页表
-    void *pgd;
+    // 进程内存信息
+    TM *tm;
     // 入口点
     void *entrypoint;
-    // 代码段(即具有RX权限的段)
-    void *text_start, *text_end;
-    // 数据段(即具有RW权限的段)
-    void *data_start, *data_end;
     // 程序整体
     // 即 [program_start, program_end)是覆盖程序各个段的最小区间
     void *program_start, *program_end;
