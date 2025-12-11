@@ -39,6 +39,16 @@ PCB *cur_proc;
 
 PCB empty_proc;
 
+static tid_t TIDALLOC = 1;
+
+static inline tid_t get_current_tid(void) {
+    return TIDALLOC++;
+}
+
+static inline tid_t get_current_pid(void) {
+    return get_current_tid();
+}
+
 /**
  * @brief 初始化进程池
  *
@@ -60,24 +70,43 @@ void proc_init(void) {
     memset(&empty_proc, 0, sizeof(PCB));
 }
 
+void terminate_tcb(TCB *t) {
+    if (t == nullptr) {
+        log_error("kill_tcb: 传入的TCB指针为空");
+        return;
+    }
+    if (t->state != TS_ZOMBIE) {
+        log_error(
+            "terminate_tcb: 只能清理处于ZOMBIE状态的线程 (tid=%d, state=%d)",
+            t->tid, t->state);
+        return;
+    }
+    // 对t进行资源清理
+
+    // 从线程链表中移除
+    list_remove(t, THREAD_LIST(t->pcb));
+
+    log_debug("terminate_tcb: 线程 (tid=%d) 资源清理完成", t->tid);
+}
+
 void terminate_pcb(PCB *p) {
     if (p == nullptr) {
         log_error("kill_pcb: 传入的PCB指针为空");
         return;
     }
-    if (p->state != PS_ZOMBIE) {
+    if (p->state != TS_ZOMBIE) {
         log_error(
             "terminate_pcb: 只能清理处于ZOMBIE状态的进程 (pid=%d, state=%d)",
             p->pid, p->state);
         return;
     }
-    // 对p进行资源清理
-
-    // 清空内核栈
-    if (p->kstack != nullptr) {
-        kfree(p->kstack);
-        p->kstack = nullptr;
+    // 清理所有的线程
+    TCB *t;
+    foreach_list(t, THREAD_LIST(p)) {
+        terminate_tcb(t);
     }
+
+    // 对p进行资源清理
 
     // 从进程链表中移除
     list_remove(p, PROC_LIST);
@@ -92,7 +121,7 @@ void init_pcb(PCB *p, int rp_level) {
     p->called_count = 0;
     p->priority     = 0;
     p->run_time     = 0;
-    p->state        = PS_READY;
+    p->state        = TS_READY;
 
     // 加入到全局进程链表
     list_push_back(p, PROC_LIST);
@@ -102,14 +131,9 @@ void init_pcb(PCB *p, int rp_level) {
     memset(p->cap_spaces, 0, sizeof(CSpace) * PROC_CSPACES);
 }
 
-PCB *create_pcb(TM *tm, void *entrypoint, int rp_level, PCB *parent) {
+PCB *create_pcb(TM *tm, int rp_level, PCB *parent) {
     if (rp_level < 0 || rp_level >= RP_LEVELS) {
         log_error("new_task: 无效的RP级别 %d", rp_level);
-        return nullptr;
-    }
-
-    if (entrypoint == nullptr) {
-        log_error("new_task: 无效的进程入口点");
         return nullptr;
     }
 
@@ -120,34 +144,94 @@ PCB *create_pcb(TM *tm, void *entrypoint, int rp_level, PCB *parent) {
     // 设置基本信息
     p->tm = tm;
 
-    // 入口点
-    p->entrypoint = entrypoint;
+    list_init(THREAD_LIST(p));
+    ordered_list_init(READY_THREAD_LIST(p));
+    list_init(CHILDREN_TASK_LIST(p));
+    list_init(CAPABILITY_LIST(p));
 
     // 设置父子关系
     p->parent = parent;
     if (parent != nullptr) {
         list_push_back(p, CHILDREN_TASK_LIST(parent));
     }
-
-    // 分配内核栈
-    log_info("为进程(PID:%d)分配内核栈: %p", p->pid, p->kstack);
-    p->kstack = (umb_t *)kmalloc(PAGE_SIZE);
-    memset(p->kstack, 0, PAGE_SIZE);
-
-    log_info("为进程(PID:%d)初始化上下文", p->pid);
-    // 留出空间存放上下文
-    umb_t *stack_top  = (umb_t *)((umb_t)p->kstack + PAGE_SIZE);
-    stack_top        -= sizeof(RegCtx) / sizeof(umb_t);
-    p->ctx            = (RegCtx *)stack_top;
-    memset(p->ctx, 0, sizeof(RegCtx));
-
-    // 架构相关设置
-    arch_setup_proc(p);
     return p;
 }
 
-PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level, PCB *parent)
-{
+/**
+ * @brief 创建线程控制块
+ *
+ * @param proc 进程PCB指针
+ * @param entrypoint 线程入口点
+ * @param stack 线程栈指针
+ * @return TCB*
+ */
+TCB *create_tcb(PCB *proc, int priority) {
+    if (proc == nullptr) {
+        log_error("create_tcb: 无效的进程指针");
+        return nullptr;
+    }
+
+    // 分配TCB
+    TCB *t = (TCB *)kmalloc(sizeof(TCB));
+    memset(t, 0, sizeof(TCB));
+
+    // 设置基本信息
+    t->tid      = get_current_tid();
+    t->priority = priority;
+
+    // 初始化内核栈
+    t->kstack = kmalloc(PAGE_SIZE);
+    memset(t->kstack, 0, PAGE_SIZE);
+
+    // 在内核栈中预留空间存放上下文
+    void *stack_top  = t->kstack + PAGE_SIZE;
+    stack_top       -= sizeof(RegCtx);
+    t->ctx           = (RegCtx *)stack_top;
+    memset(t->ctx, 0, sizeof(RegCtx));
+
+    // 设置架构相关内容
+    arch_setup_thread(t);
+
+    // 加入到进程的线程链表
+    t->pcb = proc;
+    list_push_back(t, THREAD_LIST(proc));
+
+    return t;
+}
+
+/**
+ * @brief 创建线程控制块
+ *
+ * @param proc 进程PCB指针
+ * @param entrypoint 线程入口点
+ * @param stack 线程栈指针
+ * @return TCB*
+ */
+TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority) {
+    if (entrypoint == nullptr) {
+        log_error("new_thread: 无效的入口点地址");
+        return nullptr;
+    }
+
+    if (stack == nullptr) {
+        log_error("new_thread: 无效的栈地址");
+        return nullptr;
+    }
+
+    TCB *t        = create_tcb(proc, priority);
+    t->entrypoint = entrypoint;
+
+    // 设置ip, sp
+    *t->ip = entrypoint;
+    *t->sp = stack;
+
+    // 加入到进程的待命线程链表
+    ordered_list_insert(t, READY_THREAD_LIST(proc));
+    return t;
+}
+
+PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
+              PCB *parent) {
     if (stack == nullptr) {
         log_error("new_task: 无效的栈地址");
         return nullptr;
@@ -159,40 +243,42 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level, P
     }
 
     // 构造pcb
-    PCB *p = create_pcb(tm, entrypoint, rp_level, parent);
+    PCB *p = create_pcb(tm, rp_level, parent);
     if (p == nullptr) {
         log_error("new_task: 无法创建PCB");
         return nullptr;
     }
+    p->thread_stack_base = (void *)THREAD_STACK_BASE;
 
     // 初始化进程
-    // 设置64KB的初始栈(stack为栈顶)
-    void *stack_end = stack - 16 * PAGE_SIZE;
-    add_vma(p->tm, stack_end, 16 * PAGE_SIZE, VMAT_STACK);
     // 设置128MB的堆
     add_vma(p->tm, heap, 32768 * PAGE_SIZE, VMAT_HEAP);
-
     // 预分配4KB
-    alloc_pages_for(p->tm, stack_end + 15 * PAGE_SIZE, 1, RWX_MODE_RW, true);
     alloc_pages_for(p->tm, heap, 1, RWX_MODE_RW, true);
 
-    // ip, sp寄存器
-    *p->ip = entrypoint;
-    *p->sp = (void *)((umb_t)stack);
+    // 添加主线程栈到VMA
+    // 主线程栈大小64KB(从stack向下增长)
+    add_vma(p->tm, stack - 16 * PAGE_SIZE, 16 * PAGE_SIZE, VMAT_STACK);
+    // 预分配主线程栈顶页
+    alloc_pages_for(p->tm, stack - PAGE_SIZE, 1, RWX_MODE_RW, true);
+    p->main_thread    = new_thread(p, entrypoint, stack, 0);
+    p->current_thread = nullptr;
 
     // 为当前进程构造自己的PCB能力
-    CapPtr pcb_cap_ptr = create_pcb_cap(p, p,
-                                        (PCBCapPriv){
-                                            .priv_yield = true,
-                                            .priv_exit  = true,
-                                            .priv_fork  = true,
-                                            .priv_getpid = true,
-                                        });
+    CapPtr pcb_cap_ptr =
+        create_pcb_cap(p, p,
+                       (PCBCapPriv){.priv_unwrap        = true,
+                                    .priv_derive        = true,
+                                    .priv_yield         = true,
+                                    .priv_exit          = true,
+                                    .priv_fork          = true,
+                                    .priv_getpid        = true,
+                                    .priv_create_thread = true});
     // 将PCB能力传递给进程作为第一个参数
-    arch_setup_argument(p, 0, pcb_cap_ptr.val);
+    arch_setup_argument(p->main_thread, 0, pcb_cap_ptr.val);
 
     // 将堆指针传递给进程作为第二个参数
-    arch_setup_argument(p, 1, (umb_t)(heap));
+    arch_setup_argument(p->main_thread, 1, (umb_t)(heap));
 
     // 加入到就绪队列
     if (rp_level != 3)
@@ -201,6 +287,30 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level, P
         ordered_list_insert(p, RP3_LIST);
 
     return p;
+}
+
+TCB *fork_thread(PCB *proc, TCB *parent_thread) {
+    if (proc == nullptr) {
+        log_error("fork_thread: 无效的进程指针");
+        return nullptr;
+    }
+
+    if (parent_thread == nullptr) {
+        log_error("fork_thread: 无效的父线程指针");
+        return nullptr;
+    }
+
+    // 创建新的线程
+    TCB *t        = create_tcb(proc, parent_thread->priority);
+    t->entrypoint = parent_thread->entrypoint;
+    if (t == nullptr) {
+        log_error("fork_thread: 无法创建子线程");
+        return nullptr;
+    }
+
+    // 复制上下文
+    memcpy(t->ctx, parent_thread->ctx, sizeof(RegCtx));
+    return t;
 }
 
 PCB *fork_task(PCB *parent) {
@@ -213,17 +323,32 @@ PCB *fork_task(PCB *parent) {
     }
 
     // 构造新的PCB
-    PCB *p = create_pcb(new_tm, parent->entrypoint, parent->rp_level, parent);
+    PCB *p = create_pcb(new_tm, parent->rp_level, parent);
 
     if (p == nullptr) {
         log_error("fork_task: 无法创建子进程");
         return nullptr;
     }
 
-    // 对fork进程进行初始化
-    // 栈, 堆无需额外处理, 因为已经在clone_vma中完成
-    // 复制上下文
-    memcpy(p->ctx, parent->ctx, sizeof(RegCtx));
+    // 复制父进程的调度信息
+    p->called_count = parent->called_count;
+    p->priority     = parent->priority;
+    p->rp1_count    = parent->rp1_count;
+    p->rp2_count    = parent->rp2_count;
+    p->run_time     = parent->run_time;
+
+    // 复制父进程的主线程
+    TCB *child_main_thread = fork_thread(p, parent->main_thread);
+    if (child_main_thread == nullptr) {
+        log_error("fork_task: 无法创建子进程主线程");
+        terminate_pcb(p);
+        return nullptr;
+    }
+    p->main_thread    = child_main_thread;
+    p->current_thread = nullptr;
+
+    // 将主线程加入到就绪线程链表
+    ordered_list_insert(child_main_thread, READY_THREAD_LIST(p));
 
     // 对Capability的复制等交由调用者完成
     // 加入到就绪队列
@@ -234,4 +359,40 @@ PCB *fork_task(PCB *parent) {
 
     mem_display_mapping_layout(p->tm->pgd);
     return p;
+}
+
+/**
+ * @brief 分配线程栈
+ *
+ * @param proc 进程PCB指针
+ * @param size 线程栈大小
+ *
+ * @return void* 线程栈顶地址
+ */
+void *alloc_thread_stack(PCB *proc, size_t size) {
+    if (proc == nullptr) {
+        log_error("alloc_thread_stack: 无效的进程指针");
+        return nullptr;
+    }
+
+    // 对齐栈大小到页边界
+    size_t aligned_size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+    // 计算栈顶地址
+    void *stack_top = proc->thread_stack_base;
+
+    // 计算栈底地址
+    void *stack_bottom = stack_top - aligned_size;
+
+    // 更新进程的线程栈基址
+    proc->thread_stack_base = stack_bottom;
+
+    // 添加VMA
+    add_vma(proc->tm, stack_bottom, aligned_size, VMAT_STACK);
+
+    // 预分配栈空间的栈顶页
+    size_t num_pages = aligned_size / PAGE_SIZE;
+    alloc_pages_for(proc->tm, stack_top - PAGE_SIZE, 1, RWX_MODE_RW, true);
+
+    return stack_top;
 }

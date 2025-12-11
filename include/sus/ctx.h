@@ -13,6 +13,8 @@
 
 #include <sus/arch.h>
 
+struct TCBStruct;
+typedef struct TCBStruct TCB;
 struct PCBStruct;
 typedef struct PCBStruct PCB;
 

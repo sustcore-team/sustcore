@@ -12,30 +12,71 @@
 
 #pragma once
 
-#include <sus/bits.h>
-#include <sus/ctx.h>
 #include <cap/capability.h>
 #include <mem/vmm.h>
+#include <sus/bits.h>
+#include <sus/ctx.h>
+#include <sus/list_helper.h>
 
-typedef int pid_t;
+typedef int tid_t;
+typedef tid_t pid_t;
 
-static pid_t PIDALLOC = 1;
-
-static inline pid_t get_current_pid() {
-    return PIDALLOC++;
-}
-
-// 进程状态
+// 线程状态
 typedef enum {
-    PS_EMPTY     = 0,
-    PS_READY     = 1,
-    PS_RUNNING   = 2,
-    PS_BLOCKED   = 3,
-    PS_SUSPENDED = 4,
-    PS_ZOMBIE    = 5,
-    PS_UNUSED    = 6,
-    PS_YIELD     = 7
-} ProcState;
+    TS_EMPTY     = 0,
+    TS_READY     = 1,
+    TS_RUNNING   = 2,
+    TS_BLOCKED   = 3,
+    TS_SUSPENDED = 4,
+    TS_ZOMBIE    = 5,
+    TS_UNUSED    = 6,
+    TS_YIELD     = 7
+} ThreadState;
+
+typedef struct TCBStruct {
+    // 形成链表结构
+    struct TCBStruct *prev;
+    struct TCBStruct *next;
+    // 所属进程控制块
+    struct PCBStruct *pcb;
+    // 调度队列
+    struct TCBStruct *sprev;
+    struct TCBStruct *snext;
+    // tid
+    tid_t tid;
+    // 内核栈指针
+    void *kstack;
+    // 线程入口点
+    void *entrypoint;
+    /**
+     * @brief 线程优先级
+     *
+     * 进程中的线程采取优先级调度.
+     * 优先调度优先级高(数值低)的线程.
+     *
+     */
+    int priority;
+    /**
+     * @brief 线程状态
+     *
+     */
+    ThreadState state;
+    /**
+     * @brief 线程上下文
+     *
+     */
+    RegCtx *ctx;
+    /**
+     * @brief 线程指令指针
+     *
+     */
+    void **ip;
+    /**
+     * @brief 线程栈指针
+     *
+     */
+    void **sp;
+} TCB;
 
 typedef struct PCBStruct {
     // 形成链表结构
@@ -56,19 +97,13 @@ typedef struct PCBStruct {
     // PID
     pid_t pid;
     // 进程状态
-    ProcState state;
-    // 上下文
-    RegCtx *ctx;
-    // 内核栈指针
-    void *kstack;
+    // 进程状态与线程状态没有关系
+    // 对线程而言, 其总认为进程是RUNNING状态
+    ThreadState state;
     // 进程内存信息
     TM *tm;
-    // 进程入口点
-    void *entrypoint;
-    // 进程ip寄存器
-    void **ip;
-    // 进程sp寄存器
-    void **sp;
+    // 线程栈基址
+    void *thread_stack_base;
 
     // 进程优先级
     int rp_level;
@@ -108,6 +143,21 @@ typedef struct PCBStruct {
     // 进程运行时间统计(只有Daemon队列使用) (ms)
     int run_time;
 
+    // 进程持有的线程链表(头尾)
+    TCB *threads_head;
+    TCB *threads_tail;
+
+    // 当前运行线程
+    TCB *current_thread;
+
+    // 就绪队列中的线程链表(头尾)
+    // 我们首先调度进程, 再调度进程中的线程
+    TCB *ready_threads_head;
+    TCB *ready_threads_tail;
+
+    // 主线程(进程创建时创建的第一个线程)
+    TCB *main_thread;
+
     // Capabilities
     CSpace *cap_spaces;
 
@@ -120,3 +170,9 @@ typedef struct PCBStruct {
     task->children_head, task->children_tail, sibling_next, sibling_prev
 
 #define CAPABILITY_LIST(task) task->all_cap_head, task->all_cap_tail, next, prev
+
+#define THREAD_LIST(task) task->threads_head, task->threads_tail, next, prev
+
+#define READY_THREAD_LIST(task)                                       \
+    task->ready_threads_head, task->ready_threads_tail, snext, sprev, \
+        priority, ascending

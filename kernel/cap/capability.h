@@ -46,6 +46,8 @@ typedef struct CapStruct {
     struct CapStruct *children_tail;
     struct CapStruct *sprev;
     struct CapStruct *snext;
+    // 父能力
+    struct CapStruct *parent;
     // 进程持有的所有能力, 形成链表结构
     struct CapStruct *prev;
     struct CapStruct *next;
@@ -88,3 +90,13 @@ CapPtr insert_cap(PCB *pcb, Capability *cap);
  * @return CapPtr 能力指针
  */
 CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv);
+
+/**
+ * @brief 派生能力
+ *
+ * @param p 在p内派生能力
+ * @param parent 父能力
+ * @param cap_priv 子能力权限
+ * @return CapPtr 能力指针
+ */
+CapPtr derive_cap(PCB *p, Capability *parent, void *cap_priv);

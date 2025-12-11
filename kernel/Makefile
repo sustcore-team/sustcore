@@ -33,7 +33,7 @@ flags-c += -g -mcmodel=medany
 include-third_party-c := -I$(path-third_party)/include/ -I$(path-third_party)/include/libfdt/ -I$(path-third_party)/include/std/
 include-c := -I$(path-include) -I$(path-include)/std/ $(include-third_party-c) -I$(path-d) -I$(path-include)/arch/
 
-defs-c := -DDLOG_PMM
+defs-c :=
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 

@@ -14,17 +14,17 @@
 #include <task/task_struct.h>
 
 /**
- * @brief 为进程设置架构相关内容
+ * @brief 为线程设置架构相关内容
  *
- * @param p 进程PCB指针
+ * @param t 线程TCB指针
  */
-void arch_setup_proc(PCB *p);
+void arch_setup_thread(TCB *t);
 
 /**
- * @brief 为进程设置第argno个参数的值
+ * @brief 为线程设置第argno个参数的值
  *
- * @param p 进程PCB指针
+ * @param t 线程PCB指针
  * @param argno 参数编号 (从0开始)
  * @param value 参数值
  */
-void arch_setup_argument(PCB *p, int argno, umb_t value);
+void arch_setup_argument(TCB *t, int argno, umb_t value);

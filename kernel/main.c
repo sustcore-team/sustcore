@@ -78,7 +78,7 @@ int main(void) {
 
     // 输出各项信息
     log_info("创建测试进程完成: PID=%d", p->pid);
-    log_info("  入口点: %p", p->entrypoint);
+    log_info("  入口点: %p", p->main_thread->entrypoint);
     // 遍历VMA
     VMA *vma;
     foreach_ordered_list(vma, TM_VMA_LIST(p->tm))
@@ -98,10 +98,10 @@ int main(void) {
         log_info("  VMA: vaddr=%p size=%lu type=%s", vma->vaddr, vma->size,
                 type_str[vma->type]);
     }
-    log_info("  内核栈: %p", p->kstack);
-    log_info("  上下文: %p", p->ctx);
-    log_info("  初始ip: %p", *p->ip);
-    log_info("  初始sp: %p", *p->sp);
+    log_info("  内核栈: %p", p->main_thread->kstack);
+    log_info("  上下文: %p", p->main_thread->ctx);
+    log_info("  初始ip: %p", *p->main_thread->ip);
+    log_info("  初始sp: %p", *p->main_thread->sp);
     log_info("  rp级别: %d", p->rp_level);
     log_info("  页表: %p(paddr:%p)", p->tm->pgd, KPA2PA(p->tm->pgd));
     log_info("页表布局如下:");

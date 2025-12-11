@@ -240,6 +240,12 @@
     } while (0)
 #define ordered_list_remove(node, list) __ordered_list_remove(node, list)
 
+#define __ordered_list_front(node, head, tail, next, prev, field, cmp) \
+    do {                                                               \
+        node = head;                                                   \
+    } while (0)
+#define ordered_list_front(node, list) __ordered_list_front(node, list)
+
 // 弹出有序链表头节点
 #define __ordered_list_pop_front(node, head, tail, next, prev, field, cmp)   \
     do {                                                                     \

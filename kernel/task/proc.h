@@ -12,6 +12,7 @@
 #pragma once
 
 #include <sus/bits.h>
+#include <sus/paging.h>
 #include <task/task_struct.h>
 
 /**
@@ -22,6 +23,9 @@ extern PCB *proc_list_head;
 extern PCB *proc_list_tail;
 // 进程链表操作宏
 #define PROC_LIST proc_list_head, proc_list_tail, next, prev
+
+// 线程栈基址
+#define THREAD_STACK_BASE 0x80000000
 
 /**
  * @brief 空进程
@@ -62,6 +66,13 @@ void proc_init(void);
 void terminate_pcb(PCB *p);
 
 /**
+ * @brief 清理TCB相关资源
+ *
+ * @param t TCB指针
+ */
+void terminate_tcb(TCB *t);
+
+/**
  * @brief 初始化PCB
  *
  * @param p PCB
@@ -80,12 +91,33 @@ void init_pcb(PCB *p, int rp_level);
  * @param parent 父进程指针
  * @return PCB* 新进程PCB指针
  */
-PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level, PCB *parent);
+PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
+              PCB *parent);
+
+/**
+ * @brief 创建线程控制块
+ *
+ * @param proc 进程PCB指针
+ * @param entrypoint 线程入口点
+ * @param stack 线程栈指针
+ * @return TCB* 线程控制块指针
+ */
+TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority);
 
 /**
  * @brief fork进程
- * 
+ *
  * @param parent 被fork的父进程
  * @return PCB* 新进程PCB指针
  */
 PCB *fork_task(PCB *parent);
+
+/**
+ * @brief 分配线程栈
+ *
+ * @param proc 进程PCB指针
+ * @param size 线程栈大小
+ *
+ * @return void* 线程栈顶地址
+ */
+void *alloc_thread_stack(PCB *proc, size_t size);

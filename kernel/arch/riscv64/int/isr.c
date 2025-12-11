@@ -165,7 +165,7 @@ void paging_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     if (reglist_ptr->sstatus.spp) {
         log_debug("异常发生在S-Mode");
     } else {
-        log_debug("异常发生在U-Mode");
+        log_debug("异常发生在U-Mode, 当前进程PID=%d", cur_proc->pid);
     }
     while (true);
 

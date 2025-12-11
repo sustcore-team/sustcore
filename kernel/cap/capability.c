@@ -119,3 +119,42 @@ CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv) {
     // 插入能力到PCB
     return insert_cap(p, cap);
 }
+
+
+/**
+ * @brief 派生能力
+ *
+ * @param p 在p内派生能力
+ * @param parent 父能力
+ * @param cap_priv 子能力权限
+ * @return CapPtr 能力指针
+ */
+CapPtr derive_cap(PCB *p, Capability *parent, void *cap_priv)
+{
+    if (parent == nullptr) {
+        log_error("derive_cap: 父能力不能为空!");
+        return INVALID_CAP_PTR;
+    }
+    if (cap_priv == nullptr) {
+        log_error("derive_cap: 子能力权限不能为空!");
+        return INVALID_CAP_PTR;
+    }
+    // 构造能力对象
+    Capability *cap = (Capability *)kmalloc(sizeof(Capability));
+    memset(cap, 0, sizeof(Capability));
+    // 初始化派生能力链表
+    list_init(CHILDREN_CAP_LIST(cap));
+    // 设置能力属性
+    cap->type     = parent->type;
+    cap->cap_data = parent->cap_data;
+    cap->cap_priv = cap_priv;
+    cap->parent   = parent;
+    // 插入能力到PCB
+    CapPtr ptr = insert_cap(p, cap);
+    if (ptr.val == INVALID_CAP_PTR.val) {
+        return INVALID_CAP_PTR;
+    }
+    // 将新能力加入到父能力的派生链表中
+    list_push_back(cap, CHILDREN_CAP_LIST(parent));
+    return ptr;
+}
