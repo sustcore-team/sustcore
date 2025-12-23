@@ -34,6 +34,8 @@ typedef struct CapStruct {
      * @brief 能力权限
      *
      * 指向该能力所对应的权限
+     * 添加新权限时, 应当查看对应能力的create与derive函数
+     * 确保新权限被正确地添加到权限结构体中, 并在派生函数中进行检查
      *
      */
     void *cap_priv;

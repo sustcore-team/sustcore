@@ -66,12 +66,14 @@ void exit(int code) {
     syscall(SYS_EXIT, pcb_cap.val, (umb_t)(code), 0, 0, 0, 0, 0);
 }
 
-void yield(bool thread_only) {
-	if (thread_only) {
-    	syscall(SYS_YIELD_THREAD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
+void yield(CapPtr thread) {
+	if (thread.val != 0) {
+		// 线程级让出
+		syscall(SYS_YIELD_THREAD, thread.val, 0, 0, 0, 0, 0, 0);
 	}
 	else {
-    	syscall(SYS_YIELD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
+		// 进程级让出
+		syscall(SYS_YIELD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
 	}
 }
 
@@ -171,4 +173,80 @@ CapPtr create_thread(void *entrypoint, int priority)
 	return (CapPtr){
 		.val = syscall(SYS_CREATE_THREAD, pcb_cap.val, (umb_t)(entrypoint), (umb_t)(priority), 0, 0, 0, 0)
 	};
+}
+
+void wait_notifications(CapPtr thread, CapPtr notif_cap, qword *wait_bitmap)
+{
+	if (thread.val != 0) {
+		// 线程级等待
+		syscall(SYS_WAIT_NOTIFICATION_THREAD, thread.val, notif_cap.val, (umb_t)(wait_bitmap), 0, 0, 0, 0);
+	}
+	else {
+		// 进程级等待
+		syscall(SYS_WAIT_NOTIFICATION, pcb_cap.val, notif_cap.val, (umb_t)(wait_bitmap), 0, 0, 0, 0);
+	}
+}
+
+/**
+ * @brief 等待通知
+ *
+ * @param thread 线程能力. 如果是INVALID_CAP_PTR, 则表示以进程级别让出CPU
+ * @param notif_cap 通知能力
+ * @param notification_id 等待的通知ID
+ */
+void wait_notification(CapPtr thread, CapPtr notif_cap, int notification_id)
+{
+	qword wait_bitmap[NOTIFICATION_BITMAP_QWORDS] = {0};
+	int qword_index = notification_id / (8 * sizeof(qword));
+	int bit_index   = notification_id % (8 * sizeof(qword));
+	wait_bitmap[qword_index] |= (1UL << bit_index);
+	wait_notifications(thread, notif_cap, wait_bitmap);
+}
+
+/**
+ * @brief 设置通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ */
+void notification_set(CapPtr notif_cap, int notification_id)
+{
+	syscall(SYS_SET_NOTIFICATION, notif_cap.val, (umb_t)(notification_id), 0, 0, 0, 0, 0);
+}
+
+/**
+ * @brief 重置通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ */
+void notification_reset(CapPtr notif_cap, int notification_id)
+{
+	syscall(SYS_RESET_NOTIFICATION, notif_cap.val, (umb_t)(notification_id), 0, 0, 0, 0, 0);
+}
+
+/**
+ * @brief 检查通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ * @return true 通知已设置
+ * @return false 通知未设置
+ */
+bool check_notification(CapPtr notif_cap, int notification_id)
+{
+	umb_t ret = syscall(SYS_CHECK_NOTIFICATION, notif_cap.val, (umb_t)(notification_id), 0, 0, 0, 0, 0);
+	return ret != 0;
+}
+
+CapPtr get_pcb_cap(void) {
+	return pcb_cap;
+}
+
+CapPtr get_main_thread_cap(void) {
+	return main_thread_cap;
+}
+
+CapPtr get_notification_cap(void) {
+	return default_notif_cap;
 }

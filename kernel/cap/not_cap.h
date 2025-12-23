@@ -23,12 +23,11 @@
 // 这种设计允许进程/线程高效地等待多种事件的发生
 // 而不需要为每个事件单独创建等待机制
 
-#define NOTIFICATION_BITMAP_SIZE (256)
-#define NOTIFICATION_BITMAP_QWORDS (NOTIFICATION_BITMAP_SIZE / (8 * sizeof(qword)))
-
 // 通知能力数据
 typedef struct {
-    qword bitmap[NOTIFICATION_BITMAP_QWORDS];
+    int notif_id;
+    qword bitmap[NOTIFICATION_BITMAP_QWORDS];      // 通知位图
+    qword wait_bitmap[NOTIFICATION_BITMAP_QWORDS]; // 说明哪些通知ID正在被等待
 } Notification;
 
 // 通知能力权限
@@ -81,7 +80,7 @@ void not_cap_set(PCB *p, CapPtr ptr, int notification_id);
  * @brief 清除通知位
  *
  * @param p 当前进程PCB指针
- * @param ptr 能力指针
+ * @param ptr 通知能力指针
  * @param notification_id 通知ID (0-255)
  */
 void not_cap_reset(PCB *p, CapPtr ptr, int notification_id);
@@ -90,9 +89,54 @@ void not_cap_reset(PCB *p, CapPtr ptr, int notification_id);
  * @brief 检查通知位
  *
  * @param p 当前进程PCB指针
- * @param ptr 能力指针
+ * @param ptr 通知能力指针
  * @param notification_id 通知ID (0-255)
  * @return true 通知已设置
  * @return false 通知未设置
  */
 bool not_cap_check(PCB *p, CapPtr ptr, int notification_id);
+
+/**
+ * @brief 等待通知
+ * 
+ * @param p 当前进程PCB指针
+ * @param pcb_ptr PCB能力指针
+ * @param not_ptr 通知能力指针
+ * @param wait_bitmap 等待位图(应当总长256位)
+ * @return true 通知已到达
+ * @return false 通知未到达
+ */
+bool pcb_cap_wait_notification(PCB *p, CapPtr pcb_ptr, CapPtr not_ptr, qword *wait_bitmap);
+
+/**
+ * @brief 等待通知
+ * 
+ * @param p 当前进程PCB指针
+ * @param tcb_ptr TCB能力指针
+ * @param not_ptr 通知能力指针
+ * @param wait_bitmap 等待位图(应当总长256位)
+ * @return true 通知已到达
+ * @return false 通知未到达
+ */
+bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr, qword *wait_bitmap);
+
+#define NOT_CAP_START(src_p, src_ptr, fun, cap, notif, priv, ret) \
+    Capability *cap = fetch_cap(src_p, src_ptr);                  \
+    if (cap == nullptr) {                                         \
+        log_error(#fun ":指针指向的能力不存在!");                 \
+        return ret;                                               \
+    }                                                             \
+    if (cap->type != CAP_TYPE_NOT) {                              \
+        log_error(#fun ":该能力不为Notification能力!");           \
+        return ret;                                               \
+    }                                                             \
+    if (cap->cap_data == nullptr) {                               \
+        log_error(#fun ":能力数据为空!");                         \
+        return ret;                                               \
+    }                                                             \
+    if (cap->cap_priv == nullptr) {                               \
+        log_error(#fun ":能力权限为空!");                         \
+        return ret;                                               \
+    }                                                             \
+    Notification *notif       = (Notification *)cap->cap_data;    \
+    NotificationCapPriv *priv = (NotificationCapPriv *)cap->cap_priv

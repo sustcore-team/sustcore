@@ -19,3 +19,24 @@
  * @return CapPtr 设备能力
  */
 CapPtr sa_get_device(void);
+
+/**
+ * @brief 获得PCB能力
+ * 
+ * @return CapPtr 主线程能力
+ */
+CapPtr get_pcb_cap(void);
+
+/**
+ * @brief 获得主线程能力
+ * 
+ * @return CapPtr 主线程能力
+ */
+CapPtr get_main_thread_cap(void);
+
+/**
+ * @brief 获得通知能力
+ * 
+ * @return CapPtr 通知能力
+ */
+CapPtr get_notification_cap(void);

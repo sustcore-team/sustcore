@@ -30,6 +30,8 @@ typedef struct {
     bool priv_getpid;
     // 创建线程的能力
     bool priv_create_thread;
+    // 等待通知的能力
+    bool priv_wait_notification;
 } PCBCapPriv;
 
 /**
@@ -117,3 +119,24 @@ pid_t pcb_cap_getpid(PCB *p, CapPtr ptr);
  */
 CapPtr pcb_cap_create_thread(PCB *p, CapPtr ptr, void *entrypoint,
                              int priority);
+
+#define PCB_CAP_START(p, ptr, fun, cap, pcb, priv, ret) \
+    Capability *cap = fetch_cap(p, ptr);                \
+    if (cap == nullptr) {                               \
+        log_error(#fun ":指针指向的能力不存在!");       \
+        return ret;                                     \
+    }                                                   \
+    if (cap->type != CAP_TYPE_PCB) {                    \
+        log_error(#fun ":该能力不为PCB能力!");          \
+        return ret;                                     \
+    }                                                   \
+    if (cap->cap_data == nullptr) {                     \
+        log_error(#fun ":能力数据为空!");               \
+        return ret;                                     \
+    }                                                   \
+    if (cap->cap_priv == nullptr) {                     \
+        log_error(#fun ":能力权限为空!");               \
+        return ret;                                     \
+    }                                                   \
+    PCB *pcb         = (PCB *)cap->cap_data;            \
+    PCBCapPriv *priv = (PCBCapPriv *)cap->cap_priv

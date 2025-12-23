@@ -37,27 +37,6 @@ CapPtr create_pcb_cap(PCB *p) {
     return create_cap(p, CAP_TYPE_PCB, (void *)p, (void *)priv);
 }
 
-#define PCB_CAP_START(p, ptr, fun, cap, pcb, priv, ret) \
-    Capability *cap = fetch_cap(p, ptr);                \
-    if (cap == nullptr) {                               \
-        log_error(#fun ":指针指向的能力不存在!");       \
-        return ret;                                     \
-    }                                                   \
-    if (cap->type != CAP_TYPE_PCB) {                    \
-        log_error(#fun ":该能力不为PCB能力!");          \
-        return ret;                                     \
-    }                                                   \
-    if (cap->cap_data == nullptr) {                     \
-        log_error(#fun ":能力数据为空!");               \
-        return ret;                                     \
-    }                                                   \
-    if (cap->cap_priv == nullptr) {                     \
-        log_error(#fun ":能力权限为空!");               \
-        return ret;                                     \
-    }                                                   \
-    PCB *pcb         = (PCB *)cap->cap_data;            \
-    PCBCapPriv *priv = (PCBCapPriv *)cap->cap_priv
-
 PCB *pcb_cap_unwrap(PCB *p, CapPtr ptr) {
     PCB_CAP_START(p, ptr, pcb_cap_unwrap, cap, pcb, priv, nullptr);
 
@@ -172,7 +151,9 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, PCBCapPriv priv) {
         !BOOL_IMPLIES(priv.priv_exit,          old_priv->priv_exit) ||
         !BOOL_IMPLIES(priv.priv_fork,          old_priv->priv_fork) ||
         !BOOL_IMPLIES(priv.priv_getpid,        old_priv->priv_getpid) ||
-        !BOOL_IMPLIES(priv.priv_create_thread, old_priv->priv_create_thread))
+        !BOOL_IMPLIES(priv.priv_create_thread, old_priv->priv_create_thread) ||
+        !BOOL_IMPLIES(priv.priv_wait_notification, old_priv->priv_wait_notification)
+    )
     {
         log_error("派生的权限无效!");
         return INVALID_CAP_PTR;

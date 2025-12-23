@@ -30,3 +30,17 @@ void after_interrupt(RegCtx **ctx);
  * @param p 进程PCB指针
  */
 void insert_ready_process(PCB *p);
+
+/**
+ * @brief 唤醒进程
+ * 
+ * @param p 被唤醒的进程PCB指针
+ */
+void wakeup_process(PCB *p);
+
+/**
+ * @brief 唤醒线程
+ * 
+ * @param t 被唤醒的线程TCB指针
+ */
+void wakeup_thread(TCB *t);

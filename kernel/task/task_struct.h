@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cap/capability.h>
+#include <cap/not_cap.h>
 #include <mem/vmm.h>
 #include <sus/bits.h>
 #include <sus/ctx.h>
@@ -28,9 +29,10 @@ typedef enum {
     TS_RUNNING   = 2,
     TS_BLOCKED   = 3,
     TS_SUSPENDED = 4,
-    TS_ZOMBIE    = 5,
-    TS_UNUSED    = 6,
-    TS_YIELD     = 7
+    TS_WAITING   = 5,
+    TS_ZOMBIE    = 6,
+    TS_UNUSED    = 7,
+    TS_YIELD     = 8
 } ThreadState;
 
 #define MAIN_THREAD_PRIORITY 128
@@ -44,6 +46,9 @@ typedef struct TCBStruct {
     // 调度队列
     struct TCBStruct *sprev;
     struct TCBStruct *snext;
+    // 等待队列
+    struct TCBStruct *wprev;
+    struct TCBStruct *wnext;
     // tid
     tid_t tid;
     // 内核栈指针
@@ -79,6 +84,26 @@ typedef struct TCBStruct {
      */
     void **sp;
 } TCB;
+
+typedef struct {
+    enum {
+        WAITING_NOTIFICATION,
+    } type;
+    union {
+        struct {
+            int notif_id;
+            CapPtr cap_ptr;
+            qword bitmap[NOTIFICATION_BITMAP_QWORDS];
+        } notif;
+    };
+} WatingReason;
+
+typedef struct WaitingTCBStruct {
+    struct WaitingTCBStruct *prev;
+    struct WaitingTCBStruct *next;
+    TCB *tcb;
+    WatingReason reason;
+} WaitingTCB;
 
 typedef struct PCBStruct {
     // 形成链表结构
@@ -157,6 +182,9 @@ typedef struct PCBStruct {
     TCB *ready_threads_head;
     TCB *ready_threads_tail;
 
+    WaitingTCB *waiting_threads_head;
+    WaitingTCB *waiting_threads_tail;
+
     // 主线程(进程创建时创建的第一个线程)
     TCB *main_thread;
 
@@ -168,6 +196,13 @@ typedef struct PCBStruct {
     Capability *all_cap_tail;
 } PCB;
 
+typedef struct WaitingPCBStruct {
+    struct WaitingPCBStruct *prev;
+    struct WaitingPCBStruct *next;
+    PCB *pcb;
+    WatingReason reason;
+} WaitingPCB;
+
 #define CHILDREN_TASK_LIST(task) \
     task->children_head, task->children_tail, sibling_next, sibling_prev
 
@@ -178,3 +213,6 @@ typedef struct PCBStruct {
 #define READY_THREAD_LIST(task)                                       \
     task->ready_threads_head, task->ready_threads_tail, snext, sprev, \
         priority, ascending
+
+#define WAITING_THREAD_LIST(task)                                      \
+    task->waiting_threads_head, task->waiting_threads_tail, next, prev

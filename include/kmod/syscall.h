@@ -23,9 +23,9 @@ void exit(int code);
 
 /**
  * @brief 让出CPU，主动让调度器调度其他进程/线程
- * @param thread_only 是否仅让出当前线程的CPU时间片
+ * @param thread 线程能力. 如果是INVALID_CAP_PTR, 则表示让出当前进程
  */
-void yield(bool thread_only);
+void yield(CapPtr thread);
 
 /**
  * @brief 获得当前进程的PID
@@ -54,6 +54,50 @@ void wakeup_process(CapPtr pid);
  * @param pid 进程ID(实际上是进程能力)
  */
 void wait_process(CapPtr pid);
+
+/**
+ * @brief 等待通知
+ *
+ * @param thread 线程能力. 如果是INVALID_CAP_PTR, 则表示以进程级别让出CPU
+ * @param notif_cap 通知能力
+ * @param wait_bitmap 等待的通知位图
+ */
+void wait_notifications(CapPtr thread, CapPtr notif_cap, qword *wait_bitmap);
+
+/**
+ * @brief 等待通知
+ *
+ * @param thread 线程能力. 如果是INVALID_CAP_PTR, 则表示以进程级别让出CPU
+ * @param notif_cap 通知能力
+ * @param notification_id 等待的通知ID
+ */
+void wait_notification(CapPtr thread, CapPtr notif_cap, int notification_id);
+
+/**
+ * @brief 设置通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ */
+void notification_set(CapPtr notif_cap, int notification_id);
+
+/**
+ * @brief 重置通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ */
+void notification_reset(CapPtr notif_cap, int notification_id);
+
+/**
+ * @brief 检查通知位
+ * 
+ * @param notif_cap 通知能力
+ * @param notification_id 通知ID
+ * @return true 通知已设置
+ * @return false 通知未设置
+ */
+bool check_notification(CapPtr notif_cap, int notification_id);
 
 /**
  * @brief 使当前进程休眠指定的毫秒数
@@ -150,5 +194,11 @@ void send_message(CapPtr pid, const void *msg, size_t size);
 void rpc_call(CapPtr pid, int fid, const void *args, size_t arg_size,
               void *ret_buf, size_t ret_size);
 
-// 创建线程
+/**
+ * @brief 创建线程
+ * 
+ * @param entrypoint 线程入口点
+ * @param priority 线程优先级
+ * @return CapPtr 线程能力指针
+ */
 CapPtr create_thread(void *entrypoint, int priority);

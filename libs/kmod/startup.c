@@ -18,7 +18,9 @@
 extern int kmod_main(void);
 
 static CapPtr device_cap;
+CapPtr main_thread_cap;
 CapPtr pcb_cap;
+CapPtr default_notif_cap;
 
 CapPtr sa_get_device(void) {
     return device_cap;
@@ -67,8 +69,10 @@ void _start(void) {
     // 根据约定
     // a0寄存器保存PCB能力
     // a1寄存器保存heap指针
-    pcb_cap.val = arg[0];
-    umb_t heap_ptr = arg[1];
+    pcb_cap.val     = arg[0];
+    umb_t heap_ptr  = arg[1];
+    main_thread_cap.val = arg[2];
+    default_notif_cap.val   = arg[3];
 
     init(heap_ptr);
 

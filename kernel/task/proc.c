@@ -12,6 +12,8 @@
 #include "proc.h"
 
 #include <cap/pcb_cap.h>
+#include <cap/not_cap.h>
+#include <cap/tcb_cap.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
 #include <mem/pmm.h>
@@ -35,6 +37,9 @@ PCB *proc_list_tail;
 
 PCB *rp_list_heads[RP_LEVELS];
 PCB *rp_list_tails[RP_LEVELS];
+
+WaitingPCB *waiting_list_head;
+WaitingPCB *waiting_list_tail;
 
 PCB *cur_proc;
 
@@ -159,11 +164,17 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
 
     // 为当前进程构造自己的PCB能力
     CapPtr pcb_cap_ptr = create_pcb_cap(p);
-    // 将PCB能力传递给进程作为第一个参数
-    arch_setup_argument(p->main_thread, 0, pcb_cap_ptr.val);
+    // 为当前进程构造主线程能力
+    CapPtr main_tcb_ptr = create_tcb_cap(p, main_thread);
+    // 为当前进程构造Notification能力
+    CapPtr notif_cap_ptr = create_notification_cap(p);
 
-    // 将堆指针传递给进程作为第二个参数
+    // 三个参数:
+    // PCB能力指针, 进程堆指针, 主线程能力, 初始Notification能力指针
+    arch_setup_argument(p->main_thread, 0, pcb_cap_ptr.val);
     arch_setup_argument(p->main_thread, 1, (umb_t)(heap));
+    arch_setup_argument(p->main_thread, 2, main_tcb_ptr.val);
+    arch_setup_argument(p->main_thread, 3, notif_cap_ptr.val);
 
     // 将主线程加入到就绪线程链表
     insert_ready_process(p);
@@ -304,6 +315,7 @@ TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority) {
     // 设置ip, sp
     *t->ip = entrypoint;
     *t->sp = stack;
+    t->state = TS_READY;
 
     // 加入到进程的待命线程链表
     ordered_list_insert(t, READY_THREAD_LIST(proc));

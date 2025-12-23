@@ -53,6 +53,11 @@ extern PCB *rp_list_tails[RP_LEVELS];
 #define RP3_LIST \
     rp_list_heads[3], rp_list_tails[3], snext, sprev, run_time, ascending
 
+extern WaitingPCB *waiting_list_head;
+extern WaitingPCB *waiting_list_tail;
+
+#define WAITING_PROC_LIST waiting_list_head, waiting_list_tail, next, prev
+
 /**
  * @brief 初始化进程池
  */

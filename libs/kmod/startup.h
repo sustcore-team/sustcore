@@ -14,3 +14,5 @@
 #include <kmod/syscall.h>
 
 extern CapPtr pcb_cap;
+extern CapPtr main_thread_cap;
+extern CapPtr default_notif_cap;

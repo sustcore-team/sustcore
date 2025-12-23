@@ -118,3 +118,6 @@ typedef enum {
     CAP_TYPE_CUSTOM = 10,  // 自定义能力
     CAP_TYPE_NOT = 10      // 通知能力
 } CapType;
+
+#define NOTIFICATION_BITMAP_SIZE (256)
+#define NOTIFICATION_BITMAP_QWORDS (NOTIFICATION_BITMAP_SIZE / (8 * sizeof(qword)))

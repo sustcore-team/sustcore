@@ -106,7 +106,7 @@ static TCB *fetch_ready_thread(PCB *p) {
     ordered_list_front(t, READY_THREAD_LIST(p));
 
     bool p_ready = (p->current_thread != nullptr &&
-                    p->current_thread->state == TS_RUNNING);
+                    p->current_thread->state == TS_READY);
 
     // 与当前线程比较
     if (p_ready && (t == nullptr || t->priority >= p->current_thread->priority))
@@ -119,6 +119,7 @@ static TCB *fetch_ready_thread(PCB *p) {
     return t;
 }
 
+// TODO: 将调度器更改为彻底按照线程为单位进行调度
 /**
  * @brief 调度器 - 选择下一个就绪进程进行切换
  *
@@ -143,13 +144,49 @@ void schedule(RegCtx **ctx, int time_gap) {
     }
 
     // 获取下一个就绪进程
-    PCB *next_proc   = fetch_ready_process();
+    PCB *next_proc;
+    TCB *next_thread;
+    do {
+        next_proc = fetch_ready_process();
+
+        // 没找到任何可运行的进程
+        if (next_proc == nullptr) {
+            // 如果当前进程仍然是RUNNING状态, 则继续运行当前进程
+            if (cur_proc->state == TS_RUNNING) {
+                next_proc = cur_proc;
+                // 重置时间片计数器
+                if (cur_proc->rp_level == 1) {
+                    cur_proc->rp1_count = 4;  // TODO: 时间片长度待定
+                } else if (cur_proc->rp_level == 2) {
+                    cur_proc->rp2_count = 2;  // TODO: 时间片长度待定
+                }
+            } else {
+                // 目前没有任何进程可以运行.
+                // 此时应当调度一个备用的空进程
+                // 但是我们还没做XD
+                log_error("schedule: 没有可运行的进程, 系统停滞");
+                while (true);
+            }
+        }
+        // 获得下一个线程
+        next_thread = fetch_ready_thread(next_proc);
+        if (next_thread == nullptr) {
+            log_debug("进程 (pid=%d) 没有就绪线程, 继续寻找下一个就绪进程",
+                      next_proc->pid);
+            // 将当前进程设为SUSPENDED状态
+            next_proc->state = TS_SUSPENDED;
+        }
+    }
+    // 如果没有就绪线程, 则继续寻找下一个就绪进程
+    while (next_thread == nullptr);
+
     bool switch_proc = (next_proc != cur_proc);
+    bool switch_thread = (next_thread != next_proc->current_thread);
 
     // 继续运行当前进程
     if (!switch_proc) {
         log_debug("继续运行当前进程 (pid=%d), rp_level = %d", cur_proc->pid,
-                  cur_proc->rp_level);
+                cur_proc->rp_level);
         if (cur_proc->rp_level == 1) {
             log_debug("RP1: 剩余时间片为%d", cur_proc->rp1_count);
         } else if (cur_proc->rp_level == 2) {
@@ -159,28 +196,6 @@ void schedule(RegCtx **ctx, int time_gap) {
         }
     }
 
-    // 没找到任何可运行的进程
-    if (next_proc == nullptr) {
-        // 如果当前进程仍然是RUNNING状态, 则继续运行当前进程
-        if (cur_proc->state == TS_RUNNING) {
-            next_proc = cur_proc;
-        } else {
-            log_debug("所有进程均运行");
-            // 目前没有任何进程可以运行.
-            // 此时应当调度一个备用的空进程
-            // 但是我们还没做XD
-            log_error("schedule: 没有可运行的进程, 系统停滞");
-            while (true);
-        }
-    }
-
-    // 获得下一个线程
-    TCB *next_thread = fetch_ready_thread(next_proc);
-    if (next_thread == nullptr) {
-        log_error("schedule: 进程 (pid=%d) 没有可运行的线程", next_proc->pid);
-        return;
-    }
-    bool switch_thread = (next_thread != next_proc->current_thread);
 
     // 如果没发生进程切换, 更新时间片计数器
     if (!switch_proc) {
@@ -196,6 +211,9 @@ void schedule(RegCtx **ctx, int time_gap) {
 
     // 如果不需要切换进程和线程, 则直接返回
     if (!switch_proc && !switch_thread) {
+        log_debug("继续运行当前线程 (tid=%d)",
+                  cur_proc->current_thread->tid);
+        cur_proc->current_thread->state = TS_RUNNING;
         return;
     }
 
@@ -223,9 +241,6 @@ void schedule(RegCtx **ctx, int time_gap) {
         }
         cur_proc        = next_proc;
         cur_proc->state = TS_RUNNING;
-        if (cur_proc->current_thread != nullptr) {
-            *ctx = cur_proc->current_thread->ctx;
-        }
 
         // 重置时间片计数器
         if (cur_proc->rp_level == 1) {
@@ -267,10 +282,12 @@ void schedule(RegCtx **ctx, int time_gap) {
         }
         // 切换到下一个线程
         cur_proc->current_thread        = next_thread;
-        cur_proc->current_thread->state = TS_RUNNING;
-        // 更新上下文
-        *ctx                            = cur_proc->current_thread->ctx;
     }
+
+    // 设置为RUNNING状态
+    cur_proc->current_thread->state = TS_RUNNING;
+    // 更新上下文指针
+    *ctx = cur_proc->current_thread->ctx;
 }
 
 void after_interrupt(RegCtx **ctx) {
@@ -329,6 +346,8 @@ void insert_ready_process(PCB *p)
     if (p->current_thread == nullptr) {
         // 以主线程作为当前运行线程
         p->current_thread = p->main_thread;
+        // 设置为 RUNNING 状态
+        p->current_thread->state = TS_RUNNING;
     }
 
     if (p->ready_threads_head == nullptr) {
@@ -346,4 +365,48 @@ void insert_ready_process(PCB *p)
         // 其它rp队列为普通链表, 加到尾部(先到先得)
         list_push_back(p, RP_LIST(p->rp_level));
     }
+}
+
+void wakeup_process(PCB *p)
+{
+    // 判断 p 的唤醒是否合理
+    if (p == nullptr) {
+        log_error("wakeup_process: 传入的PCB指针为空");
+        return;
+    }
+
+    if (p->state != TS_WAITING) {
+        log_error("wakeup_process: 只能唤醒WAITING状态的进程 (pid=%d, state=%d)",
+                  p->pid, p->state);
+        return;
+    }
+
+    // 唤醒进程
+    insert_ready_process(p);
+}
+
+/**
+ * @brief 唤醒线程
+ * 
+ * @param t 被唤醒的线程TCB指针
+ */
+void wakeup_thread(TCB *t)
+{
+    // 判断 t 的唤醒是否合理
+    if (t == nullptr) {
+        log_error("wakeup_thread: 传入的TCB指针为空");
+        return;
+    }
+
+    if (t->state != TS_WAITING) {
+        log_error("wakeup_thread: 只能唤醒WAITING状态的线程 (tid=%d, state=%d)",
+                  t->tid, t->state);
+        return;
+    }
+
+    // 进入 READY 状态
+    t->state = TS_READY;
+
+    // 加入就绪队列
+    ordered_list_insert(t, READY_THREAD_LIST(t->pcb));
 }
