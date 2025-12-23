@@ -18,6 +18,8 @@
 #define SYS_LOG    (SYSCALL_BASE + 0x03)
 #define SYS_FORK   (SYSCALL_BASE + 0x04)
 #define SYS_GETPID (SYSCALL_BASE + 0x05)
+#define SYS_CREATE_THREAD (SYSCALL_BASE + 0x06)
+#define SYS_YIELD_THREAD  (SYSCALL_BASE + 0x07)
 
 // 以SYS_UNSTABLE_BASE开头的系统调用为不稳定接口, 可能会在后续版本中更改或移除
 #define SYS_UNSTABLE_BASE (0xFFC0'0000)

@@ -18,8 +18,36 @@ void test_1() {
     printf("测试函数test_1被调用!\n");
 }
 
+void thread_test_1(void) {
+    printf("THREAD 1\n");
+    while (true) {
+        yield(true);
+    }
+}
+
+void thread_test_2(void) {
+    printf("THREAD 2\n");
+    while (true) {
+        yield(true);
+    }
+}
+
 void test_2(int a, const char *str) {
     printf("测试函数test_2被调用! %d是%s\n", a, str);
+
+    CapPtr thread_cap_1 = create_thread((void *)thread_test_1, 3);
+    if (thread_cap_1.val == 0) {
+        printf("创建线程失败!\n");
+        return;
+    }
+
+    CapPtr thread_cap_2 = create_thread((void *)thread_test_2, 5);
+    if (thread_cap_2.val == 0) {
+        printf("创建线程失败!\n");
+        return;
+    }
+
+    while (true);
 }
 
 int kmod_main(void) {
