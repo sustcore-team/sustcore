@@ -158,15 +158,7 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
     p->current_thread = nullptr;
 
     // 为当前进程构造自己的PCB能力
-    CapPtr pcb_cap_ptr =
-        create_pcb_cap(p, p,
-                       (PCBCapPriv){.priv_unwrap        = true,
-                                    .priv_derive        = true,
-                                    .priv_yield         = true,
-                                    .priv_exit          = true,
-                                    .priv_fork          = true,
-                                    .priv_getpid        = true,
-                                    .priv_create_thread = true});
+    CapPtr pcb_cap_ptr = create_pcb_cap(p);
     // 将PCB能力传递给进程作为第一个参数
     arch_setup_argument(p->main_thread, 0, pcb_cap_ptr.val);
 
@@ -344,25 +336,6 @@ TCB *fork_thread(PCB *p, TCB *parent_thread) {
     return t;
 }
 
-void terminate_tcb(TCB *t) {
-    if (t == nullptr) {
-        log_error("kill_tcb: 传入的TCB指针为空");
-        return;
-    }
-    if (t->state != TS_ZOMBIE) {
-        log_error(
-            "terminate_tcb: 只能清理处于ZOMBIE状态的线程 (tid=%d, state=%d)",
-            t->tid, t->state);
-        return;
-    }
-    // 对t进行资源清理
-
-    // 从线程链表中移除
-    list_remove(t, THREAD_LIST(t->pcb));
-
-    log_debug("terminate_tcb: 线程 (tid=%d) 资源清理完成", t->tid);
-}
-
 /**
  * @brief 将能力从进程的cspace中移除
  *
@@ -390,6 +363,8 @@ void remove_from_cspace(Capability *cap) {
     }
     p->cap_spaces[cap->cap_ptr.cspace][cap->cap_ptr.cindex] = nullptr;
 }
+
+// TODO: 正式实现下列的terminate函数
 
 /**
  * @brief 递归清除能力树
@@ -453,4 +428,23 @@ void terminate_pcb(PCB *p) {
     terminate_caps(p);
 
     log_debug("terminate_pcb: 进程 (pid=%d) 资源清理完成", p->pid);
+}
+
+void terminate_tcb(TCB *t) {
+    if (t == nullptr) {
+        log_error("kill_tcb: 传入的TCB指针为空");
+        return;
+    }
+    if (t->state != TS_ZOMBIE) {
+        log_error(
+            "terminate_tcb: 只能清理处于ZOMBIE状态的线程 (tid=%d, state=%d)",
+            t->tid, t->state);
+        return;
+    }
+    // 对t进行资源清理
+
+    // 从线程链表中移除
+    list_remove(t, THREAD_LIST(t->pcb));
+
+    log_debug("terminate_tcb: 线程 (tid=%d) 资源清理完成", t->tid);
 }

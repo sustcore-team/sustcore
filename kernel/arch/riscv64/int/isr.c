@@ -189,11 +189,11 @@ void timer_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     // log_info("定时器中断处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
     //          scause.value, sepc, stval);
 
-    csr_t clock, clock_ms, clock_ns;
+    // csr_t clock, clock_ms, clock_ns;
 
-    clock    = csr_get_time();
-    clock_ms = clock / (timer_info.freq / 1000);
-    clock_ns = clock / (timer_info.freq / 1000000) - clock_ms * 1000;
+    // clock    = csr_get_time();
+    // clock_ms = clock / (timer_info.freq / 1000);
+    // clock_ns = clock / (timer_info.freq / 1000000) - clock_ms * 1000;
     // log_info("进入handler的时间: %ld.%03ld ms", clock_ms, clock_ns);
 
     // Step 1: 重新设置下一次时钟中断

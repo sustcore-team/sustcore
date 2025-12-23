@@ -20,10 +20,19 @@
 
 #include <basec/logger.h>
 
-CapPtr create_tcb_cap(PCB *p, TCB *tcb, TCBCapPriv priv) {
-    TCBCapPriv *priv_ptr = (TCBCapPriv *)kmalloc(sizeof(TCBCapPriv));
-    memcpy(priv_ptr, &priv, sizeof(TCBCapPriv));
-    return create_cap(p, CAP_TYPE_TCB, (void *)tcb, (void *)priv_ptr);
+CapPtr create_tcb_cap(PCB *p, TCB *tcb) {
+    TCBCapPriv default_priv = {
+        .priv_unwrap       = true,
+        .priv_set_priority = true,
+        .priv_suspend      = true,
+        .priv_resume       = true,
+        .priv_terminate    = true,
+        .priv_yield        = true,
+    };
+
+    TCBCapPriv *priv = (TCBCapPriv *)kmalloc(sizeof(TCBCapPriv));
+    memcpy(priv, &default_priv, sizeof(TCBCapPriv));
+    return create_cap(p, CAP_TYPE_TCB, (void *)tcb, (void *)priv);
 }
 
 #define TCB_CAP_START(p, ptr, fun, cap, tcb, priv, ret) \
@@ -57,4 +66,29 @@ TCB *tcb_cap_unwrap(PCB *p, CapPtr ptr) {
     }
 
     return tcb;
+}
+
+/**
+ * @brief 将线程切换到yield状态
+ *
+ * @param p 当前进程的PCB
+ * @param ptr 能力指针
+ */
+void tcb_cap_yield(PCB *p, CapPtr ptr) {
+    TCB_CAP_START(p, ptr, tcb_cap_yield, cap, tcb, priv, );
+
+    // 是否有对应权限
+    if (!priv->priv_yield) {
+        log_error("该能力不具有yield权限!");
+        return;
+    }
+
+    // 切换线程状态到yield
+    if (tcb->state != TS_RUNNING) {
+        log_error("只能对运行中的线程进行yield操作! (tid=%d, state=%d)",
+                  tcb->tid, tcb->state);
+        return;
+    }
+
+    tcb->state = TS_YIELD;
 }
