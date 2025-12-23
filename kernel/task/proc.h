@@ -59,28 +59,6 @@ extern PCB *rp_list_tails[RP_LEVELS];
 void proc_init(void);
 
 /**
- * @brief 清理PCB相关资源
- *
- * @param p PCB指针
- */
-void terminate_pcb(PCB *p);
-
-/**
- * @brief 清理TCB相关资源
- *
- * @param t TCB指针
- */
-void terminate_tcb(TCB *t);
-
-/**
- * @brief 初始化PCB
- *
- * @param p PCB
- * @param rp_level RP级别
- */
-void init_pcb(PCB *p, int rp_level);
-
-/**
  * @brief 新建进程
  *
  * @param tm 进程内存信息
@@ -94,6 +72,22 @@ void init_pcb(PCB *p, int rp_level);
 PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
               PCB *parent);
 
+
+/**
+ * @brief fork进程
+ *
+ * @param parent 被fork的父进程
+ * @return PCB* 新进程PCB指针
+ */
+PCB *fork_task(PCB *parent);
+
+/**
+ * @brief 清理PCB相关资源
+ *
+ * @param p PCB指针
+ */
+void terminate_pcb(PCB *p);
+
 /**
  * @brief 创建线程控制块
  *
@@ -105,12 +99,20 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
 TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority);
 
 /**
- * @brief fork进程
- *
- * @param parent 被fork的父进程
- * @return PCB* 新进程PCB指针
+ * @brief fork线程
+ * 
+ * @param p 进程PCB指针
+ * @param parent_thread 父线程TCB指针
+ * @return TCB* 新线程TCB指针
  */
-PCB *fork_task(PCB *parent);
+TCB *fork_thread(PCB *p, TCB *parent_thread);
+
+/**
+ * @brief 清理TCB相关资源
+ *
+ * @param t TCB指针
+ */
+void terminate_tcb(TCB *t);
 
 /**
  * @brief 分配线程栈

@@ -22,10 +22,10 @@
 void exit(int code);
 
 /**
- * @brief 让出CPU，主动让调度器调度其他进程
- * 
+ * @brief 让出CPU，主动让调度器调度其他进程/线程
+ * @param thread_only 是否仅让出当前线程的CPU时间片
  */
-void yield(void);
+void yield(bool thread_only);
 
 /**
  * @brief 获得当前进程的PID
@@ -149,3 +149,6 @@ void send_message(CapPtr pid, const void *msg, size_t size);
  */
 void rpc_call(CapPtr pid, int fid, const void *args, size_t arg_size,
               void *ret_buf, size_t ret_size);
+
+// 创建线程
+CapPtr create_thread(void *entrypoint, int priority);

@@ -179,7 +179,6 @@ void schedule(RegCtx **ctx, int time_gap) {
     if (next_thread == nullptr) {
         log_error("schedule: 进程 (pid=%d) 没有可运行的线程", next_proc->pid);
         return;
-        ;
     }
     bool switch_thread = (next_thread != next_proc->current_thread);
 
@@ -279,8 +278,9 @@ void after_interrupt(RegCtx **ctx) {
         log_error("after_interrupt: 当前没有运行的进程");
         return;
     }
-    // 继续运行当前进程
-    if (cur_proc->state == TS_RUNNING) {
+    // 继续运行当前进程/线程
+    if (cur_proc->state == TS_RUNNING && cur_proc->current_thread != nullptr &&
+        cur_proc->current_thread->state == TS_RUNNING) {
         // 判断一下高级别是否有就绪进程需要抢占
         bool yield = false;
         for (int i = cur_proc->rp_level - 1; i >= 0; i--) {
@@ -297,4 +297,53 @@ void after_interrupt(RegCtx **ctx) {
     }
     // 当前进程已阻塞或终止, 抑或是有高级别就绪进程, 需要调度下一个进程
     schedule(ctx, 0);
+}
+
+/**
+ * @brief 将进程加入到就绪队列
+ * 
+ * @param p 进程PCB指针
+ */
+void insert_ready_process(PCB *p)
+{
+    // 判断 p 的加入是否合理
+    if (p == nullptr) {
+        log_error("insert_ready_process: 传入的PCB指针为空");
+        return;
+    }
+
+    // 不为 READY 或 RUNNING
+    if (p->state != TS_READY && p->state != TS_RUNNING) {
+        log_error("insert_ready_process: 只能加入READY或RUNNING状态的进程 (pid=%d, state=%d)",
+                  p->pid, p->state);
+        return;
+    }
+
+    // 没有主线程
+    if (p->main_thread == nullptr) {
+        log_error("insert_ready_process: 进程没有主线程 (pid=%d)", p->pid);
+        return;
+    }
+
+    // 如果 p 没有当前在运行的线程
+    if (p->current_thread == nullptr) {
+        // 以主线程作为当前运行线程
+        p->current_thread = p->main_thread;
+    }
+
+    if (p->ready_threads_head == nullptr) {
+        log_error("insert_ready_process: 进程没有就绪线程 (pid=%d)", p->pid);
+        return;
+    }
+
+    // 统一改为 READY 状态
+    p->state = TS_READY;
+
+    if (p->rp_level == 3) {
+        // rp3为有序链表
+        ordered_list_insert(p, RP3_LIST);
+    } else {
+        // 其它rp队列为普通链表, 加到尾部(先到先得)
+        list_push_back(p, RP_LIST(p->rp_level));
+    }
 }

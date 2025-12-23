@@ -83,6 +83,15 @@ int sys_write_serial(const char *msg) {
     return ret;
 }
 
+CapPtr sys_create_thread(CapPtr ptr, void *entrypoint, int priority) {
+    return pcb_cap_create_thread(cur_proc, ptr, entrypoint, priority);
+}
+
+void sys_yield_thread(CapPtr ptr) {
+    // TODO: Do it with capability
+    cur_proc->current_thread->state = TS_YIELD;
+}
+
 umb_t syscall_handler(int sysno, RegCtx *ctx, ArgumentGetter arg_getter) {
     // 第0个参数一定存放Capability
     CapPtr cap;
@@ -101,6 +110,16 @@ umb_t syscall_handler(int sysno, RegCtx *ctx, ArgumentGetter arg_getter) {
         case SYS_GETPID: {
             pid_t pid = sys_getpid(cap);
             return (umb_t)pid;
+        }
+        case SYS_CREATE_THREAD: {
+            CapPtr thread_cap = sys_create_thread(
+                cap, (void *)arg_getter(ctx, 1),
+                (int)(arg_getter(ctx, 2)));
+            return thread_cap.val;
+        }
+        case SYS_YIELD_THREAD: {
+            sys_yield_thread(cap);
+            return 0;
         }
         default: log_info("未知系统调用号: %d", sysno); return (umb_t)(-1);
     }

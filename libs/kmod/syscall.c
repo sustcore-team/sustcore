@@ -66,8 +66,13 @@ void exit(int code) {
     syscall(SYS_EXIT, pcb_cap.val, (umb_t)(code), 0, 0, 0, 0, 0);
 }
 
-void yield(void) {
-    syscall(SYS_YIELD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
+void yield(bool thread_only) {
+	if (thread_only) {
+    	syscall(SYS_YIELD_THREAD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
+	}
+	else {
+    	syscall(SYS_YIELD, pcb_cap.val, 0, 0, 0, 0, 0, 0);
+	}
 }
 
 int puts(const char *str) {
@@ -159,4 +164,11 @@ int fork(void) {
 void *mapmem(CapPtr cap) {
     // TODO: 实现映射内存系统调用
     return nullptr;
+}
+
+CapPtr create_thread(void *entrypoint, int priority)
+{
+	return (CapPtr){
+		.val = syscall(SYS_CREATE_THREAD, pcb_cap.val, (umb_t)(entrypoint), (umb_t)(priority), 0, 0, 0, 0)
+	};
 }

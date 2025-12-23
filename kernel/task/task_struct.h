@@ -33,6 +33,8 @@ typedef enum {
     TS_YIELD     = 7
 } ThreadState;
 
+#define MAIN_THREAD_PRIORITY 128
+
 typedef struct TCBStruct {
     // 形成链表结构
     struct TCBStruct *prev;

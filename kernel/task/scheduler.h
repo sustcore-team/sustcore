@@ -23,3 +23,10 @@ void schedule(RegCtx **ctx, int time_gap);
  *
  */
 void after_interrupt(RegCtx **ctx);
+
+/**
+ * @brief 将进程加入到就绪队列
+ * 
+ * @param p 进程PCB指针
+ */
+void insert_ready_process(PCB *p);
