@@ -35,12 +35,32 @@ typedef struct {
 /**
  * @brief 构造PCB能力
  *
- * @param p    在p内构造一个PCB能力
- * @param pcb  构造的能力指向pcb
- * @param priv 控制权限
+ * @param p    在p内构造一个指向自己的PCB能力
  * @return CapPtr 能力指针
  */
-CapPtr create_pcb_cap(PCB *p, PCB *pcb, PCBCapPriv priv);
+CapPtr create_pcb_cap(PCB *p);
+
+/**
+ * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p
+ * 
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param priv 新权限
+ * @return CapPtr 新的能力指针
+ */
+CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, PCBCapPriv priv);
+
+/**
+ * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p, 并保留原权限
+ * 
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param priv 新权限
+ * @return CapPtr 新的能力指针
+ */
+CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
 
 /**
  * @brief 解包PCB能力, 获得PCB指针
@@ -97,25 +117,3 @@ pid_t pcb_cap_getpid(PCB *p, CapPtr ptr);
  */
 CapPtr pcb_cap_create_thread(PCB *p, CapPtr ptr, void *entrypoint,
                              int priority);
-
-/**
- * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p
- * 
- * @param src_p 源进程
- * @param src_ptr 源能力
- * @param dst_p 目标进程
- * @param priv 新权限
- * @return CapPtr 新的能力指针
- */
-CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, PCBCapPriv priv);
-
-/**
- * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p, 并保留原权限
- * 
- * @param src_p 源进程
- * @param src_ptr 源能力
- * @param dst_p 目标进程
- * @param priv 新权限
- * @return CapPtr 新的能力指针
- */
-CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);

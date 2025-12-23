@@ -25,6 +25,8 @@ typedef struct {
     bool priv_resume;
     // 终止线程的能力
     bool priv_terminate;
+    // 让出CPU的能力
+    bool priv_yield;
 } TCBCapPriv;
 
 /**
@@ -32,10 +34,9 @@ typedef struct {
  *
  * @param p    在p内构造一个TCB能力
  * @param tcb  构造的能力指向tcb
- * @param priv 控制权限
  * @return CapPtr 能力指针
  */
-CapPtr create_tcb_cap(PCB *p, TCB *tcb, TCBCapPriv priv);
+CapPtr create_tcb_cap(PCB *p, TCB *tcb);
 
 /**
  * @brief 解包TCB能力, 获得TCB指针
@@ -45,3 +46,11 @@ CapPtr create_tcb_cap(PCB *p, TCB *tcb, TCBCapPriv priv);
  * @return TCB* TCB指针
  */
 TCB *tcb_cap_unwrap(PCB *p, CapPtr ptr);
+
+/**
+ * @brief 将线程切换到yield状态
+ *
+ * @param p 当前进程的PCB
+ * @param ptr 能力指针
+ */
+void tcb_cap_yield(PCB *p, CapPtr ptr);

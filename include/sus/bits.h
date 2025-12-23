@@ -59,3 +59,11 @@ typedef signed_machine_bits smb_t;
 // 逻辑运算符 a=>b 的实现
 // a=>b 即为 (!a | b)
 #define BOOL_IMPLIES(a, b) ((!(a)) | (b))
+
+// 逐位计算的话, 则其相当于 (y & x) == y
+#define BITS_IMPLIES(x, y) (((x) & (y)) == (y))
+
+#define QWORD_MAX (0xFFFF'FFFF'FFFF'FFFF)
+#define DWORD_MAX (0xFFFF'FFFF)
+#define WORD_MAX  (0xFFFF)
+#define BYTE_MAX  (0xFF)
