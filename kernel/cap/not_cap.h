@@ -4,9 +4,9 @@
  * @brief 通知能力
  * @version alpha-1.0.0
  * @date 2025-12-23
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #pragma once
@@ -26,16 +26,15 @@
 // 通知能力数据
 typedef struct {
     int notif_id;
-    qword bitmap[NOTIFICATION_BITMAP_QWORDS];      // 通知位图
-    qword wait_bitmap[NOTIFICATION_BITMAP_QWORDS]; // 说明哪些通知ID正在被等待
+    qword bitmap[NOTIFICATION_BITMAP_QWORDS];  // 通知位图
 } Notification;
 
 // 通知能力权限
 typedef struct {
-    qword priv_set[NOTIFICATION_BITMAP_QWORDS];   // 设置通知的权限位图
-    qword priv_reset[NOTIFICATION_BITMAP_QWORDS]; // 清除通知的权限位
-    qword priv_check[NOTIFICATION_BITMAP_QWORDS]; // 检查通知的权限位
-    bool priv_derive;                             // 派生能力的权限
+    qword priv_set[NOTIFICATION_BITMAP_QWORDS];  // 设置通知的权限位图
+    qword priv_reset[NOTIFICATION_BITMAP_QWORDS];  // 清除通知的权限位
+    qword priv_check[NOTIFICATION_BITMAP_QWORDS];  // 检查通知的权限位
+    bool priv_derive;                              // 派生能力的权限
 } NotificationCapPriv;
 
 /**
@@ -48,18 +47,19 @@ CapPtr create_notification_cap(PCB *p);
 
 /**
  * @brief 从src_p的src_ptr能力派生一个新的Notification能力到dst_p
- * 
+ *
  * @param src_p   源进程
  * @param src_ptr 源能力
  * @param dst_p   目标进程
  * @param priv    新权限
  * @return CapPtr 派生出的能力指针
  */
-CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, NotificationCapPriv priv);
+CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
+                      NotificationCapPriv priv);
 
 /**
  * @brief 从src_p的src_ptr能力克隆一个Notification能力到dst_p
- * 
+ *
  * @param src_p   源进程
  * @param src_ptr 源能力
  * @param dst_p   目标进程
@@ -98,19 +98,7 @@ bool not_cap_check(PCB *p, CapPtr ptr, int notification_id);
 
 /**
  * @brief 等待通知
- * 
- * @param p 当前进程PCB指针
- * @param pcb_ptr PCB能力指针
- * @param not_ptr 通知能力指针
- * @param wait_bitmap 等待位图(应当总长256位)
- * @return true 通知已到达
- * @return false 通知未到达
- */
-bool pcb_cap_wait_notification(PCB *p, CapPtr pcb_ptr, CapPtr not_ptr, qword *wait_bitmap);
-
-/**
- * @brief 等待通知
- * 
+ *
  * @param p 当前进程PCB指针
  * @param tcb_ptr TCB能力指针
  * @param not_ptr 通知能力指针
@@ -118,7 +106,8 @@ bool pcb_cap_wait_notification(PCB *p, CapPtr pcb_ptr, CapPtr not_ptr, qword *wa
  * @return true 通知已到达
  * @return false 通知未到达
  */
-bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr, qword *wait_bitmap);
+bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
+                               qword *wait_bitmap);
 
 #define NOT_CAP_START(src_p, src_ptr, fun, cap, notif, priv, ret) \
     Capability *cap = fetch_cap(src_p, src_ptr);                  \

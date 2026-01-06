@@ -102,3 +102,5 @@ CapPtr create_cap(PCB *p, CapType type, void *cap_data, void *cap_priv);
  * @return CapPtr 能力指针
  */
 CapPtr derive_cap(PCB *p, Capability *parent, void *cap_priv);
+
+const char *cap_type_to_string(CapType type);

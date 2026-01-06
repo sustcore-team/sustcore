@@ -168,3 +168,36 @@ CapPtr derive_cap(PCB *p, Capability *parent, void *cap_priv)
     list_push_back(cap, CHILDREN_CAP_LIST(parent));
     return ptr;
 }
+
+
+const char *cap_type_to_string(CapType type) {
+    switch (type)
+    {
+    case CAP_TYPE_NUL:
+        return "CAP_TYPE_NUL";
+    case CAP_TYPE_PRC:
+        return "CAP_TYPE_PRC";
+    case CAP_TYPE_PCB:
+        return "CAP_TYPE_PCB";
+    case CAP_TYPE_THR:
+        return "CAP_TYPE_THR";
+    case CAP_TYPE_TCB:
+        return "CAP_TYPE_TCB";
+    case CAP_TYPE_DEV:
+        return "CAP_TYPE_DEV";
+    case CAP_TYPE_FLE:
+        return "CAP_TYPE_FLE";
+    case CAP_TYPE_INT:
+        return "CAP_TYPE_INT";
+    case CAP_TYPE_MEM:
+        return "CAP_TYPE_MEM";
+    case CAP_TYPE_PRO:
+        return "CAP_TYPE_PRO";
+    case CAP_TYPE_CUSTOM:
+        return "CAP_TYPE_CUSTOM";
+    case CAP_TYPE_NOT:
+        return "CAP_TYPE_NOT";
+    default:
+        return "Invalid type";
+    }
+}

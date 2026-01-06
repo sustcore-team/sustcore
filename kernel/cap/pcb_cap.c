@@ -14,6 +14,7 @@
 #include <mem/alloc.h>
 #include <string.h>
 #include <task/proc.h>
+#include <task/scheduler.h>
 
 #ifdef DLOG_CAP
 #define DISABLE_LOGGING
@@ -25,7 +26,6 @@ CapPtr create_pcb_cap(PCB *p) {
     static const PCBCapPriv PCB_ALL_PRIV = {
         .priv_unwrap        = true,
         .priv_derive        = true,
-        .priv_yield         = true,
         .priv_exit          = true,
         .priv_fork          = true,
         .priv_getpid        = true,
@@ -49,26 +49,10 @@ PCB *pcb_cap_unwrap(PCB *p, CapPtr ptr) {
     return pcb;
 }
 
-void pcb_cap_yield(PCB *p, CapPtr ptr) {
-    PCB_CAP_START(p, ptr, pcb_cap_yield, cap, pcb, priv, );
-
-    // 是否有对应权限
-    if (!priv->priv_yield) {
-        log_error("该能力不具有yield权限!");
-        return;
-    }
-
-    if (p->state != TS_RUNNING) {
-        log_error("只能让运行中的进程yield!");
-        return;
-    }
-
-    // 让渡进程
-    pcb->state = TS_YIELD;
-}
-
 void pcb_cap_exit(PCB *p, CapPtr ptr) {
     PCB_CAP_START(p, ptr, pcb_cap_exit, cap, pcb, priv, );
+
+    (void)pcb;
 
     // 是否有对应权限
     if (!priv->priv_exit) {
@@ -76,13 +60,7 @@ void pcb_cap_exit(PCB *p, CapPtr ptr) {
         return;
     }
 
-    if (p->state != TS_RUNNING) {
-        log_error("只能让运行中的进程exit!");
-        return;
-    }
-
-    // 结束进程
-    pcb->state = TS_ZOMBIE;
+    // TODO: 结束进程
 }
 
 PCB *pcb_cap_fork(PCB *p, CapPtr ptr, CapPtr *child_cap) {
@@ -128,6 +106,8 @@ CapPtr pcb_cap_create_thread(PCB *p, CapPtr ptr, void *entrypoint,
     void *stack = alloc_thread_stack(pcb, 16 * PAGE_SIZE);
     // 创建线程
     TCB *thread = new_thread(pcb, entrypoint, stack, priority);
+    // 加入就绪队列
+    insert_ready_thread(thread);
 
     // 为线程创建能力
     return create_tcb_cap(p, thread);
@@ -137,7 +117,7 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, PCBCapPriv priv) {
     PCB_CAP_START(src_p, src_ptr, pcb_cap_derive, cap, pcb, old_priv,
                   INVALID_CAP_PTR);
 
-    (void)pcb; // 未使用, 特地标记以避免编译器警告
+    (void)pcb;  // 未使用, 特地标记以避免编译器警告
 
     // 首先检查是否有派生权限
     if (!old_priv->priv_derive) {
@@ -146,14 +126,11 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, PCBCapPriv priv) {
     }
 
     // 检查新权限是否有效
-    if (!BOOL_IMPLIES(priv.priv_unwrap,        old_priv->priv_unwrap) ||
-        !BOOL_IMPLIES(priv.priv_yield,         old_priv->priv_yield) ||
-        !BOOL_IMPLIES(priv.priv_exit,          old_priv->priv_exit) ||
-        !BOOL_IMPLIES(priv.priv_fork,          old_priv->priv_fork) ||
-        !BOOL_IMPLIES(priv.priv_getpid,        old_priv->priv_getpid) ||
-        !BOOL_IMPLIES(priv.priv_create_thread, old_priv->priv_create_thread) ||
-        !BOOL_IMPLIES(priv.priv_wait_notification, old_priv->priv_wait_notification)
-    )
+    if (!BOOL_IMPLIES(priv.priv_unwrap, old_priv->priv_unwrap) ||
+        !BOOL_IMPLIES(priv.priv_exit, old_priv->priv_exit) ||
+        !BOOL_IMPLIES(priv.priv_fork, old_priv->priv_fork) ||
+        !BOOL_IMPLIES(priv.priv_getpid, old_priv->priv_getpid) ||
+        !BOOL_IMPLIES(priv.priv_create_thread, old_priv->priv_create_thread))
     {
         log_error("派生的权限无效!");
         return INVALID_CAP_PTR;
@@ -169,7 +146,7 @@ CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
     PCB_CAP_START(src_p, src_ptr, pcb_cap_clone, cap, pcb, old_priv,
                   INVALID_CAP_PTR);
 
-    (void)pcb; // 未使用, 特地标记以避免编译器警告
+    (void)pcb;  // 未使用, 特地标记以避免编译器警告
 
     // 进行完全克隆
     return pcb_cap_derive(src_p, src_ptr, dst_p, *old_priv);

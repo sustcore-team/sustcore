@@ -13,6 +13,8 @@
 
 #include <task/proc.h>
 
+extern bool sheduling_enabled;
+
 /**
  * @brief 调度器 - 从当前进程切换到下一个就绪进程
  */
@@ -25,22 +27,15 @@ void schedule(RegCtx **ctx, int time_gap);
 void after_interrupt(RegCtx **ctx);
 
 /**
- * @brief 将进程加入到就绪队列
- * 
- * @param p 进程PCB指针
+ * @brief 将线程加入到就绪队列
+ *
+ * @param t 线程TCB指针
  */
-void insert_ready_process(PCB *p);
-
-/**
- * @brief 唤醒进程
- * 
- * @param p 被唤醒的进程PCB指针
- */
-void wakeup_process(PCB *p);
+void insert_ready_thread(TCB *t);
 
 /**
  * @brief 唤醒线程
- * 
- * @param t 被唤醒的线程TCB指针
+ *
+ * @param t 被唤醒的线程WaitingTCB指针
  */
-void wakeup_thread(TCB *t);
+void wakeup_thread(WaitingTCB *wt);

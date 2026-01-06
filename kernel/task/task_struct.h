@@ -35,6 +35,8 @@ typedef enum {
     TS_YIELD     = 8
 } ThreadState;
 
+const char *thread_state_to_string(ThreadState state);
+
 #define MAIN_THREAD_PRIORITY 128
 
 typedef struct TCBStruct {
@@ -46,9 +48,6 @@ typedef struct TCBStruct {
     // 调度队列
     struct TCBStruct *sprev;
     struct TCBStruct *snext;
-    // 等待队列
-    struct TCBStruct *wprev;
-    struct TCBStruct *wnext;
     // tid
     tid_t tid;
     // 内核栈指针
@@ -58,8 +57,9 @@ typedef struct TCBStruct {
     /**
      * @brief 线程优先级
      *
-     * 进程中的线程采取优先级调度.
-     * 优先调度优先级高(数值低)的线程.
+     * 对RP0/RP3而言无意义
+     * 对于RP1/RP2进程而言,
+     * 其决定了线程能够分配到的CPU时间片的份额(基于进程的总时间片分割)
      *
      */
     int priority;
@@ -83,6 +83,13 @@ typedef struct TCBStruct {
      *
      */
     void **sp;
+
+    // rp1 剩余时间片计数器
+    int rp1_count;
+    // rp2 剩余时间片计数器
+    int rp2_count;
+    // rp3 线程运行时间统计(只有Daemon队列使用) (ms)
+    int run_time;
 } TCB;
 
 typedef struct {
@@ -110,10 +117,6 @@ typedef struct PCBStruct {
     struct PCBStruct *prev;
     struct PCBStruct *next;
 
-    // 形成链表结构(调度链表)
-    struct PCBStruct *sprev;
-    struct PCBStruct *snext;
-
     // 形成进程树结构
     struct PCBStruct *parent;
     struct PCBStruct *children_head;
@@ -123,17 +126,12 @@ typedef struct PCBStruct {
 
     // PID
     pid_t pid;
-    // 进程状态
-    // 进程状态与线程状态没有关系
-    // 对线程而言, 其总认为进程是RUNNING状态
-    ThreadState state;
     // 进程内存信息
     TM *tm;
     // 线程栈基址
     void *thread_stack_base;
 
     // 进程优先级
-    int rp_level;
 
     // RP: Ready Process
     // 调度采取四级就绪队列, 四级序列有不同的调度策略
@@ -151,39 +149,11 @@ typedef struct PCBStruct {
     // 只有当高优先级队列为空时, 才会调度低优先级队列的进程.
     // 并且这样的调度是抢占式的. 即一旦有高优先级进程进入就绪状态,
     // 立即抢占低优先级进程的CPU使用权.
-
-    // rp0 调度信息
-
-    // rp1 调度信息
-    // 调用计数
-    int called_count;
-    // 剩余时间片计数器
-    int rp1_count;
-
-    // rp2 调度信息
-    // 优先级
-    int priority;
-    // 剩余时间片计数器
-    int rp2_count;
-
-    // rp3 调度信息
-    // 进程运行时间统计(只有Daemon队列使用) (ms)
-    int run_time;
+    int rp_level;
 
     // 进程持有的线程链表(头尾)
     TCB *threads_head;
     TCB *threads_tail;
-
-    // 当前运行线程
-    TCB *current_thread;
-
-    // 就绪队列中的线程链表(头尾)
-    // 我们首先调度进程, 再调度进程中的线程
-    TCB *ready_threads_head;
-    TCB *ready_threads_tail;
-
-    WaitingTCB *waiting_threads_head;
-    WaitingTCB *waiting_threads_tail;
 
     // 主线程(进程创建时创建的第一个线程)
     TCB *main_thread;
@@ -196,23 +166,9 @@ typedef struct PCBStruct {
     Capability *all_cap_tail;
 } PCB;
 
-typedef struct WaitingPCBStruct {
-    struct WaitingPCBStruct *prev;
-    struct WaitingPCBStruct *next;
-    PCB *pcb;
-    WatingReason reason;
-} WaitingPCB;
-
 #define CHILDREN_TASK_LIST(task) \
     task->children_head, task->children_tail, sibling_next, sibling_prev
 
 #define CAPABILITY_LIST(task) task->all_cap_head, task->all_cap_tail, next, prev
 
 #define THREAD_LIST(task) task->threads_head, task->threads_tail, next, prev
-
-#define READY_THREAD_LIST(task)                                       \
-    task->ready_threads_head, task->ready_threads_tail, snext, sprev, \
-        priority, ascending
-
-#define WAITING_THREAD_LIST(task)                                      \
-    task->waiting_threads_head, task->waiting_threads_tail, next, prev

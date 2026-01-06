@@ -110,6 +110,20 @@
     } while (0)
 #define list_pop_front(node, list) __list_pop_front(node, list)
 
+// 获得链表头节点
+#define __list_front(node, head, tail, next, prev) \
+    do {                                       \
+        node = head;                           \
+    } while (0)
+#define list_front(node, list) __list_front(node, list)
+
+// 获得链表尾节点
+#define __list_back(node, head, tail, next, prev) \
+    do {                                      \
+        node = tail;                          \
+    } while (0)
+#define list_back(node, list) __list_back(node, list)
+
 // 弹出链表尾节点
 #define __list_pop_back(node, head, tail, next, prev)    \
     do {                                                 \

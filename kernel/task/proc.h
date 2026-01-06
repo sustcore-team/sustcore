@@ -27,24 +27,18 @@ extern PCB *proc_list_tail;
 // 线程栈基址
 #define THREAD_STACK_BASE 0x80000000
 
-/**
- * @brief 空进程
- *
- */
-extern PCB empty_proc;
-
 // 进程就绪队列级别
 #define RP_LEVELS (4)
 
 /**
- * @brief 当前进程
+ * @brief 当前线程
  *
  */
-extern PCB *cur_proc;
+extern TCB *cur_thread;
 
 // 就绪队列链表
-extern PCB *rp_list_heads[RP_LEVELS];
-extern PCB *rp_list_tails[RP_LEVELS];
+extern TCB *rp_list_heads[RP_LEVELS];
+extern TCB *rp_list_tails[RP_LEVELS];
 
 // 就绪队列操作宏
 #define RP_LIST(level) rp_list_heads[level], rp_list_tails[level], snext, sprev
@@ -53,10 +47,10 @@ extern PCB *rp_list_tails[RP_LEVELS];
 #define RP3_LIST \
     rp_list_heads[3], rp_list_tails[3], snext, sprev, run_time, ascending
 
-extern WaitingPCB *waiting_list_head;
-extern WaitingPCB *waiting_list_tail;
+extern WaitingTCB *waiting_list_head;
+extern WaitingTCB *waiting_list_tail;
 
-#define WAITING_PROC_LIST waiting_list_head, waiting_list_tail, next, prev
+#define WAITING_LIST waiting_list_head, waiting_list_tail, next, prev
 
 /**
  * @brief 初始化进程池
@@ -76,7 +70,6 @@ void proc_init(void);
  */
 PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
               PCB *parent);
-
 
 /**
  * @brief fork进程
@@ -105,7 +98,7 @@ TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority);
 
 /**
  * @brief fork线程
- * 
+ *
  * @param p 进程PCB指针
  * @param parent_thread 父线程TCB指针
  * @return TCB* 新线程TCB指针

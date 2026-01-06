@@ -41,25 +41,25 @@ enum {
 
 // 异常信息
 const char *exception_msg[] = {"指令地址不对齐",
-                                "指令访问错误",
-                                "非法指令",
-                                "断点",
-                                "加载地址不对齐",
-                                "加载访问错误",
-                                "存储地址不对齐",
-                                "存储访问错误",
-                                "用户模式环境调用",
-                                "监管模式环境调用",
-                                "保留",
-                                "保留",
-                                "取指页错误",
-                                "加载页错误",
-                                "保留",
-                                "存储页错误",
-                                "保留",
-                                "保留",
-                                "软件检查异常",
-                                "硬件错误"};
+                               "指令访问错误",
+                               "非法指令",
+                               "断点",
+                               "加载地址不对齐",
+                               "加载访问错误",
+                               "存储地址不对齐",
+                               "存储访问错误",
+                               "用户模式环境调用",
+                               "监管模式环境调用",
+                               "保留",
+                               "保留",
+                               "取指页错误",
+                               "加载页错误",
+                               "保留",
+                               "存储页错误",
+                               "保留",
+                               "保留",
+                               "软件检查异常",
+                               "硬件错误"};
 
 umb_t riscv64_arg_getter(RegCtx *ctx, int idx) {
     if (idx < 0 || idx > 6) {
@@ -75,13 +75,13 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
                        InterruptContextRegisterList *reglist_ptr) {
     switch (scause.cause) {
         case EXCEPTION_ECALL_U: {
-            int sysno = reglist_ptr->regs[A0_BASE + 7];  // a7寄存器存放系统调用号
-            umb_t ret = syscall_handler(
-                sysno, reglist_ptr, riscv64_arg_getter);
+            int sysno =
+                reglist_ptr->regs[A0_BASE + 7];  // a7寄存器存放系统调用号
+            umb_t ret = syscall_handler(sysno, reglist_ptr, riscv64_arg_getter);
             // 将系统调用返回值放入a0寄存器
-            reglist_ptr->regs[A0_BASE + 0] = ret;
+            reglist_ptr->regs[A0_BASE + 0]  = ret;
             // 增加sepc以跳过ecall指令
-            reglist_ptr->sepc += 4;
+            reglist_ptr->sepc              += 4;
             break;
         }
         case EXCEPTION_ILLEGAL_INST:
@@ -94,16 +94,17 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
             break;
         default:
             // 输出异常类型
-            if (scause.cause < sizeof(exception_msg) / sizeof(exception_msg[0])) {
-                log_debug("发生异常! 类型: %s (%lu)", exception_msg[scause.cause],
-                        scause.cause);
+            if (scause.cause < sizeof(exception_msg) / sizeof(exception_msg[0]))
+            {
+                log_debug("发生异常! 类型: %s (%lu)",
+                          exception_msg[scause.cause], scause.cause);
             } else {
                 log_debug("发生异常! 类型: 未知 (%lu)", scause.cause);
             }
 
             // 输出寄存器状态
-            log_debug("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx", scause.value, sepc,
-                    stval);
+            log_debug("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx", scause.value,
+                      sepc, stval);
             log_debug("reglist_ptr: 0x%lx", reglist_ptr);
 
             // 输出异常发生特权级
@@ -120,7 +121,7 @@ void general_exception(csr_scause_t scause, umb_t sepc, umb_t stval,
 void illegal_instruction_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
                                  InterruptContextRegisterList *reglist_ptr) {
     log_debug("发生异常! 类型: %s (%lu)", exception_msg[scause.cause],
-                        scause.cause);
+              scause.cause);
     log_info("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc, stval);
     if (reglist_ptr->sstatus.spp) {
         log_debug("异常发生在S-Mode");
@@ -156,7 +157,7 @@ void illegal_instruction_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
 void paging_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
                     InterruptContextRegisterList *reglist_ptr) {
     log_debug("发生异常! 类型: %s (%lu)", exception_msg[scause.cause],
-                        scause.cause);
+              scause.cause);
     log_info("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
              scause.value, sepc, stval);
 
@@ -165,7 +166,8 @@ void paging_handler(csr_scause_t scause, umb_t sepc, umb_t stval,
     if (reglist_ptr->sstatus.spp) {
         log_debug("异常发生在S-Mode");
     } else {
-        log_debug("异常发生在U-Mode, 当前进程PID=%d", cur_proc->pid);
+        log_debug("异常发生在U-Mode, 当前线程(PID=%d, TID=%d)",
+                  cur_thread->pcb->pid, cur_thread->tid);
     }
     while (true);
 

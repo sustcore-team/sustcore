@@ -21,9 +21,10 @@
 #include <string.h>
 #include <sus/arch.h>
 #include <sus/boot.h>
-#include <sus/symbols.h>
 #include <sus/list_helper.h>
+#include <sus/symbols.h>
 #include <task/proc.h>
+#include <task/scheduler.h>
 
 void assertion_failure(const char *expression, const char *file,
                        const char *base_file, int line) {
@@ -81,22 +82,13 @@ int main(void) {
     log_info("  入口点: %p", p->main_thread->entrypoint);
     // 遍历VMA
     VMA *vma;
-    foreach_ordered_list(vma, TM_VMA_LIST(p->tm))
-    {
+    foreach_ordered_list(vma, TM_VMA_LIST(p->tm)) {
         const char *type_str[] = {
-            "VMAT_NONE",
-            "VMAT_CODE",
-            "VMAT_DATA",
-            "VMAT_STACK",
-            "VMAT_HEAP",
-            "VMAT_MMAP",
-            "VMAT_SHARE_RW",
-            "VMAT_SHARE_RO",
-            "VMAT_SHARE_RX",
-            "VMAT_SHARE_RWX"
-        };
+            "VMAT_NONE",     "VMAT_CODE",     "VMAT_DATA",     "VMAT_STACK",
+            "VMAT_HEAP",     "VMAT_MMAP",     "VMAT_SHARE_RW", "VMAT_SHARE_RO",
+            "VMAT_SHARE_RX", "VMAT_SHARE_RWX"};
         log_info("  VMA: vaddr=%p size=%lu type=%s", vma->vaddr, vma->size,
-                type_str[vma->type]);
+                 type_str[vma->type]);
     }
     log_info("  内核栈: %p", p->main_thread->kstack);
     log_info("  上下文: %p", p->main_thread->ctx);
@@ -109,8 +101,8 @@ int main(void) {
 
     log_info("启动进程调度器...");
 
-    // 将cur_proc设置为empty_proc, 从而开始进程调度
-    cur_proc = &empty_proc;
+    // 启动调度器
+    sheduling_enabled = true;
 
     // log_info("进程调度测试");
     // proc_test();

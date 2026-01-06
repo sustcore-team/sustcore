@@ -11,8 +11,8 @@
 
 #include "proc.h"
 
-#include <cap/pcb_cap.h>
 #include <cap/not_cap.h>
+#include <cap/pcb_cap.h>
 #include <cap/tcb_cap.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
@@ -34,16 +34,14 @@
 
 PCB *proc_list_head;
 PCB *proc_list_tail;
-
-PCB *rp_list_heads[RP_LEVELS];
-PCB *rp_list_tails[RP_LEVELS];
-
-WaitingPCB *waiting_list_head;
-WaitingPCB *waiting_list_tail;
-
-PCB *cur_proc;
-
 PCB empty_proc;
+TCB empty_thread;
+
+WaitingTCB *waiting_list_head;
+WaitingTCB *waiting_list_tail;
+TCB *rp_list_heads[RP_LEVELS];
+TCB *rp_list_tails[RP_LEVELS];
+TCB *cur_thread;
 
 // PID, TID 的分配
 static tid_t TIDALLOC = 1;
@@ -54,6 +52,21 @@ static inline tid_t get_current_tid(void) {
 
 static inline tid_t get_current_pid(void) {
     return get_current_tid();
+}
+
+const char *thread_state_to_string(ThreadState state) {
+    switch (state) {
+        case TS_EMPTY:     return "EMPTY";
+        case TS_READY:     return "READY";
+        case TS_RUNNING:   return "RUNNING";
+        case TS_BLOCKED:   return "BLOCKED";
+        case TS_SUSPENDED: return "SUSPENDED";
+        case TS_WAITING:   return "WAITING";
+        case TS_ZOMBIE:    return "ZOMBIE";
+        case TS_UNUSED:    return "UNUSED";
+        case TS_YIELD:     return "YIELD";
+        default:           return "UNKNOWN";
+    }
 }
 
 /**
@@ -70,11 +83,7 @@ void proc_init(void) {
     ordered_list_init(RP3_LIST);
 
     // 将当前进程设为空
-    cur_proc = nullptr;
-
-    // 设置空闲进程
-    // PID 0 保留给空进程
-    memset(&empty_proc, 0, sizeof(PCB));
+    cur_thread = nullptr;
 }
 
 // 初始化PCB块
@@ -87,12 +96,8 @@ PCB *init_pcb(TM *tm, int rp_level, PCB *parent, void *thread_stack_base,
 
     PCB *p = (PCB *)kmalloc(sizeof(PCB));
     memset(p, 0, sizeof(PCB));
-    p->pid          = get_current_pid();
-    p->rp_level     = rp_level;
-    p->called_count = 0;
-    p->priority     = priority;
-    p->run_time     = 0;
-    p->state        = TS_READY;
+    p->pid      = get_current_pid();
+    p->rp_level = rp_level;
 
     p->thread_stack_base = thread_stack_base;
 
@@ -108,7 +113,6 @@ PCB *init_pcb(TM *tm, int rp_level, PCB *parent, void *thread_stack_base,
 
     // 初始化各个链表
     list_init(THREAD_LIST(p));
-    ordered_list_init(READY_THREAD_LIST(p));
     list_init(CHILDREN_TASK_LIST(p));
     list_init(CAPABILITY_LIST(p));
 
@@ -159,13 +163,12 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
         return nullptr;
     }
 
-    p->main_thread    = main_thread;
-    p->current_thread = nullptr;
+    p->main_thread = main_thread;
 
     // 为当前进程构造自己的PCB能力
-    CapPtr pcb_cap_ptr = create_pcb_cap(p);
+    CapPtr pcb_cap_ptr   = create_pcb_cap(p);
     // 为当前进程构造主线程能力
-    CapPtr main_tcb_ptr = create_tcb_cap(p, main_thread);
+    CapPtr main_tcb_ptr  = create_tcb_cap(p, main_thread);
     // 为当前进程构造Notification能力
     CapPtr notif_cap_ptr = create_notification_cap(p);
 
@@ -177,7 +180,7 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
     arch_setup_argument(p->main_thread, 3, notif_cap_ptr.val);
 
     // 将主线程加入到就绪线程链表
-    insert_ready_process(p);
+    insert_ready_thread(main_thread);
 
     return p;
 }
@@ -200,13 +203,6 @@ PCB *fork_task(PCB *parent) {
         return nullptr;
     }
 
-    // 复制父进程的调度信息
-    p->called_count = parent->called_count;
-    p->priority     = parent->priority;
-    p->rp1_count    = parent->rp1_count;
-    p->rp2_count    = parent->rp2_count;
-    p->run_time     = parent->run_time;
-
     // 复制父进程的主线程
     TCB *child_main_thread = fork_thread(p, parent->main_thread);
     if (child_main_thread == nullptr) {
@@ -214,10 +210,9 @@ PCB *fork_task(PCB *parent) {
         terminate_pcb(p);
         return nullptr;
     }
-    p->main_thread    = child_main_thread;
-    p->current_thread = nullptr;
+    p->main_thread = child_main_thread;
 
-    insert_ready_process(p);
+    insert_ready_thread(p->main_thread);
 
     mem_display_mapping_layout(p->tm->pgd);
     return p;
@@ -241,7 +236,7 @@ void *alloc_thread_stack(PCB *proc, size_t size) {
     size_t aligned_size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
     // 计算栈地址
-    void *stack_top = proc->thread_stack_base;
+    void *stack_top    = proc->thread_stack_base;
     void *stack_bottom = stack_top - aligned_size;
 
     // 更新进程的线程栈基址
@@ -277,6 +272,9 @@ TCB *create_tcb(PCB *proc, int priority) {
     // 设置基本信息
     t->tid      = get_current_tid();
     t->priority = priority;
+    t->rp1_count = 0;
+    t->rp2_count = 0;
+    t->run_time  = 0;
 
     // 初始化内核栈
     t->kstack = kmalloc(PAGE_SIZE);
@@ -313,12 +311,9 @@ TCB *new_thread(PCB *proc, void *entrypoint, void *stack, int priority) {
     t->entrypoint = entrypoint;
 
     // 设置ip, sp
-    *t->ip = entrypoint;
-    *t->sp = stack;
+    *t->ip   = entrypoint;
+    *t->sp   = stack;
     t->state = TS_READY;
-
-    // 加入到进程的待命线程链表
-    ordered_list_insert(t, READY_THREAD_LIST(proc));
     return t;
 }
 
@@ -343,8 +338,6 @@ TCB *fork_thread(PCB *p, TCB *parent_thread) {
 
     // 复制上下文
     memcpy(t->ctx, parent_thread->ctx, sizeof(RegCtx));
-    // 将该线程加入到就绪线程链表
-    ordered_list_insert(t, READY_THREAD_LIST(p));
     return t;
 }
 
@@ -417,12 +410,6 @@ void terminate_caps(PCB *p) {
 void terminate_pcb(PCB *p) {
     if (p == nullptr) {
         log_error("kill_pcb: 传入的PCB指针为空");
-        return;
-    }
-    if (p->state != TS_ZOMBIE) {
-        log_error(
-            "terminate_pcb: 只能清理处于ZOMBIE状态的进程 (pid=%d, state=%d)",
-            p->pid, p->state);
         return;
     }
     // 清理所有的线程

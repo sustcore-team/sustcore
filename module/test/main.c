@@ -28,12 +28,18 @@ void thread_test_1(void) {
     printf("线程1等待通知32号\n");
     wait_notification(thread_cap, notif, 32);
     printf("线程1收到通知32号\n");
+    printf("线程1重置通知32号\n");
+    notification_reset(notif, 32);
+
     // 发送64号通知
     printf("线程1发送通知64号\n");
     notification_set(notif, 64);
+
     printf("线程1等待通知32号\n");
     wait_notification(thread_cap, notif, 32);
     printf("线程1收到通知32号\n");
+    printf("线程1重置通知32号\n");
+    notification_reset(notif, 32);
 
     // 等待128号通知(不会被发送)
     wait_notification(thread_cap, notif, 128);
@@ -54,11 +60,15 @@ void thread_test_2(void) {
     printf("线程2等待通知64号\n");
     wait_notification(thread_cap, notif, 64);
     printf("线程2收到通知64号\n");
+    printf("线程2重置通知64号\n");
+    notification_reset(notif, 64);
+
     printf("线程2发送通知96号\n");
     notification_set(notif, 96);
 
     // 等待128号通知(不会被发送)
     wait_notification(thread_cap, notif, 128);
+    while(true);
 }
 
 void test_2(int a, const char *str) {
@@ -81,11 +91,14 @@ void test_2(int a, const char *str) {
     CapPtr notif = get_notification_cap();
     wait_notification(main_thread_cap, notif, 96);
     printf("主线程收到通知96号\n");
+    printf("主线程重置通知96号\n");
+    notification_reset(notif, 96);
     printf("主线程发送通知32号\n");
     notification_set(notif, 32);
 
     // 等待128号通知(不会被发送)
     wait_notification(main_thread_cap, notif, 128);
+    while(true);
 }
 
 int kmod_main(void) {
@@ -93,7 +106,5 @@ int kmod_main(void) {
     printf("测试模块启动! PID=%d\n", pid);
 
     test_2(2, "A");
-
-
     return 0;
 }

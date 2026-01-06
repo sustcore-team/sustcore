@@ -12,10 +12,10 @@
 #include <cap/not_cap.h>
 #include <cap/pcb_cap.h>
 #include <cap/tcb_cap.h>
+#include <mem/alloc.h>
+#include <string.h>
 #include <task/proc.h>
 #include <task/scheduler.h>
-#include <string.h>
-#include <mem/alloc.h>
 
 #ifdef DLOG_CAP
 #define DISABLE_LOGGING
@@ -40,7 +40,7 @@ CapPtr create_notification_cap(PCB *p) {
     Notification *notif = (Notification *)kmalloc(sizeof(Notification));
     memset(notif, 0, sizeof(Notification));
     notif->notif_id = NID_COUNTER;
-    NID_COUNTER ++;
+    NID_COUNTER++;
 
     return create_cap(p, CAP_TYPE_NOT, (void *)notif, (void *)priv);
 }
@@ -55,11 +55,11 @@ CapPtr create_notification_cap(PCB *p) {
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      NotificationCapPriv priv)
-{
-    NOT_CAP_START(src_p, src_ptr, not_cap_derive, cap, notif, old_priv, INVALID_CAP_PTR);
+                      NotificationCapPriv priv) {
+    NOT_CAP_START(src_p, src_ptr, not_cap_derive, cap, notif, old_priv,
+                  INVALID_CAP_PTR);
 
-    (void)notif; // 未使用, 特地标记以避免编译器警告
+    (void)notif;  // 未使用, 特地标记以避免编译器警告
 
     if (!old_priv->priv_derive) {
         log_error("该能力不具有derive权限!");
@@ -70,10 +70,9 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
     // 逐个QWORD检查
     // 新权限位图必须是旧权限位图的子集
     // 即 old_priv => priv
-    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++)
-    {
+    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
         if (!BITS_IMPLIES(old_priv->priv_check[i], priv.priv_check[i]) ||
-            !BITS_IMPLIES(old_priv->priv_set[i],   priv.priv_set[i])   ||
+            !BITS_IMPLIES(old_priv->priv_set[i], priv.priv_set[i]) ||
             !BITS_IMPLIES(old_priv->priv_reset[i], priv.priv_reset[i]))
         {
             log_error("派生的权限无效!");
@@ -81,7 +80,7 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
         }
     }
 
-    if (! BOOL_IMPLIES(old_priv->priv_derive, priv.priv_derive)) {
+    if (!BOOL_IMPLIES(old_priv->priv_derive, priv.priv_derive)) {
         log_error("派生的权限无效!");
         return INVALID_CAP_PTR;
     }
@@ -102,80 +101,43 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_clone, cap, notif, old_priv, INVALID_CAP_PTR);
+    NOT_CAP_START(src_p, src_ptr, not_cap_clone, cap, notif, old_priv,
+                  INVALID_CAP_PTR);
 
-    (void)notif; // 未使用, 特地标记以避免编译器警告
+    (void)notif;  // 未使用, 特地标记以避免编译器警告
 
     // 进行完全克隆
     return not_cap_derive(src_p, src_ptr, dst_p, *old_priv);
 }
 
 void check_notification(Notification *notif) {
-    // 检查是否有被等待的通知到达
-    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
-        qword arrived = notif->bitmap[i] & notif->wait_bitmap[i];
-        if (arrived == 0) {
+    // 遍历等待队列, 检查是否有线程/进程在等待该通知
+    WaitingTCB *wtcb;
+    foreach_list(wtcb, WAITING_LIST) {
+        // 检查是否在等待该通知ID
+        if (wtcb->reason.type != WAITING_NOTIFICATION ||
+            wtcb->reason.notif.notif_id != notif->notif_id)
+        {
             continue;
         }
-        // 有通知到达
-        // 唤醒等待该通知的线程
 
-        // 通知不会被自动清除, 需要由被唤醒的线程/进程手动清除
-        // 首先遍历所有的等待进程
-        WaitingPCB *wpcb = nullptr;
-        foreach_list(wpcb, WAITING_PROC_LIST) {
-            // 检查该等待进程是否在等待该通知
-            if (wpcb->reason.type != WAITING_NOTIFICATION) {
-                continue;
-            }
-            // 是否等待该通知
-            if (wpcb->reason.notif.notif_id != notif->notif_id) {
-                continue;
-            }
-            // 检查位图
-            if ((notif->bitmap[i] & wpcb->reason.notif.bitmap[i]) != 0) {
-                // 该位有通知到达
-                // 唤醒该进程
-                wakeup_process(wpcb->pcb);
-                // 删除wpcb
-                list_remove(wpcb, WAITING_PROC_LIST);
-                kfree(wpcb);
+        // 检查等待位图与通知位图的交集
+        bool notified = false;
+        for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
+            if (notif->bitmap[i] & wtcb->reason.notif.bitmap[i]) {
+                notified = true;
                 break;
             }
         }
-        // 首先遍历所有的等待线程
-        PCB *pcb = nullptr;
-        foreach_list(pcb, PROC_LIST) {
-            WaitingTCB *wtcb = nullptr;
-            foreach_list(wtcb, WAITING_THREAD_LIST(pcb)) {
-                // 检查该等待线程是否在等待该通知
-                if (wtcb->reason.type != WAITING_NOTIFICATION) {
-                    continue;
-                }
-                // 是否等待该通知
-                if (wtcb->reason.notif.notif_id != notif->notif_id) {
-                    continue;
-                }
-                // 检查位图
-                if ((notif->bitmap[i] & wtcb->reason.notif.bitmap[i]) != 0) {
-                    // 该位有通知到达
-                    // 唤醒该线程
-                    wakeup_thread(wtcb->tcb);
-                    // 删除wtcb
-                    list_remove(wtcb, WAITING_THREAD_LIST(pcb));
-                    kfree(wtcb);
-                    break;
-                }
-            }
-        }
 
-        // 将wait位图中已到达的通知位清除
-        notif->wait_bitmap[i] &= ~arrived;
+        if (notified) {
+            // 唤醒该线程/进程
+            wakeup_thread(wtcb);
+        }
     }
 }
 
-void not_cap_set(PCB *p, CapPtr ptr, int notification_id)
-{
+void not_cap_set(PCB *p, CapPtr ptr, int notification_id) {
     NOT_CAP_START(p, ptr, not_cap_set, cap, notif, priv, );
 
     int qword_index = notification_id / 64;
@@ -211,8 +173,7 @@ void not_cap_set(PCB *p, CapPtr ptr, int notification_id)
  * @param ptr 能力指针
  * @param notification_id 通知ID (0-255)
  */
-void not_cap_reset(PCB *p, CapPtr ptr, int notification_id)
-{
+void not_cap_reset(PCB *p, CapPtr ptr, int notification_id) {
     NOT_CAP_START(p, ptr, not_cap_reset, cap, notif, priv, );
 
     int qword_index = notification_id / 64;
@@ -247,8 +208,7 @@ void not_cap_reset(PCB *p, CapPtr ptr, int notification_id)
  * @return true 通知已设置
  * @return false 通知未设置
  */
-bool not_cap_check(PCB *p, CapPtr ptr, int notification_id)
-{
+bool not_cap_check(PCB *p, CapPtr ptr, int notification_id) {
     NOT_CAP_START(p, ptr, not_cap_reset, cap, notif, priv, false);
 
     int qword_index = notification_id / 64;
@@ -276,57 +236,7 @@ bool not_cap_check(PCB *p, CapPtr ptr, int notification_id)
 
 /**
  * @brief 等待通知
- * 
- * @param p 当前进程PCB指针
- * @param pcb_ptr PCB能力指针
- * @param not_ptr 通知能力指针
- * @param wait_bitmap 等待位图(应当总长256位)
- * @return true 通知已到达
- * @return false 通知未到达
- */
-bool pcb_cap_wait_notification(PCB *p, CapPtr pcb_ptr, CapPtr not_ptr, qword *wait_bitmap)
-{
-    NOT_CAP_START(p, not_ptr, pcb_cap_wait_notification, not_cap, notif, not_priv, false);
-    PCB_CAP_START(p, pcb_ptr, pcb_cap_wait_notification, pcb_cap, pcb, pcb_priv, false);
-
-    if (pcb_priv->priv_wait_notification == false) {
-        log_error("该PCB能力不具有等待通知的权限!");
-        return false;
-    }
-
-    // 遍历位图确认是否可以等待
-    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
-        // 检查是否每个位都有权限等待
-        if (wait_bitmap[i] & ~(not_priv->priv_check[i])) {
-            log_error("等待位图中包含无权限等待的通知ID!");
-            return false;
-        }
-    }
-
-    // 将这些位设置为被等待状态
-    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
-        notif->wait_bitmap[i] |= wait_bitmap[i];
-    }
-
-    // 向等待队列中添加当前进程
-    WaitingPCB *wpcb = (WaitingPCB *)kmalloc(sizeof(WaitingPCB));
-    wpcb->pcb = pcb;
-    wpcb->reason.type = WAITING_NOTIFICATION;
-    wpcb->reason.notif.notif_id = notif->notif_id;
-    wpcb->reason.notif.cap_ptr = not_ptr;
-    memcpy(wpcb->reason.notif.bitmap, wait_bitmap, sizeof(qword) * NOTIFICATION_BITMAP_QWORDS);
-    pcb->state = TS_WAITING;
-    list_push_front(wpcb, WAITING_PROC_LIST);
-
-    // 检查是否有通知已经到达
-    check_notification(notif);
-
-    return true;
-}
-
-/**
- * @brief 等待通知
- * 
+ *
  * @param p 当前进程PCB指针
  * @param tcb_ptr TCB能力指针
  * @param not_ptr 通知能力指针
@@ -334,10 +244,12 @@ bool pcb_cap_wait_notification(PCB *p, CapPtr pcb_ptr, CapPtr not_ptr, qword *wa
  * @return true 通知已到达
  * @return false 通知未到达
  */
-bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr, qword *wait_bitmap)
-{
-    NOT_CAP_START(p, not_ptr, pcb_cap_wait_notification, not_cap, notif, not_priv, false);
-    TCB_CAP_START(p, tcb_ptr, pcb_cap_wait_notification, tcb_cap, tcb, tcb_priv, false);
+bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
+                               qword *wait_bitmap) {
+    NOT_CAP_START(p, not_ptr, pcb_cap_wait_notification, not_cap, notif,
+                  not_priv, false);
+    TCB_CAP_START(p, tcb_ptr, pcb_cap_wait_notification, tcb_cap, tcb, tcb_priv,
+                  false);
 
     if (tcb_priv->priv_wait_notification == false) {
         log_error("该PCB能力不具有等待通知的权限!");
@@ -353,20 +265,17 @@ bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr, qword *wa
         }
     }
 
-    // 将这些位设置为被等待状态
-    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
-        notif->wait_bitmap[i] |= wait_bitmap[i];
-    }
-
     // 向等待队列中添加当前线程
-    WaitingTCB *wtcb = (WaitingTCB *)kmalloc(sizeof(WaitingTCB));
-    wtcb->tcb = tcb;
-    wtcb->reason.type = WAITING_NOTIFICATION;
+    // TODO: 这部分应当移交到scheduler模块中处理
+    WaitingTCB *wtcb            = (WaitingTCB *)kmalloc(sizeof(WaitingTCB));
+    wtcb->tcb                   = tcb;
+    wtcb->reason.type           = WAITING_NOTIFICATION;
     wtcb->reason.notif.notif_id = notif->notif_id;
-    wtcb->reason.notif.cap_ptr = not_ptr;
-    memcpy(wtcb->reason.notif.bitmap, wait_bitmap, sizeof(qword) * NOTIFICATION_BITMAP_QWORDS);
+    wtcb->reason.notif.cap_ptr  = not_ptr;
+    memcpy(wtcb->reason.notif.bitmap, wait_bitmap,
+           sizeof(qword) * NOTIFICATION_BITMAP_QWORDS);
     tcb->state = TS_WAITING;
-    list_push_front(wtcb, WAITING_THREAD_LIST(tcb->pcb));
+    list_push_front(wtcb, WAITING_LIST);
 
     // 检查是否有通知已经到达
     check_notification(notif);

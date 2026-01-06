@@ -104,10 +104,7 @@ void general_isr(void) {
         general_exception(scause, sepc, stval, reglist_ptr);
     }
 
-    if (cur_proc != nullptr) {
-        after_interrupt(&reglist_ptr);
-    }
-
+    after_interrupt(&reglist_ptr);
     ISR_SERVICE_END(general_isr);
 }
 
@@ -115,11 +112,8 @@ ISR_SERVICE_ATTRIBUTE
 void timer_isr(void) {
     ISR_SERVICE_START(timer_isr, 128);
 
-    if (cur_proc != nullptr) {
-        // TODO: 计算时间间隔
-        schedule(&reglist_ptr, 10);
-    }
-
+    // TODO: 计算时间间隔
+    schedule(&reglist_ptr, 10);
     timer_handler(scause, sepc, stval, reglist_ptr);
 
     ISR_SERVICE_END(timer_isr);
