@@ -14,11 +14,17 @@
 #include <cap/capability.h>
 #include <task/task_struct.h>
 
+// 设置线程优先级权限
 extern const qword TCB_PRIV_SET_PRIORITY[PRIVILEDGE_QWORDS];
+// 挂起线程权限
 extern const qword TCB_PRIV_SUSPEND[PRIVILEDGE_QWORDS];
+// 恢复线程权限
 extern const qword TCB_PRIV_RESUME[PRIVILEDGE_QWORDS];
+// 终止线程权限
 extern const qword TCB_PRIV_TERMINATE[PRIVILEDGE_QWORDS];
+// 线程yield权限
 extern const qword TCB_PRIV_YIELD[PRIVILEDGE_QWORDS];
+// 线程等待通知权限
 extern const qword TCB_PRIV_WAIT_NOTIFICATION[PRIVILEDGE_QWORDS];
 
 /**
@@ -29,6 +35,39 @@ extern const qword TCB_PRIV_WAIT_NOTIFICATION[PRIVILEDGE_QWORDS];
  * @return CapPtr 能力指针
  */
 CapPtr create_tcb_cap(PCB *p, TCB *tcb);
+
+/**
+ * @brief 从src_p的src_ptr能力派生一个新的TCB能力到dst_p
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param priv 新权限
+ * @return CapPtr 新的能力指针
+ */
+CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
+                      qword priv[PRIVILEDGE_QWORDS]);
+
+/**
+ * @brief 从src_p的src_ptr能力派生一个新的TCB能力到dst_p, 并保留原权限
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @return CapPtr 新的能力指针
+ */
+CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
+
+/**
+ * @brief 将能力降级为更低权限的能力
+ *
+ * @param p 当前进程PCB指针
+ * @param cap_ptr 能力指针
+ * @param cap_priv 新的能力权限
+ * @return CapPtr 降级后的能力指针(和cap_ptr相同)
+ */
+CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,
+                       qword cap_priv[PRIVILEDGE_QWORDS]);
 
 /**
  * @brief 解包TCB能力, 获得TCB指针

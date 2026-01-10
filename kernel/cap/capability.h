@@ -122,9 +122,13 @@ inline static bool derivable(const qword parent_priv[PRIVILEDGE_QWORDS],
     return true;
 }
 
+// 解包能力权限
 extern const qword CAP_PRIV_UNPACK[PRIVILEDGE_QWORDS];
+// 派生能力权限
 extern const qword CAP_PRIV_DERIVE[PRIVILEDGE_QWORDS];
+// 全部权限
 extern const qword CAP_ALL_PRIV[PRIVILEDGE_QWORDS];
+// 无权限
 extern const qword CAP_NONE_PRIV[PRIVILEDGE_QWORDS];
 
 /**
@@ -137,6 +141,18 @@ extern const qword CAP_NONE_PRIV[PRIVILEDGE_QWORDS];
  */
 CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv[PRIVILEDGE_QWORDS],
                   void *attached_priv);
+
+/**
+ * @brief 降级能力
+ *
+ * @param p 进程控制块
+ * @param cap_ptr 能力指针
+ * @param new_priv 新权限
+ * @return true 降级成功
+ * @return false 降级失败
+ */
+bool degrade_cap(PCB *p, Capability *cap,
+                 const qword new_priv[PRIVILEDGE_QWORDS]);
 
 /**
  * @brief 能力类型转字符串

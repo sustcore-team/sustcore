@@ -213,6 +213,20 @@ CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv[PRIVILEDGE_QWORDS],
     return ptr;
 }
 
+bool degrade_cap(PCB *p, Capability *cap,
+                 const qword new_priv[PRIVILEDGE_QWORDS]) {
+    // 附加权限由各个能力类型自行检查
+
+    if (!derivable(cap->cap_priv, new_priv)) {
+        log_error("degrade_cap: 父能力权限不包含子能力权限, 无法降级!");
+        return false;
+    }
+
+    // 复制新能力权限
+    memcpy(cap->cap_priv, new_priv, sizeof(qword) * PRIVILEDGE_QWORDS);
+    return true;
+}
+
 const char *cap_type_to_string(CapType type) {
     switch (type) {
         case CAP_TYPE_NUL:    return "CAP_TYPE_NUL";

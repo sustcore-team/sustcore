@@ -14,10 +14,16 @@
 #include <cap/capability.h>
 #include <task/task_struct.h>
 
+// 退出进程权限
 extern const qword PCB_PRIV_EXIT[PRIVILEDGE_QWORDS];
+// fork新进程权限
 extern const qword PCB_PRIV_FORK[PRIVILEDGE_QWORDS];
+// 获取PID权限
 extern const qword PCB_PRIV_GETPID[PRIVILEDGE_QWORDS];
+// 创建线程权限
 extern const qword PCB_PRIV_CREATE_THREAD[PRIVILEDGE_QWORDS];
+// 遍历能力权限
+extern const qword PCB_PRIV_FOREACH_CAPS[PRIVILEDGE_QWORDS];
 
 /**
  * @brief 构造PCB能力
@@ -51,13 +57,24 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
 CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
 
 /**
+ * @brief 将能力降级为更低权限的能力
+ * 
+ * @param p 当前进程PCB指针
+ * @param cap_ptr 能力指针
+ * @param cap_priv 新的能力权限
+ * @return CapPtr 降级后的能力指针(和cap_ptr相同)
+ */
+CapPtr pcb_cap_degrade(PCB *p, CapPtr cap_ptr,
+                       qword cap_priv[PRIVILEDGE_QWORDS]);
+
+/**
  * @brief 解包PCB能力, 获得PCB指针
  *
  * @param p 当前进程PCB指针
  * @param cap_ptr 能力指针
  * @return PCB* PCB指针
  */
-PCB *pcb_cap_unwrap(PCB *p, CapPtr cap_ptr);
+PCB *pcb_cap_unpack(PCB *p, CapPtr cap_ptr);
 
 /**
  * @brief 退出进程

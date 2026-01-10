@@ -22,6 +22,10 @@
 
 #include <basec/logger.h>
 
+//============================================
+// PCB能力权限常量
+//============================================
+
 const qword PCB_PRIV_EXIT[PRIVILEDGE_QWORDS] = {
     [0] = 0x0000'0000'0000'0000ull,
     [1] = 0x0000'0000'0000'0001ull,
@@ -50,6 +54,17 @@ const qword PCB_PRIV_CREATE_THREAD[PRIVILEDGE_QWORDS] = {
     [3] = 0x0000'0000'0000'0000ull,
 };
 
+const qword PCB_PRIV_FOREACH_CAPS[PRIVILEDGE_QWORDS] = {
+    [0] = 0x0000'0000'0000'0000ull,
+    [1] = 0x0000'0000'0000'0010ull,
+    [2] = 0x0000'0000'0000'0000ull,
+    [3] = 0x0000'0000'0000'0000ull,
+};
+
+//============================================
+// PCB能力构造相关操作
+//============================================
+
 CapPtr create_pcb_cap(PCB *p) {
     return create_cap(p, CAP_TYPE_PCB, (void *)p, CAP_ALL_PRIV, nullptr);
 }
@@ -58,7 +73,7 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                       qword priv[PRIVILEDGE_QWORDS]) {
     PCB_CAP_START(src_p, src_ptr, pcb_cap_derive, cap, pcb, CAP_NONE_PRIV,
                   INVALID_CAP_PTR);
-    (void) pcb;
+    (void)pcb;
 
     // 进行派生
     return derive_cap(dst_p, cap, priv, nullptr);
@@ -74,11 +89,28 @@ CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
     return pcb_cap_derive(src_p, src_ptr, dst_p, cap->cap_priv);
 }
 
+CapPtr pcb_cap_degrade(PCB *p, CapPtr cap_ptr,
+                       qword cap_priv[PRIVILEDGE_QWORDS]) {
+    PCB_CAP_START(p, cap_ptr, pcb_cap_degrade, cap, pcb, CAP_NONE_PRIV,
+                  INVALID_CAP_PTR);
+    (void)pcb;  // 未使用, 特地标记以避免编译器警告
+
+    if (!degrade_cap(p, cap, cap_priv)) {
+        return INVALID_CAP_PTR;
+    }
+
+    return cap_ptr;
+}
+
 PCB *pcb_cap_unpack(PCB *p, CapPtr cap_ptr) {
     PCB_CAP_START(p, cap_ptr, pcb_cap_unpack, cap, pcb, CAP_PRIV_UNPACK,
                   nullptr);
     return pcb;
 }
+
+//============================================
+// PCB能力对象操作相关操作
+//============================================
 
 void pcb_cap_exit(PCB *p, CapPtr cap_ptr) {
     PCB_CAP_START(p, cap_ptr, pcb_cap_exit, cap, pcb, PCB_PRIV_EXIT, );

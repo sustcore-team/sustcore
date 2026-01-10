@@ -22,6 +22,10 @@
 #endif
 #include <basec/logger.h>
 
+//============================================
+
+// NOTIFICATION附加权限常量
+
 const NotCapPriv NOTIFICATION_ALL_PRIV = {
     .priv_check = {QWORD_MAX, QWORD_MAX, QWORD_MAX, QWORD_MAX},
     .priv_set   = {QWORD_MAX, QWORD_MAX, QWORD_MAX, QWORD_MAX},
@@ -34,6 +38,8 @@ const NotCapPriv NOTIFICATION_NONE_PRIV = {
     .priv_reset = {0, 0, 0, 0},
 };
 
+// NID计算辅助函数
+
 static int nid_qword_idx(int nid) {
     return nid / 64;
 }
@@ -41,6 +47,8 @@ static int nid_qword_idx(int nid) {
 static int nid_bit_idx(int nid) {
     return nid % 64;
 }
+
+// 权限操作函数
 
 NotCapPriv *not_priv_set(NotCapPriv *priv, int nid) {
     int qword_index = nid_qword_idx(nid);
@@ -118,6 +126,11 @@ bool notification_derivable(const NotCapPriv *parent_priv, const NotCapPriv *chi
     return true;
 }
 
+//============================================
+// Notification能力构造相关操作
+//============================================
+
+// NID分配计数器
 static int NID_COUNTER = 0;
 
 CapPtr create_notification_cap(PCB *p) {
@@ -135,15 +148,6 @@ CapPtr create_notification_cap(PCB *p) {
                       (void *)priv);
 }
 
-/**
- * @brief 从src_p的src_ptr能力派生一个新的Notification能力到dst_p
- *
- * @param src_p   源进程
- * @param src_ptr 源能力
- * @param dst_p   目标进程
- * @param priv    新权限
- * @return CapPtr 派生出的能力指针
- */
 CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                       qword cap_priv[PRIVILEDGE_QWORDS],
                       NotCapPriv *notif_priv) {
@@ -173,14 +177,6 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
     return ptr;
 }
 
-/**
- * @brief 从src_p的src_ptr能力克隆一个Notification能力到dst_p
- *
- * @param src_p   源进程
- * @param src_ptr 源能力
- * @param dst_p   目标进程
- * @return CapPtr 派生出的能力指针
- */
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
     NOT_CAP_START(src_p, src_ptr, not_cap_derive, cap, notif, CAP_NONE_PRIV,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
@@ -191,7 +187,58 @@ CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
                           (NotCapPriv *)cap->attached_priv);
 }
 
-void check_notification(Notification *notif) {
+CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
+                       qword cap_priv[PRIVILEDGE_QWORDS],
+                       NotCapPriv *notif_priv) {
+    NOT_CAP_START(p, cap_ptr, not_cap_degrade, cap, notif, CAP_NONE_PRIV,
+                  &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
+    (void)notif;  // 未使用, 特地标记以避免编译器警告
+
+    // 只需要检查附加权限即可
+    if (!notification_derivable((NotCapPriv *)cap->attached_priv, notif_priv)) {
+        log_error("not_cap_degrade: 父能力权限不包含子能力权限, 无法降级!");
+        return INVALID_CAP_PTR;
+    }
+
+    // 基础权限降级成功再进行附加权限更新
+    if (! degrade_cap(p, cap, cap_priv)) {
+        return INVALID_CAP_PTR;
+    }
+
+    memcpy(cap->attached_priv, notif_priv, sizeof(NotCapPriv));
+    return cap_ptr;
+}
+
+Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr)
+{
+    NOT_CAP_START(p, cap_ptr, not_cap_unpack, cap, notif, CAP_PRIV_UNPACK,
+                  &NOTIFICATION_NONE_PRIV, nullptr);
+    return notif;
+}
+
+//============================================
+// Notification能力对象操作相关操作
+//============================================
+
+/**
+ * @brief 检查通知是否已被设置
+ * 
+ * @param notif 通知结构体指针
+ * @param wait_bitmap 等待位图
+ * @return true 通知已设置
+ * @return false 通知未设置
+ */
+static bool is_notified(Notification *notif, qword *wait_bitmap) {
+    // 检查等待位图与通知位图的交集
+    for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
+        if (notif->bitmap[i] & wait_bitmap[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void check_notification(Notification *notif) {
     // 遍历等待队列, 检查是否有线程/进程在等待该通知
     WaitingTCB *wtcb;
     foreach_list(wtcb, WAITING_LIST) {
@@ -202,16 +249,7 @@ void check_notification(Notification *notif) {
             continue;
         }
 
-        // 检查等待位图与通知位图的交集
-        bool notified = false;
-        for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
-            if (notif->bitmap[i] & wtcb->reason.notif.bitmap[i]) {
-                notified = true;
-                break;
-            }
-        }
-
-        if (notified) {
+        if (is_notified(notif, wtcb->reason.notif.bitmap)) {
             // 唤醒该线程/进程
             wakeup_thread(wtcb);
         }
@@ -313,6 +351,10 @@ bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
 
     TCB_CAP_START(p, tcb_ptr, tcb_cap_wait_notification, tcb_cap, tcb,
                   TCB_PRIV_WAIT_NOTIFICATION, false);
+
+    if (is_notified(notif, wait_bitmap)) {
+        return true;
+    }
 
     // 向等待队列中添加当前线程
     // TODO: 这部分应当移交到scheduler模块中处理

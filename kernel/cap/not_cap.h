@@ -36,14 +36,48 @@ typedef struct {
     qword priv_check[NOTIFICATION_BITMAP_QWORDS];  // 检查通知的权限位
 } NotCapPriv;
 
+// Notification附加权限 - 全部权限
 extern const NotCapPriv NOTIFICATION_ALL_PRIV;
+// Notification附加权限 - 无权限
 extern const NotCapPriv NOTIFICATION_NONE_PRIV;
 
+/**
+ * @brief 设置设置通知位权限
+ *
+ * @param priv 通知能力权限指针
+ * @param nid 通知ID
+ * @return NotCapPriv* 设置后的权限指针
+ */
 NotCapPriv *not_priv_set(NotCapPriv *priv, int nid);
+
+/**
+ * @brief 设置清除通知位权限
+ *
+ * @param priv 通知能力权限指针
+ * @param nid 通知ID
+ * @return NotCapPriv* 设置后的权限指针
+ */
 NotCapPriv *not_priv_reset(NotCapPriv *priv, int nid);
+
+/**
+ * @brief 设置检查通知位权限
+ *
+ * @param priv 通知能力权限指针
+ * @param nid 通知ID
+ * @return NotCapPriv* 设置后的权限指针
+ */
 NotCapPriv *not_priv_check(NotCapPriv *priv, int nid);
 
-bool notification_derivable(const NotCapPriv *parent_priv, const NotCapPriv *child_priv);
+/**
+ * @brief 通知附加权限派生检查
+ *
+ * @param parent_priv 通知能力父权限
+ * @param child_priv 通知能力子权限
+ * @return true 可派生
+ * @return false 不可派生
+ */
+bool notification_derivable(const NotCapPriv *parent_priv,
+                            const NotCapPriv *child_priv);
 
 /**
  * @brief 构造Notification能力
@@ -75,6 +109,29 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
+
+/**
+ * @brief 将能力降级为更低权限的能力
+ *
+ * @param p 当前进程PCB指针
+ * @param cap_ptr 能力指针
+ * @param cap_priv 新的能力权限
+ * @param notif_priv 新的通知权限
+ * @return CapPtr 降级后的能力指针(和cap_ptr相同)
+ */
+CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
+                       qword cap_priv[PRIVILEDGE_QWORDS],
+                       NotCapPriv *notif_priv);
+
+/**
+ * @brief 解包Notification能力, 获取其数据指针
+ * @param p 当前进程PCB指针
+ * @param cap_ptr 能力指针
+ * @return Notification* 通知数据指针
+ */
+Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr);
+
+//====================================================
 
 /**
  * @brief 设置通知位
