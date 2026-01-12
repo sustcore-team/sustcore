@@ -93,12 +93,28 @@ CapPtr create_notification_cap(PCB *p);
  * @param src_p   源进程
  * @param src_ptr 源能力
  * @param dst_p   目标进程
- * @param priv    新权限
+ * @param cap_priv    新权限
+ * @param notif_priv 新通知权限
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                       qword cap_priv[PRIVILEDGE_QWORDS],
                       NotCapPriv *notif_priv);
+
+/**
+ * @brief 从src_p的src_ptr能力派生一个新的Notification能力到dst_p
+ *
+ * @param src_p   源进程
+ * @param src_ptr 源能力
+ * @param dst_p   目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @param cap_priv    新权限
+ * @param notif_priv 新通知权限
+ * @return CapPtr 派生出的能力指针
+ */
+CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
+                         qword cap_priv[PRIVILEDGE_QWORDS],
+                         NotCapPriv *notif_priv);
 
 /**
  * @brief 从src_p的src_ptr能力克隆一个Notification能力到dst_p
@@ -109,6 +125,17 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
+
+/**
+ * @brief 从src_p的src_ptr能力克隆一个Notification能力到dst_p
+ *
+ * @param src_p   源进程
+ * @param src_ptr 源能力
+ * @param dst_p   目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @return CapPtr 派生出的能力指针
+ */
+CapPtr not_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
 
 /**
  * @brief 将能力降级为更低权限的能力
@@ -180,31 +207,31 @@ bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
     /** 获取能力 */                                                     \
     Capability *cap = fetch_cap(proc, cap_ptr);                             \
     if (cap == nullptr) {                                                   \
-        log_error(#func_name ":指针指向的能力不存在!");                     \
+        log_error("%s:指针指向的能力不存在!", __FUNCTION__);                \
         return ret_val;                                                     \
     }                                                                       \
     if (cap->type != CAP_TYPE_NOT) {                                        \
-        log_error(#func_name ":该能力不为Notification能力!");               \
+        log_error("%s:该能力不为Notification能力!", __FUNCTION__);          \
         return ret_val;                                                     \
     }                                                                       \
     if (cap->cap_data == nullptr) {                                         \
-        log_error(#func_name ":能力数据为空!");                             \
+        log_error("%s:能力数据为空!", __FUNCTION__);                        \
         return ret_val;                                                     \
     }                                                                       \
     Notification *notif = (Notification *)cap->cap_data;                    \
     /** 检验权限 */                                                     \
     if (cap->attached_priv == nullptr) {                                    \
-        log_error(#func_name ":能力权限数据为空!");                         \
+        log_error("%s:能力权限数据为空!", __FUNCTION__);                    \
         return ret_val;                                                     \
     }                                                                       \
     if (!derivable(cap->cap_priv, cap_priv_check)) {                        \
-        log_error(#func_name ":能力权限不包含所需权限!");                   \
+        log_error("%s:能力权限不包含所需权限!", __FUNCTION__);              \
         return ret_val;                                                     \
     }                                                                       \
     if (!notification_derivable((NotCapPriv *)cap->attached_priv,           \
                                 notif_priv_check))                          \
     {                                                                       \
-        log_error(#func_name ":能力通知权限不包含所需权限!");               \
+        log_error("%s:能力通知权限不包含所需权限!", __FUNCTION__);          \
         return ret_val;                                                     \
     }                                                                       \
     /** 处理函数主体部分 */

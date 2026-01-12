@@ -104,8 +104,8 @@ NotCapPriv *not_priv_check(NotCapPriv *priv, int nid) {
     return priv;
 }
 
-bool notification_derivable(const NotCapPriv *parent_priv, const NotCapPriv *child_priv)
-{
+bool notification_derivable(const NotCapPriv *parent_priv,
+                            const NotCapPriv *child_priv) {
     for (int i = 0; i < NOTIFICATION_BITMAP_QWORDS; i++) {
         if ((parent_priv->priv_set[i] & child_priv->priv_set[i]) !=
             child_priv->priv_set[i])
@@ -177,14 +177,55 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
     return ptr;
 }
 
+CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
+                         qword cap_priv[PRIVILEDGE_QWORDS],
+                         NotCapPriv *notif_priv) {
+    NOT_CAP_START(src_p, src_ptr, not_cap_derive_at, cap, notif, CAP_NONE_PRIV,
+                  &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
+    (void)notif;  // 未使用, 特地标记以避免编译器警告
+
+    // Capability权限由derive_cap检查
+    // 此处检查通知权限
+    // 并申请一块内存来拷贝权限数据
+    if (!notification_derivable((NotCapPriv *)cap->attached_priv, notif_priv)) {
+        log_error("not_cap_derive_at: 父能力权限不包含子能力权限, 无法派生!");
+        return INVALID_CAP_PTR;
+    }
+
+    NotCapPriv *new_notif_priv = (NotCapPriv *)kmalloc(sizeof(NotCapPriv));
+    memcpy(new_notif_priv, notif_priv, sizeof(NotCapPriv));
+
+    // 进行派生
+    CapPtr ptr =
+        derive_cap_at(dst_p, cap, cap_priv, (void *)new_notif_priv, dst_ptr);
+    if (ptr.val == INVALID_CAP_PTR.val) {
+        // 派生失败, 释放内存
+        kfree(new_notif_priv);
+        return INVALID_CAP_PTR;
+    }
+
+    return ptr;
+}
+
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_derive, cap, notif, CAP_NONE_PRIV,
+    NOT_CAP_START(src_p, src_ptr, not_cap_clone, cap, notif, CAP_NONE_PRIV,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
     // 进行完全克隆
     return not_cap_derive(src_p, src_ptr, dst_p, cap->cap_priv,
                           (NotCapPriv *)cap->attached_priv);
+}
+
+CapPtr not_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
+                        CapPtr dst_ptr) {
+    NOT_CAP_START(src_p, src_ptr, not_cap_clone_at, cap, notif, CAP_NONE_PRIV,
+                  &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
+    (void)notif;  // 未使用, 特地标记以避免编译器警告
+
+    // 进行完全克隆
+    return not_cap_derive_at(src_p, src_ptr, dst_p, dst_ptr, cap->cap_priv,
+                             (NotCapPriv *)cap->attached_priv);
 }
 
 CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
@@ -201,7 +242,7 @@ CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
     }
 
     // 基础权限降级成功再进行附加权限更新
-    if (! degrade_cap(p, cap, cap_priv)) {
+    if (!degrade_cap(p, cap, cap_priv)) {
         return INVALID_CAP_PTR;
     }
 
@@ -209,8 +250,7 @@ CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
     return cap_ptr;
 }
 
-Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr)
-{
+Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr) {
     NOT_CAP_START(p, cap_ptr, not_cap_unpack, cap, notif, CAP_PRIV_UNPACK,
                   &NOTIFICATION_NONE_PRIV, nullptr);
     return notif;
@@ -222,7 +262,7 @@ Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr)
 
 /**
  * @brief 检查通知是否已被设置
- * 
+ *
  * @param notif 通知结构体指针
  * @param wait_bitmap 等待位图
  * @return true 通知已设置

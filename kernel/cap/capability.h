@@ -77,32 +77,65 @@ typedef Capability **CSpace;
 /**
  * @brief 从pcb中取出ptr指向的cap
  *
- * @param pcb 进程控制块
+ * @param pcb 能力所附属的进程控制块
  * @param ptr 能力指针
  * @return Capability* 能力
  */
 Capability *fetch_cap(PCB *pcb, CapPtr ptr);
 
 /**
+ * @brief 创建一个新的CSpace
+ *
+ * @return CSpace* 新的CSpace指针
+ */
+CSpace *new_cspace(void);
+
+/**
  * @brief 向pcb中插入cap
  *
- * @param pcb 进程控制块
+ * @param pcb 能力需要插入的进程控制块
  * @param cap 能力
  * @return CapPtr 能力指针
  */
 CapPtr insert_cap(PCB *pcb, Capability *cap);
 
 /**
+ * @brief 向pcb的指定位置中插入cap
+ *
+ * @param pcb 能力需要插入的进程控制块
+ * @param cap 能力
+ * @param cap_ptr 指定位置的能力指针
+ * @return CapPtr 能力指针
+ */
+CapPtr insert_cap_at(PCB *pcb, Capability *cap, CapPtr cap_ptr);
+
+/**
  * @brief 构造能力
  *
- * @param p 在p内构造能力
+ * @param p 需要构造能力的进程控制块
  * @param type 能力类型
  * @param cap_data 能力数据
  * @param cap_priv 能力权限
+ * @param attached_priv 附加权限
  * @return CapPtr 能力指针
  */
 CapPtr create_cap(PCB *p, CapType type, void *cap_data,
                   const qword cap_priv[PRIVILEDGE_QWORDS], void *attached_priv);
+
+/**
+ * @brief 在指定位置构造能力
+ *
+ * @param p 需要构造能力的进程控制块
+ * @param type 能力类型
+ * @param cap_data 能力数据
+ * @param cap_priv 能力权限
+ * @param attached_priv 附加权限
+ * @param cap_ptr 指定位置的能力指针
+ * @return CapPtr 能力指针
+ */
+CapPtr create_cap_at(PCB *p, CapType type, void *cap_data,
+                     const qword cap_priv[PRIVILEDGE_QWORDS],
+                     void *attached_priv, CapPtr cap_ptr);
 
 /**
  * @brief 权限检查
@@ -137,10 +170,25 @@ extern const qword CAP_NONE_PRIV[PRIVILEDGE_QWORDS];
  * @param p 在p内派生能力
  * @param parent 父能力
  * @param cap_priv 子能力权限
+ * @param attached_priv 附加权限
  * @return CapPtr 能力指针
  */
 CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv[PRIVILEDGE_QWORDS],
                   void *attached_priv);
+
+/**
+ * @brief 派生能力
+ *
+ * @param p 在p内派生能力
+ * @param parent 父能力
+ * @param cap_priv 子能力权限
+ * @param attached_priv 附加权限
+ * @param cap_ptr 指定位置的能力指针
+ * @return CapPtr 能力指针
+ */
+CapPtr derive_cap_at(PCB *p, Capability *parent,
+                     qword cap_priv[PRIVILEDGE_QWORDS], void *attached_priv,
+                     CapPtr cap_ptr);
 
 /**
  * @brief 降级能力

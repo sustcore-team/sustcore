@@ -28,13 +28,13 @@ extern const qword PCB_PRIV_FOREACH_CAPS[PRIVILEDGE_QWORDS];
 /**
  * @brief 构造PCB能力
  *
- * @param p    在p内构造一个指向自己的PCB能力
+ * @param p 需要构造PCB能力的进程
  * @return CapPtr 能力指针
  */
 CapPtr create_pcb_cap(PCB *p);
 
 /**
- * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p
+ * @brief 从源进程的源能力派生一个新的PCB能力到目标进程
  *
  * @param src_p 源进程
  * @param src_ptr 源能力
@@ -46,7 +46,20 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                       qword priv[PRIVILEDGE_QWORDS]);
 
 /**
- * @brief 从src_p的src_ptr能力派生一个新的PCB能力到dst_p, 并保留原权限
+ * @brief 从源进程的源能力派生一个新的PCB能力到目标进程的指定位置
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @param priv 新权限
+ * @return CapPtr 新的能力指针
+ */
+CapPtr pcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
+                         qword priv[PRIVILEDGE_QWORDS]);
+
+/**
+ * @brief 从源进程的源能力克隆一个PCB能力到目标进程
  *
  * @param src_p 源进程
  * @param src_ptr 源能力
@@ -57,8 +70,19 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
 CapPtr pcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
 
 /**
+ * @brief 从源进程的源能力克隆一个PCB能力到目标进程的指定位置
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @return CapPtr 新的能力指针
+ */
+CapPtr pcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
+
+/**
  * @brief 将能力降级为更低权限的能力
- * 
+ *
  * @param p 当前进程PCB指针
  * @param cap_ptr 能力指针
  * @param cap_priv 新的能力权限

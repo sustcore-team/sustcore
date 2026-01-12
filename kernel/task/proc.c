@@ -185,8 +185,29 @@ PCB *new_task(TM *tm, void *stack, void *heap, void *entrypoint, int rp_level,
     return p;
 }
 
+static void fork_caps(PCB *parent, PCB *child) {
+    Capability *cap;
+    // 遍历父进程的能力链表
+    foreach_list(cap, CAPABILITY_LIST(parent)) {
+        CapPtr ptr = cap->cap_ptr;
+        // 克隆能力到子进程, 且位置相同
+        pcb_cap_clone_at(parent, ptr, child, ptr);
+    }
+}
+
 PCB *fork_task(PCB *parent) {
-    // 首先对内存进行操作
+    if (parent == nullptr) {
+        log_error("fork_task: 无效的父进程指针");
+        return nullptr;
+    }
+
+    // 判断是否为单线程进程
+    if (parent->threads_head != parent->threads_tail) {
+        log_error("fork_task: 仅支持单线程进程的fork");
+        return nullptr;
+    }
+
+    // 复制父进程的内存空间
     TM *new_tm = setup_task_memory();
     // 逐VMA复制
     VMA *vma;
@@ -195,27 +216,31 @@ PCB *fork_task(PCB *parent) {
     }
 
     // 构造新的PCB
-    PCB *p = init_pcb(new_tm, parent->rp_level, parent,
+    PCB *child = init_pcb(new_tm, parent->rp_level, parent,
                       parent->thread_stack_base, parent->main_thread->priority);
 
-    if (p == nullptr) {
+    if (child == nullptr) {
         log_error("fork_task: 无法创建子进程");
         return nullptr;
     }
 
     // 复制父进程的主线程
-    TCB *child_main_thread = fork_thread(p, parent->main_thread);
+    TCB *child_main_thread = fork_thread(child, parent->main_thread);
     if (child_main_thread == nullptr) {
         log_error("fork_task: 无法创建子进程主线程");
-        terminate_pcb(p);
+        terminate_pcb(child);
         return nullptr;
     }
-    p->main_thread = child_main_thread;
+    child->main_thread = child_main_thread;
 
-    insert_ready_thread(p->main_thread);
+    insert_ready_thread(child->main_thread);
 
-    mem_display_mapping_layout(p->tm->pgd);
-    return p;
+    // 遍历父进程的能力, 派生新的能力到子进程
+    fork_caps(parent, child);
+
+    // 显示新进程的内存映射布局
+    mem_display_mapping_layout(child->tm->pgd);
+    return child;
 }
 
 /**

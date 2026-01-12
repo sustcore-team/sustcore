@@ -15,3 +15,4 @@ setup.sh
 build-setup.sh
 gdb-setup.sh
 .github/
+documents/

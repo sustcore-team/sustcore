@@ -37,7 +37,7 @@ extern const qword TCB_PRIV_WAIT_NOTIFICATION[PRIVILEDGE_QWORDS];
 CapPtr create_tcb_cap(PCB *p, TCB *tcb);
 
 /**
- * @brief 从src_p的src_ptr能力派生一个新的TCB能力到dst_p
+ * @brief 从源进程的源能力派生一个新的TCB能力到目标进程
  *
  * @param src_p 源进程
  * @param src_ptr 源能力
@@ -49,7 +49,20 @@ CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                       qword priv[PRIVILEDGE_QWORDS]);
 
 /**
- * @brief 从src_p的src_ptr能力派生一个新的TCB能力到dst_p, 并保留原权限
+ * @brief 从源进程的源能力派生一个新的TCB能力到目标进程的指定位置
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @param priv 新权限
+ * @return CapPtr 新的能力指针
+ */
+CapPtr tcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
+                         qword priv[PRIVILEDGE_QWORDS]);
+
+/**
+ * @brief 从源进程的源能力克隆一个新的TCB能力到目标进程
  *
  * @param src_p 源进程
  * @param src_ptr 源能力
@@ -57,6 +70,17 @@ CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 新的能力指针
  */
 CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p);
+
+/**
+ * @brief 从源进程的源能力克隆一个新的TCB能力到目标进程的指定位置
+ *
+ * @param src_p 源进程
+ * @param src_ptr 源能力
+ * @param dst_p 目标进程
+ * @param dst_ptr 目标能力指针位置
+ * @return CapPtr 新的能力指针
+ */
+CapPtr tcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
 
 /**
  * @brief 将能力降级为更低权限的能力
@@ -77,6 +101,8 @@ CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,
  * @return TCB* TCB指针
  */
 TCB *tcb_cap_unpack(PCB *p, CapPtr cap_ptr);
+
+//===========
 
 /**
  * @brief 将线程切换到yield状态

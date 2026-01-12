@@ -84,6 +84,16 @@ CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
     return derive_cap(dst_p, cap, priv, nullptr);
 }
 
+CapPtr tcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
+                         qword priv[PRIVILEDGE_QWORDS]) {
+    TCB_CAP_START(src_p, src_ptr, tcb_cap_derive_at, cap, tcb, CAP_NONE_PRIV,
+                  INVALID_CAP_PTR);
+    (void)tcb;
+
+    // 进行派生
+    return derive_cap_at(dst_p, cap, priv, nullptr, dst_ptr);
+}
+
 CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
     TCB_CAP_START(src_p, src_ptr, tcb_cap_clone, cap, tcb, CAP_NONE_PRIV,
                   INVALID_CAP_PTR);
@@ -92,6 +102,17 @@ CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
 
     // 进行完全克隆
     return tcb_cap_derive(src_p, src_ptr, dst_p, cap->cap_priv);
+}
+
+CapPtr tcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
+                        CapPtr dst_ptr) {
+    TCB_CAP_START(src_p, src_ptr, tcb_cap_clone_at, cap, tcb, CAP_NONE_PRIV,
+                  INVALID_CAP_PTR);
+
+    (void)tcb;  // 未使用, 特地标记以避免编译器警告
+
+    // 进行完全克隆
+    return tcb_cap_derive_at(src_p, src_ptr, dst_p, dst_ptr, cap->cap_priv);
 }
 
 CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,

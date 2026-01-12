@@ -9,3 +9,6 @@ deps += ./cap/tcb_cap.d
 
 objects += ./cap/not_cap.o
 deps += ./cap/not_cap.d
+
+objects += ./cap/cap_helper.o
+deps += ./cap/cap_helper.d
