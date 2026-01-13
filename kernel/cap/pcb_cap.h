@@ -15,15 +15,17 @@
 #include <task/task_struct.h>
 
 // 退出进程权限
-extern const qword PCB_PRIV_EXIT[PRIVILEDGE_QWORDS];
+#define PCB_PRIV_EXIT          (0x0000'0000'0001'0000ull)
 // fork新进程权限
-extern const qword PCB_PRIV_FORK[PRIVILEDGE_QWORDS];
+#define PCB_PRIV_FORK          (0x0000'0000'0002'0000ull)
 // 获取PID权限
-extern const qword PCB_PRIV_GETPID[PRIVILEDGE_QWORDS];
+#define PCB_PRIV_GETPID        (0x0000'0000'0004'0000ull)
 // 创建线程权限
-extern const qword PCB_PRIV_CREATE_THREAD[PRIVILEDGE_QWORDS];
+#define PCB_PRIV_CREATE_THREAD (0x0000'0000'0008'0000ull)
 // 遍历能力权限
-extern const qword PCB_PRIV_FOREACH_CAPS[PRIVILEDGE_QWORDS];
+#define PCB_PRIV_ENUM_CAPS     (0x0000'0000'0010'0000ull)
+// 迁移能力权限
+#define PCB_PRIV_MIGRATE_CAPS  (0x0000'0000'0020'0000ull)
 
 /**
  * @brief 构造PCB能力
@@ -42,8 +44,7 @@ CapPtr create_pcb_cap(PCB *p);
  * @param priv 新权限
  * @return CapPtr 新的能力指针
  */
-CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      qword priv[PRIVILEDGE_QWORDS]);
+CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, qword priv);
 
 /**
  * @brief 从源进程的源能力派生一个新的PCB能力到目标进程的指定位置
@@ -56,7 +57,7 @@ CapPtr pcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 新的能力指针
  */
 CapPtr pcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
-                         qword priv[PRIVILEDGE_QWORDS]);
+                         qword priv);
 
 /**
  * @brief 从源进程的源能力克隆一个PCB能力到目标进程
@@ -88,8 +89,7 @@ CapPtr pcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
  * @param cap_priv 新的能力权限
  * @return CapPtr 降级后的能力指针(和cap_ptr相同)
  */
-CapPtr pcb_cap_degrade(PCB *p, CapPtr cap_ptr,
-                       qword cap_priv[PRIVILEDGE_QWORDS]);
+CapPtr pcb_cap_degrade(PCB *p, CapPtr cap_ptr, qword cap_priv);
 
 /**
  * @brief 解包PCB能力, 获得PCB指针
@@ -139,26 +139,22 @@ pid_t pcb_cap_getpid(PCB *p, CapPtr cap_ptr);
 CapPtr pcb_cap_create_thread(PCB *p, CapPtr cap_ptr, void *entrypoint,
                              int priority);
 
-#define PCB_CAP_START(proc, cap_ptr, func_name, cap, pcb, priv_check, ret_val) \
-    Capability *cap = fetch_cap(proc, cap_ptr);                                \
-    if (cap == nullptr) {                                                      \
-        log_error(#func_name ":指针指向的能力不存在!");                        \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->type != CAP_TYPE_PCB) {                                           \
-        log_error(#func_name ":该能力不为PCB能力!");                           \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->cap_data == nullptr) {                                            \
-        log_error(#func_name ":能力数据为空!");                                \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->cap_priv == nullptr) {                                            \
-        log_error(#func_name ":能力权限为空!");                                \
-        return ret_val;                                                        \
-    }                                                                          \
-    PCB *pcb = (PCB *)cap->cap_data;                                           \
-    if (!derivable(cap->cap_priv, priv_check)) {                               \
-        log_error(#func_name ":能力权限不足!");                                \
-        return ret_val;                                                        \
+#define PCB_CAP_START(proc, cap_ptr, cap, pcb, priv_check, ret_val) \
+    Capability *cap = fetch_cap(proc, cap_ptr);                     \
+    if (cap == nullptr) {                                           \
+        log_error("%s:指针指向的能力不存在!", __FUNCTION__);        \
+        return ret_val;                                             \
+    }                                                               \
+    if (cap->type != CAP_TYPE_PCB) {                                \
+        log_error("%s:该能力不为PCB能力!", __FUNCTION__);           \
+        return ret_val;                                             \
+    }                                                               \
+    if (cap->cap_data == nullptr) {                                 \
+        log_error("%s:能力数据为空!", __FUNCTION__);                \
+        return ret_val;                                             \
+    }                                                               \
+    PCB *pcb = (PCB *)cap->cap_data;                                \
+    if (!derivable(cap->cap_priv, priv_check)) {                    \
+        log_error("%s:能力权限不足!", __FUNCTION__);                \
+        return ret_val;                                             \
     }

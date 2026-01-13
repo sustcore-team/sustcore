@@ -21,63 +21,15 @@
 #include <basec/logger.h>
 
 //============================================
-// TCB能力权限常量
-//============================================
-
-const qword TCB_PRIV_SET_PRIORITY[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0001ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-const qword TCB_PRIV_SUSPEND[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0002ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-const qword TCB_PRIV_RESUME[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0004ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-const qword TCB_PRIV_TERMINATE[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0008ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-const qword TCB_PRIV_YIELD[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0010ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-const qword TCB_PRIV_WAIT_NOTIFICATION[PRIVILEDGE_QWORDS] = {
-    [0] = 0x0000'0000'0000'0000ull,
-    [1] = 0x0000'0000'0000'0020ull,
-    [2] = 0x0000'0000'0000'0000ull,
-    [3] = 0x0000'0000'0000'0000ull,
-};
-
-//============================================
 // TCB能力构造相关操作
 //============================================
 
 CapPtr create_tcb_cap(PCB *p, TCB *tcb) {
-    return create_cap(p, CAP_TYPE_TCB, (void *)tcb, CAP_ALL_PRIV, nullptr);
+    return create_cap(p, CAP_TYPE_TCB, (void *)tcb, CAP_PRIV_ALL, nullptr);
 }
 
-CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      qword priv[PRIVILEDGE_QWORDS]) {
-    TCB_CAP_START(src_p, src_ptr, tcb_cap_derive, cap, tcb, CAP_NONE_PRIV,
-                  INVALID_CAP_PTR);
+CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, qword priv) {
+    TCB_CAP_START(src_p, src_ptr, cap, tcb, CAP_PRIV_NONE, INVALID_CAP_PTR);
     (void)tcb;
 
     // 进行派生
@@ -85,9 +37,8 @@ CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
 }
 
 CapPtr tcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
-                         qword priv[PRIVILEDGE_QWORDS]) {
-    TCB_CAP_START(src_p, src_ptr, tcb_cap_derive_at, cap, tcb, CAP_NONE_PRIV,
-                  INVALID_CAP_PTR);
+                         qword priv) {
+    TCB_CAP_START(src_p, src_ptr, cap, tcb, CAP_PRIV_NONE, INVALID_CAP_PTR);
     (void)tcb;
 
     // 进行派生
@@ -95,8 +46,7 @@ CapPtr tcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
 }
 
 CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
-    TCB_CAP_START(src_p, src_ptr, tcb_cap_clone, cap, tcb, CAP_NONE_PRIV,
-                  INVALID_CAP_PTR);
+    TCB_CAP_START(src_p, src_ptr, cap, tcb, CAP_PRIV_NONE, INVALID_CAP_PTR);
 
     (void)tcb;  // 未使用, 特地标记以避免编译器警告
 
@@ -106,8 +56,7 @@ CapPtr tcb_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
 
 CapPtr tcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                         CapPtr dst_ptr) {
-    TCB_CAP_START(src_p, src_ptr, tcb_cap_clone_at, cap, tcb, CAP_NONE_PRIV,
-                  INVALID_CAP_PTR);
+    TCB_CAP_START(src_p, src_ptr, cap, tcb, CAP_PRIV_NONE, INVALID_CAP_PTR);
 
     (void)tcb;  // 未使用, 特地标记以避免编译器警告
 
@@ -115,10 +64,8 @@ CapPtr tcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
     return tcb_cap_derive_at(src_p, src_ptr, dst_p, dst_ptr, cap->cap_priv);
 }
 
-CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,
-                       qword cap_priv[PRIVILEDGE_QWORDS]) {
-    TCB_CAP_START(p, cap_ptr, tcb_cap_degrade, cap, tcb, CAP_NONE_PRIV,
-                  INVALID_CAP_PTR);
+CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr, qword cap_priv) {
+    TCB_CAP_START(p, cap_ptr, cap, tcb, CAP_PRIV_NONE, INVALID_CAP_PTR);
     (void)tcb;  // 未使用, 特地标记以避免编译器警告
 
     if (!degrade_cap(p, cap, cap_priv)) {
@@ -129,8 +76,7 @@ CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,
 }
 
 TCB *tcb_cap_unpack(PCB *p, CapPtr cap_ptr) {
-    TCB_CAP_START(p, cap_ptr, tcb_cap_unpack, cap, tcb, CAP_PRIV_UNPACK,
-                  nullptr);
+    TCB_CAP_START(p, cap_ptr, cap, tcb, CAP_PRIV_UNPACK, nullptr);
 
     return tcb;
 }
@@ -146,7 +92,7 @@ TCB *tcb_cap_unpack(PCB *p, CapPtr cap_ptr) {
  * @param ptr 能力指针
  */
 void tcb_cap_yield(PCB *p, CapPtr cap_ptr) {
-    TCB_CAP_START(p, cap_ptr, tcb_cap_yield, cap, tcb, TCB_PRIV_YIELD, );
+    TCB_CAP_START(p, cap_ptr, cap, tcb, TCB_PRIV_YIELD, );
 
     // 切换线程状态到yield
     if (tcb->state != TS_RUNNING) {

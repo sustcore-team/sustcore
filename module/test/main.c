@@ -77,13 +77,13 @@ void test_2(int a, const char *str) {
     CapPtr main_thread_cap = get_main_thread_cap();
 
     CapPtr thread_cap_1 = create_thread((void *)thread_test_1, 129);
-    if (thread_cap_1.val == 0) {
+    if (CAPPTR_INVALID(thread_cap_1)) {
         printf("创建线程失败!\n");
         return;
     }
 
     CapPtr thread_cap_2 = create_thread((void *)thread_test_2, 129);
-    if (thread_cap_2.val == 0) {
+    if (CAPPTR_INVALID(thread_cap_2)) {
         printf("创建线程失败!\n");
         return;
     }

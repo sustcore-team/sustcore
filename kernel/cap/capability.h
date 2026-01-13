@@ -16,9 +16,6 @@
 struct PCBStruct;
 typedef struct PCBStruct PCB;
 
-#define MAX_PRIVILEDGES   (256)
-#define PRIVILEDGE_QWORDS (MAX_PRIVILEDGES / (8 * sizeof(qword)))
-
 /**
  * @brief 能力
  *
@@ -41,7 +38,7 @@ typedef struct CapStruct {
      * 确保新权限被正确地添加到权限结构体中, 并在派生函数中进行检查
      *
      */
-    qword cap_priv[PRIVILEDGE_QWORDS];
+    qword cap_priv;
     /**
      * @brief 附加权限
      *
@@ -70,6 +67,9 @@ typedef struct CapStruct {
 
 #define CSPACE_ITEMS (256)
 
+// CSpace是一个(Capability *)数组
+// 每个进程会容纳若干个CSpace, 每个CSpace容纳若干个Capability *
+// 这些CSpace并不是一开始就分配好的, 而是在需要时动态分配
 typedef Capability **CSpace;
 
 #define PROC_CSPACES (512)
@@ -86,9 +86,9 @@ Capability *fetch_cap(PCB *pcb, CapPtr ptr);
 /**
  * @brief 创建一个新的CSpace
  *
- * @return CSpace* 新的CSpace指针
+ * @return CSpace 新的CSpace
  */
-CSpace *new_cspace(void);
+CSpace new_cspace(void);
 
 /**
  * @brief 向pcb中插入cap
@@ -119,8 +119,8 @@ CapPtr insert_cap_at(PCB *pcb, Capability *cap, CapPtr cap_ptr);
  * @param attached_priv 附加权限
  * @return CapPtr 能力指针
  */
-CapPtr create_cap(PCB *p, CapType type, void *cap_data,
-                  const qword cap_priv[PRIVILEDGE_QWORDS], void *attached_priv);
+CapPtr create_cap(PCB *p, CapType type, void *cap_data, const qword cap_priv,
+                  void *attached_priv);
 
 /**
  * @brief 在指定位置构造能力
@@ -133,8 +133,7 @@ CapPtr create_cap(PCB *p, CapType type, void *cap_data,
  * @param cap_ptr 指定位置的能力指针
  * @return CapPtr 能力指针
  */
-CapPtr create_cap_at(PCB *p, CapType type, void *cap_data,
-                     const qword cap_priv[PRIVILEDGE_QWORDS],
+CapPtr create_cap_at(PCB *p, CapType type, void *cap_data, const qword cap_priv,
                      void *attached_priv, CapPtr cap_ptr);
 
 /**
@@ -145,24 +144,20 @@ CapPtr create_cap_at(PCB *p, CapType type, void *cap_data,
  * @return true 父权限包含子权限
  * @return false 父权限不包含子权限
  */
-inline static bool derivable(const qword parent_priv[PRIVILEDGE_QWORDS],
-                             const qword child_priv[PRIVILEDGE_QWORDS]) {
-    for (int i = 0; i < PRIVILEDGE_QWORDS; i++) {
-        if ((parent_priv[i] & child_priv[i]) != child_priv[i]) {
-            return false;
-        }
-    }
-    return true;
+inline static bool derivable(const qword parent_priv, const qword child_priv) {
+    return (parent_priv & child_priv) == child_priv;
 }
 
 // 解包能力权限
-extern const qword CAP_PRIV_UNPACK[PRIVILEDGE_QWORDS];
+#define CAP_PRIV_UNPACK  (0x0000'0000'0000'0001ull)
 // 派生能力权限
-extern const qword CAP_PRIV_DERIVE[PRIVILEDGE_QWORDS];
+#define CAP_PRIV_DERIVE  (0x0000'0000'0000'0002ull)
+// 迁移能力权限
+#define CAP_PRIV_MIGRATE (0x0000'0000'0000'0004ull)
 // 全部权限
-extern const qword CAP_ALL_PRIV[PRIVILEDGE_QWORDS];
+#define CAP_PRIV_ALL     (0xFFFF'FFFF'FFFF'FFFFull)
 // 无权限
-extern const qword CAP_NONE_PRIV[PRIVILEDGE_QWORDS];
+#define CAP_PRIV_NONE    (0x0000'0000'0000'0000ull)
 
 /**
  * @brief 派生能力
@@ -173,7 +168,7 @@ extern const qword CAP_NONE_PRIV[PRIVILEDGE_QWORDS];
  * @param attached_priv 附加权限
  * @return CapPtr 能力指针
  */
-CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv[PRIVILEDGE_QWORDS],
+CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv,
                   void *attached_priv);
 
 /**
@@ -186,21 +181,19 @@ CapPtr derive_cap(PCB *p, Capability *parent, qword cap_priv[PRIVILEDGE_QWORDS],
  * @param cap_ptr 指定位置的能力指针
  * @return CapPtr 能力指针
  */
-CapPtr derive_cap_at(PCB *p, Capability *parent,
-                     qword cap_priv[PRIVILEDGE_QWORDS], void *attached_priv,
-                     CapPtr cap_ptr);
+CapPtr derive_cap_at(PCB *p, Capability *parent, qword cap_priv,
+                     void *attached_priv, CapPtr cap_ptr);
 
 /**
  * @brief 降级能力
  *
  * @param p 进程控制块
- * @param cap_ptr 能力指针
+ * @param cap 能力
  * @param new_priv 新权限
  * @return true 降级成功
  * @return false 降级失败
  */
-bool degrade_cap(PCB *p, Capability *cap,
-                 const qword new_priv[PRIVILEDGE_QWORDS]);
+bool degrade_cap(PCB *p, Capability *cap, const qword new_priv);
 
 /**
  * @brief 能力类型转字符串

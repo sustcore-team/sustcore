@@ -15,17 +15,17 @@
 #include <task/task_struct.h>
 
 // 设置线程优先级权限
-extern const qword TCB_PRIV_SET_PRIORITY[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_SET_PRIORITY      (0x0000'0000'0001'0000ull)
 // 挂起线程权限
-extern const qword TCB_PRIV_SUSPEND[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_SUSPEND           (0x0000'0000'0002'0000ull)
 // 恢复线程权限
-extern const qword TCB_PRIV_RESUME[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_RESUME            (0x0000'0000'0004'0000ull)
 // 终止线程权限
-extern const qword TCB_PRIV_TERMINATE[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_TERMINATE         (0x0000'0000'0008'0000ull)
 // 线程yield权限
-extern const qword TCB_PRIV_YIELD[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_YIELD             (0x0000'0000'0010'0000ull)
 // 线程等待通知权限
-extern const qword TCB_PRIV_WAIT_NOTIFICATION[PRIVILEDGE_QWORDS];
+#define TCB_PRIV_WAIT_NOTIFICATION (0x0000'0000'0020'0000ull)
 
 /**
  * @brief 构造TCB能力
@@ -45,8 +45,7 @@ CapPtr create_tcb_cap(PCB *p, TCB *tcb);
  * @param priv 新权限
  * @return CapPtr 新的能力指针
  */
-CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      qword priv[PRIVILEDGE_QWORDS]);
+CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, qword priv);
 
 /**
  * @brief 从源进程的源能力派生一个新的TCB能力到目标进程的指定位置
@@ -59,7 +58,7 @@ CapPtr tcb_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 新的能力指针
  */
 CapPtr tcb_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
-                         qword priv[PRIVILEDGE_QWORDS]);
+                         qword priv);
 
 /**
  * @brief 从源进程的源能力克隆一个新的TCB能力到目标进程
@@ -90,8 +89,16 @@ CapPtr tcb_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
  * @param cap_priv 新的能力权限
  * @return CapPtr 降级后的能力指针(和cap_ptr相同)
  */
-CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr,
-                       qword cap_priv[PRIVILEDGE_QWORDS]);
+CapPtr tcb_cap_degrade(PCB *p, CapPtr cap_ptr, qword cap_priv);
+
+/**
+ * @brief 移除TCB能力
+ *
+ * @param p 当前进程PCB指针
+ * @param cap_ptr 能力指针
+ * @return CapPtr 被移除的能力指针
+ */
+CapPtr tcb_cap_remove(PCB *p, CapPtr cap_ptr);
 
 /**
  * @brief 解包TCB能力, 获得TCB指针
@@ -112,26 +119,22 @@ TCB *tcb_cap_unpack(PCB *p, CapPtr cap_ptr);
  */
 void tcb_cap_yield(PCB *p, CapPtr cap_ptr);
 
-#define TCB_CAP_START(proc, cap_ptr, func_name, cap, tcb, priv_check, ret_val) \
-    Capability *cap = fetch_cap(proc, cap_ptr);                                \
-    if (cap == nullptr) {                                                      \
-        log_error(#func_name ":指针指向的能力不存在!");                        \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->type != CAP_TYPE_TCB) {                                           \
-        log_error(#func_name ":该能力不为TCB能力!");                           \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->cap_data == nullptr) {                                            \
-        log_error(#func_name ":能力数据为空!");                                \
-        return ret_val;                                                        \
-    }                                                                          \
-    if (cap->cap_priv == nullptr) {                                            \
-        log_error(#func_name ":能力权限为空!");                                \
-        return ret_val;                                                        \
-    }                                                                          \
-    TCB *tcb = (TCB *)cap->cap_data;                                           \
-    if (!derivable(cap->cap_priv, priv_check)) {                               \
-        log_error(#func_name ":能力权限不足!");                                \
-        return ret_val;                                                        \
+#define TCB_CAP_START(proc, cap_ptr, cap, tcb, priv_check, ret_val) \
+    Capability *cap = fetch_cap(proc, cap_ptr);                     \
+    if (cap == nullptr) {                                           \
+        log_error("%s:指针指向的能力不存在!", __FUNCTION__);        \
+        return ret_val;                                             \
+    }                                                               \
+    if (cap->type != CAP_TYPE_TCB) {                                \
+        log_error("%s:该能力不为TCB能力!", __FUNCTION__);           \
+        return ret_val;                                             \
+    }                                                               \
+    if (cap->cap_data == nullptr) {                                 \
+        log_error("%s:能力数据为空!", __FUNCTION__);                \
+        return ret_val;                                             \
+    }                                                               \
+    TCB *tcb = (TCB *)cap->cap_data;                                \
+    if (!derivable(cap->cap_priv, priv_check)) {                    \
+        log_error("%s:能力权限不足!", __FUNCTION__);                \
+        return ret_val;                                             \
     }

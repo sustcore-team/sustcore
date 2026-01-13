@@ -4,9 +4,9 @@
  * @brief Capability系统
  * @version alpha-1.0.0
  * @date 2025-12-06
- * 
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
 #pragma once
@@ -92,7 +92,7 @@
 
 /**
  * @brief Capability指针
- * 
+ *
  */
 typedef union {
     qword val;
@@ -102,22 +102,21 @@ typedef union {
     };
 } CapPtr;
 
-#define INVALID_CAP_PTR (CapPtr){.val = 0}
+#define INVALID_CAP_PTR \
+    (CapPtr) {          \
+        .val = 0        \
+    }
+
+#define CAPPTR_INVALID(ptr) ((ptr).val == INVALID_CAP_PTR.val)
 
 typedef enum {
-    CAP_TYPE_NUL    = 0,   // 空能力
-    CAP_TYPE_PRC    = 1,   // 进程能力
-    CAP_TYPE_PCB    = 2,   // 进程控制块能力
-    CAP_TYPE_THR    = 3,   // 线程能力
-    CAP_TYPE_TCB    = 4,   // 线程控制块能力
-    CAP_TYPE_DEV    = 5,   // 设备能力
-    CAP_TYPE_FLE    = 6,   // 文件能力
-    CAP_TYPE_INT    = 7,   // 中断能力
-    CAP_TYPE_MEM    = 8,   // 内存能力
-    CAP_TYPE_PRO    = 9,   // 能力提供者能力
-    CAP_TYPE_CUSTOM = 10,  // 自定义能力
-    CAP_TYPE_NOT    = 11      // 通知能力
+    CAP_TYPE_NUL = 0,  // 空能力
+    CAP_TYPE_PCB = 1,  // 进程控制块能力
+    CAP_TYPE_TCB = 2,  // 线程控制块能力
+    CAP_TYPE_NOT = 3,  // 通知能力
+    CAP_TYPE_MEM = 4,  // 内存能力
 } CapType;
 
 #define NOTIFICATION_BITMAP_SIZE (256)
-#define NOTIFICATION_BITMAP_QWORDS (NOTIFICATION_BITMAP_SIZE / (8 * sizeof(qword)))
+#define NOTIFICATION_BITMAP_QWORDS \
+    (NOTIFICATION_BITMAP_SIZE / (8 * sizeof(qword)))

@@ -191,7 +191,7 @@ static void fork_caps(PCB *parent, PCB *child) {
     foreach_list(cap, CAPABILITY_LIST(parent)) {
         CapPtr ptr = cap->cap_ptr;
         // 克隆能力到子进程, 且位置相同
-        pcb_cap_clone_at(parent, ptr, child, ptr);
+        // cap_clone_at(parent, ptr, child, ptr);
     }
 }
 

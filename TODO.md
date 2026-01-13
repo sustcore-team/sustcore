@@ -14,11 +14,41 @@
 同时, fork()调用将会克隆当前进程的所有能力, 并将其传递给新创建的子进程, 并保持其位置不变.
 需要注意的是, 子进程的PCB能力并不遵循这一点: 此时, 子进程将会获得一个新的PCB能力, 其指向子进程的PCB结构体, 而父进程将得到该能力的一个克隆.
 
-## 3. 为进程提供对自己能力的遍历接口
+## 3. Capability管理系统
 
-提供一个接口函数, 允许进程遍历和查询自己所持有的所有能力.
-该接口函数返回一个能力列表, 每个能力包含能力ID, 能力类型, 权限等信息.
-该接口函数应当具备适当的权限检查, 仅允许进程查询自己所持有的能力, 防止越权访问其他进程的能力信息.
+对于每一类Capability, 其都应当实现一个管理系统. 该管理系统的职权为:
+
+1. 管理Capability指向的内核对象(如PCB, 内存页, Notification, 等等). 当没有Capability指向一个内核对象时, 该对象应当被销毁以释放资源.
+2. 通过Capability对这些内核对象进行访问控制. 其应当在创建一个内核对象时及时返回一个全权限的Capability, 并允许通过该Capability派生出新的Capability,
+允许Capability的降级操作, 并阻止Capability的升级操作.
+3. 管理所有的Capability权限与Capability自身. 也就是说, 所有的Capability权限都由该管理系统管理, 内核的其余部分无论如何都不应该直接操作Capability权限.
+4. 提供接口函数, 允许进程通过Capability对内核对象进行操作.
+5. 与slab分配器协同工作, 以高效地分配和回收Capability对象.
+
+> 由于该系统尚未实现, 因此目前内核中对Capability的管理仍然是分散的, 各个模块自行管理各自的Capability. 对Capability的遍历等功能其实现也较为困难.
+> 而Notification与Memory能力目前的实现也会引起内存泄漏. 进程的销毁工作也不便进行.
+> 因此将该待办项列提升为EMERGENCY级别.
+
+在该系统完成后, 还应实现
+
+### 3.1 对Capability的统一操作接口与遍历接口
+
+提供统一的接口函数, 允许进程通过Capability对内核对象进行操作. 这些接口函数应当接受一个Capability指针作为参数, 并根据Capability的类型调用对应的管理系统进行处理.
+同时, 提供接口函数, 允许内核遍历所有的Capability对象, 以便进行调试和管理.
+
+### 3.2 Capability的审计与日志记录
+
+提供审计功能, 记录对Capability对象的所有操作. 从而帮助系统调试.
+
+### 3.3 进程销毁操作的实现
+
+实现进程的销毁操作, 包括释放进程所拥有的所有Capability对象.
+
+### 3.4 命名Capability的实现
+
+允许进程在创建或派生某些Capability对象进行命名, 以便其他进程通过名称访问这些Capability对象.
+例如, 进程A创建了一个Notification能力. 在这之后, 它将该能力派生到进程B中, 并命名为"notif1".
+那么, 进程B就可以通过名称"notif1"来获得该能力的Capability指针.
 
 ## 4. 实现内存能力, 支持对内存页的能力管理
 
@@ -81,6 +111,10 @@ RT.
 
 目前的内核主要支持RISC-V架构, 需要增加对Loongarch架构的支持.
 
+## 12. 实现 cap_remove() 函数
+
+提供一个Capability移除函数, cap_remove(), 允许进程主动移除自己的Capability,使得该Capability不再有效, 并释放其占用的资源.
+
 # IMPORTANT
 
 ## 1. fast path机制
@@ -96,17 +130,6 @@ fastpath机制是一种优化RPC调用性能的技术. 通过该机制, 某些RP
 ## 2. COW(Copy-On-Write)机制的实现
 
 在 fork() 中实现COW机制, 以提高内存使用效率和进程创建性能.
-
-## 3. Capability管理系统
-
-对于每一类Capability, 其都应当实现一个管理系统. 该管理系统的职权为:
-
-1. 管理Capability指向的内核对象(如PCB, 内存页, Notification, 等等). 当没有Capability指向一个内核对象时, 该对象应当被销毁以释放资源.
-2. 通过Capability对这些内核对象进行访问控制. 其应当在创建一个内核对象时及时返回一个全权限的Capability, 并允许通过该Capability派生出新的Capability,
-允许Capability的降级操作, 并阻止Capability的升级操作.
-3. 管理所有的Capability权限与Capability自身. 也就是说, 所有的Capability权限都由该管理系统管理, 内核的其余部分无论如何都不应该直接操作Capability权限.
-4. 提供接口函数, 允许进程通过Capability对内核对象进行操作.
-5. 与slab分配器协同工作, 以高效地分配和回收Capability对象.
 
 ## 4. 将线程栈由内核分配改为用户态分配
 

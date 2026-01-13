@@ -144,14 +144,20 @@ CapPtr create_notification_cap(PCB *p) {
     notif->notif_id = NID_COUNTER;
     NID_COUNTER++;
 
-    return create_cap(p, CAP_TYPE_NOT, (void *)notif, CAP_ALL_PRIV,
+    CapPtr ptr = create_cap(p, CAP_TYPE_NOT, (void *)notif, CAP_PRIV_ALL,
                       (void *)priv);
+    if (CAPPTR_INVALID(ptr)) {
+        // 创建失败, 释放内存
+        kfree(priv);
+        kfree(notif);
+        return INVALID_CAP_PTR;
+    }
+    return ptr;
 }
 
-CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      qword cap_priv[PRIVILEDGE_QWORDS],
+CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p, qword cap_priv,
                       NotCapPriv *notif_priv) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_derive, cap, notif, CAP_NONE_PRIV,
+    NOT_CAP_START(src_p, src_ptr, cap, notif, CAP_PRIV_NONE,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
@@ -168,7 +174,7 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
 
     // 进行派生
     CapPtr ptr = derive_cap(dst_p, cap, cap_priv, (void *)new_notif_priv);
-    if (ptr.val == INVALID_CAP_PTR.val) {
+    if (CAPPTR_INVALID(ptr)) {
         // 派生失败, 释放内存
         kfree(new_notif_priv);
         return INVALID_CAP_PTR;
@@ -178,9 +184,8 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
 }
 
 CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
-                         qword cap_priv[PRIVILEDGE_QWORDS],
-                         NotCapPriv *notif_priv) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_derive_at, cap, notif, CAP_NONE_PRIV,
+                         qword cap_priv, NotCapPriv *notif_priv) {
+    NOT_CAP_START(src_p, src_ptr, cap, notif, CAP_PRIV_NONE,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
@@ -198,7 +203,7 @@ CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
     // 进行派生
     CapPtr ptr =
         derive_cap_at(dst_p, cap, cap_priv, (void *)new_notif_priv, dst_ptr);
-    if (ptr.val == INVALID_CAP_PTR.val) {
+    if (CAPPTR_INVALID(ptr)) {
         // 派生失败, 释放内存
         kfree(new_notif_priv);
         return INVALID_CAP_PTR;
@@ -208,7 +213,7 @@ CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
 }
 
 CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_clone, cap, notif, CAP_NONE_PRIV,
+    NOT_CAP_START(src_p, src_ptr, cap, notif, CAP_PRIV_NONE,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
@@ -219,7 +224,7 @@ CapPtr not_cap_clone(PCB *src_p, CapPtr src_ptr, PCB *dst_p) {
 
 CapPtr not_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                         CapPtr dst_ptr) {
-    NOT_CAP_START(src_p, src_ptr, not_cap_clone_at, cap, notif, CAP_NONE_PRIV,
+    NOT_CAP_START(src_p, src_ptr, cap, notif, CAP_PRIV_NONE,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
@@ -228,10 +233,9 @@ CapPtr not_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
                              (NotCapPriv *)cap->attached_priv);
 }
 
-CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
-                       qword cap_priv[PRIVILEDGE_QWORDS],
+CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr, qword cap_priv,
                        NotCapPriv *notif_priv) {
-    NOT_CAP_START(p, cap_ptr, not_cap_degrade, cap, notif, CAP_NONE_PRIV,
+    NOT_CAP_START(p, cap_ptr, cap, notif, CAP_PRIV_NONE,
                   &NOTIFICATION_NONE_PRIV, INVALID_CAP_PTR);
     (void)notif;  // 未使用, 特地标记以避免编译器警告
 
@@ -251,7 +255,7 @@ CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
 }
 
 Notification *not_cap_unpack(PCB *p, CapPtr cap_ptr) {
-    NOT_CAP_START(p, cap_ptr, not_cap_unpack, cap, notif, CAP_PRIV_UNPACK,
+    NOT_CAP_START(p, cap_ptr, cap, notif, CAP_PRIV_UNPACK,
                   &NOTIFICATION_NONE_PRIV, nullptr);
     return notif;
 }
@@ -306,8 +310,7 @@ void not_cap_set(PCB *p, CapPtr cap_ptr, int nid) {
     not_priv_set(&required_priv, nid);
 
     // 处理能力指针并校验能力
-    NOT_CAP_START(p, cap_ptr, not_cap_set, cap, notif, CAP_NONE_PRIV,
-                  &required_priv, );
+    NOT_CAP_START(p, cap_ptr, cap, notif, CAP_PRIV_NONE, &required_priv, );
 
     // 设置通知位
     notif->bitmap[nid_qword_idx(nid)] |= (1UL << nid_bit_idx(nid));
@@ -333,8 +336,7 @@ void not_cap_reset(PCB *p, CapPtr cap_ptr, int nid) {
     not_priv_reset(&required_priv, nid);
 
     // 处理能力指针并校验能力
-    NOT_CAP_START(p, cap_ptr, not_cap_set, cap, notif, CAP_NONE_PRIV,
-                  &required_priv, );
+    NOT_CAP_START(p, cap_ptr, cap, notif, CAP_PRIV_NONE, &required_priv, );
 
     // 设置通知位
     notif->bitmap[nid_qword_idx(nid)] &= ~(1UL << nid_bit_idx(nid));
@@ -359,8 +361,7 @@ bool not_cap_check(PCB *p, CapPtr cap_ptr, int nid) {
     not_priv_check(&required_priv, nid);
 
     // 处理能力指针并校验能力
-    NOT_CAP_START(p, cap_ptr, not_cap_set, cap, notif, CAP_NONE_PRIV,
-                  &required_priv, false);
+    NOT_CAP_START(p, cap_ptr, cap, notif, CAP_PRIV_NONE, &required_priv, false);
 
     // 检查通知位
     return (notif->bitmap[nid_qword_idx(nid)] & (1UL << nid_bit_idx(nid))) != 0;
@@ -386,11 +387,9 @@ bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
     };
     memcpy(&required_priv.priv_check, wait_bitmap,
            sizeof(qword) * NOTIFICATION_BITMAP_QWORDS);
-    NOT_CAP_START(p, not_ptr, tcb_cap_wait_notification, cap, notif,
-                  CAP_NONE_PRIV, &required_priv, false);
+    NOT_CAP_START(p, not_ptr, cap, notif, CAP_PRIV_NONE, &required_priv, false);
 
-    TCB_CAP_START(p, tcb_ptr, tcb_cap_wait_notification, tcb_cap, tcb,
-                  TCB_PRIV_WAIT_NOTIFICATION, false);
+    TCB_CAP_START(p, tcb_ptr, tcb_cap, tcb, TCB_PRIV_WAIT_NOTIFICATION, false);
 
     if (is_notified(notif, wait_bitmap)) {
         return true;

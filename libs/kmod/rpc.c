@@ -28,7 +28,7 @@ void rpc_call(CapPtr pid, int fid, const void *args, size_t arg_size,
 
     // 首先分配共享内存
     CapPtr shmid = makesharedmem(sharemem_sz);
-    if (shmid.val == 0) {
+    if (CAPPTR_INVALID(shmid)) {
         return;
     }
 

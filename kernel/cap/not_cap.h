@@ -22,12 +22,23 @@
 // 只要集合中的任意一个通知ID被设置, 进程/线程就会被唤醒
 // 这种设计允许进程/线程高效地等待多种事件的发生
 // 而不需要为每个事件单独创建等待机制
+// (可以理解成linux中的SIGNAL机制
+// 但一方面, 每个进程都有且仅有一个SIGNAL位图,
+// 而Notification能力可以被多个进程/线程持有,
+// 而一个进程也可以持有多个Notification能力,
+// 另一方面, Notification能力的权限可以被更细粒度地控制,
+// 例如某个进程只能设置某些通知ID, 而不能设置其他通知ID,
+// 同时也可以创建多个Notification能力, 隔离不同的通知用途)
+
+//====================================================
 
 // 通知能力数据
 typedef struct {
     int notif_id;
     qword bitmap[NOTIFICATION_BITMAP_QWORDS];  // 通知位图
 } Notification;
+
+//====================================================
 
 // 通知能力权限
 typedef struct {
@@ -98,7 +109,7 @@ CapPtr create_notification_cap(PCB *p);
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
-                      qword cap_priv[PRIVILEDGE_QWORDS],
+                      qword cap_priv,
                       NotCapPriv *notif_priv);
 
 /**
@@ -113,7 +124,7 @@ CapPtr not_cap_derive(PCB *src_p, CapPtr src_ptr, PCB *dst_p,
  * @return CapPtr 派生出的能力指针
  */
 CapPtr not_cap_derive_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr,
-                         qword cap_priv[PRIVILEDGE_QWORDS],
+                         qword cap_priv,
                          NotCapPriv *notif_priv);
 
 /**
@@ -147,7 +158,7 @@ CapPtr not_cap_clone_at(PCB *src_p, CapPtr src_ptr, PCB *dst_p, CapPtr dst_ptr);
  * @return CapPtr 降级后的能力指针(和cap_ptr相同)
  */
 CapPtr not_cap_degrade(PCB *p, CapPtr cap_ptr,
-                       qword cap_priv[PRIVILEDGE_QWORDS],
+                       qword cap_priv,
                        NotCapPriv *notif_priv);
 
 /**
@@ -202,7 +213,7 @@ bool not_cap_check(PCB *p, CapPtr cap_ptr, int nid);
 bool tcb_cap_wait_notification(PCB *p, CapPtr tcb_ptr, CapPtr not_ptr,
                                qword *wait_bitmap);
 
-#define NOT_CAP_START(proc, cap_ptr, func_name, cap, notif, cap_priv_check, \
+#define NOT_CAP_START(proc, cap_ptr, cap, notif, cap_priv_check, \
                       notif_priv_check, ret_val)                            \
     /** 获取能力 */                                                     \
     Capability *cap = fetch_cap(proc, cap_ptr);                             \
