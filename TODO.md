@@ -115,6 +115,8 @@ RT.
 
 提供一个Capability移除函数, cap_remove(), 允许进程主动移除自己的Capability,使得该Capability不再有效, 并释放其占用的资源.
 
+## 13. 实现VFS
+
 # IMPORTANT
 
 ## 1. fast path机制
@@ -143,6 +145,34 @@ fastpath机制是一种优化RPC调用性能的技术. 通过该机制, 某些RP
 ## 6. 实现一个简单的交互式shell
 
 实现一个简单的交互式shell, 允许用户在命令行界面下输入和执行命令. 该shell应当支持基本的命令解析和执行功能, 包括内置命令和外部命令的执行.
+
+## 7. 实现slab()
+
+是的, 我应当实现它, 但是我太懒了.
+
+## 8. 利用Capability对CSlot进行控制
+
+每个PCB中都含有一个CSpace数组, 其中存放着若干个CSpace. CSpace的实质是一个CSlot(Capability *)数组, 每个CSlot实质上都是一个Capability指针.
+进程通过指定CSpace索引和CSlot索引来访问其Capability对象. 这两个索引被统一到一个64位整数中, 其中高32位为CSpace索引, 低32位为CSlot索引.
+目前, 为进程创建能力时, CSlot由内核主动寻找空闲位置进行分配. 但是, 这并不安全, 因为进程无法控制其CSlot的分配和使用情况.
+例如, 一个恶意进程可以大量向另一个进程派生能力, 导致该进程的CSlot被耗尽, 从而无法创建新的能力.
+为了解决这个问题, 我们应当利用Capability对CSlot进行控制.
+具体而言, 我们应当把寻找CSlot与派生Capability的操作分开.
+而对CSlot的使用也通过Capability系统进行控制.
+具体而言, 我们可以实现一个CSpaceCapability. 虽然CSpace是PCB的一部分,
+但我们确实应当将其从PCB中分离出来, 使得其成为一个独立的内核对象. 不过, 获取CSpaceCapability的唯一途径是通过PCBCapability.
+CSpaceCapability允许进程对其CSlot进行分配和释放操作. 其存储有一个位图, 用于记录CSlot的使用情况.
+当进程需要创建一个新的Capability时, 其首先通过PCBCapability获取其CSpaceCapability, 然后通过CSpaceCapability分配一个新的CSlot.
+当进程不再需要某个Capability时, 其通过CSpaceCapability释放该Capability对应的CSlot.
+当进程需要向某个进程派生Capability时, 其应当遵守以下步骤:
+
+1. 通过系统调用进行不带CapPtr的派生. 该请求将被保存在内核中, 并分配一个独特的Request ID, 并等待目标进程处理.
+2. 通过某种方式将Request ID发送给目标进程. 接下来目标进程有多种选择:
+    - 拒绝该请求, 使得该请求失效.
+    - 接受该请求, 并委托系统调用为其分配一个新的CSlot用于存放该Capability. 系统将在稍后将CapPtr传递给目标进程.
+    - 接受该请求, 并向系统传递一个有效的CapPtr.
+
+如果进程间需要频繁地派生Capability, 则可以预先将CSpaceCapability派生给目标进程, 使得目标进程可以通过CSpaceCapability自行分配CSlot.
 
 # OPTIMIZATIONS
 
