@@ -11,7 +11,7 @@
 
 #include <cap/mem_cap.h>
 #include <mem/alloc.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 
 CapIdx mem_cap_create(PCB *p, void *paddr, size_t size, bool shared, bool mmio, bool allocated)
 {

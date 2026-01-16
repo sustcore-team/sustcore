@@ -45,15 +45,15 @@ const char *get_machine(Elf64_Half e_machine) {
 
 void to_type_string(Elf64_Word p_type, char *buffer) {
     switch (p_type) {
-        case PT_NULL:    ssprintf(buffer, "NULL"); break;
-        case PT_LOAD:    ssprintf(buffer, "LOAD"); break;
-        case PT_DYNAMIC: ssprintf(buffer, "DYNAMIC"); break;
-        case PT_INTERP:  ssprintf(buffer, "INTERP"); break;
-        case PT_NOTE:    ssprintf(buffer, "NOTE"); break;
-        case PT_SHLIB:   ssprintf(buffer, "SHLIB"); break;
-        case PT_PHDR:    ssprintf(buffer, "PHDR"); break;
-        case PT_TLS:     ssprintf(buffer, "TLS"); break;
-        default:         ssprintf(buffer, "UNKNOWN(%p)", p_type); break;
+        case PT_NULL:    sprintf(buffer, "NULL"); break;
+        case PT_LOAD:    sprintf(buffer, "LOAD"); break;
+        case PT_DYNAMIC: sprintf(buffer, "DYNAMIC"); break;
+        case PT_INTERP:  sprintf(buffer, "INTERP"); break;
+        case PT_NOTE:    sprintf(buffer, "NOTE"); break;
+        case PT_SHLIB:   sprintf(buffer, "SHLIB"); break;
+        case PT_PHDR:    sprintf(buffer, "PHDR"); break;
+        case PT_TLS:     sprintf(buffer, "TLS"); break;
+        default:         sprintf(buffer, "UNKNOWN(%p)", p_type); break;
     }
 }
 

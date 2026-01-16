@@ -11,7 +11,7 @@
 
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 #include <mem/vmm.h>
 #include <string.h>
 #include <sus/list_helper.h>

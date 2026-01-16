@@ -13,7 +13,7 @@
 #include <arch/riscv64/mem/sv39.h>
 #include <basec/logger.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 #include <string.h>
 
 void sv39_mapping_init(void) {}

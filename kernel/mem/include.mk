@@ -1,5 +1,5 @@
-objects += mem/pmm.o
-deps += mem/pmm.d
+objects += mem/buddy.o
+deps += mem/buddy.d
 
 objects += mem/alloc.o
 deps += mem/alloc.d

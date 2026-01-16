@@ -11,13 +11,9 @@
 
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 #include <sus/attributes.h>
 #include <sus/bits.h>
-
-#ifdef DLOG_PMM
-#define DISABLE_LOGGING
-#endif
 
 #include <basec/logger.h>
 

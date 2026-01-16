@@ -15,72 +15,76 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-/**
- * @brief 输出函数
- */
-typedef int (*BaseCPutsFunc)(const char *);
+typedef int iochan_t;
 
 /**
- * @brief 输入函数
+ * @brief 将字符打印到chan对应的IO设备上
+ * 
+ * 由用户实现
+ * 
+ * @param chan IO通道
+ * @param c 要打印的字符
+ * @return int 打印的字符数
  */
-typedef char (*BaseCGetcharFunc)(void);
+int basec_putchar(iochan_t chan, char c);
 
 /**
- * @brief 使用bputs输出
+ * @brief 从chan对应的IO设备上读取一个字符
+ * 
+ * 由用户实现
+ * 
+ * @param chan IO通道
+ * @return char 读取的字符
+ */
+int basec_puts(iochan_t chan, const char *str);
+
+/**
+ * @brief 从chan对应的IO设备上读取一个字符
+ * 
+ * 由用户实现
+ * 
+ * @param chan IO通道
+ * @return char 读取的字符
+ */
+char basec_getchar(iochan_t chan);
+
+
+/**
+ * @brief 输出到chan对应的IO设备上
  *
- * @param bputs 输出函数
+ * @param chan 输出频道
  * @param fmt 格式化字符串
  * @param args 参数
  * @return 输出字符数
  */
-int vbprintf(BaseCPutsFunc bputs, const char *fmt, va_list args);
+int vbprintf(iochan_t chan, const char *fmt, va_list args);
 
 /**
- * @brief 使用bputs输出
+ * @brief 输出到buffer中
  *
- * @param bputs 输出函数
+ * @param buffer 缓存
+ * @param fmt 格式化字符串
+ * @param args 参数
+ * @return 输出字符数
+ */
+int vsprintf(char *buffer, const char *fmt, va_list args);
+
+/**
+ * @brief 输出到chan对应的IO设备上
+ *
+ * @param chan 输出频道
  * @param fmt 格式化字符串
  * @param ... 参数
  * @return 输出字符数
  */
-int bprintf(BaseCPutsFunc bputs, const char *fmt, ...);
+int bprintf(iochan_t chan, const char *fmt, ...);
 
 /**
- * @brief 使用bgetchar输入
+ * @brief 输出到buffer中
  *
- * @param bgetchar 输入函数
- * @param fmt 格式化字符串
- * @param args 参数
- * @return 输入字符数
- */
-int vbscanf(BaseCGetcharFunc bgetchar, const char *fmt, va_list args);
-
-/**
- * @brief 使用bgetchar输入
- *
- * @param bgetchar 输入函数
+ * @param buffer 缓存
  * @param fmt 格式化字符串
  * @param ... 参数
- * @return 输入字符数
+ * @return 输出字符数
  */
-int bscanf(BaseCGetcharFunc bgetchar, const char *fmt, ...);
-
-/**
- * @brief 向str中输出格式化数据
- *
- * @param str 缓存字符串
- * @param fmt 格式化字符串
- * @param ... 参数
- * @return int 输出字符数
- */
-int ssprintf(char *str, const char *fmt, ...);
-
-// /**
-//  * @brief 从str中输入格式化数据
-//  *
-//  * @param str 源字符串
-//  * @param fmt 格式化字符串
-//  * @param ... 参数
-//  * @return int 输入字符数
-//  */
-// int sscanf(const char *str, const char *fmt, ...);
+int sprintf(char *buffer, const char *fmt, ...);

@@ -1,0 +1,90 @@
+@startuml MemorySystem
+interface PhasedSystemTrait {
+    void init(...)
+    void post_init(...)
+    void runtime_init(...)
+}
+
+package "Page Frame Allocator" {
+interface PFATrait {
+    void pfa_init(size_t total_frames)
+    void pfa_post_init(void)
+    ==
+    void *pfa_alloc_frame(void)
+    void *pfa_alloc_frames(size_t count)
+    void pfa_free_frame(void *frame)
+    void pfa_free_frames(void *frame, size_t count)
+}
+class Buddy {
+    void buddy_init(size_t total_frames)
+    void buddy_post_init(void)
+    ==
+    void *buddy_alloc_frame(void)
+    void *buddy_alloc_frames(size_t count)
+    void *buddy_alloc_frame_in_order(int order)
+    void buddy_free_frame(void *frame)
+    void buddy_free_frames(void *frame, size_t count)
+    void buddy_free_frame_in_order(void *frame, int order)
+    ==
+    int buddy_pages2order(size_t pages)
+}
+}
+
+package "Kernel Memory Allocator" {
+interface KMallocTrait {
+    void kmalloc_pre_init(void)
+    void kmalloc_post_init(void)
+    ==
+    void *kmalloc(size_t size)
+    void kfree(void *ptr)
+}
+class Stage1Allocator {
+    void stage1_allocator_init(void)
+    ==
+    void *stage1_kmalloc(size_t size)
+    void stage1_kfree(void *ptr)
+}
+
+class Stage2Allocator {
+    void stage2_allocator_post_init(void)
+    ==
+    void *stage2_kmalloc(size_t size)
+    void stage2_kfree(void *ptr)
+}
+}
+
+package "Kernel Object Allocator" {
+interface KOATrait {
+    KOCache *koa_create_cache(const char *name, size_t ko_size, size_t align, qword flags)
+    void koa_destroy_cache(KOCache *cache)
+    void *koa_alloc(KOCache *cache, qword flags)
+    void koa_free(KOCache *cache, void *ko)
+}
+class TrivalKOA {
+    void TrivalKOCache *tkoa_create_cache(const char *name, size_t ko_size, size_t align, qword flags)
+    void tkoa_destroy_cache(TrivalKOCache *cache)
+    void tkoa_alloc(TrivalKOCache *cache, qword flags)
+    void tkoa_free(TrivalKOCache *cache, void *ko)
+}
+class SlubKOA {
+    SlubKOCache *skoa_create_cache(const char *name, size_t ko_size, size_t align, qword flags)
+    void skoa_destroy_cache(SlubKOA *cache)
+    void skoa_alloc(SlubKOA *cache, qword flags)
+    void skoa_free(SlubKOA *cache, void *ko)
+}
+}
+
+PFATrait ..|> PhasedSystemTrait
+KMallocTrait ..|> PhasedSystemTrait
+PFATrait -> KMallocTrait
+KOATrait -> PFATrait
+KOATrait -> KMallocTrait
+Buddy ..|> PFATrait
+Stage1Allocator ..|> KMallocTrait
+Stage2Allocator ..|> KMallocTrait
+Stage2Allocator -> Stage1Allocator
+Stage2Allocator -> PFATrait
+TrivalKOA ..|> KOATrait
+TrivalKOA --> KMallocTrait
+SlabKOA ..|> KOATrait
+@enduml

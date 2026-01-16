@@ -18,18 +18,18 @@
 static const char *logger_name = nullptr;
 
 // 输出流
-static BaseCPutsFunc logger_puts;
+static iochan_t logger_channel = -1;
 
-void init_logger(BaseCPutsFunc bputs, const char *name) {
-    bprintf(bputs, "[BCL Logger/INFO]为[%s]初始化日志器中.\n", name);
+void init_logger(iochan_t chan, const char *name) {
+    bprintf(chan, "[BCL Logger/INFO]为[%s]初始化日志器中.\n", name);
     // 初始化
     logger_name = name;
-    logger_puts = bputs;
+    logger_channel = chan;
 }
 
 // 最初级log
 void __llog__(const char *name, const char *level, const char *msg) {
-    bprintf(logger_puts, "[%s/%s]%s\n", name, level, msg);
+    bprintf(logger_channel, "[%s/%s]%s\n", name, level, msg);
 }
 
 /**

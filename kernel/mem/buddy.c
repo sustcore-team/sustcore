@@ -1,7 +1,7 @@
 /**
- * @file pmm.c
+ * @file buddy.c
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 物理内存管理器实现
+ * @brief Buddy页框分配器
  * @version alpha-1.0.0
  * @date 2025-11-20
  *
@@ -11,11 +11,7 @@
 
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
-
-#ifdef DLOG_PMM
-#define DISABLE_LOGGING
-#endif
+#include <mem/buddy.h>
 
 #include <basec/logger.h>
 
@@ -27,12 +23,12 @@
  * 从head->tail按照指向的内存地址升序排列
  *
  */
-typedef struct __PMMFreeArea__ {
+typedef struct __BuddyFreeArea__ {
     umb_t order;                   // 内存块阶数
     void *paddr;                   // 该空闲内存块的物理地址
-    struct __PMMFreeArea__ *prev;  // 指向上一个空闲内存块
-    struct __PMMFreeArea__ *next;  // 指向下一个空闲内存块
-} PMMFreeArea;
+    struct __BuddyFreeArea__ *prev;  // 指向上一个空闲内存块
+    struct __BuddyFreeArea__ *next;  // 指向下一个空闲内存块
+} BuddyFreeArea;
 
 #define MAX_BUDDY_ORDER 15  // 最大伙伴阶数 (2^15 * 4KB = 128MB)
 
@@ -45,7 +41,7 @@ typedef struct __PMMFreeArea__ {
  * 从head->tail按照指向的内存地址升序排列
  *
  */
-static PMMFreeArea *free_area_head[MAX_BUDDY_ORDER + 1] = {};
+static BuddyFreeArea *free_area_head[MAX_BUDDY_ORDER + 1] = {};
 
 /**
  * @brief Buddy System空闲内存块链表尾
@@ -56,7 +52,7 @@ static PMMFreeArea *free_area_head[MAX_BUDDY_ORDER + 1] = {};
  * 从head->tail按照指向的内存地址升序排列
  *
  */
-static PMMFreeArea *free_area_tail[MAX_BUDDY_ORDER + 1] = {};
+static BuddyFreeArea *free_area_tail[MAX_BUDDY_ORDER + 1] = {};
 
 // farl: Free area list
 
@@ -71,7 +67,7 @@ static void init_farl(int order) {
 }
 
 // 尝试merge相邻的两个空闲内存块
-static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
+static BuddyFreeArea *farl_try_merge(BuddyFreeArea *area) {
     if (area->order == MAX_BUDDY_ORDER) {
         // 已经是最大阶数, 无法合并
         return nullptr;
@@ -85,7 +81,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
     // 向前合并
     if (forward) {
         // 前驱
-        PMMFreeArea *prev = area->prev;
+        BuddyFreeArea *prev = area->prev;
 
         if (prev == nullptr) {
             // 无前驱, 无法合并
@@ -97,8 +93,8 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
         if (neighbor) {
             // 从链表中移除area和prev
             // prev2 -> prev -> area -> next
-            PMMFreeArea *prev2 = prev->prev;
-            PMMFreeArea *next  = area->next;
+            BuddyFreeArea *prev2 = prev->prev;
+            BuddyFreeArea *next  = area->next;
 
             // 分类讨论
             // prev2 -> prev -> area -> next 与
@@ -151,7 +147,7 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
         }
     } else {
         // 向后合并
-        PMMFreeArea *next = area->next;
+        BuddyFreeArea *next = area->next;
         if (next == nullptr) {
             // 无后继, 无法合并
             return nullptr;
@@ -162,8 +158,8 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
         if (neighbor) {
             // 从链表中移除area和next
             // prev -> area -> next -> next2
-            PMMFreeArea *prev  = area->prev;
-            PMMFreeArea *next2 = next->next;
+            BuddyFreeArea *prev  = area->prev;
+            BuddyFreeArea *next2 = next->next;
             // 分类讨论
             // prev -> area -> next -> next2 与
             // null -> area -> next -> next2  与
@@ -222,9 +218,9 @@ static PMMFreeArea *farl_try_merge(PMMFreeArea *area) {
  *
  * @param order 阶数
  * @param paddr 物理地址
- * @return PMMFreeArea* 若不为空, 则应继续尝试合并
+ * @return BuddyFreeArea* 若不为空, 则应继续尝试合并
  */
-static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
+static BuddyFreeArea *farl_insert(BuddyFreeArea *new_area) {
     // 设置相关字段
     umb_t order = new_area->order;
     void *paddr = new_area->paddr;
@@ -239,7 +235,7 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
     }
 
     // 寻找应该要插入的位置
-    PMMFreeArea *cur = free_area_head[order];
+    BuddyFreeArea *cur = free_area_head[order];
 
     // 寻找第一个大于paddr的节点
     while (cur != nullptr && cur->paddr < paddr) {
@@ -248,7 +244,7 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
 
     if (cur == nullptr) {
         // 插入到链表尾
-        PMMFreeArea *tail     = free_area_tail[order];
+        BuddyFreeArea *tail     = free_area_tail[order];
         tail->next            = new_area;
         new_area->prev        = tail;
         new_area->next        = nullptr;
@@ -256,12 +252,12 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
         return farl_try_merge(new_area);
     }
 
-    PMMFreeArea *prev = cur->prev;
+    BuddyFreeArea *prev = cur->prev;
 
     // 如果prev为nullptr
     if (prev == nullptr) {
         // 插入到链表头
-        PMMFreeArea *head     = free_area_head[order];
+        BuddyFreeArea *head     = free_area_head[order];
         head->prev            = new_area;
         new_area->next        = head;
         new_area->prev        = nullptr;
@@ -289,11 +285,11 @@ static PMMFreeArea *farl_insert(PMMFreeArea *new_area) {
  * @return true 添加成功
  * @return false 添加失败
  */
-static bool pmm_add_free_memblock(void *paddr, int order) {
+static bool buddy_add_free_memblock(void *paddr, int order) {
     // 判断是否 2^order(页) 对齐
     const umb_t block_size = 1ul << (order + 12);
     if (((umb_t)paddr % block_size) != 0) {
-        log_error("pmm_add_free_memblock: 地址 %p 非 %lu 对齐", paddr,
+        log_error("buddy_add_free_memblock: 地址 %p 非 %lu 对齐", paddr,
                   block_size);
         return false;
     }
@@ -302,13 +298,13 @@ static bool pmm_add_free_memblock(void *paddr, int order) {
               (void *)((umb_t)paddr + block_size), order);
 
     // 构造FreeArea对象记录
-    PMMFreeArea *area = kmalloc(sizeof(PMMFreeArea));
+    BuddyFreeArea *area = kmalloc(sizeof(BuddyFreeArea));
     area->order       = order;
     area->paddr       = paddr;
     area->prev        = nullptr;
     area->next        = nullptr;
 
-    PMMFreeArea *merged = farl_insert(area);
+    BuddyFreeArea *merged = farl_insert(area);
     while (merged != nullptr) {
         merged = farl_insert(merged);
     }
@@ -323,7 +319,7 @@ static bool pmm_add_free_memblock(void *paddr, int order) {
  * @return true 添加成功
  * @return false 添加失败
  */
-static bool pmm_add_free_pages(void *paddr, int pages) {
+static bool buddy_add_free_pages(void *paddr, int pages) {
     // 将其分解为多个2^order页的内存块
     // 每个内存块都是 2^order 页对齐的
 
@@ -351,8 +347,8 @@ static bool pmm_add_free_pages(void *paddr, int pages) {
         // 当break时, 至少上一个order是可用的
         order--;
         // 插入该阶数的块(addr, addr + 2^order * 4KB - 1)
-        if (!pmm_add_free_memblock((void *)addr, order)) {
-            log_error("pmm_add_free_pages: 添加内存块失败 addr=%p order=%d",
+        if (!buddy_add_free_memblock((void *)addr, order)) {
+            log_error("buddy_add_free_pages: 添加内存块失败 addr=%p order=%d",
                       (void *)addr, order);
             return false;
         }
@@ -371,7 +367,7 @@ static bool pmm_add_free_pages(void *paddr, int pages) {
  * @param order 内存块阶数
  * @return void* 内存块地址
  */
-static void *pmm_fetch_free_memblock(int order) {
+static void *buddy_fetch_free_memblock(int order) {
     void *paddr = nullptr;
 
     // 无可用内存块
@@ -382,7 +378,7 @@ static void *pmm_fetch_free_memblock(int order) {
             return nullptr;
         }
         // 向高一阶请求内存块
-        void *higher_block = pmm_fetch_free_memblock(order + 1);
+        void *higher_block = buddy_fetch_free_memblock(order + 1);
         if (higher_block == nullptr) {
             // 高一阶无可用内存块
             return nullptr;
@@ -400,14 +396,14 @@ static void *pmm_fetch_free_memblock(int order) {
 
         // 留下buddy2, 返回buddy1
         paddr = buddy1;
-        pmm_add_free_memblock(buddy2, order);
+        buddy_add_free_memblock(buddy2, order);
     } else {
         // 从链表头取出一个内存块
-        PMMFreeArea *area = free_area_head[order];
+        BuddyFreeArea *area = free_area_head[order];
         paddr             = area->paddr;
 
         // 从链表中移除area
-        PMMFreeArea *next = area->next;
+        BuddyFreeArea *next = area->next;
         if (next != nullptr) {
             next->prev            = nullptr;
             free_area_head[order] = next;
@@ -428,7 +424,7 @@ static void *pmm_fetch_free_memblock(int order) {
 }
 
 void *alloc_page(void) {
-    return pmm_fetch_free_memblock(0);
+    return buddy_fetch_free_memblock(0);
 }
 
 void *alloc_pages_in_order(int order) {
@@ -437,7 +433,7 @@ void *alloc_pages_in_order(int order) {
         return nullptr;
     }
 
-    return pmm_fetch_free_memblock(order);
+    return buddy_fetch_free_memblock(order);
 }
 
 int pages2order(int pagecnt) {
@@ -469,7 +465,7 @@ void *alloc_pages(int pagecnt) {
     int order = pages2order(pagecnt);
 
     // 分配的页地址
-    void *addr = pmm_fetch_free_memblock(order);
+    void *addr = buddy_fetch_free_memblock(order);
 
     // 如果页为空
     if (addr == nullptr) {
@@ -477,7 +473,7 @@ void *alloc_pages(int pagecnt) {
     }
 
     // 将多余的页送还
-    pmm_add_free_pages((void *)((umb_t)addr + (pagecnt << 12)),
+    buddy_add_free_pages((void *)((umb_t)addr + (pagecnt << 12)),
                        (1ul << order) - pagecnt);
     return addr;
 }
@@ -491,7 +487,7 @@ void free_page(void *paddr) {
         log_error("free_page: 地址 %p 非页对齐", paddr);
         return;
     }
-    pmm_add_free_memblock(paddr, 0);
+    buddy_add_free_memblock(paddr, 0);
 }
 
 void free_pages_in_order(void *paddr, int order) {
@@ -511,13 +507,13 @@ void free_pages_in_order(void *paddr, int order) {
         int multiplier = 1 << (order - MAX_BUDDY_ORDER);
         // 先释放多个最大阶数内存块
         for (int i = 0; i < multiplier; i++) {
-            pmm_add_free_memblock(
+            buddy_add_free_memblock(
                 (void *)((umb_t)paddr + (i * (1ul << (MAX_BUDDY_ORDER + 12)))),
                 MAX_BUDDY_ORDER);
         }
         return;
     }
-    pmm_add_free_memblock(paddr, order);
+    buddy_add_free_memblock(paddr, order);
 }
 
 void free_pages(void *paddr, int pagecnt) {
@@ -533,10 +529,10 @@ void free_pages(void *paddr, int pagecnt) {
         log_error("free_pages: 无效的页数 %d", pagecnt);
         return;
     }
-    pmm_add_free_pages(paddr, pagecnt);
+    buddy_add_free_pages(paddr, pagecnt);
 }
 
-void pmm_init(MemRegion *layout) {
+void buddy_init(MemRegion *layout) {
     // STEP1: 根据layout解析物理内存布局
 
     // 初始化FARL
@@ -559,14 +555,14 @@ void pmm_init(MemRegion *layout) {
                 (region->size - (start_addr - (umb_t)region->addr)) / PAGE_SIZE;
 
             // 将其加入物理内存管理器
-            pmm_add_free_pages((void *)start_addr, pages);
+            buddy_add_free_pages((void *)start_addr, pages);
         }
         // 处理下一个内存区域
         region = region->next;
     }
 }
 
-void pmm_post_init(void) {
+void buddy_post_init(void) {
     // 遍历所有FARL链表
     for (int order = 0; order <= MAX_BUDDY_ORDER; order++) {
         if (free_area_head[order] == nullptr) {
@@ -575,10 +571,10 @@ void pmm_post_init(void) {
         // 将表头迁移到高地址
         // 由于这部分是在stage1分配器下分配的, 因此应迁移到Kernel处而非Kheap处
         // 更新链表中所有节点的地址
-        log_debug("pmm_post_init: 迁移PMMFreeArea链表 阶数=%d", order);
+        log_debug("buddy_post_init: 迁移BuddyFreeArea链表 阶数=%d", order);
         free_area_head[order] = PA2KA(free_area_head[order]);
         free_area_tail[order] = PA2KA(free_area_tail[order]);
-        PMMFreeArea *iter     = free_area_head[order];
+        BuddyFreeArea *iter     = free_area_head[order];
         while (iter != nullptr) {
             // 更新prev和next指针
             if (iter->prev != nullptr) {

@@ -19,3 +19,15 @@ int printf(const char *fmt, ...) {
     va_end(args);
     return ret;
 }
+
+#define STDIO_CHAN (8)
+
+int basec_puts(iochan_t chan, const char *str) {
+    if (chan == STDIO_CHAN) {
+        // 标准io通道, 使用sys_write_syscall
+        puts(str);
+        return 0;
+    }
+    // 未知通道
+    return -1;
+}

@@ -37,7 +37,7 @@ void init_allocator(void);
 /**
  * @brief 初始化分配器第二阶段
  *
- * 应当在post-init阶段, 更新了pmm之后调用
+ * 应当在post-init阶段, 更新了buddy之后调用
  *
  */
 void init_allocator_stage2(void);

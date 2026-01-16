@@ -10,10 +10,12 @@
  */
 
 #include <alloc.h>
-#include <startup.h>
+#include <basec/baseio.h>
 #include <kmod/syscall.h>
+#include <startup.h>
 #include <sus/bits.h>
 #include <syscall.h>
+#include <string.h>
 
 extern int kmod_main(void);
 
@@ -29,7 +31,7 @@ CapIdx sa_get_device(void) {
 void init(umb_t heap_ptr) {
     // 初始化堆指针
     init_malloc((void *)heap_ptr);
-    device_cap = INVALID_CAP_IDX; // TODO: 从系统参数获取设备能力
+    device_cap = INVALID_CAP_IDX;  // TODO: 从系统参数获取设备能力
 }
 
 void terminate(int code) {
@@ -69,10 +71,10 @@ void _start(void) {
     // 根据约定
     // a0寄存器保存PCB能力
     // a1寄存器保存heap指针
-    pcb_cap.val     = arg[0];
-    umb_t heap_ptr  = arg[1];
-    main_thread_cap.val = arg[2];
-    default_notif_cap.val   = arg[3];
+    pcb_cap.val           = arg[0];
+    umb_t heap_ptr        = arg[1];
+    main_thread_cap.val   = arg[2];
+    default_notif_cap.val = arg[3];
 
     init(heap_ptr);
 

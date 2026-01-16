@@ -108,6 +108,7 @@ typedef union {
     }
 
 #define CAPIDX_INVALID(idx) ((idx).val == INVALID_CAP_IDX.val)
+#define CAPIDX_VALID(idx)   ((idx).val != INVALID_CAP_IDX.val)
 
 typedef enum {
     CAP_TYPE_NUL = 0,  // 空能力

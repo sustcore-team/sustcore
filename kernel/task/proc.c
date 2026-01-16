@@ -16,7 +16,7 @@
 #include <cap/tcb_cap.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 #include <mem/vmm.h>
 #include <string.h>
 #include <sus/boot.h>

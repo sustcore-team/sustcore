@@ -21,7 +21,7 @@
  * @param output 输出函数
  * @param name 程序名
  */
-void init_logger(BaseCPutsFunc bputs, const char *name);
+void init_logger(iochan_t chan, const char *name);
 
 /**
  * @brief 输出日志

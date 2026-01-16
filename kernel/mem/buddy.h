@@ -1,7 +1,7 @@
 /**
- * @file pmm.h
+ * @file buddy.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 物理内存管理器
+ * @brief Buddy页框分配器
  * @version alpha-1.0.0
  * @date 2025-11-20
  *
@@ -23,16 +23,16 @@
  * @param layout 物理内存布局
  *
  */
-void pmm_init(MemRegion *layout);
+void buddy_init(MemRegion *layout);
 
 /**
  * @brief 物理内存管理器后期初始化
  *
  * 在post_init阶段调用.
- * 将PMM的数据结构迁移到高地址处.
+ * 将Buddy的数据结构迁移到高地址处.
  *
  */
-void pmm_post_init(void);
+void buddy_post_init(void);
 
 /**
  * @brief 分配一个物理页(返回物理页地址)

@@ -101,7 +101,7 @@ MemRegion *arch_get_memory_layout(void) {
     // 处理mmode_resv($i) (0 <= i < 16)
     for (int i = 0; i < 16; i++) {
         char resv_name[32];
-        ssprintf(resv_name, "%s%d", resv_name_base, i);
+        sprintf(resv_name, "%s%d", resv_name_base, i);
         FDTNodeDesc resv_node = get_sub_device(fdt, reserved_mem, resv_name);
         if (resv_node == -1) {
             // 未找到该节点, 结束

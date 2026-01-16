@@ -14,7 +14,7 @@
 #include <elfloader.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/pmm.h>
+#include <mem/buddy.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -25,6 +25,19 @@
 #include <sus/symbols.h>
 #include <task/proc.h>
 #include <task/scheduler.h>
+
+#define KERNEL_IOCHAN (8)
+
+int basec_puts(iochan_t chan, const char *str)
+{
+    if (chan == KERNEL_IOCHAN) {
+        // 内核通道, 输出到串口
+        kputs(str);
+        return 0;
+    }
+    kprintf("Unknown iochan: %d\n", chan);
+    return -1;
+}
 
 void assertion_failure(const char *expression, const char *file,
                        const char *base_file, int line) {
@@ -104,9 +117,6 @@ int main(void) {
     // 启动调度器
     sheduling_enabled = true;
 
-    // log_info("进程调度测试");
-    // proc_test();
-
     while (true);
 
     return 0;
@@ -161,7 +171,7 @@ void pre_init(void) {
     // 由于此时还在pre-init阶段
     // 内核页表还未完成, 但是虚拟地址位于高地址处
     // 所以此处设置时需先将其转换为物理地址
-    init_logger(kputs, "SUSTCore-PreInit");
+    init_logger(KERNEL_IOCHAN, "SUSTCore-PreInit");
 
     log_info("初始化内存分配器...");
     init_allocator();
@@ -192,11 +202,11 @@ void post_init(void) {
     __asm__ volatile("mv sp, %0" ::"r"(new_sp));
 
     // 首先, 重新设置logger的函数指针
-    init_logger(kputs, "SUSTCore");
+    init_logger(KERNEL_IOCHAN, "SUSTCore");
 
-    // 让PMM重新设置其数据结构
+    // 让Buddy重新设置其数据结构
     // 使得新的分配数据位于高地址处
-    pmm_post_init();
+    buddy_post_init();
 
     // 进入分配器的第二阶段
     init_allocator_stage2();
@@ -248,7 +258,7 @@ void init(void) {
     }
 
     log_info("初始化物理内存管理器...");
-    pmm_init(layout);
+    buddy_init(layout);
 
     // kernel_paging_setup会把我们带到post_init阶段
     kernel_paging_setup(layout);
