@@ -8,7 +8,7 @@ mem.puml 中的 PFATrait 接口定义了 PFA 的基本操作.
 
 ## 1. PFA
 
-### 1.1 void pfa_init(size_t total_frames)
+### 1.1 void pfa_pre_init(size_t total_frames)
 
 初始化 PFA 子系统.
 参数 total_frames 指定了系统中可用的物理页框总数.
@@ -45,7 +45,7 @@ PFA 的经典实现是伙伴系统 (Buddy System).
 伙伴系统通过将物理内存划分为大小为 2 的幂次的块来管理内存.
 当分配或回收内存时, 伙伴系统会根据请求的大小找到合适的块, 并在必要时进行分裂或合并操作.
 
-### 2.1 void buddy_init(size_t total_frames)
+### 2.1 void buddy_pre_init(size_t total_frames)
 ### 2.2 void buddy_post_init(void)
 ### 2.3 void *buddy_alloc_frame(void)
 ### 2.4 void *buddy_alloc_frames(size_t count)

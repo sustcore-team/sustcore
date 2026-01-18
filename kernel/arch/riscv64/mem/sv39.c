@@ -13,13 +13,13 @@
 #include <arch/riscv64/mem/sv39.h>
 #include <basec/logger.h>
 #include <mem/kmem.h>
-#include <mem/buddy.h>
+#include <mem/pfa.h>
 #include <string.h>
 
 void sv39_mapping_init(void) {}
 
 SV39PT construct_sv39_mapping_root(void) {
-    SV39PT root = PA2KPA((SV39PT)alloc_page());
+    SV39PT root = PA2KPA((SV39PT)pfa_alloc_frame());
     memset(root, 0, SV39_4K_PAGE_SIZE);
     return root;
 }
@@ -53,7 +53,7 @@ void sv39_maps_to(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     // 搜索第二级, 第三级
     for (int level = 2; level > 0; level--) {
         if (!(pte->v)) {
-            SV39PT *new_table = (SV39PT *)alloc_page();
+            SV39PT *new_table = (SV39PT *)pfa_alloc_frame();
             // 初始化新的页表项
             pte->value        = 0;
             pte->v            = 1;
@@ -99,7 +99,7 @@ void sv39_maps_to_2m(SV39PT root, void *vaddr, void *paddr, umb_t rwx, bool u,
     SV39PTE *pte = &root[vpn[1]];
     // 搜索第二级
     if (!(pte->v)) {
-        SV39PT *new_table = (SV39PT *)alloc_page();
+        SV39PT *new_table = (SV39PT *)pfa_alloc_frame();
         // 初始化新的页表项
         pte->value        = 0;
         pte->v            = 1;

@@ -14,7 +14,7 @@
 #include <elfloader.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/buddy.h>
+#include <mem/pfa.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -206,7 +206,7 @@ void post_init(void) {
 
     // 让Buddy重新设置其数据结构
     // 使得新的分配数据位于高地址处
-    buddy_post_init();
+    pfa_post_init();
 
     // 进入分配器的第二阶段
     init_allocator_stage2();
@@ -258,7 +258,7 @@ void init(void) {
     }
 
     log_info("初始化物理内存管理器...");
-    buddy_init(layout);
+    pfa_pre_init(layout);
 
     // kernel_paging_setup会把我们带到post_init阶段
     kernel_paging_setup(layout);

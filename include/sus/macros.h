@@ -61,6 +61,10 @@
 #define SC_DELETE(x)    kfree(x);
 #define SC_DELETES(...) SCFOREACH(SC_DELETE, __VA_ARGS__)
 
+// 添加分号
+#define SC_SEMICOLON(x)    x;
+#define SC_SEMICOLONS(...) SCFOREACH(SC_SEMICOLON, __VA_ARGS__)
+
 /**
  * @brief 表达式失败时返回指定值
  * @param expr 要检验的某个布尔表达式
@@ -76,6 +80,15 @@
         if (!((expr))) {                                                      \
             log_error("%s: 表达式" SCSTRINGIFY(expr) " 失败!", __FUNCTION__); \
             SC_DELETES(__VA_ARGS__)                                           \
+            return err_ret;                                                   \
+        }                                                                     \
+    } while (0)
+
+#define SC_GUARD_EXT(expr, err_ret, ...)                                      \
+    do {                                                                      \
+        if (!((expr))) {                                                      \
+            log_error("%s: 表达式" SCSTRINGIFY(expr) " 失败!", __FUNCTION__); \
+            SC_SEMICOLONS(__VA_ARGS__)                                        \
             return err_ret;                                                   \
         }                                                                     \
     } while (0)
@@ -109,11 +122,35 @@
         }                                                                 \
     } while (0)
 
+#define SC_NONNULL_MSG(ptr, err_ret, msg, ...)     \
+    do {                                           \
+        if (ptr == nullptr) {                      \
+            log_error("%s:%s", __FUNCTION__, msg); \
+            SC_DELETES(__VA_ARGS__)                \
+            return err_ret;                        \
+        }                                          \
+    } while (0)
+
+#define SC_NONNULL_EXT(ptr, err_ret, ...)                                 \
+    do {                                                                  \
+        if (ptr == nullptr) {                                             \
+            log_error("%s: 指针" SCSTRINGIFY(ptr) "为空!", __FUNCTION__); \
+            SC_SEMICOLONS(__VA_ARGS__)                                    \
+            return err_ret;                                               \
+        }                                                                 \
+    } while (0)
+
 #define SC_NEW(type, ptr, err_ret, ...)        \
     type *ptr = (type *)kmalloc(sizeof(type)); \
     SC_NONNULL(ptr, err_ret, __VA_ARGS__);
 
-#define NEW(type, ptr, ...) SC_NEW(type, ptr, sc_err_ret, __VA_ARGS__)
-#define GUARD(expr, ...)    SC_GUARD(expr, sc_err_ret, __VA_ARGS__)
+#define NEW(type, ptr, ...)  SC_NEW(type, ptr, sc_err_ret, __VA_ARGS__)
+#define GUARD(expr, ...)     SC_GUARD(expr, sc_err_ret, __VA_ARGS__)
+#define GUARD_EXT(expr, ...) SC_GUARD_EXT(expr, sc_err_ret, __VA_ARGS__)
+#define NONNULL(ptr, ...)    SC_NONNULL(ptr, sc_err_ret, __VA_ARGS__)
+#define NONNULL_MSG(ptr, msg, ...) \
+    SC_NONNULL_MSG(ptr, sc_err_ret, msg, __VA_ARGS__)
+#define NONNULL_EXT(ptr, ...) SC_NONNULL_EXT(ptr, sc_err_ret, __VA_ARGS__)
 #define GUARD_MSG(expr, msg, ...) \
     SC_GUARD_MSG(expr, sc_err_ret, msg, __VA_ARGS__)
+#define SET_ERR_RET(type, val) type sc_err_ret = val;

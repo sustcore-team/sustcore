@@ -9,13 +9,13 @@
  *
  */
 
+#include <basec/logger.h>
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/buddy.h>
+#include <mem/pfa.h>
 #include <sus/attributes.h>
 #include <sus/bits.h>
-
-#include <basec/logger.h>
+#include <sus/macros.h>
 
 typedef void *(*KAllocator)(size_t size);
 typedef void (*KDeallocator)(void *ptr);
@@ -44,19 +44,17 @@ static void set_dual_allocator(KAllocator allocator, KDeallocator deallocator) {
 }
 
 void *kmalloc(size_t size) {
-    if (__kmalloc__ != nullptr) {
-        return __kmalloc__(size);
-    }
-    log_error("kmalloc: 内存分配器未设置");
-    return nullptr;
+    SET_ERR_RET(void *, nullptr);
+    NONNULL_MSG(__kmalloc__, "内存分配器未设置");
+    return __kmalloc__(size);
 }
 
 void kfree(void *ptr) {
-    if (__kfree__ != nullptr) {
-        __kfree__(ptr);
-        return;
-    }
-    log_error("kfree: 内存释放器未设置");
+#define sc_err_ret
+    NONNULL_MSG(__kfree__, "内存释放器未设置");
+#undef sc_err_ret
+
+    __kfree__(ptr);
 }
 
 /**
@@ -77,10 +75,8 @@ static byte *heap_ptr      = nullptr;  // 当前堆内存分配指针
  * @return void* 分配的内存指针
  */
 void *__primitive_kmalloc__(size_t size) {
-    if (heap_ptr + size > __HEAP_TAIL__) {
-        log_error("__primitive_kmalloc__: 堆内存不足");
-        return nullptr;
-    }
+    SET_ERR_RET(void *, nullptr);
+    GUARD_MSG(heap_ptr + size <= __HEAP_TAIL__, "堆内存不足");
 
     // 分配堆内存
     void *ptr  = heap_ptr;
@@ -191,22 +187,20 @@ static size_t heap_free_dwords = 0;
  *
  */
 static bool alloc_heap_page(void) {
+    SET_ERR_RET(bool, false);
+
     // 首先请求一个order 5内存块
-    void *new_heap_pages = PA2KPA(alloc_pages_in_order(5));
-    if (new_heap_pages == nullptr) {
-        log_error("alloc_heap_page: 无法分配新的堆页");
-        return false;
-    }
+    void *new_heap_pages = PA2KPA(pfa_alloc_frames(32));
+    NONNULL_EXT(new_heap_pages);
+
     // 再请求一个页来管理这些页里的pages
-    void *new_bitmap_page = PA2KPA(alloc_page());
-    if (new_bitmap_page == nullptr) {
-        log_error("alloc_heap_page: 无法分配新的位图页");
-        // 释放之前分配的堆页
-        free_pages_in_order(new_heap_pages, 5);
-        return false;
-    }
+    void *new_bitmap_page = PA2KPA(pfa_alloc_frame());
+    NONNULL_EXT(new_bitmap_page, pfa_free_frames(new_heap_pages, 5));
+
     // 组成一个HeapPage加入结构体
     HeapPageIdx *new_idx = (HeapPageIdx *)kmalloc(sizeof(HeapPageIdx));
+    NONNULL_EXT(new_idx, pfa_free_frame(KPA2PA(new_bitmap_page));
+                pfa_free_frames(new_heap_pages, 5));
     new_idx->bitmap_page = new_bitmap_page;
     new_idx->heap_pages  = new_heap_pages;
 
@@ -240,25 +234,13 @@ static InBitmapLocation locate_in_bitmap(HeapLocation location) {
  * @param end 结束位置
  */
 static void mark_dirty(HeapLocation start, HeapLocation end) {
-    if (start.idx != end.idx) {
-        log_error("mark_dirty: 跨页标记不支持");
-        return;
-    }
-
-    if (start.offset > end.offset) {
-        log_error("mark_dirty: 起始位置大于结束位置");
-        return;
-    }
-
-    if (end.offset / 32 >= 4096) {
-        log_error("mark_dirty: offset 超出范围");
-        return;
-    }
-
-    if ((start.offset & 0x3) != 0 || (end.offset & 0x3) != 0) {
-        log_error("mark_dirty: offset 非dword对齐");
-        return;
-    }
+#define sc_err_ret
+    GUARD_MSG(start.idx == end.idx, "不支持跨页标记!");
+    GUARD_MSG(start.offset <= end.offset, "偏移起始位置大于结束位置!");
+    GUARD_MSG(end.offset / 32 < 4096, "偏移超出范围!");
+    GUARD_MSG((start.offset & 0x3) == 0 && (end.offset & 0x3) == 0,
+              "偏移非dword对齐!");
+#undef sc_err_ret
 
     InBitmapLocation start_loc = locate_in_bitmap(start);
     InBitmapLocation end_loc   = locate_in_bitmap(end);
@@ -298,26 +280,13 @@ static void mark_dirty(HeapLocation start, HeapLocation end) {
  * @param end 结束位置
  */
 static void unmark_dirty(HeapLocation start, HeapLocation end) {
-    if (start.idx != end.idx) {
-        log_error("unmark_dirty: 跨页标记不支持");
-        return;
-    }
-
-    if (start.offset > end.offset) {
-        log_error("unmark_dirty: 起始位置大于结束位置");
-        return;
-    }
-
-    if (end.offset / 32 >= 4096) {
-        log_error("unmark_dirty: offset 超出范围");
-        return;
-    }
-
-    if ((start.offset & 0x3) != 0 || (end.offset & 0x3) != 0) {
-        log_error("unmark_dirty: offset 非dword对齐");
-        return;
-    }
-
+#define sc_err_ret
+    GUARD_MSG(start.idx == end.idx, "不支持跨页标记!");
+    GUARD_MSG(start.offset <= end.offset, "偏移起始位置大于结束位置!");
+    GUARD_MSG(end.offset / 32 < 4096, "偏移超出范围!");
+    GUARD_MSG((start.offset & 0x3) == 0 && (end.offset & 0x3) == 0,
+              "偏移非dword对齐!");
+#undef sc_err_ret
     InBitmapLocation start_loc = locate_in_bitmap(start);
     InBitmapLocation end_loc   = locate_in_bitmap(end);
 
@@ -498,6 +467,9 @@ static void extend_empty_alloc_infos(const int extend_count) {
     extending_empty_alloc_infos = true;
     // 分配内存用于新的分配信息
     AllocInfo *info = (AllocInfo *)kmalloc(sizeof(AllocInfo) * extend_count);
+#define sc_err_ret
+    NONNULL(info);
+#undef sc_err_ret
 
     // 初始化这些分配信息
     for (int i = 0; i < extend_count; i++) {
@@ -535,10 +507,8 @@ static void extend_empty_alloc_infos(const int extend_count) {
  * @return AllocInfo* 分配信息指针
  */
 static AllocInfo *get_empty_alloc_info(void) {
-    if (empty_alloc_info_head == nullptr) {
-        log_error("get_empty_alloc_info: 分配信息链表为空");
-        return nullptr;
-    }
+    SET_ERR_RET(AllocInfo *, nullptr);
+    NONNULL_MSG(empty_alloc_info_head, "分配信息链表为空");
 
     // 如果空闲分配信息不足, 且不在扩展状态中, 则扩展
     if (!extending_empty_alloc_infos && empty_alloc_info_count < 16) {
@@ -588,10 +558,9 @@ static void add_alloc_info(AllocInfo *info) {
  */
 static void add_small_alloc_info(HeapLocation start, HeapLocation end) {
     AllocInfo *info = get_empty_alloc_info();
-    if (info == nullptr) {
-        log_error("add_small_alloc_info: 无可用的分配信息");
-        return;
-    }
+#define sc_err_ret
+    NONNULL_MSG(info, "无可用的分配信息");
+#undef sc_err_ret
 
     // 填充信息
     info->is_page = false;
@@ -608,10 +577,9 @@ static void add_small_alloc_info(HeapLocation start, HeapLocation end) {
  */
 static void add_page_alloc_info(void *start_page, int page_count) {
     AllocInfo *info = get_empty_alloc_info();
-    if (info == nullptr) {
-        log_error("add_page_alloc_info: 无可用的分配信息");
-        return;
-    }
+#define sc_err_ret
+    NONNULL_MSG(info, "无可用的分配信息");
+#undef sc_err_ret
 
     // 填充信息
     info->is_page    = true;
@@ -626,10 +594,10 @@ static void add_page_alloc_info(void *start_page, int page_count) {
  * @param info 分配信息指针
  */
 static void release_page_alloc_info(AllocInfo *info) {
-    if (!info->is_used) {
-        log_error("release_page_alloc_info: 分配信息未被使用");
-        return;
-    }
+#define sc_err_ret
+    NONNULL_MSG(info, "分配信息指针为空");
+    GUARD(info->is_used, "分配信息未被使用");
+#undef sc_err_ret
     // 将其标记为未使用
     info->is_used   = false;
     AllocInfo *prev = info->last;
@@ -686,48 +654,33 @@ static AllocInfo *match_alloc_info(void *addr) {
  * @return void* 分配的内存指针
  */
 static void *__stage2_kmalloc__(size_t size) {
+    SET_ERR_RET(void *, nullptr);
     if (size >= 4096) {
         // 将其向上对齐至page, 并分配page
-        void *paddr = alloc_pages(SIZE2PAGES(size));
-        void *addr          = PA2KPA(paddr);
-        if (addr == nullptr) {
-            log_error("__stage2_kmalloc__: 大页分配失败 size=%u", size);
-            return nullptr;
-        }
+        void *paddr = pfa_alloc_frames(SIZE2PAGES(size));
+        NONNULL_MSG(paddr, "无法分配大页!");
+        void *addr = PA2KPA(paddr);
         // 将其记录在分配记录中
         add_page_alloc_info(addr, SIZE2PAGES(size));
         return addr;
     }
 
-    if (heap_idx_head == nullptr) {
-        log_error("__stage2_kmalloc__: 堆页索引未初始化");
-        return nullptr;
-    }
+    NONNULL_MSG(heap_idx_head, "堆页索引未初始化");
 
     // 计算所需dword数
     size_t needed_dwords = (size + 3) / 4;
 
     // 如果当前空闲dword数量不足, 则分配新的堆页
     while (heap_free_dwords < needed_dwords + LEAST_FREE_DWORDS) {
-        if (!alloc_heap_page()) {
-            log_error("__stage2_kmalloc__: 无法分配新的堆页");
-            return nullptr;
-        }
+        GUARD_MSG(alloc_heap_page(), "无法分配新的堆页");
     }
 
     // 寻找空闲dword位置
     HeapLocation loc = search_free_dwords(needed_dwords);
     if (loc.idx == nullptr) {
-        // 堆内存不足, 分配一个新堆页
-        if (!alloc_heap_page()) {
-            log_error("__stage2_kmalloc__: 无法分配新的堆页");
-            return nullptr;
-        }
+        GUARD_MSG(alloc_heap_page(), "无法分配新的堆页");
         loc = search_free_dwords(needed_dwords);
-        if (loc.idx == nullptr) {
-            log_error("__stage2_kmalloc__: 分配新堆页后仍无法找到空闲位置");
-            return nullptr;
-        }
+        NONNULL_MSG(loc.idx, "分配新堆页后仍无法找到空闲位置");
     }
 
     // 标记为已使用
@@ -744,7 +697,6 @@ static void *__stage2_kmalloc__(size_t size) {
 
     // 计算实际地址
     void *addr = (void *)((umb_t)loc.idx->heap_pages + loc.offset);
-
     return addr;
 }
 
@@ -764,7 +716,7 @@ void __stage2_kfree__(void *ptr) {
     }
     if (info->is_page) {
         // 大页分配
-        free_pages(KPA2PA(info->start_page), info->page_count);
+        pfa_free_frames(KPA2PA(info->start_page), info->page_count);
     } else {
         // 小块分配
         // 标记为未使用
@@ -784,10 +736,9 @@ void init_allocator_stage2(void) {
 
     // 先初始化堆页索引链表
     heap_idx_head = heap_idx_tail = nullptr;
-    if (!alloc_heap_page()) {
-        log_error("init_allocator_stage2: 无法初始化堆页索引链表");
-        return;
-    }
+#define sc_err_ret
+    GUARD_MSG(alloc_heap_page(), "init_allocator_stage2: 无法初始化堆页索引链表");
+#undef sc_err_ret
     // 再添加初始空闲分配信息
     extend_empty_alloc_infos(64);
 

@@ -527,8 +527,7 @@ typedef union {
         umb_t cbcfe : 1;   // [6]
         umb_t cbze : 1;    // [7]
         umb_t wrpi1 : 24;  // [8:31] WRPI
-        umb_t
-            buddy : 2;  // [32:33] Pause Mask in M-Mode M-Mode下是否屏蔽PAUSE指令
+        umb_t pmm : 2;  // [32:33] Pause Mask in M-Mode M-Mode下是否屏蔽PAUSE指令
         umb_t wrpi2 : 30;  // [34:63] WRPI
     } PACKED;
 } csr_senvcfg_t;

@@ -319,7 +319,7 @@ static bool buddy_add_free_memblock(void *paddr, int order) {
  * @return true 添加成功
  * @return false 添加失败
  */
-static bool buddy_add_free_pages(void *paddr, int pages) {
+static bool buddy_add_free_frames(void *paddr, int pages) {
     // 将其分解为多个2^order页的内存块
     // 每个内存块都是 2^order 页对齐的
 
@@ -348,7 +348,7 @@ static bool buddy_add_free_pages(void *paddr, int pages) {
         order--;
         // 插入该阶数的块(addr, addr + 2^order * 4KB - 1)
         if (!buddy_add_free_memblock((void *)addr, order)) {
-            log_error("buddy_add_free_pages: 添加内存块失败 addr=%p order=%d",
+            log_error("buddy_add_free_frames: 添加内存块失败 addr=%p order=%d",
                       (void *)addr, order);
             return false;
         }
@@ -423,21 +423,21 @@ static void *buddy_fetch_free_memblock(int order) {
     return paddr;
 }
 
-void *alloc_page(void) {
+void *buddy_alloc_frame(void) {
     return buddy_fetch_free_memblock(0);
 }
 
-void *alloc_pages_in_order(int order) {
+void *buddy_alloc_frames_in_order(int order) {
     if (order > MAX_BUDDY_ORDER) {
-        log_error("alloc_pages_in_order: 无效的页数 2^%d", order);
+        log_error("buddy_alloc_frames_in_order: 无效的页数 2^%d", order);
         return nullptr;
     }
 
     return buddy_fetch_free_memblock(order);
 }
 
-int pages2order(int pagecnt) {
-    switch (pagecnt) {
+int pages2order(size_t count) {
+    switch (count) {
         case 1:  return 0;
         case 2:  return 1;
         case 3:
@@ -445,7 +445,7 @@ int pages2order(int pagecnt) {
         default: {
             int order = 3;
             while (order <= MAX_BUDDY_ORDER) {
-                if ((1ul << order) >= pagecnt) {
+                if ((1ul << order) >= count) {
                     break;
                 }
                 order++;
@@ -455,14 +455,14 @@ int pages2order(int pagecnt) {
     }
 }
 
-void *alloc_pages(int pagecnt) {
-    if (pagecnt <= 0 || (pagecnt >> MAX_BUDDY_ORDER) > 1) {
-        log_error("alloc_pages: 无效的页数 %d", pagecnt);
+void *buddy_alloc_frames(size_t count) {
+    if (count <= 0 || (count >> MAX_BUDDY_ORDER) > 1) {
+        log_error("buddy_alloc_frames: 无效的页数 %d", count);
         return nullptr;
     }
 
     // 计算所需的最小order
-    int order = pages2order(pagecnt);
+    int order = pages2order(count);
 
     // 分配的页地址
     void *addr = buddy_fetch_free_memblock(order);
@@ -473,34 +473,34 @@ void *alloc_pages(int pagecnt) {
     }
 
     // 将多余的页送还
-    buddy_add_free_pages((void *)((umb_t)addr + (pagecnt << 12)),
-                       (1ul << order) - pagecnt);
+    buddy_add_free_frames((void *)((umb_t)addr + (count << 12)),
+                       (1ul << order) - count);
     return addr;
 }
 
-void free_page(void *paddr) {
+void buddy_free_frame(void *paddr) {
     if (paddr >= (void *)KPHY_VA_OFFSET) {
-        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        log_error("free_frame: 地址 %p 超出物理地址范围", paddr);
         return;
     }
     if (((umb_t)paddr % 0x1000) != 0) {
-        log_error("free_page: 地址 %p 非页对齐", paddr);
+        log_error("free_frame: 地址 %p 非页对齐", paddr);
         return;
     }
     buddy_add_free_memblock(paddr, 0);
 }
 
-void free_pages_in_order(void *paddr, int order) {
+void buddy_free_frames_in_order(void *paddr, int order) {
     if (paddr >= (void *)KPHY_VA_OFFSET) {
-        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        log_error("free_frame: 地址 %p 超出物理地址范围", paddr);
         return;
     }
     if (((umb_t)paddr % 0x1000) != 0) {
-        log_error("free_pages_in_order: 地址 %p 非页对齐", paddr);
+        log_error("free_frames_in_order: 地址 %p 非页对齐", paddr);
         return;
     }
     if (order < 0) {
-        log_error("free_pages_in_order: 无效的页数 2^%d", order);
+        log_error("free_frames_in_order: 无效的页数 2^%d", order);
         return;
     }
     if (order > MAX_BUDDY_ORDER) {
@@ -516,23 +516,23 @@ void free_pages_in_order(void *paddr, int order) {
     buddy_add_free_memblock(paddr, order);
 }
 
-void free_pages(void *paddr, int pagecnt) {
+void buddy_free_frames(void *paddr, size_t count) {
     if (paddr >= (void *)KPHY_VA_OFFSET) {
-        log_error("free_page: 地址 %p 超出物理地址范围", paddr);
+        log_error("free_frame: 地址 %p 超出物理地址范围", paddr);
         return;
     }
     if (((umb_t)paddr % 0x1000) != 0) {
-        log_error("free_pages: 地址 %p 非页对齐", paddr);
+        log_error("free_frames: 地址 %p 非页对齐", paddr);
         return;
     }
-    if (pagecnt <= 0) {
-        log_error("free_pages: 无效的页数 %d", pagecnt);
+    if (count <= 0) {
+        log_error("free_frames: 无效的页数 %d", count);
         return;
     }
-    buddy_add_free_pages(paddr, pagecnt);
+    buddy_add_free_frames(paddr, count);
 }
 
-void buddy_init(MemRegion *layout) {
+void buddy_pre_init(MemRegion *layout) {
     // STEP1: 根据layout解析物理内存布局
 
     // 初始化FARL
@@ -551,11 +551,11 @@ void buddy_init(MemRegion *layout) {
             // 其实质为:
             // ((region->size + region->addr) - start_addr) / PAGE_SIZE
             // 即(region->end_addr - start_addr) / PAGE_SIZE
-            umb_t pages =
+            umb_t count =
                 (region->size - (start_addr - (umb_t)region->addr)) / PAGE_SIZE;
 
             // 将其加入物理内存管理器
-            buddy_add_free_pages((void *)start_addr, pages);
+            buddy_add_free_frames((void *)start_addr, count);
         }
         // 处理下一个内存区域
         region = region->next;

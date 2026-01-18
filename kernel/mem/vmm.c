@@ -11,7 +11,7 @@
 
 #include <mem/alloc.h>
 #include <mem/kmem.h>
-#include <mem/buddy.h>
+#include <mem/pfa.h>
 #include <mem/vmm.h>
 #include <string.h>
 #include <sus/list_helper.h>
@@ -65,7 +65,7 @@ void add_pma(void *paddr, int pages) {
  * @return void* 分配的物理地址
  */
 void *pma_alloc_pages(int remain_pages) {
-    void *paddr = alloc_pages(remain_pages);
+    void *paddr = pfa_alloc_frames(remain_pages);
     if (paddr == nullptr) {
         return nullptr;
     }
@@ -75,28 +75,12 @@ void *pma_alloc_pages(int remain_pages) {
 }
 
 /**
- * @brief 分配order阶物理页并添加到PMA链表
- *
- * @param order 阶数
- * @return void* 分配的物理地址
- */
-void *pma_alloc_pages_in_order(int order) {
-    void *paddr = alloc_pages_in_order(order);
-    if (paddr == nullptr) {
-        return nullptr;
-    }
-
-    add_pma(paddr, 1ul << order);
-    return paddr;
-}
-
-/**
  * @brief 分配单个物理页并添加到PMA链表
  *
  * @return void* 分配的物理地址
  */
 void *pma_alloc_page(void) {
-    return pma_alloc_pages_in_order(0);
+    return pma_alloc_pages(1);
 }
 
 PMA *pma_find(void *paddr) {
@@ -280,7 +264,7 @@ bool alloc_pages_for(TM *tm, void *vaddr, size_t pages, int rwx, bool user) {
                 paddr = pma_alloc_pages(remain_pages);
             } else {
                 // 否则尝试分配2^order页
-                paddr = pma_alloc_pages_in_order(order);
+                paddr = pma_alloc_pages(1 << order);
             }
             // paddr为nullptr时持续降低
             if (paddr == nullptr)

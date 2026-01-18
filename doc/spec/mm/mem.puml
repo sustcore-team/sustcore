@@ -40,7 +40,6 @@ package "Task Memory" {
         PMA *prev;
         PMA *next;
     }
-    in
     interface RPMA {
         void rpma_init(void)
         ===
@@ -87,7 +86,7 @@ package "Task Memory" {
 
 package "Page Frame Allocator" {
     interface PFATrait {
-        void pfa_init(size_t total_frames)
+        void pfa_pre_init(size_t total_frames)
         void pfa_post_init(void)
         ==
         void *pfa_alloc_frame(void)
@@ -96,7 +95,7 @@ package "Page Frame Allocator" {
         void pfa_free_frames(void *frame, size_t count)
     }
     class Buddy {
-        void buddy_init(size_t total_frames)
+        void buddy_pre_init(size_t total_frames)
         void buddy_post_init(void)
         ==
         void *buddy_alloc_frame(void)
