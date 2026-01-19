@@ -49,7 +49,7 @@ namespace FDTHelper {
     template<>
     dword get_property_value_as<dword, 0>(FDTPropDesc prop);
     template<>
-    int get_property_value_as<int, -1>(FDTPropDesc prop);
+    int get_property_value_as<int, 0>(FDTPropDesc prop);
     template<>
     qword get_property_value_as<qword, 0>(FDTPropDesc prop);
     int get_reg_regions_cnt(FDTPropDesc prop, int addr_cells, int size_cells);
