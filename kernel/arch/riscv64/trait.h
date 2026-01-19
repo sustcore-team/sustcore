@@ -18,3 +18,11 @@ public:
 };
 
 typedef Riscv64Serial ArchSerial;
+
+class Riscv64Initialization {
+public:
+    static void pre_init(void);
+    static void post_init(void);
+};
+
+typedef Riscv64Initialization ArchInitialization;

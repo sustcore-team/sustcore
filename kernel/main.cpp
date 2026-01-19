@@ -25,5 +25,6 @@ void init(void) {
 
 void kernel_setup(void) {
     ArchSerial::serial_write_string("欢迎使用 Sustcore Riscv64 内核!\n");
+    ArchInitialization::pre_init();
     while (true);
 }

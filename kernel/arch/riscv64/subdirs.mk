@@ -1,0 +1,1 @@
+subdirs += ./arch/riscv64/device/

@@ -58,7 +58,7 @@ flags-asm :=
 
 args-asm := flags-asm="$(flags-asm)"
 
-libs := kersbi kerbasecpp
+libs := kersbi kerbasecpp fdt
 
 args := $(args-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"
 args-phy := $(args-phy-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"

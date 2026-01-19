@@ -10,6 +10,8 @@
  */
 
 #include <arch/riscv64/csr.h>
+#include <arch/riscv64/device/fdt_helper.h>
+#include <arch/riscv64/device/misc.h>
 #include <arch/trait.h>
 #include <libfdt.h>
 #include <sbi/sbi.h>
@@ -29,3 +31,18 @@ extern "C" void c_setup(void) {
     kernel_setup();
     while (true);
 }
+
+void Riscv64Initialization::pre_init(void) {
+    if (FDTHelper::fdt_init(dtb_ptr) == nullptr) {
+        // FDT初始化失败
+        while (true);
+    }
+
+    int hz = get_clock_freq_hz();
+    if (hz <= 0) {
+        // 时钟频率获取失败
+        while (true);
+    }
+}
+
+void Riscv64Initialization::post_init(void) {}
