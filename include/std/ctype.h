@@ -12,6 +12,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
 /**
  * @brief 判断字符是否为空白字符（空格、制表符等）
  * @param ch 要判断的字符
@@ -116,3 +121,8 @@ int tolower(int ch);
  * @return 转换后的字符
  */
 int toupper(int ch);
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

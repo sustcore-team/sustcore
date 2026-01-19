@@ -11,8 +11,11 @@
 
 #pragma once
 
-#include <sus/bits.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+#include <sus/bits.h>
 #include <sbi/sbi_enum.h>
 
 /**
@@ -366,3 +369,7 @@ SBIRet sbi_remote_hfence_vvma_asid(umb_t hart_mask, umb_t hart_mask_base,
  */
 SBIRet sbi_remote_hfence_vvma(umb_t hart_mask, umb_t hart_mask_base,
                               umb_t start_addr, umb_t size);
+
+#ifdef __cplusplus
+}
+#endif

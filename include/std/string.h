@@ -12,6 +12,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
 #include <stddef.h>
 
 /**
@@ -197,3 +202,8 @@ int memcmp(const void *restrict str1, const void *restrict str2, int count);
  * @return void* 指向首次出现字符的指针，若未找到则返回NULL
  */
 void *memchr(const void *restrict str, char ch, int count);
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

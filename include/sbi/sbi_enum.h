@@ -11,6 +11,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     SBI_SUCCESS               =  0,
     SBI_ERR_FAILED            = -1,
@@ -121,3 +125,7 @@ enum HSM_STATE {
     SUSPEND_PENDING = 5,  // 已请求挂起该 hart，仍在努力使其进入 SUSPENDED
     RESUME_PENDING  = 6   // 已请求恢复该 hart，仍在努力使其进入 STARTED
 };
+
+#ifdef __cplusplus
+}
+#endif

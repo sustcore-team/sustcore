@@ -11,9 +11,17 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
 #include <limits.h>
 #include <stdint.h>
 
 unsigned long int strtoul(const char *restrict str, char **endptr, int base);
 
-// WIP
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

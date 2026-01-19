@@ -12,6 +12,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
 /**
  * @brief 断言
  *
@@ -55,4 +60,9 @@ void panic(const char *format, ...);
 #define panic_assert(expression) \
     if (!(expression))           \
     panic_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
+#endif
+
+#ifdef __cplusplus
+}
+#undef restrict
 #endif

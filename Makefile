@@ -28,16 +28,11 @@ arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(pa
 -include $(path-script)/config.mk
 
 build:
-	$(q)$(MAKE) -f $(path-e)/libs/basec/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/libs/sbi/Makefile $(arg-basic) $@
-	$(q)$(MAKE) -f $(path-e)/libs/kmod/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
-	
+
 	$(call prepare, $(path-attach))
 	$(q)$(copy) ./LICENSE $(path-attach)/license
-# 	$(q)$(MAKE) -f $(path-e)/loader/grub/Makefile $(arg-basic) $@
-# 	$(q)$(MAKE) -f $(path-e)/module/virtio_blk/Makefile $(arg-basic) $@
-	$(q)$(MAKE) -f $(path-e)/module/test/Makefile $(arg-basic) $@
 
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@
 

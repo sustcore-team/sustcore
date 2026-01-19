@@ -12,6 +12,11 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
 /** 巨大值 */
 #define HUGE_VAL (__builtin_huge_val())
 
@@ -32,3 +37,8 @@ double exp(double x);            // e^x
 double pow(double x, double y);  // x^y
 double sqrt(double x);           // 开方
 double fabs(double x);           // 绝对值
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

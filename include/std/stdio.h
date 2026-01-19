@@ -12,6 +12,13 @@
 
 #pragma once
 
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
+#include <stdarg.h>
+
 /**
  * @brief 输出到buffer中
  *
@@ -48,3 +55,8 @@ int printf(const char *fmt, ...);
  * @return int 输出的字符数
  */
 int puts(const char *str);
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

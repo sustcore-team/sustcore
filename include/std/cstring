@@ -1,0 +1,22 @@
+/**
+ * @file cstring
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief C字符串操作函数
+ * @version alpha-1.0.0
+ * @date 2026-01-19
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
+#include <string.h>
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif
