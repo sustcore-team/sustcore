@@ -9,14 +9,23 @@
  *
  */
 
+#include <arch/riscv64/csr.h>
+#include <arch/trait.h>
 #include <libfdt.h>
 #include <sbi/sbi.h>
 
 int hart_id;
 void *dtb_ptr;
 
-extern "C"
-void c_setup(void) {
-    sbi_dbcn_console_write_byte('R');
+void Riscv64Serial::serial_write_char(char ch) {
+    sbi_dbcn_console_write_byte(ch);
+}
+
+void Riscv64Serial::serial_write_string(const char *str) {
+    sbi_dbcn_console_write(strlen(str), str);
+}
+
+extern "C" void c_setup(void) {
+    kernel_setup();
     while (true);
 }

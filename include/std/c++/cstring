@@ -9,6 +9,8 @@
  * 
  */
 
+#pragma once
+
 #ifdef __cplusplus
 #define restrict __restrict__
 extern "C" {
