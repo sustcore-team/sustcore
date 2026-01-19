@@ -1,0 +1,24 @@
+/**
+ * @file cstddef
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief stddef.h
+ * @version alpha-1.0.0
+ * @date 2026-01-19
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
+#pragma once
+
+#ifdef __cplusplus
+#define restrict __restrict__
+extern "C" {
+#endif
+
+#include <stddef.h>
+
+#ifdef __cplusplus
+}
+#undef restrict
+#endif

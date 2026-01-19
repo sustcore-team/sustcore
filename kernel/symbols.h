@@ -11,6 +11,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief 内核起始/结束处位置
  *
@@ -82,3 +86,7 @@ extern void *s_attach_test, *e_attach_test;
  * 
  */
 extern void *s_ptest1, *e_ptest1;
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,1 @@
+objects += mem/lga.o

@@ -43,3 +43,5 @@ IndentCaseLabels: "true"
 IndentWidth: "4"
 PointerAlignment: Right
 SpaceAfterCStyleCast: "false"
+AccessModifierOffset: -4
+NamespaceIndentation: All

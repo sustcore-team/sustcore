@@ -67,3 +67,5 @@ typedef signed_machine_bits smb_t;
 #define DWORD_MAX (0xFFFF'FFFF)
 #define WORD_MAX  (0xFFFF)
 #define BYTE_MAX  (0xFF)
+
+#define PACKED __attribute__((packed))
