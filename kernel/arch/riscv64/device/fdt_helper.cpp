@@ -100,7 +100,7 @@ namespace FDTHelper {
         return fdt32_to_cpu(*(const dword *)val.ptr);
     }
     template<>
-    int get_property_value_as<int, -1>(FDTPropDesc prop) {
+    int get_property_value_as<int, 0>(FDTPropDesc prop) {
         union {
             int i;
             dword d;

@@ -13,18 +13,18 @@
 #include <basecpp/baseio.h>
 #include <basecpp/logger.h>
 #include <basecpp/tostring.h>
-#include <ctype.h>
-#include <string.h>
+#include <cctype>
+#include <cstring>
 
 /**
- * @brief 底层printf
+ * @brief 底层printf, 输出到buffer中
  *
  * @param buffer 输出缓冲
  * @param fmt 格式化字符串
  * @param args 参数
  * @return 输出字符数
  */
-static int __llprintf(char *buffer, const char *fmt, va_list args) {
+int vsprintf(char *buffer, const char *fmt, va_list args) {
     enum {
         // 标志
         FLAG_SIGN         = 1 << 0,  // 显示符号
@@ -310,55 +310,6 @@ static int __llprintf(char *buffer, const char *fmt, va_list args) {
 
     return buffer - original;
     return 0;
-}
-
-/**
- * @brief 输出到chan对应的IO设备上
- *
- * @param chan 输出频道
- * @param fmt 格式化字符串
- * @param args 参数
- * @return 输出字符数
- */
-int vbprintf(iochan_t chan, const char *fmt, va_list args) {
-    // TODO: 优化为分块输出
-    static char buffer[8192];
-
-    int ret = __llprintf(buffer, fmt, args);
-    basec_puts(chan, buffer);
-
-    return ret;
-}
-
-/**
- * @brief 输出到buffer中
- *
- * @param buffer 缓存
- * @param fmt 格式化字符串
- * @param args 参数
- * @return 输出字符数
- */
-int vsprintf(char *buffer, const char *fmt, va_list args) {
-    return __llprintf(buffer, fmt, args);
-}
-
-/**
- * @brief 输出到chan对应的IO设备上
- *
- * @param chan 输出频道
- * @param fmt 格式化字符串
- * @param ... 参数
- * @return 输出字符数
- */
-int bprintf(iochan_t chan, const char *fmt, ...) {
-    // 初始化可变参数
-    va_list lst;
-    va_start(lst, fmt);
-
-    int ret = vbprintf(chan, fmt, lst);
-
-    va_end(lst);
-    return ret;
 }
 
 /**

@@ -9,18 +9,54 @@
  *
  */
 
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <cstring>
-
-#include <mem/alloc.h>
 #include <arch/trait.h>
+#include <mem/alloc.h>
+#include <cstdarg>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <basecpp/baseio.h>
+#include <kio.h>
 
-void post_init(void) {
+void post_init(void) {}
+
+void init(void) {}
+
+int kputs(const char* str) {
+    ArchSerial::serial_write_string(str);
+    return strlen(str);
 }
 
-void init(void) {
+int kputchar(char ch) {
+    ArchSerial::serial_write_char(ch);
+    return ch;
+}
+
+char kgetchar() {
+    return '\0';
+}
+
+KernelIO kio;
+
+int KernelIO::putchar(char c) {
+    return kputchar(c);
+}
+
+int KernelIO::puts(const char* str) {
+    return kputs(str);
+}
+
+char KernelIO::getchar() {
+    return kgetchar();
+}
+
+int kprintf(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int len = vbprintf(kio, fmt, args);
+    va_end(args);
+    return len;
 }
 
 void kernel_setup(void) {

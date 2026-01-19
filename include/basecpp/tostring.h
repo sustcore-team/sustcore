@@ -12,6 +12,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief 无符号整型转字符串
  *
@@ -51,3 +55,7 @@ char *ulltoa(unsigned long long val, char *buffer, int base);
  * @return 字符串
  */
 char *lltoa(long long val, char *buffer, int base);
+
+#ifdef __cplusplus
+}
+#endif

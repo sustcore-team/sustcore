@@ -15,6 +15,7 @@
 #include <arch/trait.h>
 #include <libfdt.h>
 #include <sbi/sbi.h>
+#include <kio.h>
 
 int hart_id;
 void *dtb_ptr;
@@ -43,6 +44,8 @@ void Riscv64Initialization::pre_init(void) {
         // 时钟频率获取失败
         while (true);
     }
+
+    kprintf("时钟频率为 %d Hz", hz);
 }
 
 void Riscv64Initialization::post_init(void) {}

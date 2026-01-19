@@ -12,42 +12,26 @@
 
 #pragma once
 
-#include <stdarg.h>
-#include <stdio.h>
+#include <concept>
+#include <cstdarg>
+#include <cstdio>
 
-typedef int iochan_t;
+namespace basecpp {
 
-/**
- * @brief 将字符打印到chan对应的IO设备上
- * 
- * 由用户实现
- * 
- * @param chan IO通道
- * @param c 要打印的字符
- * @return int 打印的字符数
- */
-int basec_putchar(iochan_t chan, char c);
+    template <typename T>
+    concept IOTrait = requires(T x, char c, const char *str) {
+        {
+            x.putchar(c)
+        } -> std::same_as<int>;
+        {
+            x.puts(str)
+        } -> std::same_as<int>;
+        {
+            x.getchar()
+        } -> std::same_as<char>;
+    };
 
-/**
- * @brief 从chan对应的IO设备上读取一个字符
- * 
- * 由用户实现
- * 
- * @param chan IO通道
- * @return char 读取的字符
- */
-int basec_puts(iochan_t chan, const char *str);
-
-/**
- * @brief 从chan对应的IO设备上读取一个字符
- * 
- * 由用户实现
- * 
- * @param chan IO通道
- * @return char 读取的字符
- */
-char basec_getchar(iochan_t chan);
-
+}  // namespace basecpp
 
 /**
  * @brief 输出到chan对应的IO设备上
@@ -57,7 +41,13 @@ char basec_getchar(iochan_t chan);
  * @param args 参数
  * @return 输出字符数
  */
-int vbprintf(iochan_t chan, const char *fmt, va_list args);
+template <basecpp::IOTrait T>
+int vbprintf(T chan, const char *fmt, va_list args) {
+    char buffer[1024];
+    int len = vsprintf(buffer, fmt, args);
+    chan.puts(buffer);
+    return len;
+}
 
 /**
  * @brief 输出到buffer中
@@ -77,7 +67,14 @@ int vsprintf(char *buffer, const char *fmt, va_list args);
  * @param ... 参数
  * @return 输出字符数
  */
-int bprintf(iochan_t chan, const char *fmt, ...);
+template <basecpp::IOTrait T>
+int bprintf(T chan, const char *fmt, ...) {
+    va_list lst;
+    va_start(lst, fmt);
+    int ret = vbprintf(chan, fmt, lst);
+    va_end(lst);
+    return ret;
+}
 
 /**
  * @brief 输出到buffer中

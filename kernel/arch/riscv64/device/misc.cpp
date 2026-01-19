@@ -32,7 +32,7 @@ int get_clock_freq_hz(void) {
         return -1;
     }
 
-    int freq = FDTHelper::get_property_value_as_int(prop_freq);
+    int freq = FDTHelper::get_property_value_as<int, 0>(prop_freq);
     if (freq <= 0) {
         // 属性值无效
         // log_error("/cpus/timebase-frequency不能以dword读取, 无法获取时钟频率");
