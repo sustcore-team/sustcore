@@ -1,0 +1,44 @@
+/**
+ * @file functional
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 仿函数对象
+ * @version alpha-1.0.0
+ * @date 2026-01-20
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <utility>
+
+namespace std {
+
+    template <typename T>
+    struct less {
+        constexpr bool operator()(const T &a, const T &b) const noexcept {
+            return a < b;
+        }
+    };
+
+    template <typename T>
+    struct greater {
+        constexpr bool operator()(const T &a, const T &b) const noexcept {
+            return a > b;
+        }
+    };
+
+    // template <>
+    // struct less<void> {
+    //     template <typename T, typename U>
+    //     constexpr auto operator()(T &&a, U &&b) const
+    //         noexcept(noexcept(forward<T>(a) < forward<U>(b)))
+    //             -> decltype(forward<T>(a) < forward<U>(b)) {
+    //         return forward<T>(a) < forward<U>(b);
+    //     }
+
+    //     using is_transparent = void;
+    // };
+
+}  // namespace std

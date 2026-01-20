@@ -1,0 +1,25 @@
+/**
+ * @file utility
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief utility 工具
+ * @version alpha-1.0.0
+ * @date 2026-01-20
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+namespace std {
+    template <class T>
+    void swap(T& a, T& b) {
+        T temp = static_cast<T&&>(a);
+        a      = static_cast<T&&>(b);
+        b      = static_cast<T&&>(temp);
+    }
+
+    // template <typename T>
+    // struct forward {};
+
+}  // namespace std

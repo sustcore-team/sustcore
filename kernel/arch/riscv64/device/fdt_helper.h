@@ -11,8 +11,9 @@
 
 #pragma once
 
-#include <sus/bits.h>
 #include <libfdt.h>
+#include <sus/bits.h>
+
 #include <cstddef>
 
 typedef void FDTDesc;
@@ -36,7 +37,7 @@ namespace FDTHelper {
     };
     PropVal get_property_value(FDTPropDesc prop);
     const char *get_property_value_as_string(FDTPropDesc prop);
-    template<typename T, T errno = 0>
+    template <typename T, T errno = 0>
     T get_property_value_as(FDTPropDesc prop) {
         PropVal val = get_property_value(prop);
         if (val.len < sizeof(T)) {
@@ -44,13 +45,13 @@ namespace FDTHelper {
         }
         return *(T *)(val.ptr);
     }
-    template<>
+    template <>
     word get_property_value_as<word, 0>(FDTPropDesc prop);
-    template<>
+    template <>
     dword get_property_value_as<dword, 0>(FDTPropDesc prop);
-    template<>
+    template <>
     int get_property_value_as<int, 0>(FDTPropDesc prop);
-    template<>
+    template <>
     qword get_property_value_as<qword, 0>(FDTPropDesc prop);
     int get_reg_regions_cnt(FDTPropDesc prop, int addr_cells, int size_cells);
     int get_property_value_as_reg_regions(FDTPropDesc prop, int addr_cells,
@@ -58,6 +59,6 @@ namespace FDTHelper {
                                           int max_regions);
     int get_parent_addresses_cells(FDTNodeDesc node);
     int get_parent_size_cells(FDTNodeDesc node);
-    // void print_device_tree(void);
-    // void print_device_tree_detailed(void);
-};
+    void print_entire_device_tree(void);
+    void print_device_tree_detailed(void);
+};  // namespace FDTHelper

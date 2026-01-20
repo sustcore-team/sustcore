@@ -11,10 +11,14 @@
 
 #pragma once
 
-#include <arch/riscv64/trait.h>
-
 #include <concept>
+#include <cstddef>
 
+/**
+ * @brief 架构串口 Trait
+ *
+ * @tparam T 架构串口类
+ */
 template <typename T>
 concept ArchSerialTrait = requires(char ch, const char *str) {
     {
@@ -25,10 +29,17 @@ concept ArchSerialTrait = requires(char ch, const char *str) {
     } -> std::same_as<void>;
 };
 
-static_assert(ArchSerialTrait<ArchSerial>);
-
+/**
+ * @brief 内核启动函数
+ *
+ */
 void kernel_setup(void);
 
+/**
+ * @brief 架构初始化 Trait
+ *
+ * @tparam T 架构初始化类
+ */
 template <typename T>
 concept ArchInitializationTrait = requires() {
     {
@@ -39,4 +50,36 @@ concept ArchInitializationTrait = requires() {
     } -> std::same_as<void>;
 };
 
-static_assert(ArchInitializationTrait<ArchInitialization>);
+/**
+ * @brief 内存区域
+ *
+ */
+struct MemRegion {
+    /**
+     * @brief 内存状态
+     *
+     */
+    enum class MemoryStatus {
+        FREE             = 0,
+        RESERVED         = 1,
+        ACPI_RECLAIMABLE = 2,
+        ACPI_NVS         = 3,
+        BAD_MEMORY       = 4
+    };
+
+    void *ptr;
+    size_t size;
+    MemoryStatus status;
+};
+
+/**
+ * @brief 架构内存布局 Trait
+ *
+ * @tparam T 架构内存布局类
+ */
+template <typename T>
+concept ArchMemLayoutTrait = requires(MemRegion *regions, int cnt) {
+    {
+        T::detect_memory_layout(regions, cnt)
+    } -> std::same_as<int>;
+};

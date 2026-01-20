@@ -9,14 +9,16 @@
  *
  */
 
-#include <arch/trait.h>
+#include <arch/riscv64/trait.h>
+#include <basecpp/baseio.h>
+#include <kio.h>
 #include <mem/alloc.h>
+#include <sus/bits.h>
+
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <basecpp/baseio.h>
-#include <kio.h>
 
 void post_init(void) {}
 
@@ -50,8 +52,7 @@ char KernelIO::getchar() {
     return kgetchar();
 }
 
-int kprintf(const char* fmt, ...)
-{
+int kprintf(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     int len = vbprintf(kio, fmt, args);
@@ -62,5 +63,15 @@ int kprintf(const char* fmt, ...)
 void kernel_setup(void) {
     ArchSerial::serial_write_string("欢迎使用 Sustcore Riscv64 内核!\n");
     ArchInitialization::pre_init();
+
+    // FDTHelper::print_device_tree_detailed();
+
+    MemRegion regions[128];
+    int cnt = ArchMemoryLayout::detect_memory_layout(regions, 128);
+    for (int i = 0; i < cnt; i++) {
+        kprintf("Region %d: [%p, %p) Status: %d\n", i, regions[i].ptr,
+                (void*)((umb_t)(regions[i].ptr) + regions[i].size),
+                static_cast<int>(regions[i].status));
+    }
     while (true);
 }
