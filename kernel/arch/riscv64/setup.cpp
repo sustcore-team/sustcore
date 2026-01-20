@@ -12,10 +12,10 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
-#include <arch/trait.h>
+#include <arch/riscv64/trait.h>
+#include <kio.h>
 #include <libfdt.h>
 #include <sbi/sbi.h>
-#include <kio.h>
 
 int hart_id;
 void *dtb_ptr;
@@ -45,7 +45,7 @@ void Riscv64Initialization::pre_init(void) {
         while (true);
     }
 
-    kprintf("时钟频率为 %d Hz", hz);
+    kprintf("时钟频率为 %d Hz\n", hz);
 }
 
 void Riscv64Initialization::post_init(void) {}

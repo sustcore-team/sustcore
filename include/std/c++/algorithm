@@ -1,0 +1,38 @@
+/**
+ * @file algorithm
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 算法
+ * @version alpha-1.0.0
+ * @date 2026-01-20
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+namespace std {
+    /**
+     * @brief 对 [begin, sort) 进行排序
+     *
+     * @tparam T Data Type
+     * @tparam Compare 比较函数类型
+     * @param begin 起始
+     * @param end 结束
+     * @param comp 比较函数
+     */
+    template <typename RandomIt, typename Compare>
+    void sort(RandomIt begin, RandomIt end, Compare comp) {
+        // 此处采取简单的插入排序
+        for (RandomIt i = begin + 1; i < end; i++) {
+            auto key   = *i;
+            RandomIt j = i - 1;
+
+            while (j >= begin && comp(key, *j)) {
+                *(j + 1) = *j;
+                j--;
+            }
+            *(j + 1) = key;
+        }
+    }
+}  // namespace std
