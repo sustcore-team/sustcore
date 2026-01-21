@@ -4,9 +4,9 @@
  * @brief 输入输出
  * @version alpha-1.0.0
  * @date 2026-01-20
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -19,11 +19,11 @@ char kgetchar();
 int kprintf(const char* fmt, ...);
 
 struct KernelIO {
-    int putchar(char c);
-    int puts(const char* str);
-    char getchar();
+    static int putchar(char c);
+    static int puts(const char* str);
+    static char getchar();
 };
 
-static_assert(basecpp::IOTrait<KernelIO>, "KernelIO does not satisfy IOTrait");
+constexpr KernelIO kio;
 
-extern KernelIO kio;
+static_assert(basecpp::IOTrait<KernelIO>, "KernelIO does not satisfy IOTrait");

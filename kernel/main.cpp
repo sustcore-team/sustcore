@@ -12,6 +12,7 @@
 #include <arch/trait.h>
 #include <basecpp/baseio.h>
 #include <configuration.h>
+#include <basecpp/logger.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <mem/kaddr.h>
@@ -39,13 +40,11 @@ char kgetchar() {
     return '\0';
 }
 
-KernelIO kio;
-
 int KernelIO::putchar(char c) {
     return kputchar(c);
 }
 
-int KernelIO::puts(const char* str) {
+int KernelIO::puts(const char *str) {
     return kputs(str);
 }
 
@@ -53,15 +52,14 @@ char KernelIO::getchar() {
     return kgetchar();
 }
 
-int kprintf(const char* fmt, ...) {
+int kprintf(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    int len = vbprintf(kio, fmt, args);
+    int len = vbprintf<KernelIO>(fmt, args);
     va_end(args);
     return len;
 }
 
-//============================
 
 MemRegion regions[128];
 PageMan::PTE *kernel_root = nullptr;
