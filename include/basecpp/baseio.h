@@ -16,18 +16,19 @@
 #include <cstdarg>
 #include <cstdio>
 
+
 namespace basecpp {
 
     template <typename T>
-    concept IOTrait = requires(T x, char c, const char *str) {
+    concept IOTrait = requires(char c, const char *str) {
         {
-            x.putchar(c)
+            T::putchar(c)
         } -> std::same_as<int>;
         {
-            x.puts(str)
+            T::puts(str)
         } -> std::same_as<int>;
         {
-            x.getchar()
+            T::getchar()
         } -> std::same_as<char>;
     };
 
@@ -36,16 +37,16 @@ namespace basecpp {
 /**
  * @brief 输出到chan对应的IO设备上
  *
- * @param chan 输出频道
+ * @tparam T IO频道类型
  * @param fmt 格式化字符串
  * @param args 参数
  * @return 输出字符数
  */
 template <basecpp::IOTrait T>
-int vbprintf(T chan, const char *fmt, va_list args) {
+int vbprintf(const char *fmt, va_list args) {
     char buffer[1024];
     int len = vsprintf(buffer, fmt, args);
-    chan.puts(buffer);
+    T::puts(buffer);
     return len;
 }
 
@@ -62,16 +63,16 @@ int vsprintf(char *buffer, const char *fmt, va_list args);
 /**
  * @brief 输出到chan对应的IO设备上
  *
- * @param chan 输出频道
+ * @tparam T IO频道类型
  * @param fmt 格式化字符串
  * @param ... 参数
  * @return 输出字符数
  */
 template <basecpp::IOTrait T>
-int bprintf(T chan, const char *fmt, ...) {
+int bprintf(const char *fmt, ...) {
     va_list lst;
     va_start(lst, fmt);
-    int ret = vbprintf(chan, fmt, lst);
+    int ret = vbprintf<T>(fmt, lst);
     va_end(lst);
     return ret;
 }
