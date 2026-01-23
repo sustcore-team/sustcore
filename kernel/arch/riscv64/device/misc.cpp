@@ -13,6 +13,18 @@
 #include <arch/riscv64/device/misc.h>
 #include <basecpp/logger.h>
 
+#include "kio.h"
+
+struct MiscLog {
+    static constexpr char name[]    = "Misc";
+    static constexpr LogLevel level = LogLevel::INFO;
+};
+
+static_assert(basecpp::LogInfo<MiscLog>,
+              "MiscLog does not satisfy LogInfo concept");
+
+static Logger<KernelIO, MiscLog> logger;
+
 int get_clock_freq_hz(void) {
     // 读取 /cpus/timebase-frequency 属性
     FDTNodeDesc root = FDTHelper::get_root_node();
@@ -20,7 +32,7 @@ int get_clock_freq_hz(void) {
     FDTNodeDesc cpus_node = FDTHelper::get_subnode(root, "cpus");
     if (cpus_node < 0) {
         // 未找到cpus节点
-        // log_error("未找到/cpus节点, 无法获取时钟频率");
+        logger.error("未找到/cpus节点, 无法获取时钟频率");
         return -1;
     }
 
@@ -28,14 +40,15 @@ int get_clock_freq_hz(void) {
         FDTHelper::get_property(cpus_node, "timebase-frequency");
     if (prop_freq < 0) {
         // 未找到timebase-frequency属性
-        // log_error("未找到/cpus/timebase-frequency属性, 无法获取时钟频率");
+        logger.error("未找到/cpus/timebase-frequency属性, 无法获取时钟频率");
         return -1;
     }
 
     int freq = FDTHelper::get_property_value_as<int, 0>(prop_freq);
     if (freq <= 0) {
         // 属性值无效
-        // log_error("/cpus/timebase-frequency不能以dword读取, 无法获取时钟频率");
+        logger.error(
+            "/cpus/timebase-frequency不能以dword读取, 无法获取时钟频率");
         return -1;
     }
 

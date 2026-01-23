@@ -63,6 +63,7 @@ int kprintf(const char *fmt, ...) {
 
 MemRegion regions[128];
 PageMan::PTE *kernel_root = nullptr;
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, KernelSetup)
 
 void init_ker_paddr(void *upper_bound);
 void mapping_kernel_areas(PageMan &man);
