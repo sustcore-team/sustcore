@@ -31,3 +31,7 @@ void LinearGrowAllocator::free(void* ptr) {
     MEMORY.FATAL("%s", "线性增长分配器不支持释放内存");
     (void)ptr;  // 避免未使用参数警告
 }
+
+void LinearGrowAllocator::init(void) {
+    LOGGER.INFO("线性增长分配器初始化完成, 可用内存大小: %u 字节", SIZE);
+}

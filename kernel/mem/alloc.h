@@ -24,6 +24,9 @@ concept AllocatorTrait = requires(size_t size, void* ptr) {
     {
         T::free(ptr)
     } -> std::same_as<void>;
+    {
+        T::init()
+    } -> std::same_as<void>;
 };
 class LinearGrowAllocator {
 private:
@@ -45,6 +48,11 @@ public:
      * @param ptr 要释放的内存地址
      */
     static void free(void* ptr);
+    /**
+     * @brief 初始化函数
+     * 
+     */
+    static void init(void);
 };
 
 static_assert(AllocatorTrait<LinearGrowAllocator>,
