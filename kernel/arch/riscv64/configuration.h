@@ -16,6 +16,7 @@
 using ArchSerial = Riscv64Serial;
 using ArchInitialization = Riscv64Initialization;
 using ArchMemoryLayout = Riscv64MemoryLayout;
+using ArchContext = Riscv64Context;
 
 template<PageFrameAllocatorTrait PFA>
 using ArchPageMan = Riscv64SV39PageMan<PFA>;

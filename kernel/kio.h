@@ -42,3 +42,4 @@ DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, PMM);
 
 // 设备相关Logger
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, DEVICE)
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, INTERRUPT);

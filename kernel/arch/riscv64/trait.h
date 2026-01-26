@@ -12,6 +12,14 @@
 #pragma once
 
 #include <arch/trait.h>
+#include <arch/riscv64/csr.h>
+#include <sus/types.h>
+
+// 该功能必须通过宏来实现, 以保证其一定会内联到原代码片段中
+#define RELOAD_SP()            \
+    asm volatile(                  \
+        "la sp, boot_stack_top\n"     \
+    );
 
 class Riscv64Serial {
 public:
@@ -43,5 +51,11 @@ public:
 };
 
 static_assert(ArchMemLayoutTrait<Riscv64MemoryLayout>);
+
+struct Riscv64Context {
+    umb_t regs[31];
+    umb_t sepc;
+    csr_sstatus_t sstatus;
+};
 
 #include <arch/riscv64/mem/sv39.h>

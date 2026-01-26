@@ -12,6 +12,7 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
+#include <arch/riscv64/int/exception.h>
 #include <arch/riscv64/trait.h>
 #include <kio.h>
 #include <libfdt.h>
@@ -49,4 +50,28 @@ void Riscv64Initialization::pre_init(void) {
     DEVICE.DEBUG("时钟频率为 %d Hz", hz);
 }
 
-void Riscv64Initialization::post_init(void) {}
+// 触发非法指令异常
+__attribute__((noinline)) int trigger_illegal_instruction(void) {
+    asm volatile(".word 0x00000000");  // 全零是非法指令
+    asm volatile(".word 0x000000FF");  // 自定义非法指令
+    int a = 3, b = 3;
+    asm volatile(
+        "mv t0, %1\n"
+        "mv t1, %2\n"
+        ".word 0x00FF00FF\n"
+        "mv %0, t0\n"
+        : "=r"(a)
+        : "r"(a), "r"(b)
+        : "t0", "t1");  // 自定义非法指令2
+    INTERRUPT.INFO("计算结果: %d", a);
+    return -1;
+}
+
+void Riscv64Initialization::post_init(void) {
+    // 重置 sscratch 寄存器
+    csr_set_sscratch(0);
+    // 初始化 IVT
+    init_ivt();
+    // 测试非法指令异常处理
+    trigger_illegal_instruction();
+}

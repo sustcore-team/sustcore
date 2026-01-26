@@ -27,7 +27,13 @@
 bool post_init_flag = false;
 
 int kputs(const char* str) {
-    Serial::serial_write_string(str);
+    if (! post_init_flag) {
+        Serial::serial_write_string(str);
+    }
+    else {
+        const char *_str = (const char *)KA2PA((void *)str);
+        Serial::serial_write_string(_str);
+    }
     return strlen(str);
 }
 
@@ -86,7 +92,25 @@ void kernel_paging_setup(void *upper_bound) {
 }
 
 void post_init(void) {
-    LOGGER.INFO("我是 post_init 函数!");
+    // 将 sp 移动到高位内存
+    RELOAD_SP();
+
+    // 设置post_init标志
+    post_init_flag = true;
+
+    // logger
+    LOGGER.INFO("已进入 post-init 阶段");
+
+    // 将 pre-init 阶段中初始化的子系统再次初始化, 以适应内核虚拟地址空间
+    PFA::post_init();
+    PageMan::post_init();
+
+    // 初始化默认 Allocator 子系统
+    Allocator::init();
+
+    // 架构后初始化
+    Initialization::post_init();
+
     while (true);
 }
 
@@ -113,6 +137,8 @@ void pre_init(void) {
     PageMan::pre_init();
     kernel_paging_setup(upper_bound);
 
+    // 进入 post-init 阶段
+    // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
     typedef void (*PostTestFuncType)(void);
     PostTestFuncType post_test_func = (PostTestFuncType)PA2KA((void *)post_init);
     LOGGER.DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p", post_test_func);
