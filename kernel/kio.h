@@ -27,3 +27,18 @@ struct KernelIO {
 constexpr KernelIO kio;
 
 static_assert(basecpp::IOTrait<KernelIO>, "KernelIO does not satisfy IOTrait");
+
+
+// Loggers
+#include <basecpp/logger.h>
+
+// 通用Logger
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, LOGGER);
+
+// 内存管理相关Logger
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, MEMORY)
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, PAGING);
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, PMM);
+
+// 设备相关Logger
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, DEVICE)

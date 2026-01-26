@@ -18,6 +18,7 @@
 #include <sus/types.h>
 #include <kio.h>
 #include <cstring>
+#include <basecpp/logger.h>
 
 enum class Riscv64SV39RWX : umb_t {
     // 基本权限
@@ -331,9 +332,9 @@ public:
                 pte->rwx = rwx_tobits(RWX::P);  // 标记为非叶子节点
                 pte->u   = u;
                 pte->g   = g;
-                kprintf("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p\n", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
+                PAGING.DEBUG("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
             } else if (rwx_frombits(pte->rwx) != RWX::P) {
-                kprintf("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p\n", i - 1, vpn[i - 1], pte->rwx, pte->value);
+                PAGING.DEBUG("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value);
                 return;
             } else if (pte->np) {
                 // 非存在页，do sth...
