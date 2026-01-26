@@ -63,7 +63,6 @@ int kprintf(const char *fmt, ...) {
 
 MemRegion regions[128];
 PageMan::PTE *kernel_root = nullptr;
-DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, KernelSetup)
 
 void init_ker_paddr(void *upper_bound);
 void mapping_kernel_areas(PageMan &man);
@@ -87,7 +86,7 @@ void kernel_paging_setup(void *upper_bound) {
 }
 
 void post_init(void) {
-    kprintf("我是post_init函数!\n");
+    LOGGER.INFO("我是 post_init 函数!");
     while (true);
 }
 
@@ -98,7 +97,7 @@ void pre_init(void) {
     int cnt = MemLayout::detect_memory_layout(regions, 128);
     void *upper_bound = nullptr;
     for (int i = 0; i < cnt; i++) {
-        kprintf("探测到内存区域 %d: [%p, %p) Status: %d\n", i, regions[i].ptr,
+        LOGGER.INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, regions[i].ptr,
                 (void*)((umb_t)(regions[i].ptr) + regions[i].size),
                 static_cast<int>(regions[i].status));
         void *this_bound = (void *)((umb_t)(regions[i].ptr) + regions[i].size);
@@ -107,16 +106,16 @@ void pre_init(void) {
         }
     }
 
-    kprintf("初始化线性增长PFA\n");
+    LOGGER.INFO("初始化线性增长PFA");
     PFA::pre_init(regions, cnt);
 
-    kprintf("初始化内核地址空间管理器\n");
+    LOGGER.INFO("初始化内核地址空间管理器");
     PageMan::pre_init();
     kernel_paging_setup(upper_bound);
 
     typedef void (*PostTestFuncType)(void);
     PostTestFuncType post_test_func = (PostTestFuncType)PA2KA((void *)post_init);
-    kprintf("跳转到内核虚拟地址空间中的post_init函数: %p\n", post_test_func);
+    LOGGER.DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p", post_test_func);
     post_test_func();
 }
 
