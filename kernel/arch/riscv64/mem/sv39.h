@@ -31,6 +31,8 @@ enum class Riscv64SV39RWX : umb_t {
     RW  = R | W,
     RX  = R | X,
     RWX = R | W | X,
+    // 空
+    NONE = 0b000,
 };
 
 constexpr bool operator&(Riscv64SV39RWX lhs, Riscv64SV39RWX rhs) {
@@ -40,6 +42,27 @@ constexpr bool operator&(Riscv64SV39RWX lhs, Riscv64SV39RWX rhs) {
 constexpr Riscv64SV39RWX operator|(Riscv64SV39RWX lhs, Riscv64SV39RWX rhs) {
     return static_cast<Riscv64SV39RWX>(static_cast<uint8_t>(lhs) |
                                        static_cast<uint8_t>(rhs));
+}
+
+constexpr umb_t rwx_cast(Riscv64SV39RWX rwx) {
+    switch (rwx) {
+        case Riscv64SV39RWX::P:   return 0b000;
+        case Riscv64SV39RWX::R:   return 0b001;
+        case Riscv64SV39RWX::W:   return 0b010;
+        case Riscv64SV39RWX::RW:  return 0b011;
+        case Riscv64SV39RWX::X:   return 0b100;
+        case Riscv64SV39RWX::RX:  return 0b101;
+        case Riscv64SV39RWX::RWX: return 0b111;
+        default:                  return 0b000;  // 非法组合，设置为P
+    }
+}
+
+constexpr bool operator==(Riscv64SV39RWX lhs, umb_t rhs) {
+    return rwx_cast(lhs) == rhs;
+}
+
+constexpr bool operator==(umb_t lhs, Riscv64SV39RWX rhs) {
+    return rwx_cast(rhs) == lhs;
 }
 
 enum class Riscv64SV39ModifyMask : umb_t {
@@ -102,35 +125,6 @@ public:
         return rwx & Riscv64SV39RWX::X;
     }
 
-    // RWX枚举 - 位转换
-    static constexpr Riscv64SV39RWX rwx_frombits(umb_t bits) {
-        umb_t trunc = bits & 0b111;
-        switch (trunc) {
-            case 0b000: return Riscv64SV39RWX::P;
-            case 0b001: return Riscv64SV39RWX::R;
-            case 0b010: return Riscv64SV39RWX::W;
-            case 0b011: return Riscv64SV39RWX::RW;
-            case 0b100: return Riscv64SV39RWX::X;
-            case 0b101: return Riscv64SV39RWX::RX;
-            case 0b110: return Riscv64SV39RWX::P;  // 非法组合，设置为P
-            case 0b111: return Riscv64SV39RWX::RWX;
-            default:    return Riscv64SV39RWX::P;  // 非法组合，设置为P
-        }
-    }
-
-    static constexpr umb_t rwx_tobits(Riscv64SV39RWX rwx) {
-        switch (rwx) {
-            case Riscv64SV39RWX::P:   return 0b000;
-            case Riscv64SV39RWX::R:   return 0b001;
-            case Riscv64SV39RWX::W:   return 0b010;
-            case Riscv64SV39RWX::RW:  return 0b011;
-            case Riscv64SV39RWX::X:   return 0b100;
-            case Riscv64SV39RWX::RX:  return 0b101;
-            case Riscv64SV39RWX::RWX: return 0b111;
-            default:                  return 0b000;  // 非法组合，设置为P
-        }
-    }
-
     enum class PageSize { SIZE_NULL, SIZE_4K, SIZE_2M, SIZE_1G };
 
     // 获得页大小
@@ -174,7 +168,17 @@ public:
 
     // PTE信息解析
     static constexpr RWX rwx(PTE pte) {
-        return rwx_frombits(pte.rwx);
+        switch (pte->rwx) {
+        case 0b000: return RWX::P;
+        case 0b001: return RWX::R;
+        case 0b110: return RWX::NONE;
+        case 0b011: return RWX::RW;
+        case 0b100: return RWX::X;
+        case 0b101: return RWX::RX;
+        case 0b110: return RWX::NONE;
+        case 0b111: return RWX::RWX;
+        default:    return RWX::NONE;
+        }
     }
 
     static constexpr bool is_present(PTE pte) {
@@ -329,11 +333,11 @@ public:
                 memset((PTE *)PA2KPA(new_pt), 0, PAGESIZE);
                 pte->ppn = to_ppn(KPA2PA(new_pt));
                 pte->v   = true;
-                pte->rwx = rwx_tobits(RWX::P);  // 标记为非叶子节点
+                pte->rwx = rwx_cast(RWX::P);  // 标记为非叶子节点
                 pte->u   = u;
                 pte->g   = g;
                 PAGING.DEBUG("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
-            } else if (rwx_frombits(pte->rwx) != RWX::P) {
+            } else if (pte->rwx != RWX::P) {
                 PAGING.DEBUG("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value);
                 return;
             } else if (pte->np) {
@@ -357,7 +361,7 @@ public:
         pte->value = 0;
         // 设置各个位
         pte->v     = true;
-        pte->rwx   = rwx_tobits(rwx);
+        pte->rwx   = rwx_cast(rwx);
         pte->u     = u;
         pte->g     = g;
         pte->ppn   = to_ppn(paddr);
@@ -456,8 +460,8 @@ public:
 
         constexpr umb_t rwx_mask = to_rwx_mask(mask);
         if constexpr (rwx_mask != 0b000) {
-            umb_t rwx_bits = rwx_tobits(rwx);
-            umb_t old_bits = rwx_bits(pte->rwx);
+            umb_t rwx_bits = rwx_cast(rwx);
+            umb_t old_bits = rwx_cast(pte->rwx);
             // 将 old_bits, rwx_bits 按 rwx_mask 进行修改
             // 我们考虑按位计算, 那么对于单个位 o(old_bits), n(rwx_bits), m(rwx_mask)
             // 我们有 f(o, n, 0) = o, f(o, n, 1) = n
