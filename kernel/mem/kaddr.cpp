@@ -54,8 +54,8 @@ namespace ker_paddr {
     }
 }  // namespace ker_paddr
 
-void init_ker_paddr(void *upper_bound) {
-    ker_paddr::init_ker_paddr(upper_bound);
+void init_ker_paddr(void *phymem_upper_bound) {
+    ker_paddr::init_ker_paddr(phymem_upper_bound);
 }
 
 void map_seg(PageMan &man, const ker_paddr::Segment &seg, PageMan::RWX rwx,
