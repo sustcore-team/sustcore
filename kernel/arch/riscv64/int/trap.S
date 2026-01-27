@@ -4,43 +4,45 @@
  * @brief 异常处理程序入口, 出口汇编代码
  * @version alpha-1.0.0
  * @date 2025-11-18
- * 该文件实际上并不会被编译, 只是作为trap.h中内联汇编代码的参考
+ *
  * @copyright Copyright (c) 2025
- * 
+ *
  */
 
-entry:
+.section .text
+.globl isr_entry
+.extern handle_trap
+isr_entry:
     /* 第1步：切换栈空间 */
     csrrw sp, sscratch, sp
     /* 如果sp为零，说明之前是S-Mode, 否则是U-Mode, 进入不同情况对栈寄存器的处理 */
-    bne sp, zero, name_entry_user_stkproc
-name_entry_kernel_stkproc:
-    /* 第2.1步: 内核态对栈寄存器的处理 */
-    /* 从sscratch中恢复sp（即之前的内核栈） */
+    bne sp, zero, isr_ustkp
+    /* S-Mode Stack Protection*/
+isr_sstkp:
+    /* 第2步: 从sscratch中恢复sp */
     csrrw sp, sscratch, sp
-    /* 为了与user_trap保持一致, 先分配栈空间并保存一部分寄存器(x1, x2) */
+    /* 分配栈空间并保存x1, x2 */
     addi sp, sp, -264
-    sd x1,  0(sp)
-    /* 我们约定x2是进入isr前的x2(sp), 于是可以先利用已经被保存的x1 */
+    sd x1, 0(sp)
+    /* 令 x1 指向原栈顶, 即原x2(sp) */
     addi x1, sp, 264
-    sd x1,  8(sp)
-    /* 进入剩余寄存器的保存 */
-    j name_entry_rest_context_save
-name_entry_user_stkproc:
-    /* 第2.2步: 用户态对栈寄存器的处理 */
-    /* 如果之前在U-Mode，则清空sscratch, 说明已经处于S-Mode */
-    /* 在清空前, 把其值(在经过交换后, 此时sscratch是U-Mode下的sp, x2为S-Mode下的sp)保存到栈上 */
-    /* 于是, 无论如何 我们先分配栈空间保存一部分寄存器(x1, x2) */
+    /* 保存x2 */
+    sd x1, 8(sp)
+    j isr_regp
+    /* U-Mode Stack Protection*/
+isr_ustkp:
+    /* 此时, sp 为内核栈顶地址 */
+    /* 分配栈空间并保存x1, x2 */
     addi sp, sp, -264
-    sd x1,  0(sp)
-    /* 我们约定x2是进入isr前的x2(sp), 我们利用x1读取sscratch并保存sp */
+    sd x1, 0(sp)
+    /* 令 x1 指向原栈顶, 即原x2(sp) */
     csrr x1, sscratch
-    sd x1,  8(sp)
+    /* 保存 x2 */
+    sd x1, 8(sp)
     /* 清空sscratch */
-    csrw sscratch, x0
-    /* 进入剩余寄存器的保存 */
-name_entry_rest_context_save:
-    /* 第3步: 保存剩下的通用寄存器 */
+    csrw sscratch, zero
+isr_regp:
+    /* 第3步: 保存通用寄存器 */
     sd x3, 16(sp)
     sd x4, 24(sp)
     sd x5, 32(sp)
@@ -70,35 +72,42 @@ name_entry_rest_context_save:
     sd x29, 224(sp)
     sd x30, 232(sp)
     sd x31, 240(sp)
-    /* 第4步: 保存关键CSR寄存器*/
-    csrr t0, sepc /* spec */
+    /* 接下来寄存器就可以随意使用了 */
+    /* 保存关键 CSR */
+    csrr t0, sepc
     sd t0, 248(sp)
-    csrr t0, sstatus /* sstatus */
+    csrr t0, sstatus
     sd t0, 256(sp)
-    /* 第5步: 传参 */
-    csrr %0, scause
-    csrr %1, sepc
-    csrr %2, stval
-    mv   %3, sp
-    /* 为ISR预留栈空间 */
-    addi sp, sp, -512
-
-exit:
-    /* 第0步：恢复sp */
-    mv   sp, %0
-    /* 第1步：恢复关键CSR寄存器 */
-    ld t0, 256(sp)             /* 恢复 sstatus */
+    /* 传参 */
+    csrr a0, scause
+    csrr a1, sepc
+    csrr a2, stval
+    mv   a3, sp
+    /* 调用C异常处理函数 */
+    call handle_trap
+    /* 判断sstatus的SPP位，决定返回U-Mode还是S-Mode */
+    /* 读取sstatus */
+    csrr t0, sstatus
+    /* 检查SPP位 */
+    andi t1, t0, 0x100
+    /* 根据结果选择栈恢复路径 */
+    beqz t1, isr_regr
+    /* 此时 t1 != 0, 说明之前是S-Mode */
+    /* 将8(sp), 即原sp设置为0 */
+    sd zero, 8(sp)
+    /* 恢复栈空间 */
+isr_regr:
+    /* 恢复关键 CSR */
+    ld t0, 256(sp)
     csrw sstatus, t0
-    ld t0, 248(sp)             /* 恢复 sepc */
+    ld t0, 248(sp)
     csrw sepc, t0
-    /* 第2步: 对sscratch的特殊处理 */
-    /* 对isr的要求是, 在进入退出程序前, 判断是否是从S-Mode进入的还是从U-Mode进入的, 并据此修改栈上保存的sp值 */
-    /* 我们将把sp值直接保存到sscratch上. 因此判断是从S-Mode进入时, 应将sp值归零 */
+    /* 接下来是特殊的对sscratch的处理 */
     ld x1, 8(sp)
+    /* 这里, 被处理过的sp值将被写入sscratch中 */
     csrw sscratch, x1
-    /* 第3步：恢复所有通用寄存器 */
+    /* 恢复通用寄存器 */
     ld x1, 0(sp)
-    /* 其中x2即为sp, 经过了上面的特殊处理 */
     ld x3, 16(sp)
     ld x4, 24(sp)
     ld x5, 32(sp)
@@ -128,14 +137,14 @@ exit:
     ld x29, 224(sp)
     ld x30, 232(sp)
     ld x31, 240(sp)
-    /* 第4步: 堆栈平衡. */
+    /* 恢复栈空间 */
     addi sp, sp, 264
-    /* 第5步：最后从sscratch中恢复栈指针(sp). 此时sp指向S-Mode堆栈, sscratch指向U-Mode堆栈. 交换即可 */
+    /* 第4步: 切换回原栈空间 */
     csrrw sp, sscratch, sp
-    /* 第6步：梅开二度. 如果sp此时的sp为空, 说明是从S-Mode进入的ISR.  */
-    bne sp, zero, name_exit
-    /* 再次交换, 将sp换回 */
+    /* 如果 sp 为0, 说明要返回 S-Mode, 那么此时sscratch中保存的就是原sp */
+    /* 否则返回 U-Mode, sscratch中保存的就是内核栈顶地址 */
+    bnez sp, isr_rtn
+    /* 再次从sscratch中恢复sp */
     csrrw sp, sscratch, sp
-name_exit:
-    /* 第7步：返回 */
+isr_rtn:
     sret

@@ -9,10 +9,10 @@
  *
  */
 
+#include <arch/riscv64/configuration.h>
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
-#include <arch/riscv64/int/exception.h>
 #include <arch/riscv64/trait.h>
 #include <kio.h>
 #include <libfdt.h>
@@ -68,10 +68,6 @@ __attribute__((noinline)) int trigger_illegal_instruction(void) {
 }
 
 void Riscv64Initialization::post_init(void) {
-    // 重置 sscratch 寄存器
-    csr_set_sscratch(0);
-    // 初始化 IVT
-    init_ivt();
     // 测试非法指令异常处理
     trigger_illegal_instruction();
 }

@@ -9,10 +9,14 @@
  *
  */
 
+#include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
 #include <basecpp/logger.h>
 #include <kio.h>
+#include <sbi/sbi.h>
+
+TimerInfo timer_info;
 
 int get_clock_freq_hz(void) {
     // 读取 /cpus/timebase-frequency 属性
@@ -43,4 +47,20 @@ int get_clock_freq_hz(void) {
 
     // 对于QEMU的virt机器, 时钟频率恒为10MHz
     return freq;
+}
+
+void init_timer(int freq, int expected_freq) {
+    // 设置计时器频率(freq:Hz, expected_freq:mHz(10^-3 Hz))
+    int increasment          = freq / expected_freq * 1000;
+    timer_info.freq          = freq;
+    timer_info.expected_freq = expected_freq;
+    timer_info.increasment   = increasment;
+
+    // 之后稳定触发
+    sbi_legacy_set_timer(csr_get_time() + increasment);
+
+    // 启用S-Mode计时器中断
+    csr_sie_t sie = csr_get_sie();
+    sie.stie      = 1;
+    csr_set_sie(sie);
 }

@@ -56,6 +56,38 @@ struct Riscv64Context {
     umb_t regs[31];
     umb_t sepc;
     csr_sstatus_t sstatus;
+
+    static umb_t &pc(Riscv64Context *ctx) {
+        return ctx->sepc;
+    }
+
+    static umb_t &sp(Riscv64Context *ctx) {
+        return ctx->regs[2 - 1];  // x2 = sp
+    }
 };
+
+static_assert(ArchContextTrait<Riscv64Context>);
+
+struct Riscv64Interrupt {
+    /**
+    * @brief 初始化IVT
+    *
+    */
+    static void init(void);
+
+    /**
+    * @brief 启用中断
+    *
+    */
+    static void sti(void);
+
+    /**
+    * @brief 关闭中断
+    *
+    */
+    static void cli(void);
+};
+
+static_assert(ArchInterruptTrait<Riscv64Interrupt>);
 
 #include <arch/riscv64/mem/sv39.h>

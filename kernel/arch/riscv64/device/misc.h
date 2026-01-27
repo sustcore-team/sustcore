@@ -17,3 +17,19 @@
  * @return int 时钟频率(Hz)
  */
 int get_clock_freq_hz(void);
+
+struct TimerInfo {
+    int freq;
+    int expected_freq;
+    int increasment;
+};
+
+extern TimerInfo timer_info;
+
+/**
+* @brief 初始化计时器
+*
+* @param freq 计时器频率(Hz)
+* @param expected_freq 期望频率(mHz(10^-3 Hz))
+*/
+void init_timer(int freq, int expected_freq);
