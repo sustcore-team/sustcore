@@ -50,7 +50,7 @@ namespace ker_paddr {
         ker_paddr::misc   = Segment(&s_misc, &ekernel);
 
         ker_paddr::kphy_space =
-            Segment((void *)0, upper_bound, PA2KPA(0), PA2KPA(upper_bound));
+            Segment((void *)0, upper_bound, (void *)(0 + KPHY_VA_OFFSET), (void *)((umb_t)(upper_bound) + KPHY_VA_OFFSET));
     }
 }  // namespace ker_paddr
 
