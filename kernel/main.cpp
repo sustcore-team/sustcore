@@ -108,6 +108,9 @@ void post_init(void) {
     // 初始化默认 Allocator 子系统
     Allocator::init();
 
+    // 初始化中断
+    ArchInterrupt::init();
+
     // 架构后初始化
     Initialization::post_init();
 

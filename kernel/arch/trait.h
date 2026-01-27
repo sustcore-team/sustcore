@@ -13,6 +13,7 @@
 
 #include <concept>
 #include <cstddef>
+#include <sus/types.h>
 
 /**
  * @brief 架构串口 Trait
@@ -261,5 +262,29 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
     // 更换页表根
     {
         root.switch_root()
+    } -> std::same_as<void>;
+};
+
+template <typename T>
+concept ArchContextTrait = requires(T *ctx) {
+    {
+        T::pc(ctx)
+    } -> std::same_as<umb_t &>;
+    {
+        T::sp(ctx)
+    } -> std::same_as<umb_t &>;
+};
+
+// 中断管理器 Trait
+template <typename T>
+concept ArchInterruptTrait = requires() {
+    {
+        T::init()
+    } -> std::same_as<void>;
+    {
+        T::sti()
+    } -> std::same_as<void>;
+    {
+        T::cli()
     } -> std::same_as<void>;
 };
