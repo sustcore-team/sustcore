@@ -70,4 +70,20 @@ __attribute__((noinline)) int trigger_illegal_instruction(void) {
 void Riscv64Initialization::post_init(void) {
     // 测试非法指令异常处理
     trigger_illegal_instruction();
+
+    // 我们希望50ms触发1次时钟中断(调试用)
+    // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
+    int freq = get_clock_freq_hz();
+    if (freq < 0) {
+        // 使用QEMU virt机器的默认值10MHz
+        freq = 10000000;
+        DEVICE.ERROR("获取时钟频率失败, 使用默认值 %d Hz", freq);
+    }
+    DEVICE.INFO("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000,
+             freq / 1000000);
+    init_timer(freq, 20000);
+    DEVICE.INFO("启用时钟中断...");
+
+    // 开启中断
+    ArchInterrupt::sti();
 }
