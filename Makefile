@@ -18,12 +18,13 @@ include $(path-script)/util.mk
 include $(path-script)/setup.mk
 include $(path-script)/run.mk
 
-.PHONY: build mount umount image __image stat_code all
+.PHONY: build mount umount image __image stat_code all dbg clean
 
 path-bin := $(path-e)/build/bin
 path-objects := $(path-e)/build/objects
+build-mode ?= debug
 
-arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects) q=$(q)
+arg-basic := build-mode=$(build-mode) architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects) q=$(q)
 
 -include $(path-script)/config.mk
 
@@ -68,3 +69,6 @@ all:
 
 dbg:
 	$(q)$(MAKE) -s build && $(MAKE) run_dbg
+
+clean:
+	rm -rf $(path-e)/build
