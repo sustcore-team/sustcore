@@ -90,4 +90,9 @@ struct Riscv64Interrupt {
 
 static_assert(ArchInterruptTrait<Riscv64Interrupt>);
 
+struct Riscv64WPFault {
+    int reserved;
+};
+static_assert(ArchWPFaultTrait<Riscv64WPFault>);
+
 #include <arch/riscv64/mem/sv39.h>

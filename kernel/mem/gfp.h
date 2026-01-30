@@ -1,5 +1,5 @@
 /**
- * @file pfa.h
+ * @file gfp.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief 页框分配器接口
  * @version alpha-1.0.0
@@ -40,10 +40,10 @@ concept PageFrameAllocatorTrait = requires(
 };
 
 /**
- * @brief 线性增长PFA
+ * @brief 线性增长GFP
  *
  */
-class LinearGrowPFA {
+class LinearGrowGFP {
     static void *baseaddr;
     static void *curaddr;
     static void *boundary;
@@ -55,8 +55,8 @@ public:
     static void free_frame(void *ptr, size_t frame_count = 1);
 };
 
-static_assert(PageFrameAllocatorTrait<LinearGrowPFA>,
-              "LinearGrowthPFA 不满足 PageFrameAllocatorTrait");
+static_assert(PageFrameAllocatorTrait<LinearGrowGFP>,
+              "LinearGrowthGFP 不满足 PageFrameAllocatorTrait");
 
 constexpr size_t PAGESIZE = 0x1000;  // 4KB
 

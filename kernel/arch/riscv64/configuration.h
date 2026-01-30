@@ -19,6 +19,7 @@ using ArchInitialization = Riscv64Initialization;
 using ArchMemoryLayout = Riscv64MemoryLayout;
 using ArchContext = Riscv64Context;
 using ArchInterrupt = Riscv64Interrupt;
+using ArchWPFault = Riscv64WPFault;
 
-template<PageFrameAllocatorTrait PFA>
-using ArchPageMan = Riscv64SV39PageMan<PFA>;
+template<PageFrameAllocatorTrait GFP>
+using ArchPageMan = Riscv64SV39PageMan<GFP>;

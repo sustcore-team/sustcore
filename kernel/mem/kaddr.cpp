@@ -67,7 +67,7 @@ void mapping_kernel_areas(PageMan &man) {
     using namespace ker_paddr;
 
     map_seg(man, ker_paddr::text, PageMan::rwx(true, false, true), false, true);
-    map_seg(man, ker_paddr::ivt, PageMan::rwx(true, true, true), false,
+    map_seg(man, ker_paddr::ivt, PageMan::rwx(true, false, true), false,
             true);
     map_seg(man, ker_paddr::rodata, PageMan::rwx(true, false, false),
             false, true);

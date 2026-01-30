@@ -12,7 +12,7 @@
 #pragma once
 
 #include <arch/trait.h>
-#include <mem/pfa.h>
+#include <mem/gfp.h>
 #include <mem/alloc.h>
 #include <mem/buddy.h>
 
@@ -21,10 +21,13 @@
 #include <arch/riscv64/trait.h>
 #include <arch/riscv64/configuration.h>
 
-// using PFA = LinearGrowPFA;
-using PFA = BuddyAllocator;
+// using GFP = LinearGrowGFP;
+using GFP = BuddyAllocator;
 using Allocator = LinearGrowAllocator;
-using PageMan = ArchPageMan<PFA>;
+using PageMan = ArchPageMan<GFP>;
 using Serial = ArchSerial;
 using Initialization = ArchInitialization;
 using MemLayout = ArchMemoryLayout;
+using Interrupt = ArchInterrupt;
+using Context = ArchContext;
+using WPFault = ArchWPFault;

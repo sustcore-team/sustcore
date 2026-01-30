@@ -12,7 +12,7 @@ objects := main.o cxa.o
 deps := main.d cxa.d
 attachments := license.attachment.o
 
-subdirs := ./arch/$(architecture)/ ./mem/
+subdirs := ./arch/$(architecture)/ ./mem/ ./task/
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
@@ -40,7 +40,7 @@ args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 
 # CPP
 
-flags-cpp := -std=gnu++26 -nostdlib -fno-builtin -ffreestanding -nostdinc \
+flags-cpp := -std=gnu++26 -nostdlib -ffreestanding -nostdinc \
 		   -Wall -fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
  		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions \
 		   -fno-toplevel-reorder -fno-tree-scev-cprop -Os

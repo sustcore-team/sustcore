@@ -288,3 +288,9 @@ concept ArchInterruptTrait = requires() {
         T::cli()
     } -> std::same_as<void>;
 };
+
+// Write-Protection Fault Infomation Trait
+template <typename T>
+concept ArchWPFaultTrait = requires() {
+    true;
+};

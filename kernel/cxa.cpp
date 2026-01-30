@@ -37,7 +37,6 @@ void* operator new(size_t size, void* ptr) noexcept {
 }
 
 void operator delete(void* ptr, void*) noexcept {
-    Allocator::free(ptr);
 }
 
 void* operator new[](size_t size, void* ptr) noexcept {
@@ -45,7 +44,6 @@ void* operator new[](size_t size, void* ptr) noexcept {
 }
 
 void operator delete[](void* ptr, void*) noexcept {
-    Allocator::free(ptr);
 }
 
 // C++ 运行时支持 (C++ Runtime Support)

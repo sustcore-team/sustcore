@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <mem/pfa.h>
+#include <mem/gfp.h>
 
 #include <concepts>
 #include <cstddef>
@@ -73,11 +73,11 @@ static_assert(AllocatorTrait<LinearGrowAllocator>,
               "LinearGrowAllocator 不满足 AllocatorTrait");
 
 // 实现固定大小分配器
-template <PageFrameAllocatorTrait PFA>
+template <PageFrameAllocatorTrait GFP>
 class FixedSizeAllocator {};
 
 // 实现可变大小分配器
-template <PageFrameAllocatorTrait PFA>
+template <PageFrameAllocatorTrait GFP>
 class MixedSizeAllocator {};
 
 template<typename T, AllocatorTrait Allocator>

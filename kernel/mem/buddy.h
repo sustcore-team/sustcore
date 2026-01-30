@@ -12,7 +12,7 @@
 #pragma once
 
 #include <arch/trait.h>
-#include <mem/pfa.h>
+#include <mem/gfp.h>
 #include <stddef.h>
 #include <sus/list.h>
 #include <sus/types.h>

@@ -14,7 +14,7 @@
 #include <arch/riscv64/csr.h>
 #include <arch/trait.h>
 #include <mem/kaddr.h>
-#include <mem/pfa.h>
+#include <mem/gfp.h>
 #include <sus/types.h>
 #include <kio.h>
 #include <cstring>
@@ -89,7 +89,7 @@ constexpr Riscv64SV39ModifyMask operator|(Riscv64SV39ModifyMask lhs,
                                               static_cast<uint8_t>(rhs));
 }
 
-template <PageFrameAllocatorTrait PFA>
+template <PageFrameAllocatorTrait GFP>
 class Riscv64SV39PageMan {
 public:
     // 前初始化与后初始化
@@ -248,7 +248,7 @@ public:
     }
 
     static PTE *make_root(void) {
-        PTE *root = (PTE *)PA2KPA(PFA::alloc_frame());
+        PTE *root = (PTE *)PA2KPA(GFP::alloc_frame());
         memset(root, 0, PAGESIZE);
         return root;
     }
@@ -328,7 +328,7 @@ public:
         for (int i = 1; i < tot_levels; i++) {
             if (!pte->v) {
                 // 分配下一级页表
-                PTE *new_pt = (PTE *)PFA::alloc_frame();
+                PTE *new_pt = (PTE *)GFP::alloc_frame();
                 // check new_pt not null
                 memset((PTE *)PA2KPA(new_pt), 0, PAGESIZE);
                 pte->ppn = to_ppn(KPA2PA(new_pt));
@@ -531,4 +531,4 @@ public:
     }
 };
 
-static_assert(ArchPageManTrait<Riscv64SV39PageMan<LinearGrowPFA>>);
+static_assert(ArchPageManTrait<Riscv64SV39PageMan<LinearGrowGFP>>);

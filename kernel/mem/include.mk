@@ -1,8 +1,8 @@
 objects += mem/alloc.o
 deps += mem/alloc.d
 
-objects += mem/pfa.o
-deps += mem/pfa.d
+objects += mem/gfp.o
+deps += mem/gfp.d
 
 objects += mem/kaddr.o
 deps += mem/kaddr.d
