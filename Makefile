@@ -20,8 +20,8 @@ include $(path-script)/run.mk
 
 .PHONY: build mount umount image __image stat_code all
 
-path-bin := $(path-e)/build/bin/
-path-objects := $(path-e)/build/objects/
+path-bin := $(path-e)/build/bin
+path-objects := $(path-e)/build/objects
 
 arg-basic := architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects) q=$(q)
 
@@ -32,7 +32,7 @@ build:
 	$(q)$(MAKE) -f $(path-e)/libs/basecpp/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
 
-	$(call prepare, $(path-attach))
+	$(call if_mkdir, $(path-attach))
 	$(q)$(copy) ./LICENSE $(path-attach)/license
 
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@

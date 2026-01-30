@@ -12,7 +12,7 @@ objects := main.o cxa.o
 deps := main.d cxa.d
 attachments := license.attachment.o
 
-subdirs := ./arch/$(architecture)/ ./mem/ ./task/
+subdirs := ./arch/$(architecture)/ ./mem ./task
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
@@ -31,8 +31,8 @@ flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc++ \
 
 flags-c += -g -mcmodel=medany
 
-include-third_party-c := -I$(path-third_party)/include/ -I$(path-third_party)/include/libfdt/ -I$(path-third_party)/include/std/
-include-c := -I$(path-include) -I$(path-include)/std/ $(include-third_party-c) -I$(path-d) -I$(path-include)/arch/
+include-third_party-c := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt -I$(path-third_party)/include/std
+include-c := -I$(path-include) -I$(path-include)/std $(include-third_party-c) -I$(path-d) -I$(path-include)/arch
 
 defs-c :=
 
@@ -45,10 +45,10 @@ flags-cpp := -std=gnu++26 -nostdlib -ffreestanding -nostdinc \
  		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions \
 		   -fno-toplevel-reorder -fno-tree-scev-cprop -Os
 flags-cpp += -g -mcmodel=medany
-include-third_party-cpp := -I$(path-third_party)/include/ -I$(path-third_party)/include/libfdt/ \
-						   -I$(path-third_party)/include/std/
-include-cpp := -I$(path-include) -I$(path-include)/std/ -I$(path-include)/std/c++ \
-			   $(include-third_party-cpp) -I$(path-d) -I$(path-include)/arch/
+include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
+						   -I$(path-third_party)/include/std
+include-cpp := -I$(path-include) -I$(path-include)/std -I$(path-include)/std/c++ \
+			   $(include-third_party-cpp) -I$(path-d) -I$(path-include)/arch
 defs-cpp :=
 args-cpp := defs-cpp="$(defs-cpp)" include-cpp="$(include-cpp)" flags-cpp="$(flags-cpp)"
 
@@ -63,7 +63,7 @@ libs := kersbi kerbasecpp fdt
 args := $(args-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"
 args-phy := $(args-phy-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"
 
-dir := dir-obj="$(path-objects)/kernel/" dir-src="$(path-d)"
+dir := dir-obj="$(path-objects)/kernel" dir-src="$(path-d)"
 
 build:
 	$(q)$(MAKE) $(builder-k)=$(target) architecture=$(architecture) attachments="$(attachments)" deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
