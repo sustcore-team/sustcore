@@ -79,7 +79,7 @@ void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
             size_t pages = (end_addr - start_addr) / 0x1000;
             if (pages > 0) {
                 add_memory_range((void *)start_addr, pages);
-                BUDDY.DEBUG("添加可用内存区域 [%p, %p), 共 %d 页",
+                BUDDY::DEBUG("添加可用内存区域 [%p, %p), 共 %d 页",
                             (void *)start_addr, (void *)end_addr, pages);
             }
         }
@@ -87,7 +87,7 @@ void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
 }
 
 void BuddyAllocator::post_init() {
-    BUDDY.DEBUG("enter post_init");
+    BUDDY::DEBUG("enter post_init");
 
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
         auto &list = free_area[i];
@@ -110,7 +110,7 @@ void BuddyAllocator::post_init() {
             FreeBlock *next_ka = (FreeBlock *)PA2KPA(next_pa);
             FreeBlock *prev_ka = (FreeBlock *)PA2KPA(prev_pa);
 
-            BUDDY.DEBUG("next PA: %p -> KPA: %p, prev PA: %p -> KPA: %p",
+            BUDDY::DEBUG("next PA: %p -> KPA: %p, prev PA: %p -> KPA: %p",
                         next_pa, next_ka, prev_pa, prev_ka);
 
             // 写回
@@ -122,7 +122,7 @@ void BuddyAllocator::post_init() {
         // 直到到达哨兵节点
         } while (iter != sentinel);
     }
-    BUDDY.INFO("BuddyAllocator initialized and migrated to KVA.");
+    BUDDY::INFO("BuddyAllocator initialized and migrated to KVA.");
 }
 
 void BuddyAllocator::free_frame(void *ptr, size_t frame_count) {
@@ -133,15 +133,15 @@ void BuddyAllocator::free_frame(void *ptr, size_t frame_count) {
     size_t order = pages2order(frame_count);
 
     if (paddr >= (umb_t)KPHY_VA_OFFSET) {
-        BUDDY.ERROR("free_frame: 地址 %p 超出物理地址范围", ptr);
+        BUDDY::ERROR("free_frame: 地址 %p 超出物理地址范围", ptr);
         return;
     }
     if ((paddr % 0x1000) != 0) {
-        BUDDY.ERROR("free_frames_in_order: 地址 %p 非页对齐", paddr);
+        BUDDY::ERROR("free_frames_in_order: 地址 %p 非页对齐", paddr);
         return;
     }
     if (order < 0 || order > MAX_BUDDY_ORDER) {
-        BUDDY.ERROR("free_frames_in_order: 无效的页数 2^%d", order);
+        BUDDY::ERROR("free_frames_in_order: 无效的页数 2^%d", order);
         return;
     }
 
@@ -150,7 +150,7 @@ void BuddyAllocator::free_frame(void *ptr, size_t frame_count) {
 
 void BuddyAllocator::free_frame_in_order(void *ptr, int order) {
     if (order < 0 || order > MAX_BUDDY_ORDER) {
-        BUDDY.ERROR("free_frame_in_order: 无效的order %d", order);
+        BUDDY::ERROR("free_frame_in_order: 无效的order %d", order);
         return;
     }
 
@@ -212,7 +212,7 @@ void BuddyAllocator::free_frame_in_order(void *ptr, int order) {
         if (buddy) {
             umb_t buddy_paddr  = (umb_t)block2pa(buddy);
             umb_t merged_paddr = is_left ? paddr : paddr - block_size;
-            BUDDY.DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
+            BUDDY::DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
                         (void *)paddr, (void *)(paddr + block_size),
                         (void *)buddy_paddr, (void *)(buddy_paddr + block_size),
                         (void *)merged_paddr,
@@ -238,7 +238,7 @@ void *BuddyAllocator::alloc_frame(size_t frame_count) {
     if (frame_count <= 0 ||
         (frame_count >> BuddyAllocator::MAX_BUDDY_ORDER) > 1)
     {
-        BUDDY.ERROR("无效的页数 %d", frame_count);
+        BUDDY::ERROR("无效的页数 %d", frame_count);
         return nullptr;
     }
 
@@ -259,7 +259,7 @@ void *BuddyAllocator::alloc_frame(size_t frame_count) {
 
 void *BuddyAllocator::alloc_frames_in_order(size_t order) {
     if (order > BuddyAllocator::MAX_BUDDY_ORDER) {
-        BUDDY.ERROR("无可用内存块: order %d 超出范围", order);
+        BUDDY::ERROR("无可用内存块: order %d 超出范围", order);
         return nullptr;
     }
     return fetch_frame_order(order);
@@ -278,7 +278,7 @@ void *BuddyAllocator::fetch_frame_order(size_t order) {
 
     if (current_order > BuddyAllocator::MAX_BUDDY_ORDER) {
         // 无可用内存块
-        BUDDY.ERROR("无可用内存块");
+        BUDDY::ERROR("无可用内存块");
         return nullptr;
     }
 

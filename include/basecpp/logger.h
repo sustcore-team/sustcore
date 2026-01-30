@@ -47,31 +47,31 @@ template <basecpp::IOTrait IOChannel, basecpp::LogInfo LogInfo>
 class Logger {
 private:
     template <LogLevel level, typename... Args>
-    void __log__(const char *file, const int line, const char *func,
+    static void __log__(const char *file, const int line, const char *func,
                  const char *fmt, Args... args);
 
     template <LogLevel level, typename... Args>
-    void __log__(const char *fmt, Args... args);
+    static void __log__(const char *fmt, Args... args);
 
 public:
     template <typename... Args>
-    void debug(const char *file, const int line, const char *func,
+    static void debug(const char *file, const int line, const char *func,
                const char *fmt, Args... args);
 
     template <typename... Args>
-    void info(const char *file, const int line, const char *func,
+    static void info(const char *file, const int line, const char *func,
               const char *fmt, Args... args);
 
     template <typename... Args>
-    void warn(const char *file, const int line, const char *func,
+    static void warn(const char *file, const int line, const char *func,
               const char *fmt, Args... args);
 
     template <typename... Args>
-    void error(const char *file, const int line, const char *func,
+    static void error(const char *file, const int line, const char *func,
                const char *fmt, Args... args);
 
     template <typename... Args>
-    void fatal(const char *file, const int line, const char *func,
+    static void fatal(const char *file, const int line, const char *func,
                const char *fmt, Args... args);
 };
 
@@ -179,4 +179,4 @@ void Logger<IOChannel, LogInfo>::fatal(const char *file, const int line,
     };                                                         \
     static_assert(basecpp::LogInfo<loggerName##Logger>,        \
                   #loggerName " Logger static assert failed"); \
-    static Logger<IOChannel, loggerName##Logger> loggerName;
+    using loggerName = Logger<IOChannel, loggerName##Logger>;

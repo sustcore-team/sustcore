@@ -80,61 +80,61 @@ namespace Handlers {
                 if (scause.cause <
                     sizeof(Exceptions::MSG) / sizeof(Exceptions::MSG[0]))
                 {
-                    INTERRUPT.ERROR("发生异常! 类型: %s (%lu)",
+                    INTERRUPT::ERROR("发生异常! 类型: %s (%lu)",
                                     Exceptions::MSG[scause.cause],
                                     scause.cause);
                 } else {
-                    INTERRUPT.ERROR("发生异常! 类型: 未知 (%lu)", scause.cause);
+                    INTERRUPT::ERROR("发生异常! 类型: 未知 (%lu)", scause.cause);
                 }
 
                 // 输出寄存器状态
-                INTERRUPT.ERROR("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx",
+                INTERRUPT::ERROR("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx",
                                 scause.value, sepc, stval);
-                INTERRUPT.ERROR("ctx: 0x%lx", ctx);
+                INTERRUPT::ERROR("ctx: 0x%lx", ctx);
 
                 // 输出异常发生特权级
                 if (ctx->sstatus.spp) {
-                    INTERRUPT.ERROR("异常发生在S-Mode");
+                    INTERRUPT::ERROR("异常发生在S-Mode");
                 } else {
-                    INTERRUPT.ERROR("异常发生在U-Mode");
+                    INTERRUPT::ERROR("异常发生在U-Mode");
                 }
-                INTERRUPT.ERROR("无对应解决方案: 0x%lx", scause.cause);
+                INTERRUPT::ERROR("无对应解决方案: 0x%lx", scause.cause);
                 while (true);
         }
     }
 
     void illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
                              ArchContext *ctx) {
-        INTERRUPT.DEBUG("发生异常! 类型: %s (%lu)",
+        INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
                         Exceptions::MSG[scause.cause], scause.cause);
-        INTERRUPT.INFO("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc,
+        INTERRUPT::INFO("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc,
                        stval);
         if (ctx->sstatus.spp) {
-            INTERRUPT.DEBUG("异常发生在S-Mode");
+            INTERRUPT::DEBUG("异常发生在S-Mode");
         } else {
-            INTERRUPT.DEBUG("异常发生在U-Mode");
+            INTERRUPT::DEBUG("异常发生在U-Mode");
         }
 
         // 我们可以通过该指令自定义kernel服务
         dword ins = *((dword *)sepc);
-        INTERRUPT.INFO("指令内容: 0x%08x", ins);
+        INTERRUPT::INFO("指令内容: 0x%08x", ins);
         // 这是一个任意的非法指令
         // 被我们选中用于模拟真实指令
         if (ins == 0x000000FF) {
-            INTERRUPT.INFO("自定义Kernel服务: Hello, World!");
+            INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
         } else if (ins == 0x00FF00FF) {
-            INTERRUPT.INFO("自定义Kernel服务: 计算t0的t1次方, 结果存储到t0中");
+            INTERRUPT::INFO("自定义Kernel服务: 计算t0的t1次方, 结果存储到t0中");
             int t0 = ctx->regs[5 - 1];  // x5 = t0
             int t1 = ctx->regs[6 - 1];  // x6 = t1
-            INTERRUPT.INFO("计算参数: t0=%d, t1=%d", t0, t1);
+            INTERRUPT::INFO("计算参数: t0=%d, t1=%d", t0, t1);
             int result = 1;
             for (int i = 0; i < t1; i++) {
                 result *= t0;
             }
             ctx->regs[5 - 1] = result;  // x5 = t0
-            INTERRUPT.INFO("计算完成!");
+            INTERRUPT::INFO("计算完成!");
         } else {
-            INTERRUPT.ERROR("非kernel自定义指令: 0x%08x", ins);
+            INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
         }
 
         ctx->sepc += 4;  // 跳过该指令
@@ -142,17 +142,17 @@ namespace Handlers {
 
     void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
                       ArchContext *ctx) {
-        INTERRUPT.DEBUG("发生异常! 类型: %s (%lu)",
+        INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
                         Exceptions::MSG[scause.cause], scause.cause);
-        INTERRUPT.INFO("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
+        INTERRUPT::INFO("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
                        scause.value, sepc, stval);
 
-        INTERRUPT.INFO("异常页地址: 0x%016lx", stval);
+        INTERRUPT::INFO("异常页地址: 0x%016lx", stval);
 
         if (ctx->sstatus.spp) {
-            INTERRUPT.DEBUG("异常发生在S-Mode");
+            INTERRUPT::DEBUG("异常发生在S-Mode");
         } else {
-            INTERRUPT.DEBUG("异常发生在U-Mode");
+            INTERRUPT::DEBUG("异常发生在U-Mode");
         }
         while (true);
 

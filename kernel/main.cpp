@@ -101,7 +101,7 @@ void post_init(void) {
     post_init_flag = true;
 
     // logger
-    LOGGER.INFO("已进入 post-init 阶段");
+    LOGGER::INFO("已进入 post-init 阶段");
 
     // 将 pre-init 阶段中初始化的子系统再次初始化, 以适应内核虚拟地址空间
     GFP::post_init();
@@ -135,7 +135,7 @@ void pre_init(void) {
     int cnt           = MemLayout::detect_memory_layout(regions, 128);
     void *upper_bound = nullptr;
     for (int i = 0; i < cnt; i++) {
-        LOGGER.INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, regions[i].ptr,
+        LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, regions[i].ptr,
                     (void *)((umb_t)(regions[i].ptr) + regions[i].size),
                     static_cast<int>(regions[i].status));
         void *this_bound = (void *)((umb_t)(regions[i].ptr) + regions[i].size);
@@ -144,10 +144,10 @@ void pre_init(void) {
         }
     }
 
-    LOGGER.INFO("初始化线性增长GFP");
+    LOGGER::INFO("初始化线性增长GFP");
     GFP::pre_init(regions, cnt);
 
-    LOGGER.INFO("初始化内核地址空间管理器");
+    LOGGER::INFO("初始化内核地址空间管理器");
     PageMan::pre_init();
     phymem_upper_bound = upper_bound;
     kernel_paging_setup();
@@ -157,7 +157,7 @@ void pre_init(void) {
     typedef void (*PostTestFuncType)(void);
     PostTestFuncType post_test_func =
         (PostTestFuncType)PA2KA((void *)post_init);
-    LOGGER.DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p", post_test_func);
+    LOGGER::DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p", post_test_func);
     post_test_func();
 }
 
@@ -167,34 +167,34 @@ void kernel_setup(void) {
 }
 
 void buddy_test_complex() {
-    LOGGER.INFO("========== Complex Buddy Allocator Test Start ==========");
+    LOGGER::INFO("========== Complex Buddy Allocator Test Start ==========");
 
     // Scenario 1: Mixed Size Allocation & Fragmentation
-    LOGGER.INFO("Scenario 1: Mixed Size & Fragmentation");
+    LOGGER::INFO("Scenario 1: Mixed Size & Fragmentation");
     void *p1 = GFP::alloc_frame(1);  // 1 page
     void *p2 = GFP::alloc_frame(2);  // 2 pages
     void *p4 = GFP::alloc_frame(4);  // 4 pages
     void *p3 = GFP::alloc_frame(3);  // 3 pages (odd size)
 
     if (p1 && p2 && p3 && p4) {
-        LOGGER.INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p", p1, p2,
+        LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p", p1, p2,
                     p4, p3);
 
         // Free middle blocks to create fragmentation
         GFP::free_frame(p2, 2);
         GFP::free_frame(p3, 3);
-        LOGGER.INFO("Freed middle blocks (2p, 3p)");
+        LOGGER::INFO("Freed middle blocks (2p, 3p)");
 
         // Try to alloc 2 pages again (should reuse p2 or part of p3)
         void *p_new = GFP::alloc_frame(2);
-        LOGGER.INFO("Re-alloc 2 pages: %p", p_new);
+        LOGGER::INFO("Re-alloc 2 pages: %p", p_new);
 
         if (p_new)
             GFP::free_frame(p_new, 2);
         GFP::free_frame(p1, 1);
         GFP::free_frame(p4, 4);
     } else {
-        LOGGER.ERROR("Mixed Alloc Failed");
+        LOGGER::ERROR("Mixed Alloc Failed");
         if (p1)
             GFP::free_frame(p1, 1);
         if (p2)
@@ -206,7 +206,7 @@ void buddy_test_complex() {
     }
 
     // Scenario 2: Exhaustion Test (Specific Order)
-    LOGGER.INFO("Scenario 2: Try to exhaust order 0 (1 page)");
+    LOGGER::INFO("Scenario 2: Try to exhaust order 0 (1 page)");
     constexpr int MAX_singles = 32;
     void *singles[MAX_singles];
     int alloc_count = 0;
@@ -214,42 +214,42 @@ void buddy_test_complex() {
     for (int i = 0; i < MAX_singles; i++) {
         singles[i] = GFP::alloc_frame(1);
         if (!singles[i]) {
-            LOGGER.WARN("Stopped at %d allocations", i);
+            LOGGER::WARN("Stopped at %d allocations", i);
             break;
         }
         alloc_count++;
     }
-    LOGGER.INFO("Allocated %d single pages", alloc_count);
+    LOGGER::INFO("Allocated %d single pages", alloc_count);
 
     // Reverse free to encourage merging
     for (int i = alloc_count - 1; i >= 0; i--) {
         GFP::free_frame(singles[i], 1);
     }
-    LOGGER.INFO("Freed all single pages");
+    LOGGER::INFO("Freed all single pages");
 
     // Scenario 3: Large Block Split & Merge
-    LOGGER.INFO("Scenario 3: Large Block Split & Merge");
+    LOGGER::INFO("Scenario 3: Large Block Split & Merge");
     void *huge = GFP::alloc_frame(64);  // Request 64 pages
     if (huge) {
-        LOGGER.INFO("Huge block allocated at %p", huge);
+        LOGGER::INFO("Huge block allocated at %p", huge);
         GFP::free_frame(huge, 64);
-        LOGGER.INFO("Huge block freed");
+        LOGGER::INFO("Huge block freed");
 
         // Verify we can alloc it again (merge successful)
         void *huge2 = GFP::alloc_frame(64);
         if (huge2 == huge) {
-            LOGGER.INFO(
+            LOGGER::INFO(
                 "Merge Verification Success: Same address re-allocated");
         } else {
-            LOGGER.WARN(
+            LOGGER::WARN(
                 "Merge Verification: Got different address %p (Original: %p)",
                 huge2, huge);
         }
         if (huge2)
             GFP::free_frame(huge2, 64);
     } else {
-        LOGGER.ERROR("Huge block alloc failed");
+        LOGGER::ERROR("Huge block alloc failed");
     }
 
-    LOGGER.INFO("========== Complex Buddy Allocator Test End ==========");
+    LOGGER::INFO("========== Complex Buddy Allocator Test End ==========");
 }

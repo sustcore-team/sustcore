@@ -50,10 +50,10 @@ void Riscv64Interrupt::init(void) {
     // 采用direct模式
     stvec.mode     = 0b00;
     if (stvec.value & 0x3) {
-        INTERRUPT.ERROR("错误: stvec地址未对齐!");
+        INTERRUPT::ERROR("错误: stvec地址未对齐!");
         return;
     }
-    INTERRUPT.DEBUG("isr_entry 地址: 0x%lx", (umb_t)isr_entry);
+    INTERRUPT::DEBUG("isr_entry 地址: 0x%lx", (umb_t)isr_entry);
 
     // 写入stvec寄存器
     csr_set_stvec(stvec);

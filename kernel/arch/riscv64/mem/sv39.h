@@ -336,9 +336,9 @@ public:
                 pte->rwx = rwx_cast(RWX::P);  // 标记为非叶子节点
                 pte->u   = u;
                 pte->g   = g;
-                PAGING.DEBUG("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
+                PAGING::DEBUG("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
             } else if (pte->rwx != RWX::P) {
-                PAGING.DEBUG("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value);
+                PAGING::DEBUG("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value);
                 return;
             } else if (pte->np) {
                 // 非存在页，do sth...
