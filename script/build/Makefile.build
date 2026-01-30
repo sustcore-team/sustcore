@@ -1,5 +1,6 @@
 include $(global-env)
 include $(path-script)/env/local.mk
+-include $(path-e)/config.mk
 
 include $(path-script)/build/build.mk
 include $(path-script)/tool.mk
