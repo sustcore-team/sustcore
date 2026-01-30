@@ -257,6 +257,10 @@ namespace util {
             return D_sentinel;
         }
 
+        std::size_t size() {
+            return D_size;
+        }
+
         // 禁止浅拷贝
         IntrusiveList(const IntrusiveList&)            = delete;
         IntrusiveList& operator=(const IntrusiveList&) = delete;

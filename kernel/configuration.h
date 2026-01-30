@@ -14,13 +14,15 @@
 #include <arch/trait.h>
 #include <mem/pfa.h>
 #include <mem/alloc.h>
+#include <mem/buddy.h>
 
 // Riscv 64
 
 #include <arch/riscv64/trait.h>
 #include <arch/riscv64/configuration.h>
 
-using PFA = LinearGrowPFA;
+// using PFA = LinearGrowPFA;
+using PFA = BuddyAllocator;
 using Allocator = LinearGrowAllocator;
 using PageMan = ArchPageMan<PFA>;
 using Serial = ArchSerial;

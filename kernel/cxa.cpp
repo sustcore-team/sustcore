@@ -47,3 +47,14 @@ void* operator new[](size_t size, void* ptr) noexcept {
 void operator delete[](void* ptr, void*) noexcept {
     Allocator::free(ptr);
 }
+
+// C++ 运行时支持 (C++ Runtime Support)
+// 这段代码定义了链接器缺失的符号，满足 C++ 静态对象管理的 ABI 需求
+extern "C" {
+void *__dso_handle = 0;
+
+// 内核不会退出，所以我们不需要真正的“退出时析构”逻辑，直接返回 0 即可
+int __cxa_atexit(void (*)(void *), void *, void *) {
+    return 0;
+}
+}

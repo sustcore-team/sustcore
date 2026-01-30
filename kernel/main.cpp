@@ -27,6 +27,8 @@
 
 bool post_init_flag = false;
 
+void buddy_test_complex();
+
 int kputs(const char *str) {
     if (!post_init_flag) {
         Serial::serial_write_string(str);
@@ -113,6 +115,8 @@ void post_init(void) {
     // 架构后初始化
     Initialization::post_init();
 
+    buddy_test_complex();
+
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
@@ -157,4 +161,92 @@ void pre_init(void) {
 void kernel_setup(void) {
     pre_init();
     while (true);
+}
+
+void buddy_test_complex() {
+    LOGGER.INFO("========== Complex Buddy Allocator Test Start ==========");
+
+    // Scenario 1: Mixed Size Allocation & Fragmentation
+    LOGGER.INFO("Scenario 1: Mixed Size & Fragmentation");
+    void *p1 = PFA::alloc_frame(1);  // 1 page
+    void *p2 = PFA::alloc_frame(2);  // 2 pages
+    void *p4 = PFA::alloc_frame(4);  // 4 pages
+    void *p3 = PFA::alloc_frame(3);  // 3 pages (odd size)
+
+    if (p1 && p2 && p3 && p4) {
+        LOGGER.INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p", p1, p2,
+                    p4, p3);
+
+        // Free middle blocks to create fragmentation
+        PFA::free_frame(p2, 2);
+        PFA::free_frame(p3, 3);
+        LOGGER.INFO("Freed middle blocks (2p, 3p)");
+
+        // Try to alloc 2 pages again (should reuse p2 or part of p3)
+        void *p_new = PFA::alloc_frame(2);
+        LOGGER.INFO("Re-alloc 2 pages: %p", p_new);
+
+        if (p_new)
+            PFA::free_frame(p_new, 2);
+        PFA::free_frame(p1, 1);
+        PFA::free_frame(p4, 4);
+    } else {
+        LOGGER.ERROR("Mixed Alloc Failed");
+        if (p1)
+            PFA::free_frame(p1, 1);
+        if (p2)
+            PFA::free_frame(p2, 2);
+        if (p4)
+            PFA::free_frame(p4, 4);
+        if (p3)
+            PFA::free_frame(p3, 3);
+    }
+
+    // Scenario 2: Exhaustion Test (Specific Order)
+    LOGGER.INFO("Scenario 2: Try to exhaust order 0 (1 page)");
+    constexpr int MAX_singles = 32;
+    void *singles[MAX_singles];
+    int alloc_count = 0;
+
+    for (int i = 0; i < MAX_singles; i++) {
+        singles[i] = PFA::alloc_frame(1);
+        if (!singles[i]) {
+            LOGGER.WARN("Stopped at %d allocations", i);
+            break;
+        }
+        alloc_count++;
+    }
+    LOGGER.INFO("Allocated %d single pages", alloc_count);
+
+    // Reverse free to encourage merging
+    for (int i = alloc_count - 1; i >= 0; i--) {
+        PFA::free_frame(singles[i], 1);
+    }
+    LOGGER.INFO("Freed all single pages");
+
+    // Scenario 3: Large Block Split & Merge
+    LOGGER.INFO("Scenario 3: Large Block Split & Merge");
+    void *huge = PFA::alloc_frame(64);  // Request 64 pages
+    if (huge) {
+        LOGGER.INFO("Huge block allocated at %p", huge);
+        PFA::free_frame(huge, 64);
+        LOGGER.INFO("Huge block freed");
+
+        // Verify we can alloc it again (merge successful)
+        void *huge2 = PFA::alloc_frame(64);
+        if (huge2 == huge) {
+            LOGGER.INFO(
+                "Merge Verification Success: Same address re-allocated");
+        } else {
+            LOGGER.WARN(
+                "Merge Verification: Got different address %p (Original: %p)",
+                huge2, huge);
+        }
+        if (huge2)
+            PFA::free_frame(huge2, 64);
+    } else {
+        LOGGER.ERROR("Huge block alloc failed");
+    }
+
+    LOGGER.INFO("========== Complex Buddy Allocator Test End ==========");
 }
