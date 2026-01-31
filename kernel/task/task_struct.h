@@ -33,11 +33,9 @@ struct PCB;
 
 struct TCB {
     // 总线程链表
-    TCB *next, *prev;
-    // 进程线程链表
-    TCB *process_next, *process_prev;
-    // 调度队列
-    TCB *schedule_next, *schedule_prev;
+    util::ListHead<TCB> __total_head;
+    util::ListHead<TCB> __process_head;
+    util::ListHead<TCB> __schedule_head;
 
     // TID
     tid_t tid;
@@ -88,7 +86,7 @@ struct PCB {
 
     // 线程链表
     using ThreadList =
-        util::IntrusiveList<TCB, &TCB::process_next, &TCB::process_prev>;
+        util::IntrusiveList<TCB, &TCB::__process_head>;
     ThreadList threads;
     TCB *main_thread;
 

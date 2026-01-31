@@ -104,8 +104,8 @@ void BuddyAllocator::post_init() {
             // iter 现在是 KPA 指针
             // iter->next 和 iter->prev 在内存中仍然是 PA
             // 需要转换到KPA
-            FreeBlock *next_pa = iter->next;
-            FreeBlock *prev_pa = iter->prev;
+            FreeBlock *next_pa = iter->list_head.next;
+            FreeBlock *prev_pa = iter->list_head.prev;
 
             FreeBlock *next_ka = (FreeBlock *)PA2KPA(next_pa);
             FreeBlock *prev_ka = (FreeBlock *)PA2KPA(prev_pa);
@@ -114,11 +114,11 @@ void BuddyAllocator::post_init() {
                         next_pa, next_ka, prev_pa, prev_ka);
 
             // 写回
-            iter->next = next_ka;
-            iter->prev = prev_ka;
+            iter->list_head.next = next_ka;
+            iter->list_head.prev = prev_ka;
 
             // 迭代
-            iter = iter->next;
+            iter = iter->list_head.next;
         // 直到到达哨兵节点
         } while (iter != sentinel);
     }

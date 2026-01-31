@@ -20,11 +20,9 @@
 class BuddyAllocator {
 public:
     struct FreeBlock {
-        // 匹配 IntrusiveListNodeTrait
-        FreeBlock *prev;
-        FreeBlock *next;
+        util::ListHead<FreeBlock> list_head;
 
-        FreeBlock() : prev(nullptr), next(nullptr) {}
+        FreeBlock() : list_head({}) {}
     };
 
     static constexpr int MAX_BUDDY_ORDER = 15;

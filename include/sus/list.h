@@ -23,47 +23,47 @@ namespace util {
     template <typename T, typename U>
     constexpr auto get_member_node_type(U T::*) -> T;
 
+
+    template <typename Node>
+    struct ListHead {
+        Node *prev;
+        Node *next;
+    };
+
     // 侵入式链表节点
-    template <typename Node, auto NextPtr = &Node::next,
-              auto PrevPtr = &Node::prev>
+    template <typename Node, auto Head>
     concept IntrusiveListNodeTrait =
-        std::is_member_pointer_v<decltype(NextPtr)> &&
-        std::is_member_pointer_v<decltype(PrevPtr)> &&
-        std::is_same_v<decltype(get_member_value_type(NextPtr)),
-                       decltype(get_member_value_type(PrevPtr))> &&
-        std::is_same_v<decltype(get_member_node_type(NextPtr)),
-                       decltype(get_member_node_type(PrevPtr))> &&
-        std::is_pointer_v<decltype(get_member_value_type(NextPtr))> &&
-        std::is_same_v<decltype(get_member_value_type(NextPtr)), Node*>&&
-            requires()
-    {
+    requires(Node *node) {
         {
             new Node()
         } -> std::same_as<Node*>;
+        {
+            node->*Head
+        } -> std::same_as<ListHead<Node> &>;
     };
 
-    template <typename Node, auto NextPtr = &Node::next,
-              auto PrevPtr = &Node::prev>
-        requires IntrusiveListNodeTrait<Node, NextPtr, PrevPtr>
+    template <typename Node, auto Head = &Node::list_head>
+        requires IntrusiveListNodeTrait<Node, Head>
     class IntrusiveList;
 
     // 迭代器
-    template <typename Node, auto NextPtr = &Node::next,
-              auto PrevPtr = &Node::prev>
+    template <typename Node, auto Head = &Node::list_head>
     class IntrusiveListIterator {
     private:
         using NodeType          = Node;
-        using NextMemberPtrType = decltype(NextPtr);
-        using PrevMemberPtrType = decltype(PrevPtr);
 
         NodeType* D_current;
 
+        static constexpr ListHead<NodeType> &U_head(NodeType *node) noexcept {
+            return node->*Head;
+        }
+
         static constexpr NodeType*& U_next(NodeType* node) noexcept {
-            return node->*NextPtr;
+            return U_head(node).next;
         }
 
         static constexpr NodeType*& U_prev(NodeType* node) noexcept {
-            return node->*PrevPtr;
+            return U_head(node).prev;
         }
 
     public:
@@ -121,26 +121,27 @@ namespace util {
             return !(*this == other);
         }
 
-        friend class IntrusiveList<Node, NextPtr, PrevPtr>;
+        friend class IntrusiveList<Node, Head>;
     };
 
     // 常量迭代器
-    template <typename Node, auto NextPtr = &Node::next,
-              auto PrevPtr = &Node::prev>
+    template <typename Node, auto Head = &Node::list_head>
     class IntrusiveListConstIterator {
     private:
         using NodeType          = Node;
-        using NextMemberPtrType = decltype(NextPtr);
-        using PrevMemberPtrType = decltype(PrevPtr);
 
         const NodeType* D_current;
 
+        static constexpr const ListHead<NodeType> &U_head(NodeType *node) noexcept {
+            return node->*Head;
+        }
+
         static constexpr const NodeType* U_next(const NodeType* node) noexcept {
-            return node->*NextPtr;
+            return U_head(node).next;
         }
 
         static constexpr const NodeType* U_prev(const NodeType* node) noexcept {
-            return node->*PrevPtr;
+            return U_head(node).prev;
         }
 
     public:
@@ -155,7 +156,7 @@ namespace util {
         constexpr explicit IntrusiveListConstIterator(const NodeType* node)
             : D_current(node) {}
         constexpr IntrusiveListConstIterator(
-            const IntrusiveListIterator<Node, NextPtr, PrevPtr>& it) noexcept
+            const IntrusiveListIterator<Node, Head>& it) noexcept
             : D_current(it.operator->()) {}
 
         // 解引用
@@ -199,27 +200,31 @@ namespace util {
             const IntrusiveListConstIterator& other) const noexcept {
             return !(*this == other);
         }
+
+        friend class IntrusiveList<Node, Head>;
     };
 
-    template <typename Node, auto NextPtr, auto PrevPtr>
-        requires IntrusiveListNodeTrait<Node, NextPtr, PrevPtr>
+    template <typename Node, auto Head>
+        requires IntrusiveListNodeTrait<Node, Head>
     class IntrusiveList {
     private:
         using NodeType          = Node;
-        using NextMemberPtrType = decltype(NextPtr);
-        using PrevMemberPtrType = decltype(PrevPtr);
 
         // 哨兵节点
         NodeType D_sentinel;
 
         std::size_t D_size;
 
+        static constexpr ListHead<NodeType> &U_head(NodeType *node) noexcept {
+            return node->*Head;
+        }
+
         static constexpr NodeType*& U_next(NodeType* node) noexcept {
-            return node->*NextPtr;
+            return U_head(node).next;
         }
 
         static constexpr NodeType*& U_prev(NodeType* node) noexcept {
-            return node->*PrevPtr;
+            return U_head(node).prev;
         }
 
         static constexpr void U_link(NodeType* prev, NodeType* next) noexcept {
@@ -240,9 +245,9 @@ namespace util {
         }
 
     public:
-        using iterator = IntrusiveListIterator<Node, NextPtr, PrevPtr>;
+        using iterator = IntrusiveListIterator<Node, Head>;
         using const_iterator =
-            IntrusiveListConstIterator<Node, NextPtr, PrevPtr>;
+            IntrusiveListConstIterator<Node, Head>;
         using size_type = std::size_t;
 
         constexpr IntrusiveList() noexcept : D_size(0) {
@@ -271,10 +276,10 @@ namespace util {
             if (other.empty()) {
                 U_init_sentinel(D_sentinel);
             } else {
-                D_sentinel.next         = other.D_sentinel.next;
-                D_sentinel.prev         = other.D_sentinel.prev;
-                U_prev(D_sentinel.next) = &D_sentinel;
-                U_next(D_sentinel.prev) = &D_sentinel;
+                U_next(&D_sentinel)         = U_next(&D_sentinel);
+                U_prev(&D_sentinel)         = U_prev(&D_sentinel);
+                U_prev(U_next(&D_sentinel)) = &D_sentinel;
+                U_next(U_prev(&D_sentinel)) = &D_sentinel;
                 U_init_sentinel(other.D_sentinel);
                 other.D_size = 0;
             }
@@ -287,10 +292,10 @@ namespace util {
                 if (other.empty()) {
                     U_init_sentinel(D_sentinel);
                 } else {
-                    D_sentinel.next         = other.D_sentinel.next;
-                    D_sentinel.prev         = other.D_sentinel.prev;
-                    U_prev(D_sentinel.next) = &D_sentinel;
-                    U_next(D_sentinel.prev) = &D_sentinel;
+                    U_next(&D_sentinel)         = U_next(&D_sentinel);
+                    U_prev(&D_sentinel)         = U_prev(&D_sentinel);
+                    U_prev(U_next(&D_sentinel)) = &D_sentinel;
+                    U_next(U_prev(&D_sentinel)) = &D_sentinel;
                     U_init_sentinel(other.D_sentinel);
                     other.D_size = 0;
                 }
@@ -308,13 +313,13 @@ namespace util {
 
         // iterators
         constexpr iterator begin() noexcept {
-            return iterator(D_sentinel.next);
+            return iterator(U_next(&D_sentinel));
         }
         constexpr const_iterator begin() const noexcept {
-            return const_iterator(D_sentinel.next);
+            return const_iterator(U_next(&D_sentinel));
         }
         constexpr const_iterator cbegin() const noexcept {
-            return const_iterator(D_sentinel.next);
+            return const_iterator(U_next(&D_sentinel));
         }
         constexpr iterator end() noexcept {
             return iterator(&D_sentinel);
@@ -328,17 +333,17 @@ namespace util {
 
         // 访问元素
         constexpr NodeType& front() noexcept {
-            return *D_sentinel.next;
+            return *U_next(&D_sentinel);
         }
         constexpr const NodeType& front() const noexcept {
-            return *D_sentinel.next;
+            return *U_next(&D_sentinel);
         }
 
         constexpr NodeType& back() noexcept {
-            return *D_sentinel.prev;
+            return *U_prev(&D_sentinel);
         }
         constexpr const NodeType& back() const noexcept {
-            return *D_sentinel.prev;
+            return *U_prev(&D_sentinel);
         }
 
         // insert & erase
