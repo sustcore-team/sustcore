@@ -1,0 +1,20 @@
+/**
+ * @file new
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief new
+ * @version alpha-1.0.0
+ * @date 2026-02-04
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
+#pragma once
+
+#include <cstddef>
+
+// Placement new/delete
+void* operator new(size_t size, void* ptr) noexcept;
+void operator delete(void* ptr, void*) noexcept;
+void* operator new[](size_t size, void* ptr) noexcept;
+void operator delete[](void* ptr, void*) noexcept;

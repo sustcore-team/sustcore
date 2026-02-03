@@ -12,6 +12,10 @@
 #include <configuration.h>
 #include <mem/pmm.h>
 
+PMM::page *PMM::__base_address;
+size_t PMM::__arraysz;
+umb_t PMM::__lower_ppn, PMM::__upper_ppn;
+
 void PMM::init(void *lowerbound, void *upperbound) {
     __lower_ppn    = phys2ppn((umb_t)lowerbound);
     __upper_ppn    = phys2ppn((umb_t)upperbound);

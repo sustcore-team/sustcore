@@ -8,20 +8,16 @@
  * @copyright Copyright (c) 2026
  *
  */
+#include <arch/trait.h>
 #include <basecpp/logger.h>
 #include <kio.h>
 #include <mem/buddy.h>
 #include <mem/kaddr_defs.h>
+#include <sus/list.h>
+#include <sus/types.h>
 
 #include <cstddef>
-
-#include "arch/trait.h"
-#include "sus/list.h"
-#include "sus/types.h"
-
-inline void *operator new(size_t, void *p) noexcept {
-    return p;
-}
+#include <new>
 
 util::IntrusiveList<BuddyAllocator::FreeBlock>
     BuddyAllocator::free_area[BuddyAllocator::MAX_BUDDY_ORDER + 1];
@@ -80,7 +76,7 @@ void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
             if (pages > 0) {
                 add_memory_range((void *)start_addr, pages);
                 BUDDY::DEBUG("添加可用内存区域 [%p, %p), 共 %d 页",
-                            (void *)start_addr, (void *)end_addr, pages);
+                             (void *)start_addr, (void *)end_addr, pages);
             }
         }
     }
@@ -97,9 +93,9 @@ void BuddyAllocator::post_init() {
         // 这样做是为了确保链表中的所有指针都指向 Kernel Physical Memory Space
         FreeBlock *sentinel = (FreeBlock *)PA2KPA(KA2PA(&list.sentinel()));
         // 开始遍历
-        FreeBlock *iter = sentinel;
-        
-        // 一开始就是哨兵节点, 
+        FreeBlock *iter     = sentinel;
+
+        // 一开始就是哨兵节点,
         do {
             // iter 现在是 KPA 指针
             // iter->next 和 iter->prev 在内存中仍然是 PA
@@ -111,7 +107,7 @@ void BuddyAllocator::post_init() {
             FreeBlock *prev_ka = (FreeBlock *)PA2KPA(prev_pa);
 
             BUDDY::DEBUG("next PA: %p -> KPA: %p, prev PA: %p -> KPA: %p",
-                        next_pa, next_ka, prev_pa, prev_ka);
+                         next_pa, next_ka, prev_pa, prev_ka);
 
             // 写回
             iter->list_head.next = next_ka;
@@ -119,7 +115,7 @@ void BuddyAllocator::post_init() {
 
             // 迭代
             iter = iter->list_head.next;
-        // 直到到达哨兵节点
+            // 直到到达哨兵节点
         } while (iter != sentinel);
     }
     BUDDY::INFO("BuddyAllocator initialized and migrated to KVA.");
@@ -212,11 +208,11 @@ void BuddyAllocator::free_frame_in_order(void *ptr, int order) {
         if (buddy) {
             umb_t buddy_paddr  = (umb_t)block2pa(buddy);
             umb_t merged_paddr = is_left ? paddr : paddr - block_size;
-            BUDDY::DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
-                        (void *)paddr, (void *)(paddr + block_size),
-                        (void *)buddy_paddr, (void *)(buddy_paddr + block_size),
-                        (void *)merged_paddr,
-                        (void *)(merged_paddr + block_size * 2));
+            BUDDY::DEBUG(
+                "将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)", (void *)paddr,
+                (void *)(paddr + block_size), (void *)buddy_paddr,
+                (void *)(buddy_paddr + block_size), (void *)merged_paddr,
+                (void *)(merged_paddr + block_size * 2));
 
             // 从链表中移除node和buddy
             list.remove(*node);

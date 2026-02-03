@@ -31,6 +31,14 @@ void operator delete[](void* ptr) noexcept {
     Allocator::free(ptr);
 }
 
+void operator delete(void* ptr, size_t) noexcept {
+    Allocator::free(ptr);
+}
+
+void operator delete[](void* ptr, size_t) noexcept {
+    Allocator::free(ptr);
+}
+
 // Placement new/delete
 void* operator new(size_t size, void* ptr) noexcept {
     return ptr;

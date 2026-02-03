@@ -17,7 +17,7 @@ using lba_t = size_t;
 
 class IBlockDevice {
 public:
-    virtual ~IBlockDevice()                                      = default;
+    virtual ~IBlockDevice() = default;
     /**
      * @brief 获得块大小
      *

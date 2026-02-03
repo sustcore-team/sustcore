@@ -9,10 +9,7 @@
  *
  */
 
-#pragma once
-
 #include <device/block.h>
-
 #include <cstring>
 
 size_t RamDiskDevice::block_sz(void) const {

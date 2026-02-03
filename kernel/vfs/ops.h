@@ -15,6 +15,7 @@
 #include <sus/optional.h>
 #include <concepts>
 #include <cstddef>
+#include <device/block.h>
 
 enum class FSErrCode {
     SUCCESS       = 0,
@@ -33,6 +34,7 @@ enum class SeekWhence { SET = 0, CUR = 1, END = 2 };
 class IFile;
 class IDirectory;
 class IMetadata;
+class IDentry;
 class IINode;
 class ISuperblock;
 
@@ -97,17 +99,17 @@ public:
      * @brief 在目录中查找指定名称的目录项
      *
      * @param name 目录项名称
-     * @return FSOptional<IINode *> 查询到的目录项
+     * @return FSOptional<IDentry *> 查询到的目录项
      */
-    virtual FSOptional<IINode *> lookup(const char *name) = 0;
+    virtual FSOptional<IDentry *> lookup(const char *name) = 0;
     /**
      * @brief 在目录中创建一个新的目录项
      *
      * @param name 目录项名称
      * @param is_dir 是否为目录
-     * @return FSOptional<IINode *> 创建的目录项
+     * @return FSOptional<IDentry *> 创建的目录项
      */
-    virtual FSOptional<IINode *> create(const char *name, bool is_dir) = 0;
+    virtual FSOptional<IDentry *> create(const char *name, bool is_dir) = 0;
     /**
      * @brief 同步目录数据到存储设备
      *
@@ -126,25 +128,12 @@ public:
 };
 
 /**
- * @brief 目录项接口
- *
+ * @brief inode接口
+ * 
  */
 class IINode {
 public:
     virtual ~IINode()                             = default;
-    /**
-     * @brief 移除该目录项
-     *
-     * @return FSErrCode 错误码
-     */
-    virtual FSErrCode remove(void)                 = 0;
-    /**
-     * @brief 重命名该目录项
-     *
-     * @param new_name 新名称
-     * @return FSErrCode 错误码
-     */
-    virtual FSErrCode rename(const char *new_name) = 0;
     /**
      * @brief 将该目录项作为目录打开
      *
@@ -163,6 +152,34 @@ public:
      * @return FSOptional<IMetadata *> 元数据对象
      */
     virtual FSOptional<IMetadata *> metadata(void)              = 0;
+};
+
+/**
+ * @brief 目录项接口
+ *
+ */
+class IDentry {
+public:
+    virtual ~IDentry() = default;
+    /**
+     * @brief 移除该目录项
+     *
+     * @return FSErrCode 错误码
+     */
+    virtual FSErrCode remove(void)                 = 0;
+    /**
+     * @brief 重命名该目录项
+     *
+     * @param new_name 新名称
+     * @return FSErrCode 错误码
+     */
+    virtual FSErrCode rename(const char *new_name) = 0;
+    /**
+     * @brief 获得该目录项对应的inode
+     * 
+     * @return IINode* 目录项对应的inode
+     */
+    virtual FSOptional<IINode *> inode(void) = 0;
 };
 
 /**
@@ -192,14 +209,12 @@ public:
     virtual FSOptional<IMetadata *> metadata(void) = 0;
 };
 
-class BlockDevice;
-
 class IFsDriver {
 public:
     virtual ~IFsDriver() = default;
     virtual const char *name() const = 0;
-    virtual FSOptional<bool> probe(BlockDevice device, const char *options) = 0;
-    virtual FSOptional<ISuperblock *> mount(BlockDevice device, const char *options) = 0;
+    virtual FSOptional<bool> probe(IBlockDevice device, const char *options) = 0;
+    virtual FSOptional<ISuperblock *> mount(IBlockDevice device, const char *options) = 0;
     virtual FSErrCode unmount(ISuperblock *sb) = 0;
 };
 
