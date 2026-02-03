@@ -36,9 +36,6 @@ PMM::page *PMM::__get_page(umb_t ppn) {
 
 void PMM::__ref_page(page *pg) {
     pg->refcnt++;
-    if (pg->refcnt > 1) {
-        // Open COW Mechanism
-    }
 }
 
 bool PMM::__unref_page(page *pg) {
@@ -46,9 +43,6 @@ bool PMM::__unref_page(page *pg) {
     pg->refcnt--;
     if (pg->refcnt == 0) {
         return true;
-    }
-    if (pg->refcnt == 1) {
-        // Close COW Mechanism
     }
     return false;
 }
