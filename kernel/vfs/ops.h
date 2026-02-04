@@ -24,6 +24,7 @@ enum class FSErrCode {
     NO_SPACE      = -2,
     IO_ERROR      = -3,
     NOT_SUPPORTED = -4,
+    BUSY          = -5,
     UNKNOWN_ERROR = -255
 };
 

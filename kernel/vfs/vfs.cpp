@@ -45,7 +45,7 @@ namespace path_util {
      */
     bool prefix(const char *path, const char *pfx) {
         size_t pfx_len = strlen(pfx);
-        if (sizeof(pfx) == 1) {
+        if (strlen(pfx) == 1) {
             // assert (*pfx == '/');
             return true;  // 根路径是所有路径的前缀
         }
@@ -60,7 +60,7 @@ namespace path_util {
     /**
      * @brief 规范化路径
      * 
-     * @param path 待规范化路径
+     * @param path 待规范化绝对路径(不包含'.'和'..')
      * @return util::string 规范化后的路径
      */
     util::string refine_path(const char *path) {
@@ -79,7 +79,8 @@ namespace path_util {
                 }
                 // 只保留一个斜杠
                 sb.append('/');
-            } else {
+            }
+            else {
                 // 复制普通字符
                 sb.append(*path);
                 path++;
@@ -105,7 +106,7 @@ namespace path_util {
      */
     util::string relative_path(const char *full_path, const char *mntpt) {
         if (!prefix(full_path, mntpt)) {
-            return 0;  // 不是前缀
+            return "";  // 不是前缀
         }
         util::string_builder sb;
 
@@ -166,7 +167,8 @@ namespace path_util {
                 path_util::entry(path + offset);
 
             // 调用回调函数
-            func(entry_name);
+            if (! func(entry_name))
+                break;
 
             // 移动偏移量
             offset += entry_name.length() + 1;  // +1 跳过斜杠
@@ -198,6 +200,14 @@ FSErrCode VFS::unregister_fs(const char *fs_name) {
     if (!fs_table.contains(fs_name)) {
         return FSErrCode::INVALID_PARAM;
     }
+    // 遍历superblock表, 确认没有挂载该文件系统
+    for (auto &mnt_entry : mount_table) {
+        ISuperblock *sb = mnt_entry.second;
+        if (strcmp(sb->fs()->name(), fs_name) == 0) {
+            return FSErrCode::BUSY;  // 该文件系统仍被挂载
+        }
+    }
+    fs_table.get(fs_name).if_present([](IFsDriver *driver) {delete driver;});
     fs_table.remove(fs_name);
     return FSErrCode::SUCCESS;
 }
@@ -241,6 +251,15 @@ FSErrCode VFS::umount(const char *mountpoint) {
     }
 
     ISuperblock *sb = _sb_opt.value().second;
+
+    // 遍历 Open File List, 确认没有文件正在使用该挂载点
+    for (auto &file_entry : open_file_list) {
+        VFile *vfile = file_entry.second;
+        if (vfile->sb == sb) {
+            return FSErrCode::BUSY;  // 有文件仍在使用该挂载点
+        }
+    }
+
     // 移除挂载
     FSErrCode ret   = sb->fs()->unmount(sb);
     if (ret != FSErrCode::SUCCESS) {
@@ -253,6 +272,8 @@ FSErrCode VFS::umount(const char *mountpoint) {
 }
 
 FSOptional<VFile *> VFS::_open(const char *path, int flags) {
+    // TODO: check path validity
+
     // 选择 path 中从 / 开始尽可能长的路径前缀作为挂载点
     // 修正路径
     util::string refined_path = path_util::refine_path(path);
@@ -290,14 +311,10 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
     FSErrCode errflag = FSErrCode::SUCCESS;
     // 解析相对路径, 查找文件
     path_util::foreach_entry(rel_path, [&curinode, &errflag](const util::string &entry_name) {
-        if (errflag != FSErrCode::SUCCESS) {
-            return;
-        }
-
         auto _dir_opt = curinode->as_directory();
         if (!_dir_opt.present()) {
             errflag = _dir_opt.error();  // 不是目录
-            return;
+            return false;
         }
         IDirectory *dir = _dir_opt.value();
 
@@ -305,7 +322,7 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
         auto _dentry_opt = dir->lookup(entry_name.c_str());
         if (!_dentry_opt.present()) {
             errflag = _dentry_opt.error();  // 未找到对应目录项
-            return;
+            return false;
         }
         IDentry *dentry = _dentry_opt.value();
 
@@ -313,9 +330,10 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
         auto _inode_opt = dentry->inode();
         if (!_inode_opt.present()) {
             errflag = _inode_opt.error();  // 无法获得i节点
-            return;
+            return false;
         }
         curinode = _inode_opt.value();
+        return true;
     });
 
     // 当前inode即为目标文件的inode
@@ -333,3 +351,14 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
     open_file_list.put(vfile->fd, vfile);
     return FSOptional<VFile *>(vfile);
 }
+
+FSErrCode VFS::_close(VFile *vfile) {
+    if (!open_file_list.contains(vfile->fd)) {
+        return FSErrCode::INVALID_PARAM;  // 文件未打开
+    }
+    open_file_list.remove(vfile->fd);
+    delete vfile->ifile;
+    delete vfile;
+    return FSErrCode::SUCCESS;
+}
+

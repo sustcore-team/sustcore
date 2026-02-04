@@ -192,7 +192,18 @@ namespace std {
 
     // is_member_pointer
     template <typename _Tp>
-    struct is_member_pointer : public bool_constant<__is_member_pointer(_Tp)> {};
+    struct is_member_pointer : public bool_constant<__is_member_pointer(_Tp)> {
+    };
+
+    // is_member_function_pointer
+    template <typename _Tp>
+    struct is_member_function_pointer
+        : public bool_constant<__is_member_function_pointer(_Tp)> {};
+
+    // is_member_object_pointer
+    template <typename _Tp>
+    struct is_member_object_pointer
+        : public bool_constant<__is_member_object_pointer(_Tp)> {};
 
     // is_function
     template <typename _Tp>
@@ -268,7 +279,7 @@ namespace std {
     template <typename _Tp>
     inline constexpr size_t rank_v = rank<_Tp>::value;
 
-    // std::void_t
+    // void_t
     template <typename...>
     using void_t = void;
 
@@ -283,4 +294,52 @@ namespace std {
 
     template <bool _Bp, typename _Tp = void>
     using enable_if_t = typename enable_if<_Bp, _Tp>::type;
+
+    template <typename T>
+    typename remove_reference<T>::type&& __move(T&& t) {
+        return static_cast<typename remove_reference<T>::type&&>(t);
+    }
+
+    template <typename T>
+    T&& __forward(typename remove_reference<T>::type& t) {
+        return static_cast<T&&>(t);
+    }
+
+    template <typename T>
+    T&& __forward(typename remove_reference<T>::type&& t) {
+        return static_cast<T&&>(t);
+    }
+
+    namespace detail {
+        // invoke
+        template <typename F, typename... Args>
+        auto invoke_impl(F&& f, Args&&... args)
+            -> decltype(__forward<F>(f)(__forward<Args>(args)...));
+
+        // invoke member function pointer
+        template <typename R, typename C, typename... FArgs, typename T,
+                  typename... Args>
+        auto invoke_impl(R (C::*f)(FArgs...), T&& t, Args&&... args)
+            -> decltype((__forward<T>(t).*f)(__forward<Args>(args)...));
+
+        // invoke const member function pointer
+        template <typename R, typename C, typename... FArgs, typename T,
+                  typename... Args>
+        auto invoke_impl(R (C::*f)(FArgs...) const, T&& t, Args&&... args)
+            -> decltype((__forward<T>(t).*f)(__forward<Args>(args)...));
+
+        // invoke member object pointer
+        template <typename R, typename C, typename T>
+        auto invoke_impl(R(C::*f), T&& t) -> decltype(__forward<T>(t).*f);
+    }  // namespace detail
+
+    // invoke_result
+    template <typename _Fp, typename... _Args>
+    struct invoke_result {
+        using type =
+            decltype(detail::invoke_impl(declval<_Fp>(), declval<_Args>()...));
+    };
+
+    template <typename _Fp, typename... _Args>
+    using invoke_result_t = typename invoke_result<_Fp, _Args...>::type;
 }  // namespace std

@@ -51,6 +51,23 @@ public:
                            const char *mountpoint, MountFlags flags,
                            const char *options);
     FSErrCode umount(const char *mountpoint);
-    // 打开文件
+    // 打开/关闭文件
     FSOptional<VFile *> _open(const char *path, int flags);
+    FSErrCode _close(VFile *vfile);
+
+    inline FSOptional<fd_t> open(const char *path, int flags) {
+        auto _vfile_opt = _open(path, flags);
+        return _vfile_opt.map([](VFile *vfile) {
+            return vfile->fd;
+        });
+    }
+
+    inline FSErrCode close(fd_t fd) {
+        auto _vfile_opt = open_file_list.get(fd);
+        if (! _vfile_opt.present()) {
+            return FSErrCode::INVALID_PARAM;
+        }
+        VFile *vfile = _vfile_opt.value();
+        return _close(vfile);
+    }
 };

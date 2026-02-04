@@ -25,18 +25,18 @@ namespace std {
     template <typename Iter>
     struct iterator_traits;
 
-    template <typename _Iterator, typename = std::void_t<>>
+    template <typename _Iterator, typename = void_t<>>
     struct __iterator_traits {};
 
     template <typename Iter>
     struct iterator_traits : public __iterator_traits<Iter> {};
 
     template <typename _Tp>
-        requires std::is_object_v<_Tp>
+        requires is_object_v<_Tp>
     struct iterator_traits<_Tp *> {
         using iterator_concept  = contiguous_iterator_tag;
         using iterator_category = random_access_iterator_tag;
-        using value_type        = std::remove_cv_t<_Tp>;
+        using value_type        = remove_cv_t<_Tp>;
         using difference_type   = ptrdiff_t;
         using pointer           = _Tp *;
         using reference         = _Tp &;

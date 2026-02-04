@@ -20,13 +20,13 @@ namespace std {
     template <typename From, typename To>
     concept convertible_to = requires {
         // 隐式转换
-        []() -> To { return std::declval<From>(); };
+        []() -> To { return declval<From>(); };
     } && requires(From (&f)()) {
         // 显式转换
         static_cast<To>(f());
     } && requires {
         // static_cast有效
-        static_cast<To>(std::declval<From>());
-    } && std::is_convertible_v<From, To>;
+        static_cast<To>(declval<From>());
+    } && is_convertible_v<From, To>;
 
 }  // namespace std
