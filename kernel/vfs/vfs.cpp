@@ -13,9 +13,30 @@
 #include <sus/raii.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+#include <type_traits>
 #include "sus/mstring.h"
 
 namespace path_util {
+    template <typename T>
+    const char *_cstr(const T &str) {
+        if constexpr (std::is_convertible_v<T, const char *>) {
+            return str;
+        }
+        else {
+            return str.c_str();
+        }
+    }
+
+    template <typename T>
+    size_t _strlen(const T &str) {
+        if constexpr (std::is_convertible_v<T, const char *>) {
+            return strlen(str);
+        }
+        else {
+            return str.length();
+        }
+    }
+
     /**
      * @brief 判断pfx是否是str的前缀
      * 
@@ -24,13 +45,16 @@ namespace path_util {
      * @return true pfx是str的前缀
      * @return false pfx不是str的前缀
      */
-    bool _prefix(const char *str, const char *pfx) {
-        while (*pfx != 0) {
-            if (*str != *pfx) {
+    template <typename T>
+    bool _prefix(const T &str, const T &pfx) {
+        const char *str_c = _cstr(str);
+        const char *pfx_c = _cstr(pfx);
+        while (*pfx_c != 0) {
+            if (*str_c != *pfx_c) {
                 return false;
             }
-            str++;
-            pfx++;
+            str_c++;
+            pfx_c++;
         }
         return true;
     }
@@ -43,18 +67,15 @@ namespace path_util {
      * @return true pfx是path的路径前缀
      * @return false pfx不是path的路径前缀
      */
-    bool prefix(const char *path, const char *pfx) {
-        size_t pfx_len = strlen(pfx);
-        if (strlen(pfx) == 1) {
+    template <typename T>
+    bool prefix(const T &path, const T &pfx) {
+        size_t pfx_len = _strlen(pfx);
+        if (pfx_len == 1) {
             // assert (*pfx == '/');
             return true;  // 根路径是所有路径的前缀
         }
         return _prefix(path, pfx) &&
                (path[pfx_len] == '/' || path[pfx_len] == '\0');
-    }
-
-    bool prefix(const util::string &path, const util::string &pfx) {
-        return prefix(path.c_str(), pfx.c_str());
     }
 
     /**
@@ -63,27 +84,29 @@ namespace path_util {
      * @param path 待规范化绝对路径(不包含'.'和'..')
      * @return util::string 规范化后的路径
      */
-    util::string refine_path(const char *path) {
+    template <typename T>
+    util::string refine_path(const T &path) {
         util::string_builder sb;
+        const char *path_c = _cstr(path);
 
-        if (*path != '/') {
+        if (*path_c != '/') {
             sb.append('/');
         }
 
-        while (*path != 0) {
+        while (*path_c != 0) {
             // 复制非多余的斜杠
-            if (*path == '/') {
+            if (*path_c == '/') {
                 // 跳过多余的斜杠
-                while (*path == '/') {
-                    path++;
+                while (*path_c == '/') {
+                    path_c++;
                 }
                 // 只保留一个斜杠
                 sb.append('/');
             }
             else {
                 // 复制普通字符
-                sb.append(*path);
-                path++;
+                sb.append(*path_c);
+                path_c++;
             }
         }
         if (sb[sb.length() - 1]) {
@@ -93,10 +116,6 @@ namespace path_util {
         return sb.build();
     }
 
-    util::string refine_path(const util::string &path) {
-        return refine_path(path.c_str());
-    }
-
     /**
      * @brief 计算full_path相对于mntpt的相对路径
      * 
@@ -104,7 +123,8 @@ namespace path_util {
      * @param mntpt 挂载点路径
      * @return util::string 相对路径
      */
-    util::string relative_path(const char *full_path, const char *mntpt) {
+    template <typename T>
+    util::string relative_path(const T &full_path, const T &mntpt) {
         if (!prefix(full_path, mntpt)) {
             return "";  // 不是前缀
         }
@@ -114,8 +134,8 @@ namespace path_util {
         sb.append('/');
 
         // 计算相对路径起始位置
-        size_t mntpt_len     = strlen(mntpt);
-        const char *rel_path = full_path + mntpt_len;
+        size_t mntpt_len     = _strlen(mntpt);
+        const char *rel_path = _cstr(full_path) + mntpt_len;
         if (*rel_path == '\0') {
             return sb.build();
         }
@@ -125,46 +145,40 @@ namespace path_util {
         return sb.build();
     }
 
-    util::string relative_path(const util::string &full_path,
-                                     const util::string &mntpt) {
-        return relative_path(full_path.c_str(), mntpt.c_str());
-    }
-
     /**
      * @brief 提取路径中的下一个路径项
      * 
      * @param path 路径字符串
      * @return util::string 下一个路径项字符串
      */
-    util::string entry(const char *path) {
+    template <typename T>
+    util::string entry(const T &path) {
+        const char *path_c = _cstr(path);
+
         // 跳过开头的斜杠
-        if (*path == '/') {
-            path++;
+        if (*path_c == '/') {
+            path_c++;
         }
 
         util::string_builder sb;
 
         // 复制路径项
-        while (*path != '/' && *path != '\0') {
-            sb.append(*path);
-            path++;
+        while (*path_c != '/' && *path_c != '\0') {
+            sb.append(*path_c);
+            path_c++;
         }
 
         return sb.build();
     }
 
-    util::string entry(const util::string &path) {
-        return entry(path.c_str());
-    }
-
-    template <typename Func>
-    void foreach_entry(const char *path, Func func) {
+    template <typename T, typename Func>
+    void foreach_entry(const T &path, Func func) {
         size_t offset = 0;
-        size_t path_len = strlen(path);
+        size_t path_len = _strlen(path);
         while (offset < path_len) {
             // 提取下一个路径项
             util::string entry_name =
-                path_util::entry(path + offset);
+                path_util::entry(_cstr(path) + offset);
 
             // 调用回调函数
             if (! func(entry_name))
@@ -173,11 +187,6 @@ namespace path_util {
             // 移动偏移量
             offset += entry_name.length() + 1;  // +1 跳过斜杠
         }
-    }
-
-    template <typename Func>
-    void foreach_entry(const util::string &path, Func func) {
-        foreach_entry(path.c_str(), func);
     }
 };  // namespace path_util
 
