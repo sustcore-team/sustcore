@@ -125,6 +125,8 @@ namespace util {
 
         constexpr explicit LinkedMapConstIterator(const typename ListType::iterator it) noexcept
             : D_it(it) {}
+        constexpr LinkedMapConstIterator(const LinkedMapIterator<_K, _V>& it) noexcept
+            : D_it(it.operator->()) {}
 
         // 解引用
         constexpr reference operator*() const noexcept {

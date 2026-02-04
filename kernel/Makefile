@@ -12,7 +12,7 @@ objects := main.o cxa.o
 deps := main.d cxa.d
 attachments := license.attachment.o
 
-subdirs := ./arch/$(architecture)/ ./mem ./task ./device ./vfs
+subdirs := ./arch/$(architecture)/ ./mem ./task ./device ./vfs ./cap
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
