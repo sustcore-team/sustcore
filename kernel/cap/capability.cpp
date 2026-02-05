@@ -10,19 +10,3 @@
  */
 
 #include <cap/capability.h>
-
-Capability::Capability(CapType type, PCB *owner, CapIdx idx, BasicPermission perm)
-    : _type(type), _owner(owner), _idx(idx), _permissions()
-{
-    _permissions.push_back(new BasicPermission(perm));
-}
-
-Capability::~Capability() {
-    // 将自身从继承树中剥离
-
-    // 遍历继承树, 通知其派生能力销毁自身
-
-    for (auto perm : _permissions) {
-        delete perm;
-    }
-}

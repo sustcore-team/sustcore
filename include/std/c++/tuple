@@ -1,0 +1,113 @@
+/**
+ * @file tuple
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 元组
+ * @version alpha-1.0.0
+ * @date 2026-02-05
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstddef>
+#include <type_traits>
+#include <utility>
+
+namespace std {
+    template <typename... Types>
+    class tuple;
+
+    template <>
+    class tuple<> {
+        tuple() = default;
+        static constexpr std::size_t size() {
+            return 0;
+        }
+    };
+
+    template <typename T, typename... Types>
+    class tuple<T, Types...> : private tuple<Types...> {
+    protected:
+        using base_type  = tuple<Types...>;
+        using value_type = T;
+
+        value_type _value;
+
+    public:
+        tuple() : base_type(), _value() {}
+        tuple(const value_type &value, const Types &...args)
+            : base_type(args...), _value(value) {}
+        tuple(value_type &&value, Types &&...args)
+            : base_type(std::forward<Types>(args)...),
+              _value(std::forward<value_type>(value)) {}
+
+        // 大小
+        static constexpr std::size_t size() {
+            return 1 + base_type::size();
+        }
+
+        // get
+        template <std::size_t Index>
+        constexpr auto &get() {
+            static_assert(Index < size(), "Index out of bounds");
+            if constexpr (Index == 0) {
+                return _value;
+            } else {
+                return base_type::template get<Index - 1>();
+            }
+        }
+
+        template <std::size_t Index>
+        constexpr const auto &get() const {
+            static_assert(Index < size(), "Index out of bounds");
+            if constexpr (Index == 0) {
+                return _value;
+            } else {
+                return base_type::template get<Index - 1>();
+            }
+        }
+
+        template <typename U>
+        T &get() {
+            if constexpr (std::is_same_v<U, value_type>) {
+                return _value;
+            } else {
+                return base_type::template get<U>();
+            }
+        }
+
+        template <typename U>
+        const T &get() const {
+            if constexpr (std::is_same_v<U, value_type>) {
+                return _value;
+            } else {
+                return base_type::template get<U>();
+            }
+        }
+    };
+
+    template <typename... Types>
+    auto make_tuple(Types &&...args) {
+        return tuple<std::remove_cv_t<Types>...>(std::forward<Types>(args)...);
+    }
+
+    // get
+    template <std::size_t Index, typename... Types>
+    constexpr auto &get(tuple<Types...> &t) {
+        return t.template get<Index>();
+    }
+    template <std::size_t Index, typename... Types>
+    constexpr const auto &get(const tuple<Types...> &t) {
+        return t.template get<Index>();
+    }
+    template <typename U, typename... Types>
+    constexpr U &get(tuple<Types...> &t) {
+        return t.template get<U>();
+    }
+    template <typename U, typename... Types>
+    constexpr const U &get(const tuple<Types...> &t) {
+        return t.template get<U>();
+    }
+}  // namespace std
