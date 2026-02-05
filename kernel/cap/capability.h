@@ -12,27 +12,35 @@
 #pragma once
 
 #include <sus/types.h>
-#include <utility>
+#include <sustcore/cap_type.h>
+
+#include <concepts>
 #include <tuple>
+#include <utility>
 
-class PCB;
+#include "sus/optional.h"
 
-union CapIdx {
-    struct {
-        b32 slot : 32;
-        b32 space : 32;
-    };
-    b64 raw;
+enum class CapErrCode {
+    SUCCESS                  = 0,
+    INVALID_CAPABILITY       = -1,
+    INVALID_INDEX            = -2,
+    INSUFFICIENT_PERMISSIONS = -3,
+    TYPE_NOT_MATCHED         = -4,
+    PAYLOAD_ERROR            = -5,
+    UNKNOWN_ERROR            = -255,
 };
 
-enum class CapType { NONE = 0, BASIC = 1 };
+template <typename T>
+using CapOptional = util::Optional<T, CapErrCode, CapErrCode::SUCCESS,
+                                   CapErrCode::UNKNOWN_ERROR>;
 
 struct PermissionBits {
     // 基础权限位, 绝大多数能力只需要这64个位
     // 我们规定, 低16位保留给基础能力使用, 剩余48位供派生能力使用
     b64 basic_permissions;
     // 扩展权限位图
-    // 例如 FILE 能力, NOTIFICATION 能力, CSPACE能力指向的内核对象实质上包含了一系列对象
+    // 例如 FILE 能力, NOTIFICATION 能力,
+    // CSPACE能力指向的内核对象实质上包含了一系列对象
     // 对这些对象进行更细粒度的权限控制时, 就需要使用权限位图
     b64 *permission_bitmap;
 
@@ -115,10 +123,44 @@ struct PermissionBits {
     }
 };
 
-template <typename Payload>
+template <size_t SPACE_SIZE, size_t SPACE_COUNT, typename... Payloads>
+class __CapHolder;
+
+constexpr size_t CAP_SPACE_SIZE  = 1024;
+constexpr size_t CAP_SPACE_COUNT = 1024;
+
+template <typename... Payloads>
+using _CapHolder = __CapHolder<CAP_SPACE_SIZE, CAP_SPACE_COUNT>;
+
+class PCB;
+
+// 新的需要管理的内核对象应该追加到此处
+using CapHolder = _CapHolder<PCB /*, other kernel objects*/>;
+
+template <typename T>
+concept HasReferenceCount = requires(T *t) {
+    {
+        t->retain()
+    } -> std::same_as<void>;
+    {
+        t->release()
+    } -> std::same_as<void>;
+    {
+        t->ref_count()
+    } -> std::convertible_to<int>;
+};
+
+template <typename T>
+concept PayloadTrait = HasReferenceCount<T> && requires {
+    {
+        T::IDENTIFIER
+    } -> std::convertible_to<CapType>;
+};
+
+template <PayloadTrait Payload>
 class Capability {
 protected:
-    PCB *_owner;
+    CapHolder *_owner;
     CapIdx _idx;
     // TODO: Derivation Tree
 
@@ -132,16 +174,30 @@ public:
     static constexpr b64 PERMISSION_UNWRAP = 0x1;
     static constexpr b64 PERMISSION_DERIVE = 0x2;
 
-    Capability(PCB *owner, CapIdx idx, Payload *payload,
+    /**
+     * @brief 构造能力对象
+     *
+     * @param owner 能力持有者
+     * @param idx 能力索引
+     * @param payload 负载对象(不应为nullptr)
+     * @param permissions 权限位图
+     */
+    Capability(CapHolder *owner, CapIdx idx, Payload *payload,
                PermissionBits &&permissions)
         : _owner(owner),
           _idx(idx),
           _payload(payload),
-          _permissions(std::move(permissions)) {}
+          _permissions(std::move(permissions)) {
+        // assert (payload != nullptr);
+        _payload->retain();
+    }
     ~Capability() {
         // 将自身从继承树中剥离
 
         // 遍历继承树, 通知其派生能力销毁自身
+
+        // 释放负载对象
+        _payload->release();
     }
     virtual void suicide(void) {
         // 反向调用PCB相关方法, 通知其销毁自身
@@ -149,85 +205,144 @@ public:
     constexpr CapType type(void) const noexcept {
         return Payload::CapType;
     }
-    constexpr PCB *owner(void) const noexcept {
+    constexpr CapHolder *owner(void) const noexcept {
         return _owner;
     }
     constexpr CapIdx idx(void) const noexcept {
         return _idx;
     }
 
-    Payload *payload(void) const noexcept {
+    CapOptional<Payload *> payload(void) const noexcept {
         // UNWRAP 权限校验
-        if (! _permissions.imply(PERMISSION_UNWRAP)) {
-            return nullptr;
+        if (!_permissions.imply(PERMISSION_UNWRAP)) {
+            return CapErrCode::INSUFFICIENT_PERMISSIONS;
         }
         return _payload;
     }
 };
 
-template <typename Payload, size_t SPACE_SIZE>
-class CapSpace {
-protected:
-    Capability<Payload> *_space;
-public:
-    CapSpace() {
-        _space = new Capability<Payload>[SPACE_SIZE];
-    }
-    ~CapSpace() {
-        if (_space != nullptr) {
-            delete[] _space;
-        }
-    }
-    const Capability<Payload> *lookup(size_t slot) const {
-        if (0 > slot || slot >= SPACE_SIZE)
-            return nullptr;
-        return _space[slot];
+class CapSpaceBase {
+    virtual CapType type() = 0;
+
+    template <typename T>
+    bool is(void) {
+        return type() == T::IDENTIFIER;
     }
 
-    Capability<Payload> *lookup(size_t slot) {
-        if (0 > slot || slot >= SPACE_SIZE)
-            return nullptr;
-        return _space[slot];
+    template <typename T>
+    static T *cast(CapSpaceBase *base) {
+        if (base->is<T>()) {
+            return reinterpret_cast<T *>(base);
+        }
+        return nullptr;
+    }
+
+    template <typename T>
+    static const T *cast(CapSpaceBase *base) {
+        if (base->is<T>()) {
+            return reinterpret_cast<T *>(base);
+        }
+        return nullptr;
+    }
+
+    template <typename T>
+    T *as() {
+        if (is<T>()) {
+            return reinterpret_cast<T *>(this);
+        }
+        return nullptr;
+    }
+
+    template <typename T>
+    const T *as() const {
+        if (is<T>()) {
+            return reinterpret_cast<T *>(this);
+        }
+        return nullptr;
     }
 };
 
-template <typename Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
-class CapUniverse {
-protected:
-    CapSpace<Payload, SPACE_SIZE> *_spaces;
+template <PayloadTrait Payload, size_t SPACE_SIZE>
+class CapSpace : public CapSpaceBase {
 public:
-    CapUniverse() {
-        _spaces = new CapSpace<Payload, SPACE_SIZE>[SPACE_COUNT];
+    using Cap = Capability<Payload>;
+
+protected:
+    Cap *_slots[SPACE_SIZE];
+
+public:
+    static constexpr CapType IDENTIFIER = Payload::IDENTIFIER;
+    virtual CapType type() override {
+        return IDENTIFIER;
     }
-    ~CapUniverse() {
-        if (_spaces != nullptr) {
-            delete[] _spaces;
+    CapSpace() {}
+    ~CapSpace() {
+        for (int i = 0; i < SPACE_SIZE; i++) {
+            if (_slots[i] != nullptr) {
+                delete _slots[i];
+            }
         }
     }
-    const CapSpace<Payload, SPACE_SIZE> *lookup_space(size_t space) const {
+    CapOptional<const Cap *> lookup(size_t slot) const {
+        if (0 > slot || slot >= SPACE_SIZE)
+            return CapErrCode::INVALID_INDEX;
+        return _slots[slot];
+    }
+
+    CapOptional<Cap *> lookup(size_t slot) {
+        if (0 > slot || slot >= SPACE_SIZE)
+            return CapErrCode::INVALID_INDEX;
+        return _slots[slot];
+    }
+};
+
+template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
+class CapUniverse {
+public:
+    using Space = CapSpace<Payload, SPACE_SIZE>;
+    using Cap  = Space::Cap;
+
+protected:
+    Space *_spaces[SPACE_COUNT];
+
+public:
+    CapUniverse() {}
+    ~CapUniverse() {
+        for (int i = 0; i < SPACE_COUNT; i++) {
+            if (_spaces[i] != nullptr) {
+                delete _spaces[i];
+            }
+        }
+    }
+
+    CapOptional<Space *> lookup_space(size_t space) {
         if (0 > space || space >= SPACE_COUNT)
-            return nullptr;
+            return CapErrCode::INVALID_INDEX;
         return _spaces[space];
     }
 
-    CapSpace<Payload, SPACE_SIZE> *lookup_space(size_t space) {
+    CapOptional<const Space *> lookup_space(size_t space) const {
         if (0 > space || space >= SPACE_COUNT)
-            return nullptr;
+            return CapErrCode::INVALID_INDEX;
         return _spaces[space];
     }
 
-    Capability<Payload> *lookup(CapIdx idx) {
-        CapSpace<Payload, SPACE_SIZE> *space = lookup_space(idx.space);
-        if (space == nullptr)
-            return nullptr;
-        return space->lookup(idx.slot);
+    CapOptional<Cap *> lookup(size_t space, size_t slot) {
+        CapOptional<Space *> cap_space = lookup_space(space);
+        return cap_space.map([slot](Space *sp) { return sp->lookup(slot); });
     }
 
-    Capability<Payload> *lookup(size_t space, size_t slot) {
-        CapSpace<Payload, SPACE_SIZE> *cap_space = lookup_space(space);
-        if (cap_space == nullptr)
-            return nullptr;
-        return cap_space->lookup(slot);
+    CapOptional<const Cap *> lookup(size_t space, size_t slot) const {
+        CapOptional<const Space *> cap_space = lookup_space(space);
+        return cap_space.map([slot](const Space *sp) { return sp->lookup(slot); });
+    }
+
+    CapOptional<Cap *> lookup(CapIdx idx) {
+        return lookup(idx.space, idx.slot);
+    }
+
+    CapOptional<const Cap *> lookup(CapIdx idx) const {
+        return lookup(idx.space, idx.slot);
     }
 };
 
@@ -238,30 +353,29 @@ protected:
     using Universe = CapUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
 
     std::tuple<Universe<Payloads>...> _universes;
+
 public:
-    __CapHolder() {
-    }
-    ~__CapHolder() {
-    }
+    __CapHolder() {}
+    ~__CapHolder() {}
     template <typename Payload>
-    Universe<Payload> *universe(void) {
-        return &std::get<Universe<Payload>>(_universes);
+    Universe<Payload> &universe(void) {
+        return std::get<Universe<Payload>>(_universes);
     }
 
     template <typename Payload>
-    Capability<Payload> *lookup(CapIdx idx) {
-        Universe<Payload> *univ = universe<Payload>();
-        if (univ == nullptr)
-            return nullptr;
-        return univ->lookup(idx);
+    const Universe<Payload> &universe(void) const {
+        return std::get<Universe<Payload>>(_universes);
+    }
+
+    template <typename Payload>
+    CapOptional<Capability<Payload> *> lookup(CapIdx idx) {
+        Universe<Payload> &univ = universe<Payload>();
+        return univ.lookup(idx);
+    }
+
+    template <typename Payload>
+    CapOptional<const Capability<Payload> *> lookup(CapIdx idx) {
+        const Universe<Payload> &univ = universe<Payload>();
+        return univ.lookup(idx);
     }
 };
-
-constexpr size_t CAP_SPACE_SIZE  = 1024;
-constexpr size_t CAP_SPACE_COUNT = 1024;
-
-template <typename... Payloads>
-using _CapHolder =
-    __CapHolder<CAP_SPACE_SIZE, CAP_SPACE_COUNT>;
-
-using CapHolder = _CapHolder<PCB>;

@@ -358,7 +358,7 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
                              .sb = target_sb,
                              .ifile = ifile};
     open_file_list.put(vfile->fd, vfile);
-    return FSOptional<VFile *>(vfile);
+    return vfile;
 }
 
 FSErrCode VFS::_close(VFile *vfile) {
