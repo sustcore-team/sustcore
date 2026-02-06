@@ -61,7 +61,7 @@ typedef signed_machine_bits smb_t;
 typedef smb_t off_t;
 
 // 逻辑运算符 a=>b 的实现
-// a=>b 即为 (!a | b)
+// a=>b 即为 (!a | b) 相当于 (a & b) == b
 #define BOOL_IMPLIES(a, b) ((!(a)) | (b))
 
 // 逐位计算的话, 则其相当于 (y & x) == y
@@ -74,8 +74,8 @@ typedef smb_t off_t;
 
 // Attributes
 
-#define PACKED __attribute__((packed))
-#define NAKED __attribute__((naked))
+#define PACKED     __attribute__((packed))
+#define NAKED      __attribute__((naked))
 #define ALIGNED(x) __attribute__((aligned(x)))
 #define SECTION(x) __attribute__((section(x)))
 

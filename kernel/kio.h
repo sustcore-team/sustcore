@@ -43,3 +43,6 @@ DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, BUDDY)
 // 设备相关Logger
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, DEVICE)
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, INTERRUPT);
+
+// Capability相关Logger
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, CAPABILITY);

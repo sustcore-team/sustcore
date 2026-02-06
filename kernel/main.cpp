@@ -11,13 +11,13 @@
 
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
-#include <sus/baseio.h>
-#include <sus/logger.h>
 #include <configuration.h>
 #include <kio.h>
 #include <mem/alloc.h>
-#include <mem/kaddr.h>
 #include <mem/gfp.h>
+#include <mem/kaddr.h>
+#include <sus/baseio.h>
+#include <sus/logger.h>
 #include <sus/types.h>
 #include <symbols.h>
 #include <task/task.h>
@@ -25,6 +25,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstring>
+
 #include "cap/capability.h"
 
 bool post_init_flag = false;
@@ -133,9 +134,10 @@ void pre_init(void) {
     int cnt           = MemLayout::detect_memory_layout(regions, 128);
     void *upper_bound = nullptr;
     for (int i = 0; i < cnt; i++) {
-        LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, regions[i].ptr,
-                    (void *)((umb_t)(regions[i].ptr) + regions[i].size),
-                    static_cast<int>(regions[i].status));
+        LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
+                     regions[i].ptr,
+                     (void *)((umb_t)(regions[i].ptr) + regions[i].size),
+                     static_cast<int>(regions[i].status));
         void *this_bound = (void *)((umb_t)(regions[i].ptr) + regions[i].size);
         if (upper_bound < this_bound) {
             upper_bound = this_bound;
@@ -155,8 +157,34 @@ void pre_init(void) {
     typedef void (*PostTestFuncType)(void);
     PostTestFuncType post_test_func =
         (PostTestFuncType)PA2KA((void *)post_init);
-    LOGGER::DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p", post_test_func);
+    LOGGER::DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p",
+                  post_test_func);
     post_test_func();
+}
+
+void cap_test(void) {
+    // 目前为止, 只是为了测试其是否会产生编译错误
+    CapHolder holder;
+    auto cap_opt = holder.lookup<CapSpaceBase>(CapIdx{.raw = 0});
+    // 绝大多数情况下, 你都不应该这么做来解包
+    // 此处只是用于测试编译有效性
+    // 可读性为0
+    auto sp_opt  = cap_opt.and_then_opt(
+        // 第一个 lambda 为
+        // Capability<CapSpaceBase> * -> CapOptional<CapSpace<CapSpaceBase> *>
+        [](auto *cap) {
+            return cap->payload().and_then(
+                // 第二个 lambda 为 CapSpaceBase * -> CapSpace<CapSpaceBase> *
+                [](CapSpaceBase *base) {
+                    return base->as<CapSpace<CapSpaceBase>>();
+                });
+        });
+    if (sp_opt.present()) {
+        CapSpace<CapSpaceBase> *sp = sp_opt.value();
+        LOGGER::INFO("成功获取 CapSpace: %p", sp);
+    } else {
+        LOGGER::INFO("未能获取 CapSpace");
+    }
 }
 
 void kernel_setup(void) {
@@ -176,7 +204,7 @@ void buddy_test_complex() {
 
     if (p1 && p2 && p3 && p4) {
         LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p", p1, p2,
-                    p4, p3);
+                     p4, p3);
 
         // Free middle blocks to create fragmentation
         GFP::free_frame(p2, 2);

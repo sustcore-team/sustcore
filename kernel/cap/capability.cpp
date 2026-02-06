@@ -10,3 +10,14 @@
  */
 
 #include <cap/capability.h>
+
+void CapSpaceBase::retain(void) {
+    this->_ref_count++;
+}
+
+void CapSpaceBase::release(void) {
+    this->_ref_count--;
+    if (this->_ref_count == 0) {
+        on_zero_ref();
+    }
+}

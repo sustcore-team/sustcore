@@ -34,6 +34,10 @@ namespace util {
         _Ep D_err;
 
     public:
+        using value_type = _Tp;
+        template <typename _Up>
+        using optional_type = Optional<_Up, _Ep, _Success, _Failure>;
+
         Optional() noexcept : D_err(_Failure) {}
         Optional(const _Tp &value) noexcept : D_err(_Success) {
             new (D_storage) _Tp(value);
@@ -79,13 +83,41 @@ namespace util {
             }
         }
 
-        template <typename _Fp, typename _Up = std::invoke_result_t<_Fp, _Tp>>
+        template <typename _Up, typename _Fp>
             requires IfPresentFunc<_Fp, _Tp>
-        Optional<_Up, _Ep, _Success, _Failure> map(_Fp f) {
-            if (present()) {
-                return Optional<_Up, _Ep, _Success, _Failure>(f(value()));
+        optional_type<_Up> map(_Fp f) {
+            if constexpr (std::is_same_v<std::invoke_result_t<_Fp, _Tp>, _Up>) {
+                if (present()) {
+                    return optional_type<_Up>(f(value()));
+                }
+                return optional_type<_Up>(error());
+            } else if constexpr (std::is_same_v<
+                                     std::invoke_result_t<_Fp, _Tp>,
+                                     optional_type<_Up>>) {
+                if (present()) {
+                    return f(value());
+                }
+                return optional_type<_Up>(error());
             }
-            return Optional<_Up, _Ep, _Success, _Failure>(error());
+            else {
+                static_assert(
+                    std::is_same_v<std::invoke_result_t<_Fp, _Tp>, _Up> ||
+                        std::is_same_v<std::invoke_result_t<_Fp, _Tp>,
+                                       optional_type<_Up>>,
+                    "Return type of map function must be U or Optional<U>");
+            }
+        }
+
+        template<typename _Fp, typename _Up = std::invoke_result_t<_Fp, _Tp>>
+            requires IfPresentFunc<_Fp, _Tp>
+        optional_type<_Up> and_then(_Fp f) {
+            return map<_Up>(f);
+        }
+
+        template<typename _Fp, typename _Up = std::invoke_result_t<_Fp, _Tp>>
+            requires IfPresentFunc<_Fp, _Tp> && std::is_same_v<_Up, optional_type<typename _Up::value_type>>
+        _Up and_then_opt(_Fp f) {
+            return map<typename _Up::value_type>(f);
         }
     };
 }  // namespace util

@@ -22,7 +22,7 @@ include $(path-script)/run.mk
 
 path-bin := $(path-e)/build/bin
 path-objects := $(path-e)/build/objects
-build-mode ?= debug
+build-mode ?= release
 
 arg-basic := build-mode=$(build-mode) architecture=$(architecture) global-env=$(global-env) path-bin=$(path-bin) path-objects=$(path-objects) q=$(q)
 

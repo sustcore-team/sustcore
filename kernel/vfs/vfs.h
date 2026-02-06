@@ -57,7 +57,7 @@ public:
 
     inline FSOptional<fd_t> open(const char *path, int flags) {
         auto _vfile_opt = _open(path, flags);
-        return _vfile_opt.map([](VFile *vfile) {
+        return _vfile_opt.map<fd_t>([](VFile *vfile) {
             return vfile->fd;
         });
     }

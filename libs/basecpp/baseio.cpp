@@ -293,7 +293,7 @@ int vsprintf(char *buffer, const char *fmt, va_list args) {
             char fillch = flag & FLAG_FILL_ZERO ? '0' : ' ';
 
             // 填充
-            for (int i = strlen(_buffer) + offset; i < width; i++) {
+            for (unsigned int i = strlen(_buffer) + offset; i < width; i++) {
                 *buffer = fillch;
                 buffer++;
             }

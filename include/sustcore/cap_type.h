@@ -4,16 +4,19 @@
  * @brief 能力类型
  * @version alpha-1.0.0
  * @date 2026-02-05
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
 
 #include <sus/types.h>
 
-enum class CapType { NONE = 0, BASIC = 1 };
+enum class CapType {
+    NONE = 0,
+    CAP_SPACE = 1,
+};
 
 union CapIdx {
     struct {
