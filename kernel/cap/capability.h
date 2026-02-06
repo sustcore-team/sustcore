@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include <cap/permission.h>
 #include <cap/capdef.h>
+#include <cap/permission.h>
 #include <kio.h>
 #include <sus/optional.h>
 #include <sus/types.h>
@@ -39,9 +39,6 @@ protected:
     // permissions
     PermissionBits _permissions;
 
-    Payload * __payload(void) const noexcept {
-        return _payload;
-    }
 public:
     /**
      * @brief 构造能力对象
@@ -58,18 +55,40 @@ public:
           _payload(payload),
           _permissions(std::move(permissions)) {
         // assert (payload != nullptr);
+        // assert (owner != nullptr);
+        _payload->retain();
+    }
+    Capability(CapHolder *owner, CapIdx idx, Payload *payload,
+               const PermissionBits &permissions)
+        : _owner(owner),
+          _idx(idx),
+          _payload(payload),
+          _permissions(std::move(permissions)) {
+        // assert (payload != nullptr);
+        // assert (owner != nullptr);
         _payload->retain();
     }
     virtual ~Capability() {
         // 将自身从继承树中剥离
 
-        // 遍历继承树, 通知其派生能力销毁自身
+        // 遍历继承树, 通知其派生能力销毁自身(通过suicide)
 
         // 释放负载对象
         _payload->release();
     }
-    virtual void suicide(void) {
+
+    // you shouldn't copy or move any capability directly
+    Capability(const Capability &)            = delete;
+    Capability &operator=(const Capability &) = delete;
+    Capability(Capability &&)                 = delete;
+    Capability &operator=(Capability &&)      = delete;
+
+    void suicide(void) {
         // 反向调用CapHolder相关方法, 通知其销毁自身
+    }
+    void discard(void) {
+        // 说明这个能力是一个临时的能力, 没被插入到CapHolder中
+        // 先放在这, 万一需要了
     }
     constexpr CapType type(void) const noexcept {
         return Payload::CapType;
@@ -93,15 +112,17 @@ concept DrvdSpaceTrait = requires() {
 };
 
 class CSpaceCalls;
-
 class CSpaceBase {
 protected:
     int _ref_count;
     virtual void on_zero_ref() = 0;
+    const size_t _index;
 
 public:
+    using CCALL = CSpaceCalls;
     // constructors & destructors
-    constexpr CSpaceBase() : _ref_count(0){};
+    constexpr explicit CSpaceBase(size_t index)
+        : _ref_count(0), _index(index){};
     virtual ~CSpaceBase() {}
 
     static constexpr CapType IDENTIFIER = CapType::CAP_SPACE;
@@ -117,6 +138,10 @@ public:
     // 因为 RTTI 被我们禁用
     // 我们通过这种方法模拟 RTTI
     virtual CapType type() = 0;
+
+    constexpr size_t index(void) const noexcept {
+        return _index;
+    }
 
     template <typename T>
         requires DrvdSpaceTrait<T>
@@ -162,6 +187,7 @@ public:
 
     friend class CSpaceCalls;
 };
+static_assert(PayloadTrait<CSpaceBase>);
 
 template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
 class __CSpace : public CSpaceBase {
@@ -172,7 +198,6 @@ public:
 protected:
     Cap *_slots[SPACE_SIZE];
     Universe *_universe;
-    const size_t _index;
 
     virtual void on_zero_ref() override {
         _universe->on_zero_ref(this);
@@ -199,7 +224,7 @@ protected:
 
     // constructor & destructor, it should only be called by Universe
     __CSpace(Universe *universe, size_t index)
-        : CSpaceBase(), _universe(universe), _index(index) {
+        : CSpaceBase(index), _universe(universe) {
         memset(_slots, 0, sizeof(_slots));
     }
     ~__CSpace() {
@@ -209,15 +234,12 @@ protected:
             }
         }
     }
+
 public:
     // identifiers
     static constexpr CapType IDENTIFIER = Payload::IDENTIFIER;
     virtual CapType type() override {
         return IDENTIFIER;
-    }
-
-    constexpr size_t index(void) const noexcept {
-        return _index;
     }
 
     // you shouldn't move or copy any CSpace
@@ -243,7 +265,7 @@ public:
     }
 
     // lookup
-    CapOptional<const Cap *> lookup(size_t slot_idx) const {
+    CapOptional<Cap *> lookup(size_t slot_idx) {
         // 0号能力位被保留, 不允许访问
         if (_index + slot_idx == 0)
             return CapErrCode::INVALID_INDEX;
@@ -252,13 +274,13 @@ public:
         return wrap(_slots[slot_idx]);
     }
 
-    CapOptional<Cap *> lookup(size_t slot_idx) {
+    CapOptional<const Cap *> lookup(size_t slot_idx) const {
         // 0号能力位被保留, 不允许访问
         if (_index + slot_idx == 0)
             return CapErrCode::INVALID_INDEX;
         if (0 > slot_idx || slot_idx >= SPACE_SIZE)
             return CapErrCode::INVALID_INDEX;
-        return wrap(_slots[slot_idx]);
+        return wrap((const Cap *)_slots[slot_idx]);
     }
 
     friend class __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
@@ -299,6 +321,12 @@ public:
         }
     }
 
+    // you shouldn't move or copy any CUniverse
+    __CUniverse(const __CUniverse &)            = delete;
+    __CUniverse &operator=(const __CUniverse &) = delete;
+    __CUniverse(__CUniverse &&)                 = delete;
+    __CUniverse &operator=(__CUniverse &&)      = delete;
+
     template <typename T>
     static constexpr CapOptional<T *> wrap(T *pointer) {
         if (pointer == nullptr) {
@@ -324,7 +352,7 @@ public:
     CapOptional<const Space *> lookup_space(size_t space_idx) const {
         if (0 > space_idx || space_idx >= SPACE_COUNT)
             return CapErrCode::INVALID_INDEX;
-        return wrap(_spaces[space_idx]);
+        return wrap((const Space *)_spaces[space_idx]);
     }
 
     CapOptional<Cap *> lookup(size_t space_idx, size_t slot_idx) {
@@ -355,6 +383,8 @@ class __CapHolder {
 public:
     template <PayloadTrait Payload>
     using Universe = __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    template <PayloadTrait Payload>
+    using Space = Universe<Payload>::Space;
 
 protected:
     std::tuple<Universe<Payloads>...> _universes;
@@ -370,6 +400,16 @@ public:
     template <PayloadTrait Payload>
     const Universe<Payload> &universe(void) const {
         return std::get<Universe<Payload>>(_universes);
+    }
+
+    template <PayloadTrait Payload>
+    CapOptional<Space<Payload> *> space(size_t space_idx) {
+        return universe<Payload>().lookup_space(space_idx);
+    }
+
+    template <PayloadTrait Payload>
+    CapOptional<const Space<Payload> *> space(size_t space_idx) const {
+        return universe<Payload>().lookup_space(space_idx);
     }
 
     template <PayloadTrait Payload>

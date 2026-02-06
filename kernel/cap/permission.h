@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cap/capdef.h>
+#include <string.h>
 #include <sus/types.h>
 
 namespace perm {
@@ -45,8 +46,8 @@ namespace perm {
         constexpr b64 SLOT_REMOVE = 0x4;
         // 分享该槽位
         // 如果一个槽位的SLOT_SHARE权限为0
-        // 则该能力被克隆出的能力中, 相应权限的SLOT_READ, SLOT_INSERT, SLOT_REMOVE, SLOT_SHARE位都将被清除
-        // 用于防止槽位的二次分发
+        // 则该能力被克隆出的能力中, 相应权限的SLOT_READ, SLOT_INSERT,
+        // SLOT_REMOVE, SLOT_SHARE位都将被清除 用于防止槽位的二次分发
         constexpr b64 SLOT_SHARE  = 0x8;
 
         constexpr size_t slot_offset(size_t slot_idx) noexcept {
@@ -55,18 +56,18 @@ namespace perm {
 
         // 向权限位图中写入某个槽位的权限
         constexpr void set_slot(b64 *bitmap, size_t slot_idx, b64 permission) {
-            size_t bit_pos      = slot_offset(slot_idx);
-            size_t bitmap_index = bit_pos / 64;
-            size_t bit_offset   = bit_pos % 64;
+            size_t bit_pos        = slot_offset(slot_idx);
+            size_t bitmap_index   = bit_pos / 64;
+            size_t bit_offset     = bit_pos % 64;
             // 清除原有权限位
-            b64 aligned_perm = (permission & SLOT_MASK) << bit_offset;
+            b64 aligned_perm      = (permission & SLOT_MASK) << bit_offset;
             // clear the original bits
-            b64 clear_mask   = ~(SLOT_MASK << bit_offset);
+            b64 clear_mask        = ~(SLOT_MASK << bit_offset);
             bitmap[bitmap_index] &= clear_mask;
             // set new permission bits
             bitmap[bitmap_index] |= aligned_perm;
         }
-    }  // namespace capspace
+    }  // namespace cspace
 }  // namespace perm
 
 struct PermissionBits {
@@ -87,13 +88,18 @@ struct PermissionBits {
             case Type::NONE:  return 0;
             case Type::BASIC: return 0;
             case Type::CAPSPACE:
-                return CAP_SPACE_SIZE / 64 * perm::cspace::SLOT_BITS;  // 每个b64可以表示64个位
+                return CAP_SPACE_SIZE / 64 *
+                       perm::cspace::SLOT_BITS;  // 每个b64可以表示64个位
             default: return 0;
         }
     }
 
     constexpr PermissionBits(b64 basic, b64 *bitmap, Type type)
-        : basic_permissions(basic), permission_bitmap(bitmap), type(type) {}
+        : basic_permissions(basic),
+          permission_bitmap(new b64[to_bitmap_size(type)]),
+          type(type) {
+        memcpy(permission_bitmap, bitmap, to_bitmap_size(type));
+    }
     constexpr PermissionBits(b64 basic, Type type)
         : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
         // assert (to_bitmap_size(type) == 0);
@@ -106,20 +112,36 @@ struct PermissionBits {
     }
 
     constexpr PermissionBits(PermissionBits &&other) noexcept
-        : permission_bitmap(other.permission_bitmap), type(other.type) {
+        : basic_permissions(other.basic_permissions),
+          permission_bitmap(other.permission_bitmap),
+          type(other.type) {
         other.permission_bitmap = nullptr;
     }
     constexpr PermissionBits &operator=(PermissionBits &&other) noexcept {
         // assert (this.type == other.type);
         if (this != &other) {
+            basic_permissions = other.basic_permissions;
+
+            if (permission_bitmap != nullptr)
+                delete[] permission_bitmap;
             permission_bitmap       = other.permission_bitmap;
             other.permission_bitmap = nullptr;
         }
         return *this;
     }
 
-    PermissionBits(const PermissionBits &other)            = delete;
-    PermissionBits &operator=(const PermissionBits &other) = delete;
+    PermissionBits(const PermissionBits &other)
+        : PermissionBits(other.basic_permissions, other.permission_bitmap,
+                         other.type) {}
+    PermissionBits &operator=(const PermissionBits &other) {
+        // assert (this.type == other.type);
+        if (this != &other) {
+            basic_permissions = other.basic_permissions;
+            memcpy(permission_bitmap, other.permission_bitmap,
+                   to_bitmap_size(type));
+        }
+        return *this;
+    }
 
     constexpr bool imply(const PermissionBits &other) const noexcept {
         if (this->type != other.type) {
@@ -170,9 +192,8 @@ struct PermissionBits {
         b64 relevant_bits = this->permission_bitmap[bitmap_index] >> bit_offset;
         // 如果 permission_b64 跨越了两个b64
         if (bit_offset + 64 > 64) {
-            relevant_bits |=
-                this->permission_bitmap[bitmap_index + 1]
-                << (64 - bit_offset);
+            relevant_bits |= this->permission_bitmap[bitmap_index + 1]
+                             << (64 - bit_offset);
         }
         return BITS_IMPLIES(relevant_bits, permission_b64);
     }

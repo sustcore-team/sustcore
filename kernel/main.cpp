@@ -165,7 +165,7 @@ void pre_init(void) {
 void cap_test(void) {
     // 目前为止, 只是为了测试其是否会产生编译错误
     CapHolder holder;
-    auto cap_opt = holder.lookup<CSpaceBase>(CapIdx{.raw = 0});
+    auto cap_opt = holder.lookup<CSpaceBase>(CapIdx(0));
     // 绝大多数情况下, 你都不应该这么做来解包
     // 此处只是用于测试编译有效性
     // 可读性为0
@@ -173,7 +173,7 @@ void cap_test(void) {
         // 第一个 lambda 为
         // Capability<CSpaceBase> * -> CapOptional<CSpace<CSpaceBase> *>
         [](auto *cap) {
-            return CSpaceCalls::payload(cap).and_then(
+            return CSpaceCalls::basic::payload(cap).and_then(
                 // 第二个 lambda 为 CSpaceBase * -> CSpace<CSpaceBase> *
                 [](CSpaceBase *base) {
                     return base->as<CSpace<CSpaceBase>>();
@@ -188,13 +188,22 @@ void cap_test(void) {
     }
 
     Capability<CSpaceBase> *cap = cap_opt.value();
+    size_t space_idx            = CSpaceCalls::index(cap);
     size_t slot = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
     if (slot == 0) {
-        LOGGER::ERROR("分配槽位失败");
+        LOGGER::ERROR("分配槽位slot失败");
         return;
     }
     CSpaceCalls::insert(cap, slot, cap);
     CSpaceCalls::remove<CSpaceBase>(cap, slot);
+    CSpaceCalls::insert(cap, slot, cap);
+    size_t slot2 = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
+    if (slot == 0) {
+        LOGGER::ERROR("分配槽位slot2失败");
+        return;
+    }
+    CSpaceCalls::clone<CSpaceBase>(cap, &holder, CapIdx(space_idx, slot2),
+                                   &holder, CapIdx(space_idx, slot));
 }
 
 void kernel_setup(void) {

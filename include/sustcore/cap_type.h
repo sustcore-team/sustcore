@@ -14,7 +14,7 @@
 #include <sus/types.h>
 
 enum class CapType {
-    NONE = 0,
+    NONE      = 0,
     CAP_SPACE = 1,
 };
 
@@ -24,6 +24,9 @@ union CapIdx {
         b32 space : 32;
     };
     b64 raw;
+
+    constexpr CapIdx(b64 raw = 0) : raw(raw){};
+    constexpr CapIdx(b32 space, b32 slot) : slot(slot), space(space){};
 };
 
 enum class CapErrCode {

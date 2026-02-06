@@ -10,19 +10,19 @@
  */
 
 #include <string.h>
+#include <sus/mstring.h>
 #include <sus/raii.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+
 #include <type_traits>
-#include "sus/mstring.h"
 
 namespace path_util {
     template <typename T>
     const char *_cstr(const T &str) {
         if constexpr (std::is_convertible_v<T, const char *>) {
             return str;
-        }
-        else {
+        } else {
             return str.c_str();
         }
     }
@@ -31,15 +31,14 @@ namespace path_util {
     size_t _strlen(const T &str) {
         if constexpr (std::is_convertible_v<T, const char *>) {
             return strlen(str);
-        }
-        else {
+        } else {
             return str.length();
         }
     }
 
     /**
      * @brief 判断pfx是否是str的前缀
-     * 
+     *
      * @param str 字符串
      * @param pfx 前缀
      * @return true pfx是str的前缀
@@ -80,7 +79,7 @@ namespace path_util {
 
     /**
      * @brief 规范化路径
-     * 
+     *
      * @param path 待规范化绝对路径(不包含'.'和'..')
      * @return util::string 规范化后的路径
      */
@@ -102,8 +101,7 @@ namespace path_util {
                 }
                 // 只保留一个斜杠
                 sb.append('/');
-            }
-            else {
+            } else {
                 // 复制普通字符
                 sb.append(*path_c);
                 path_c++;
@@ -118,7 +116,7 @@ namespace path_util {
 
     /**
      * @brief 计算full_path相对于mntpt的相对路径
-     * 
+     *
      * @param full_path 完整路径
      * @param mntpt 挂载点路径
      * @return util::string 相对路径
@@ -147,7 +145,7 @@ namespace path_util {
 
     /**
      * @brief 提取路径中的下一个路径项
-     * 
+     *
      * @param path 路径字符串
      * @return util::string 下一个路径项字符串
      */
@@ -173,15 +171,14 @@ namespace path_util {
 
     template <typename T, typename Func>
     void foreach_entry(const T &path, Func func) {
-        size_t offset = 0;
+        size_t offset   = 0;
         size_t path_len = _strlen(path);
         while (offset < path_len) {
             // 提取下一个路径项
-            util::string entry_name =
-                path_util::entry(_cstr(path) + offset);
+            util::string entry_name = path_util::entry(_cstr(path) + offset);
 
             // 调用回调函数
-            if (! func(entry_name))
+            if (!func(entry_name))
                 break;
 
             // 移动偏移量
@@ -216,7 +213,7 @@ FSErrCode VFS::unregister_fs(const char *fs_name) {
             return FSErrCode::BUSY;  // 该文件系统仍被挂载
         }
     }
-    fs_table.get(fs_name).if_present([](IFsDriver *driver) {delete driver;});
+    fs_table.get(fs_name).if_present([](IFsDriver *driver) { delete driver; });
     fs_table.remove(fs_name);
     return FSErrCode::SUCCESS;
 }
@@ -270,7 +267,7 @@ FSErrCode VFS::umount(const char *mountpoint) {
     }
 
     // 移除挂载
-    FSErrCode ret   = sb->fs()->unmount(sb);
+    FSErrCode ret = sb->fs()->unmount(sb);
     if (ret != FSErrCode::SUCCESS) {
         return ret;
     }
@@ -288,9 +285,9 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
     util::string refined_path = path_util::refine_path(path);
 
     // 遍历挂载点表, 寻找最长匹配前缀
-    ISuperblock *target_sb   = nullptr;
+    ISuperblock *target_sb = nullptr;
     util::string target_mntpt;
-    size_t target_mntpt_len  = 0;
+    size_t target_mntpt_len = 0;
     for (auto &mnt_entry : mount_table) {
         util::string mntpt = mnt_entry.first;
         // path_util::prefix 保证 mntpt 是 path 的前缀, 且是路径前缀
@@ -308,7 +305,8 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
         return FSErrCode::INVALID_PARAM;  // 未找到匹配的挂载点
     }
 
-    util::string rel_path = path_util::relative_path(refined_path, target_mntpt);
+    util::string rel_path =
+        path_util::relative_path(refined_path, target_mntpt);
 
     // 通过超级块获得根目录项
     auto _root_inode_opt = target_sb->root();
@@ -316,34 +314,35 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
         return _root_inode_opt.error();  // 无法获得根目录项
     }
 
-    IINode *curinode = _root_inode_opt.value();
+    IINode *curinode  = _root_inode_opt.value();
     FSErrCode errflag = FSErrCode::SUCCESS;
     // 解析相对路径, 查找文件
-    path_util::foreach_entry(rel_path, [&curinode, &errflag](const util::string &entry_name) {
-        auto _dir_opt = curinode->as_directory();
-        if (!_dir_opt.present()) {
-            errflag = _dir_opt.error();  // 不是目录
-            return false;
-        }
-        IDirectory *dir = _dir_opt.value();
+    path_util::foreach_entry(
+        rel_path, [&curinode, &errflag](const util::string &entry_name) {
+            auto _dir_opt = curinode->as_directory();
+            if (!_dir_opt.present()) {
+                errflag = _dir_opt.error();  // 不是目录
+                return false;
+            }
+            IDirectory *dir = _dir_opt.value();
 
-        // 获得对应的目录项
-        auto _dentry_opt = dir->lookup(entry_name.c_str());
-        if (!_dentry_opt.present()) {
-            errflag = _dentry_opt.error();  // 未找到对应目录项
-            return false;
-        }
-        IDentry *dentry = _dentry_opt.value();
+            // 获得对应的目录项
+            auto _dentry_opt = dir->lookup(entry_name.c_str());
+            if (!_dentry_opt.present()) {
+                errflag = _dentry_opt.error();  // 未找到对应目录项
+                return false;
+            }
+            IDentry *dentry = _dentry_opt.value();
 
-        // 获得inode
-        auto _inode_opt = dentry->inode();
-        if (!_inode_opt.present()) {
-            errflag = _inode_opt.error();  // 无法获得i节点
-            return false;
-        }
-        curinode = _inode_opt.value();
-        return true;
-    });
+            // 获得inode
+            auto _inode_opt = dentry->inode();
+            if (!_inode_opt.present()) {
+                errflag = _inode_opt.error();  // 无法获得i节点
+                return false;
+            }
+            curinode = _inode_opt.value();
+            return true;
+        });
 
     // 当前inode即为目标文件的inode
     // 将inode作为文件打开
@@ -353,9 +352,9 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
     }
 
     IFile *ifile = _file_opt.value();
-    VFile *vfile = new VFile{.fd = next_fd(),
-                             .fs = target_sb->fs(),
-                             .sb = target_sb,
+    VFile *vfile = new VFile{.fd    = next_fd(),
+                             .fs    = target_sb->fs(),
+                             .sb    = target_sb,
                              .ifile = ifile};
     open_file_list.put(vfile->fd, vfile);
     return vfile;
@@ -370,4 +369,3 @@ FSErrCode VFS::_close(VFile *vfile) {
     delete vfile;
     return FSErrCode::SUCCESS;
 }
-

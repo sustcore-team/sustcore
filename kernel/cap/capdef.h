@@ -34,7 +34,11 @@ concept PayloadTrait = requires(Payload *p) {
     {
         Payload::IDENTIFIER
     } -> std::same_as<const CapType &>;
+    typename Payload::CCALL;
 };
+
+template <PayloadTrait Payload>
+class Capability;
 
 // CSpaces
 class CSpaceBase;
