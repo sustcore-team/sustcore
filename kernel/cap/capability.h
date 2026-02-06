@@ -11,149 +11,21 @@
 
 #pragma once
 
+#include <cap/permission.h>
+#include <cap/capdef.h>
 #include <kio.h>
 #include <sus/optional.h>
 #include <sus/types.h>
 #include <sustcore/cap_type.h>
 
 #include <concepts>
+#include <cstddef>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 
-enum class CapErrCode {
-    SUCCESS                  = 0,
-    INVALID_CAPABILITY       = -1,
-    INVALID_INDEX            = -2,
-    INSUFFICIENT_PERMISSIONS = -3,
-    TYPE_NOT_MATCHED         = -4,
-    PAYLOAD_ERROR            = -5,
-    UNKNOWN_ERROR            = -255,
-};
-
-template <typename T>
-using CapOptional = util::Optional<T, CapErrCode, CapErrCode::SUCCESS,
-                                   CapErrCode::UNKNOWN_ERROR>;
-
-struct PermissionBits {
-    // 基础权限位, 绝大多数能力只需要这64个位
-    // 我们规定, 低16位保留给基础能力使用, 剩余48位供派生能力使用
-    b64 basic_permissions;
-    // 扩展权限位图
-    // 例如 FILE 能力, NOTIFICATION 能力,
-    // CSPACE能力指向的内核对象实质上包含了一系列对象
-    // 对这些对象进行更细粒度的权限控制时, 就需要使用权限位图
-    b64 *permission_bitmap;
-
-    enum class Type { NONE = 0, BASIC = 1 };
-    const Type type;
-
-    constexpr static size_t to_bitmap_size(Type type) noexcept {
-        switch (type) {
-            case Type::NONE:
-            case Type::BASIC:
-            default:          return 0;
-        }
-    }
-
-    constexpr PermissionBits(b64 basic, b64 *bitmap, Type type)
-        : basic_permissions(basic), permission_bitmap(bitmap), type(type) {}
-    constexpr PermissionBits(b64 basic, Type type)
-        : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
-        // assert (to_bitmap_size(type) == 0);
-    }
-    constexpr ~PermissionBits() {
-        if (permission_bitmap != nullptr) {
-            delete[] permission_bitmap;
-            permission_bitmap = nullptr;
-        }
-    }
-
-    constexpr PermissionBits(PermissionBits &&other) noexcept
-        : permission_bitmap(other.permission_bitmap), type(other.type) {
-        other.permission_bitmap = nullptr;
-    }
-    constexpr PermissionBits &operator=(PermissionBits &&other) noexcept {
-        // assert (this.type == other.type);
-        if (this != &other) {
-            permission_bitmap       = other.permission_bitmap;
-            other.permission_bitmap = nullptr;
-        }
-        return *this;
-    }
-
-    PermissionBits(const PermissionBits &other)            = delete;
-    PermissionBits &operator=(const PermissionBits &other) = delete;
-
-    constexpr bool imply(const PermissionBits &other) const noexcept {
-        if (this->type != other.type) {
-            return false;
-        }
-        // 首先比较 basic_permissions
-        if (!BITS_IMPLIES(this->basic_permissions, other.basic_permissions)) {
-            return false;
-        }
-        // 之后再比较 permission_bitmap
-        size_t bitmap_size      = to_bitmap_size(this->type);
-        bool permission_implied = true;
-        /**
-         * 为什么采用逐b64比较并将结果进行累加,
-         * 而不是在判定到某一位不满足时直接返回false? 在这里, 我的考量是,
-         * 权限位图并不会特别巨大(不超过4096字节), 且绝大多数情况下,
-         * 权限校验都是成功的. 因此, 提前返回无法节省多少时间,
-         * 甚至可能因为分支预测失败而带来额外的开销(虽然概率不大) 而且,
-         * 我选择相信编译器.
-         * 编译器极有可能会使用SIMD指令来优化这个循环(尽管RISC-V下好像没有,
-         * 但似乎存在类似的向量指令集) 同时也能够避免分支预测失败带来的性能损失.
-         * 综上所述, 我认为这种实现方式在大多数情况下性能更优.
-         * 也许我是错的? 但我确实认为这种方法是效率更加的选择.
-         * 也许需要做一个测试, 但还是等到后面说吧.
-         * TODO: 进行性能测试, 比较提前返回与否的性能差异
-         */
-        for (size_t i = 0; i < bitmap_size; i++) {
-            permission_implied &= BITS_IMPLIES(this->permission_bitmap[i],
-                                               other.permission_bitmap[i]);
-        }
-        return permission_implied;
-    }
-
-    constexpr bool imply(b64 basic_permission) const noexcept {
-        return BITS_IMPLIES(this->basic_permissions, basic_permission);
-    }
-};
-
-template <typename Payload>
-concept PayloadTrait = requires(Payload *p) {
-    {
-        p->retain()
-    } -> std::same_as<void>;
-    {
-        p->release()
-    } -> std::same_as<void>;
-    {
-        p->ref_count()
-    } -> std::same_as<int>;
-    {
-        Payload::IDENTIFIER
-    } -> std::same_as<const CapType &>;
-};
-
-class CapSpaceBase;
-template <PayloadTrait Payload, size_t SPACE_SIZE>
-class __CapSpace;
-template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
-class __CapUniverse;
-template <size_t SPACE_SIZE, size_t SPACE_COUNT, typename... Payloads>
-class __CapHolder;
-
-constexpr size_t CAP_SPACE_SIZE  = 1024;
-constexpr size_t CAP_SPACE_COUNT = 1024;
-
-template <typename... Payloads>
-using _CapHolder = __CapHolder<CAP_SPACE_SIZE, CAP_SPACE_COUNT, Payloads...>;
-
-// 新的需要管理的内核对象应该追加到此处
-using CapHolder = _CapHolder<CapSpaceBase /*, other kernel objects*/>;
+template <PayloadTrait Payload>
+class BasicCalls;
 
 template <PayloadTrait Payload>
 class Capability {
@@ -167,14 +39,10 @@ protected:
     // permissions
     PermissionBits _permissions;
 
+    Payload * __payload(void) const noexcept {
+        return _payload;
+    }
 public:
-    // permissions
-    static constexpr b64 PERMISSION_UNWRAP  = 0x01;
-    static constexpr b64 PERMISSION_CLONE   = 0x02;
-    static constexpr b64 PERMISSION_MIGRATE = 0x04;
-    // static constexpr b64 PERMISSION_DOWNGRADE = 0x08;
-    // static constexpr b64 PERMISSION_REMOVE    = 0x10;
-
     /**
      * @brief 构造能力对象
      *
@@ -213,32 +81,28 @@ public:
         return _idx;
     }
 
-    CapOptional<Payload *> payload(void) const noexcept {
-        // UNWRAP 权限校验
-        if (!_permissions.imply(PERMISSION_UNWRAP)) {
-            return CapErrCode::INSUFFICIENT_PERMISSIONS;
-        }
-        return _payload;
-    }
+    friend class BasicCalls<Payload>;
 };
 
 template <typename DrvdSpace>
 concept DrvdSpaceTrait = requires() {
-    std::is_base_of_v<CapSpaceBase, DrvdSpace>;
+    std::is_base_of_v<CSpaceBase, DrvdSpace>;
     {
         DrvdSpace::IDENTIFIER
     } -> std::same_as<const CapType &>;
 };
 
-class CapSpaceBase {
+class CSpaceCalls;
+
+class CSpaceBase {
 protected:
     int _ref_count;
     virtual void on_zero_ref() = 0;
 
 public:
     // constructors & destructors
-    constexpr CapSpaceBase() : _ref_count(0){};
-    virtual ~CapSpaceBase() {}
+    constexpr CSpaceBase() : _ref_count(0){};
+    virtual ~CSpaceBase() {}
 
     static constexpr CapType IDENTIFIER = CapType::CAP_SPACE;
 
@@ -262,7 +126,7 @@ public:
 
     template <typename T>
         requires DrvdSpaceTrait<T>
-    static T *cast(CapSpaceBase *base) {
+    static T *cast(CSpaceBase *base) {
         if (base->is<T>()) {
             return reinterpret_cast<T *>(base);
         }
@@ -271,7 +135,7 @@ public:
 
     template <typename T>
         requires DrvdSpaceTrait<T>
-    static const T *cast(CapSpaceBase *base) {
+    static const T *cast(CSpaceBase *base) {
         if (base->is<T>()) {
             return reinterpret_cast<T *>(base);
         }
@@ -295,23 +159,56 @@ public:
         }
         return nullptr;
     }
+
+    friend class CSpaceCalls;
 };
 
-template <PayloadTrait Payload, size_t SPACE_SIZE>
-class __CapSpace : public CapSpaceBase {
+template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
+class __CSpace : public CSpaceBase {
 public:
     using Cap      = Capability<Payload>;
-    using Universe = __CapUniverse<Payload, SPACE_SIZE, CAP_SPACE_COUNT>;
+    using Universe = __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
 
 protected:
     Cap *_slots[SPACE_SIZE];
     Universe *_universe;
-    const int _index;
+    const size_t _index;
 
     virtual void on_zero_ref() override {
         _universe->on_zero_ref(this);
     }
 
+    /**
+     * @brief 将能力对象插入到能力空间中
+     *
+     * @param slot_idx 能力位索引
+     * @param cap 能力对象指针(不应为nullptr)
+     */
+    void __insert(size_t slot_idx, Cap *cap) {
+        // assert(0 <= slot_idx && slot_idx < SPACE_SIZE);
+        // assert (_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
+        _slots[slot_idx] = cap;
+    }
+
+    // 将能力对象从能力空间中移除
+    void __remove(size_t slot_idx) {
+        // assert(0 <= slot_idx && slot_idx < SPACE_SIZE);
+        // assert (_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
+        _slots[slot_idx] = nullptr;
+    }
+
+    // constructor & destructor, it should only be called by Universe
+    __CSpace(Universe *universe, size_t index)
+        : CSpaceBase(), _universe(universe), _index(index) {
+        memset(_slots, 0, sizeof(_slots));
+    }
+    ~__CSpace() {
+        for (int i = 0; i < SPACE_SIZE; i++) {
+            if (_slots[i] != nullptr) {
+                delete _slots[i];
+            }
+        }
+    }
 public:
     // identifiers
     static constexpr CapType IDENTIFIER = Payload::IDENTIFIER;
@@ -319,28 +216,15 @@ public:
         return IDENTIFIER;
     }
 
-    constexpr int index(void) const noexcept {
+    constexpr size_t index(void) const noexcept {
         return _index;
     }
 
-    // constructor & destructor
-    __CapSpace(Universe *universe, int index)
-        : CapSpaceBase(), _universe(universe), _index(index) {
-        memset(_slots, 0, sizeof(_slots));
-    }
-    ~__CapSpace() {
-        for (int i = 0; i < SPACE_SIZE; i++) {
-            if (_slots[i] != nullptr) {
-                delete _slots[i];
-            }
-        }
-    }
-
-    // you shouldn't move or copy any CapSpace
-    __CapSpace(const __CapSpace &)            = delete;
-    __CapSpace &operator=(const __CapSpace &) = delete;
-    __CapSpace(__CapSpace &&)                 = delete;
-    __CapSpace &operator=(__CapSpace &&)      = delete;
+    // you shouldn't move or copy any CSpace
+    __CSpace(const __CSpace &)            = delete;
+    __CSpace &operator=(const __CSpace &) = delete;
+    __CSpace(__CSpace &&)                 = delete;
+    __CSpace &operator=(__CSpace &&)      = delete;
 
     template <typename T>
     static constexpr CapOptional<T *> wrap(T *pointer) {
@@ -360,22 +244,31 @@ public:
 
     // lookup
     CapOptional<const Cap *> lookup(size_t slot_idx) const {
+        // 0号能力位被保留, 不允许访问
+        if (_index + slot_idx == 0)
+            return CapErrCode::INVALID_INDEX;
         if (0 > slot_idx || slot_idx >= SPACE_SIZE)
             return CapErrCode::INVALID_INDEX;
         return wrap(_slots[slot_idx]);
     }
 
     CapOptional<Cap *> lookup(size_t slot_idx) {
+        // 0号能力位被保留, 不允许访问
+        if (_index + slot_idx == 0)
+            return CapErrCode::INVALID_INDEX;
         if (0 > slot_idx || slot_idx >= SPACE_SIZE)
             return CapErrCode::INVALID_INDEX;
         return wrap(_slots[slot_idx]);
     }
+
+    friend class __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    friend class CSpaceCalls;
 };
 
 template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
-class __CapUniverse {
+class __CUniverse {
 public:
-    using Space = __CapSpace<Payload, SPACE_SIZE>;
+    using Space = __CSpace<Payload, SPACE_SIZE, SPACE_COUNT>;
     using Cap   = Space::Cap;
 
 protected:
@@ -395,10 +288,10 @@ protected:
     }
 
 public:
-    __CapUniverse() {
+    __CUniverse() {
         memset(_spaces, 0, sizeof(_spaces));
     }
-    ~__CapUniverse() {
+    ~__CUniverse() {
         for (int i = 0; i < SPACE_COUNT; i++) {
             if (_spaces[i] != nullptr) {
                 delete _spaces[i];
@@ -454,16 +347,18 @@ public:
         return lookup(idx.space, idx.slot);
     }
 
-    friend class __CapSpace<Payload, SPACE_SIZE>;
+    friend class __CSpace<Payload, SPACE_SIZE, SPACE_COUNT>;
 };
 
 template <size_t SPACE_SIZE, size_t SPACE_COUNT, typename... Payloads>
 class __CapHolder {
 public:
     template <PayloadTrait Payload>
-    using Universe = __CapUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    using Universe = __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+
 protected:
     std::tuple<Universe<Payloads>...> _universes;
+
 public:
     __CapHolder() {}
     ~__CapHolder() {}
@@ -491,6 +386,6 @@ public:
 };
 
 template <PayloadTrait Payload>
-using CapUniverse = CapHolder::Universe<Payload>;
+using CUniverse = CapHolder::Universe<Payload>;
 template <PayloadTrait Payload>
-using CapSpace = CapUniverse<Payload>::Space;
+using CSpace = CUniverse<Payload>::Space;

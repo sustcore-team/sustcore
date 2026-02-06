@@ -11,11 +11,11 @@
 
 #include <cap/capability.h>
 
-void CapSpaceBase::retain(void) {
+void CSpaceBase::retain(void) {
     this->_ref_count++;
 }
 
-void CapSpaceBase::release(void) {
+void CSpaceBase::release(void) {
     this->_ref_count--;
     if (this->_ref_count == 0) {
         on_zero_ref();

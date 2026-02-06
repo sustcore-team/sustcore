@@ -11,6 +11,8 @@
 
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
+#include <cap/capability.h>
+#include <cap/capcall.h>
 #include <configuration.h>
 #include <kio.h>
 #include <mem/alloc.h>
@@ -25,8 +27,6 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstring>
-
-#include "cap/capability.h"
 
 bool post_init_flag = false;
 
@@ -165,26 +165,36 @@ void pre_init(void) {
 void cap_test(void) {
     // 目前为止, 只是为了测试其是否会产生编译错误
     CapHolder holder;
-    auto cap_opt = holder.lookup<CapSpaceBase>(CapIdx{.raw = 0});
+    auto cap_opt = holder.lookup<CSpaceBase>(CapIdx{.raw = 0});
     // 绝大多数情况下, 你都不应该这么做来解包
     // 此处只是用于测试编译有效性
     // 可读性为0
     auto sp_opt  = cap_opt.and_then_opt(
         // 第一个 lambda 为
-        // Capability<CapSpaceBase> * -> CapOptional<CapSpace<CapSpaceBase> *>
+        // Capability<CSpaceBase> * -> CapOptional<CSpace<CSpaceBase> *>
         [](auto *cap) {
-            return cap->payload().and_then(
-                // 第二个 lambda 为 CapSpaceBase * -> CapSpace<CapSpaceBase> *
-                [](CapSpaceBase *base) {
-                    return base->as<CapSpace<CapSpaceBase>>();
+            return CSpaceCalls::payload(cap).and_then(
+                // 第二个 lambda 为 CSpaceBase * -> CSpace<CSpaceBase> *
+                [](CSpaceBase *base) {
+                    return base->as<CSpace<CSpaceBase>>();
                 });
         });
     if (sp_opt.present()) {
-        CapSpace<CapSpaceBase> *sp = sp_opt.value();
-        LOGGER::INFO("成功获取 CapSpace: %p", sp);
+        CSpace<CSpaceBase> *sp = sp_opt.value();
+        LOGGER::INFO("成功获取 CSpace: %p", sp);
     } else {
-        LOGGER::INFO("未能获取 CapSpace");
+        LOGGER::INFO("未能获取 CSpace");
+        return;
     }
+
+    Capability<CSpaceBase> *cap = cap_opt.value();
+    size_t slot = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
+    if (slot == 0) {
+        LOGGER::ERROR("分配槽位失败");
+        return;
+    }
+    CSpaceCalls::insert(cap, slot, cap);
+    CSpaceCalls::remove<CSpaceBase>(cap, slot);
 }
 
 void kernel_setup(void) {

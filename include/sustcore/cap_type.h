@@ -25,3 +25,13 @@ union CapIdx {
     };
     b64 raw;
 };
+
+enum class CapErrCode {
+    SUCCESS                  = 0,
+    INVALID_CAPABILITY       = -1,
+    INVALID_INDEX            = -2,
+    INSUFFICIENT_PERMISSIONS = -3,
+    TYPE_NOT_MATCHED         = -4,
+    PAYLOAD_ERROR            = -5,
+    UNKNOWN_ERROR            = -255,
+};
