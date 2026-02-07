@@ -14,12 +14,16 @@
 #include <cap/capdef.h>
 #include <cap/permission.h>
 #include <kio.h>
+#include <sus/list.h>
 #include <sus/optional.h>
 #include <sus/types.h>
 #include <sustcore/cap_type.h>
 
+#include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -39,6 +43,8 @@ protected:
     // permissions
     PermissionBits _permissions;
 
+    bool _accepted;
+
 public:
     /**
      * @brief 构造能力对象
@@ -53,9 +59,10 @@ public:
         : _owner(owner),
           _idx(idx),
           _payload(payload),
-          _permissions(std::move(permissions)) {
-        // assert (payload != nullptr);
-        // assert (owner != nullptr);
+          _permissions(std::move(permissions)),
+          _accepted(false) {
+        assert(payload != nullptr);
+        assert(owner != nullptr);
         _payload->retain();
     }
     Capability(CapHolder *owner, CapIdx idx, Payload *payload,
@@ -63,18 +70,22 @@ public:
         : _owner(owner),
           _idx(idx),
           _payload(payload),
-          _permissions(std::move(permissions)) {
-        // assert (payload != nullptr);
-        // assert (owner != nullptr);
+          _permissions(permissions),
+          _accepted(false) {
+        assert(payload != nullptr);
+        assert(owner != nullptr);
         _payload->retain();
     }
     virtual ~Capability() {
         // 将自身从继承树中剥离
 
         // 遍历继承树, 通知其派生能力销毁自身(通过suicide)
+        // TODO: 待树的数据结构实现后, 对Capability的继承树进行管理
 
         // 释放负载对象
-        _payload->release();
+        if (_payload != nullptr) {
+            _payload->release();
+        }
     }
 
     // you shouldn't copy or move any capability directly
@@ -85,13 +96,20 @@ public:
 
     void suicide(void) {
         // 反向调用CapHolder相关方法, 通知其销毁自身
+        if (_accepted && _owner != nullptr) {
+            // doing sth...
+        }
+    }
+    void accept(void) {
+        // 说明该能力已被其owner接受, 在suicide时应当通知其owner主动销毁自身
+        _accepted = true;
     }
     void discard(void) {
-        // 说明这个能力是一个临时的能力, 没被插入到CapHolder中
-        // 先放在这, 万一需要了
+        // 说明该能力已被其owner抛弃, 在suicide时不应当通知其owner销毁自身
+        _accepted = false;
     }
     constexpr CapType type(void) const noexcept {
-        return Payload::CapType;
+        return Payload::IDENTIFIER;
     }
     constexpr CapHolder *owner(void) const noexcept {
         return _owner;
@@ -101,11 +119,14 @@ public:
     }
 
     friend class BasicCalls<Payload>;
+
+protected:
 };
 
 template <typename DrvdSpace>
-concept DrvdSpaceTrait = requires() {
-    std::is_base_of_v<CSpaceBase, DrvdSpace>;
+concept DrvdSpaceTrait = std::is_base_of_v<CSpaceBase, DrvdSpace> &&
+    requires()
+{
     {
         DrvdSpace::IDENTIFIER
     } -> std::same_as<const CapType &>;
@@ -116,13 +137,14 @@ class CSpaceBase {
 protected:
     int _ref_count;
     virtual void on_zero_ref() = 0;
+    CapHolder *_holder;
     const size_t _index;
 
 public:
     using CCALL = CSpaceCalls;
     // constructors & destructors
-    constexpr explicit CSpaceBase(size_t index)
-        : _ref_count(0), _index(index){};
+    constexpr explicit CSpaceBase(CapHolder *holder, size_t index)
+        : _ref_count(0), _holder(holder), _index(index){};
     virtual ~CSpaceBase() {}
 
     static constexpr CapType IDENTIFIER = CapType::CAP_SPACE;
@@ -141,6 +163,10 @@ public:
 
     constexpr size_t index(void) const noexcept {
         return _index;
+    }
+
+    constexpr CapHolder *holder(void) noexcept {
+        return _holder;
     }
 
     template <typename T>
@@ -192,11 +218,13 @@ static_assert(PayloadTrait<CSpaceBase>);
 template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
 class __CSpace : public CSpaceBase {
 public:
-    using Cap      = Capability<Payload>;
-    using Universe = __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    static constexpr size_t SpaceSize  = SPACE_SIZE;
+    static constexpr size_t SpaceCount = SPACE_COUNT;
+    using Cap                          = Capability<Payload>;
+    using Universe = __CUniverse<Payload, SpaceSize, SpaceCount>;
 
 protected:
-    Cap *_slots[SPACE_SIZE];
+    Cap *_slots[SpaceSize];
     Universe *_universe;
 
     virtual void on_zero_ref() override {
@@ -210,44 +238,50 @@ protected:
      * @param cap 能力对象指针(不应为nullptr)
      */
     void __insert(size_t slot_idx, Cap *cap) {
-        // assert(0 <= slot_idx && slot_idx < SPACE_SIZE);
-        // assert (_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
+        assert(0 <= slot_idx && slot_idx < SpaceSize);
+        assert(_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
         _slots[slot_idx] = cap;
     }
 
     // 将能力对象从能力空间中移除
     void __remove(size_t slot_idx) {
-        // assert(0 <= slot_idx && slot_idx < SPACE_SIZE);
-        // assert (_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
+        assert(0 <= slot_idx && slot_idx < SpaceSize);
+        assert(_index + slot_idx != 0);  // 0号能力位被保留, 不允许访问
         _slots[slot_idx] = nullptr;
     }
 
-    // constructor & destructor, it should only be called by Universe
-    __CSpace(Universe *universe, size_t index)
-        : CSpaceBase(index), _universe(universe) {
-        memset(_slots, 0, sizeof(_slots));
-    }
-    ~__CSpace() {
-        for (int i = 0; i < SPACE_SIZE; i++) {
+    void __clear(void) {
+        for (int i = 0; i < SpaceSize; i++) {
             if (_slots[i] != nullptr) {
                 delete _slots[i];
+                _slots[i] = nullptr;
             }
         }
     }
 
-public:
-    // identifiers
-    static constexpr CapType IDENTIFIER = Payload::IDENTIFIER;
-    virtual CapType type() override {
-        return IDENTIFIER;
+    // constructor & destructor, it should only be called by Universe
+    __CSpace(CapHolder *holder, Universe *universe, size_t index)
+        : CSpaceBase(holder, index), _universe(universe) {
+        memset(_slots, 0, sizeof(_slots));
+    }
+    ~__CSpace() {
+        __clear();
     }
 
-    // you shouldn't move or copy any CSpace
+public:
+    // identifiers
+    static constexpr CapType PAYLOAD_IDENTIFIER = Payload::IDENTIFIER;
+    virtual CapType type() override {
+        return PAYLOAD_IDENTIFIER;
+    }
+
+    // you shouldn't copy or move any CSpace
     __CSpace(const __CSpace &)            = delete;
     __CSpace &operator=(const __CSpace &) = delete;
     __CSpace(__CSpace &&)                 = delete;
     __CSpace &operator=(__CSpace &&)      = delete;
 
+    // wrap functions
     template <typename T>
     static constexpr CapOptional<T *> wrap(T *pointer) {
         if (pointer == nullptr) {
@@ -269,7 +303,7 @@ public:
         // 0号能力位被保留, 不允许访问
         if (_index + slot_idx == 0)
             return CapErrCode::INVALID_INDEX;
-        if (0 > slot_idx || slot_idx >= SPACE_SIZE)
+        if (slot_idx >= SpaceSize)
             return CapErrCode::INVALID_INDEX;
         return wrap(_slots[slot_idx]);
     }
@@ -278,35 +312,49 @@ public:
         // 0号能力位被保留, 不允许访问
         if (_index + slot_idx == 0)
             return CapErrCode::INVALID_INDEX;
-        if (0 > slot_idx || slot_idx >= SPACE_SIZE)
+        if (slot_idx >= SpaceSize)
             return CapErrCode::INVALID_INDEX;
         return wrap((const Cap *)_slots[slot_idx]);
     }
 
-    friend class __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    friend class __CUniverse<Payload, SpaceSize, SpaceCount>;
     friend class CSpaceCalls;
 };
 
 template <PayloadTrait Payload, size_t SPACE_SIZE, size_t SPACE_COUNT>
 class __CUniverse {
 public:
-    using Space = __CSpace<Payload, SPACE_SIZE, SPACE_COUNT>;
+    static constexpr size_t SpaceSize  = SPACE_SIZE;
+    static constexpr size_t SpaceCount = SPACE_COUNT;
+    using Space = __CSpace<Payload, SpaceSize, SpaceCount>;
     using Cap   = Space::Cap;
 
 protected:
-    Space *_spaces[SPACE_COUNT];
+    /**
+     * @brief CSpace对象集
+     * CUniverse中, 并不是一开始就创建了所有的CSpace对象,
+     * 而是采用了按需创建的方式
+     * 当某个通过CUniverse提供的space()方法作为Capability对象的Payload被访问时
+     * 才会通过__new_space方法创建对应的CSpace对象
+     * 并在CUniverse析构时销毁所有已创建的CSpace对象
+     */
+    Space *_spaces[SpaceCount];
+    CapHolder *_holder;
 
     void __new_space(size_t space_idx) {
-        // assert (0 <= space && space < SPACE_COUNT);
+        assert(space_idx < SpaceCount);
         if (_spaces[space_idx] == nullptr) {
-            _spaces[space_idx] = new Space(space_idx, this);
+            _spaces[space_idx] = new Space(_holder, this, space_idx);
             _spaces[space_idx]->retain();
         }
     }
 
     void on_zero_ref(Space *sp) {
-        // do nothing, just keep the space alive
-        CAPABILITY::DEBUG("Space at %d ref_count reached zero.", sp->index());
+        // CSpace的声明周期与CUniverse绑定而非与CSpaceCap绑定
+        // 因此只在CUniverse被销毁时再销毁CSpace
+        // 该函数只是为了说明引用计数达到零时的处理方式,
+        // 实际上我们并不需要在此处销毁CSpace
+        CAPABILITY::DEBUG("Space at %u ref_count reached zero.", sp->index());
     }
 
 public:
@@ -314,14 +362,18 @@ public:
         memset(_spaces, 0, sizeof(_spaces));
     }
     ~__CUniverse() {
-        for (int i = 0; i < SPACE_COUNT; i++) {
+        for (int i = 0; i < SpaceCount; i++) {
             if (_spaces[i] != nullptr) {
                 delete _spaces[i];
             }
         }
     }
 
-    // you shouldn't move or copy any CUniverse
+    void set_holder(CapHolder *holder) {
+        _holder = holder;
+    }
+
+    // you shouldn't copy or move any CUniverse
     __CUniverse(const __CUniverse &)            = delete;
     __CUniverse &operator=(const __CUniverse &) = delete;
     __CUniverse(__CUniverse &&)                 = delete;
@@ -344,13 +396,13 @@ public:
     }
 
     CapOptional<Space *> lookup_space(size_t space_idx) {
-        if (0 > space_idx || space_idx >= SPACE_COUNT)
+        if (space_idx >= SpaceCount)
             return CapErrCode::INVALID_INDEX;
         return wrap(_spaces[space_idx]);
     }
 
     CapOptional<const Space *> lookup_space(size_t space_idx) const {
-        if (0 > space_idx || space_idx >= SPACE_COUNT)
+        if (space_idx >= SpaceCount)
             return CapErrCode::INVALID_INDEX;
         return wrap((const Space *)_spaces[space_idx]);
     }
@@ -375,23 +427,83 @@ public:
         return lookup(idx.space, idx.slot);
     }
 
-    friend class __CSpace<Payload, SPACE_SIZE, SPACE_COUNT>;
+    CapOptional<Space *> space(size_t space_idx) {
+        if (space_idx >= SpaceCount)
+            return CapErrCode::INVALID_INDEX;
+        if (_spaces[space_idx] == nullptr) {
+            __new_space(space_idx);
+        }
+        // 不需要wrap, 因为__new_space保证了_spaces[space_idx]不为nullptr
+        return _spaces[space_idx];
+    }
+
+    friend class __CSpace<Payload, SpaceSize, SpaceCount>;
 };
 
 template <size_t SPACE_SIZE, size_t SPACE_COUNT, typename... Payloads>
 class __CapHolder {
 public:
+    static constexpr size_t SpaceSize  = SPACE_SIZE;
+    static constexpr size_t SpaceCount = SPACE_COUNT;
     template <PayloadTrait Payload>
-    using Universe = __CUniverse<Payload, SPACE_SIZE, SPACE_COUNT>;
+    using Universe = __CUniverse<Payload, SpaceSize, SpaceCount>;
     template <PayloadTrait Payload>
     using Space = Universe<Payload>::Space;
 
+    template <PayloadTrait Payload>
+    struct MigrateToken {
+        CapIdx src_idx;
+        __CapHolder *dst_holder;
+    };
+
 protected:
     std::tuple<Universe<Payloads>...> _universes;
+    std::tuple<util::ArrayList<MigrateToken<Payloads>>...> _migrate_tokens;
+
+    // 在migrate_tokens中寻找空位
+    // 如果找到了一个空位, 则返回该空位的索引; 否则返回-1
+    template <PayloadTrait Payload>
+    size_t migrate_alloc(void) {
+        util::ArrayList<MigrateToken<Payload>> &tokens =
+            std::get<util::ArrayList<MigrateToken<Payload>>>(_migrate_tokens);
+        size_t idx = INT32_MAX;
+        for (size_t i = 0; i < tokens.size(); i++) {
+            if (tokens[i].src_idx.nullable()) {
+                idx = i;
+                break;
+            }
+        }
+        return idx;
+    }
+
+    // 将token放入migrate_tokens中, 返回其索引
+    template <PayloadTrait Payload>
+    size_t migrate_put(MigrateToken<Payload> token) {
+        util::ArrayList<MigrateToken<Payload>> &tokens =
+            std::get<util::ArrayList<MigrateToken<Payload>>>(_migrate_tokens);
+        size_t idx = migrate_alloc<Payload>();
+        if (idx == INT32_MAX) {
+            tokens.push_back(token);
+            return tokens.size() - 1;
+        }
+        tokens[idx] = token;
+        return idx;
+    }
 
 public:
-    __CapHolder() {}
+    __CapHolder() : _universes() {
+        // for each the universes and set the holder
+        // by folding expressions
+        (universe<Payloads>().set_holder(this), ...);
+    }
     ~__CapHolder() {}
+
+    // you shouldn't copy or move any Cap Holder
+    __CapHolder(const __CapHolder &)            = delete;
+    __CapHolder &operator=(const __CapHolder &) = delete;
+    __CapHolder(__CapHolder &&other)            = delete;
+    __CapHolder &operator=(__CapHolder &&)      = delete;
+
     template <PayloadTrait Payload>
     Universe<Payload> &universe(void) {
         return std::get<Universe<Payload>>(_universes);
@@ -403,13 +515,23 @@ public:
     }
 
     template <PayloadTrait Payload>
-    CapOptional<Space<Payload> *> space(size_t space_idx) {
+    CapOptional<Space<Payload> *> lookup_space(size_t space_idx) {
         return universe<Payload>().lookup_space(space_idx);
     }
 
     template <PayloadTrait Payload>
-    CapOptional<const Space<Payload> *> space(size_t space_idx) const {
+    CapOptional<const Space<Payload> *> lookup_space(size_t space_idx) const {
         return universe<Payload>().lookup_space(space_idx);
+    }
+
+    template <PayloadTrait Payload>
+    CapOptional<Space<Payload> *> space(size_t space_idx) {
+        return universe<Payload>().space(space_idx);
+    }
+
+    template <PayloadTrait Payload>
+    CapOptional<const Space<Payload> *> space(size_t space_idx) const {
+        return universe<Payload>().space(space_idx);
     }
 
     template <PayloadTrait Payload>
@@ -422,6 +544,44 @@ public:
     CapOptional<const Capability<Payload> *> lookup(CapIdx idx) const {
         const Universe<Payload> &univ = universe<Payload>();
         return univ.lookup(idx);
+    }
+
+    template <PayloadTrait Payload>
+    MigrateToken<Payload> fetch_migrate_token(int token_idx) {
+        util::ArrayList<MigrateToken<Payload>> &tokens =
+            std::get<util::ArrayList<MigrateToken<Payload>>>(_migrate_tokens);
+        if (token_idx < 0 || token_idx >= (int)tokens.size()) {
+            return MigrateToken<Payload>{CapIdx(0), nullptr};
+        }
+        MigrateToken<Payload> tok = tokens[token_idx];
+        tokens[token_idx]         = {CapIdx(0), nullptr};  // clear the token
+        return tok;
+    }
+
+    template <PayloadTrait Payload>
+    MigrateToken<Payload> peer_migrate_token(int token_idx) {
+        util::ArrayList<MigrateToken<Payload>> &tokens =
+            std::get<util::ArrayList<MigrateToken<Payload>>>(_migrate_tokens);
+        if (token_idx < 0 || token_idx >= (int)tokens.size()) {
+            return MigrateToken<Payload>{CapIdx(0), nullptr};
+        }
+        MigrateToken<Payload> tok = tokens[token_idx];
+        return tok;
+    }
+
+    /**
+     * @brief 创建能力转移令牌, 由Capability调用,
+     * 以生成一个能力转移令牌供其owner进行能力转移操作
+     *
+     * @tparam Payload 能力负载类型
+     * @param src_idx 能力索引
+     * @param dst_holder 目标holder
+     * @return size_t 能力转移令牌的索引
+     */
+    template <PayloadTrait Payload>
+    size_t create_migrate_token(CapIdx src_idx, __CapHolder *dst_holder) {
+        MigrateToken<Payload> token{src_idx, dst_holder};
+        return migrate_put<Payload>(token);
     }
 };
 

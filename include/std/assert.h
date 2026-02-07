@@ -45,14 +45,16 @@ void panic_failure(const char *expression, const char *file,
  */
 void panic(const char *format, ...);
 
+#define ASSERT_IMPLEMENTED 0
+
 // 不开启DEBUG
-#ifdef NDEBUG
+#if defined(NDEBUG) || ! ASSERT_IMPLEMENTED
 /** 断言 */
 #define assert(expression)       ((void)0)
 /** 崩溃断言 */
 #define panic_assert(expression) ((void)0)
 #else
-/** 断言 */
+
 #define assert(expression) \
     if (!(expression))     \
     assertion_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
@@ -60,6 +62,7 @@ void panic(const char *format, ...);
 #define panic_assert(expression) \
     if (!(expression))           \
     panic_failure(#expression, __FILE__, __BASE_FILE__, __LINE__)
+
 #endif
 
 #ifdef __cplusplus

@@ -55,16 +55,8 @@ auto CSpaceCalls::basic::downgrade(Cap *src, const PermissionBits &new_perm)
     return CapErrCode::SUCCESS;
 }
 
-auto CSpaceCalls::from(Cap *space_cap, size_t space_idx,
-                       const CapHolder *owner) -> bool {
-    size_t this_idx = _payload(space_cap)->index();
-    if (this_idx != space_idx) {
-        return false;
-    }
-    auto opt = owner->space<CSpaceBase>(space_idx);
-    return opt.present() && (opt.value() == _payload(space_cap));
-}
-
-auto CSpaceCalls::index(Cap *space_cap) -> size_t {
-    return _payload(space_cap)->index();
+auto CSpaceCalls::basic::create(CSpaceBase *space, CapHolder *owner, CapIdx idx,
+                                const PermissionBits &bits)
+    -> CapOptional<Cap *> {
+    return new Cap(owner, idx, space, bits);
 }

@@ -34,7 +34,7 @@ void PMM::init(void *lowerbound, void *upperbound) {
 }
 
 PMM::page *PMM::__get_page(umb_t ppn) {
-    // assert(ppn >= __lower_ppn && ppn < __upper_ppn);
+    assert(ppn >= __lower_ppn && ppn < __upper_ppn);
     return &__base_address[ppn - __lower_ppn];
 }
 
@@ -43,7 +43,7 @@ void PMM::__ref_page(page *pg) {
 }
 
 bool PMM::__unref_page(page *pg) {
-    // assert(pg->refcnt > 0);
+    assert(pg->refcnt > 0);
     pg->refcnt--;
     if (pg->refcnt == 0) {
         return true;

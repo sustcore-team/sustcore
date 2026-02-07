@@ -12,13 +12,14 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
-#include <sus/logger.h>
 #include <kio.h>
 #include <sbi/sbi.h>
+#include <sus/logger.h>
+#include <sus/units.h>
 
 TimerInfo timer_info;
 
-int get_clock_freq_hz(void) {
+units::frequency get_clock_freq(void) {
     // 读取 /cpus/timebase-frequency 属性
     FDTNodeDesc root = FDTHelper::get_root_node();
 
@@ -26,7 +27,7 @@ int get_clock_freq_hz(void) {
     if (cpus_node < 0) {
         // 未找到cpus节点
         DEVICE::ERROR("未找到/cpus节点, 无法获取时钟频率");
-        return -1;
+        return 0_Hz;
     }
 
     FDTPropDesc prop_freq =
@@ -34,7 +35,7 @@ int get_clock_freq_hz(void) {
     if (prop_freq < 0) {
         // 未找到timebase-frequency属性
         DEVICE::ERROR("未找到/cpus/timebase-frequency属性, 无法获取时钟频率");
-        return -1;
+        return 0_Hz;
     }
 
     int freq = FDTHelper::get_property_value_as<int, 0>(prop_freq);
@@ -42,22 +43,21 @@ int get_clock_freq_hz(void) {
         // 属性值无效
         DEVICE::ERROR(
             "/cpus/timebase-frequency不能以dword读取, 无法获取时钟频率");
-        return -1;
+        return 0_Hz;
     }
 
     // 对于QEMU的virt机器, 时钟频率恒为10MHz
-    return freq;
+    return units::frequency::from_hz(freq);
 }
 
-void init_timer(int freq, int expected_freq) {
-    // 设置计时器频率(freq:Hz, expected_freq:mHz(10^-3 Hz))
-    int increasment          = freq / expected_freq * 1000;
+void init_timer(units::frequency freq, units::frequency expected_freq) {
+    int increment            = freq.to_hz() / expected_freq.to_hz();
     timer_info.freq          = freq;
     timer_info.expected_freq = expected_freq;
-    timer_info.increasment   = increasment;
+    timer_info.increment     = increment;
 
     // 之后稳定触发
-    sbi_legacy_set_timer(csr_get_time() + increasment);
+    sbi_legacy_set_timer(csr_get_time() + increment);
 
     // 启用S-Mode计时器中断
     csr_sie_t sie = csr_get_sie();

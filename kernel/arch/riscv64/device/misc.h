@@ -11,17 +11,19 @@
 
 #pragma once
 
+#include <sus/units.h>
+
 /**
  * @brief 获得时钟频率
  *
- * @return int 时钟频率(Hz)
+ * @return units::frequency 时钟频率
  */
-int get_clock_freq_hz(void);
+units::frequency get_clock_freq(void);
 
 struct TimerInfo {
-    int freq;
-    int expected_freq;
-    int increasment;
+    units::frequency freq;
+    units::frequency expected_freq;
+    int increment;
 };
 
 extern TimerInfo timer_info;
@@ -32,4 +34,4 @@ extern TimerInfo timer_info;
 * @param freq 计时器频率(Hz)
 * @param expected_freq 期望频率(mHz(10^-3 Hz))
 */
-void init_timer(int freq, int expected_freq);
+void init_timer(units::frequency freq, units::frequency expected_freq);

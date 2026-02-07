@@ -20,13 +20,21 @@ enum class CapType {
 
 union CapIdx {
     struct {
+        // 低位
         b32 slot : 32;
+        // 高位
         b32 space : 32;
     };
     b64 raw;
 
     constexpr CapIdx(b64 raw = 0) : raw(raw){};
+    // 然而, 构造函数中, 我们先指明space再指明slot,
+    // 以符合我们平时习惯的空间在前, 槽位在后的表达方式
     constexpr CapIdx(b32 space, b32 slot) : slot(slot), space(space){};
+
+    constexpr bool nullable(void) const noexcept {
+        return raw == 0;
+    }
 };
 
 enum class CapErrCode {
@@ -36,5 +44,6 @@ enum class CapErrCode {
     INSUFFICIENT_PERMISSIONS = -3,
     TYPE_NOT_MATCHED         = -4,
     PAYLOAD_ERROR            = -5,
+    CREATION_FAILED          = -6,
     UNKNOWN_ERROR            = -255,
 };

@@ -21,7 +21,7 @@ void *GMM::get_page(int cnt) {
     for (int i = 0 ; i < cnt ; i ++) {
         umb_t _paddr = (umb_t) paddr + i * PAGESIZE;
         PMM::page *page = PMM::get_page((void *)_paddr);
-        // assert(! PMM::refering(page));
+        assert(! PMM::refering(page));
         PMM::reset_page(page);
         PMM::ref_page(page);
     }
@@ -32,7 +32,7 @@ void GMM::put_page(void *paddr, int cnt) {
     for (int i = 0 ; i < cnt ; i ++) {
         umb_t _paddr = (umb_t) paddr + i * PAGESIZE;
         PMM::page *page = PMM::get_page((void *)_paddr);
-        // assert(PMM::refering(page));
+        assert(PMM::refering(page));
         bool flag = PMM::unref_page(page);
         // 引用计数 <= 0, 释放页
         // NOTE: 也许把连续的部分一次性释放更有利于性能?

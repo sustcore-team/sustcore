@@ -23,16 +23,38 @@ namespace std {
 
     template <typename T>
     typename remove_reference<T>::type&& move(T&& t) {
-        return __move(t);
+        return static_cast<typename remove_reference<T>::type&&>(t);
     }
 
     template <typename T>
     T&& forward(typename remove_reference<T>::type& t) {
-        return __forward(t);
+        return static_cast<T&&>(t);
     }
 
     template <typename T>
     T&& forward(typename remove_reference<T>::type&& t) {
-        return __forward(t);
+        return static_cast<T&&>(t);
     }
+
+    // interger_sequence
+    template <typename T, T... Ints>
+    struct integer_sequence {
+        using value_type = T;
+
+        static constexpr std::size_t size() noexcept {
+            return sizeof...(Ints);
+        }
+    };
+
+    template <std::size_t... Ints>
+    using index_sequence = integer_sequence<std::size_t, Ints...>;
+
+    // 简单的make_index_sequence实现
+    template <std::size_t N, std::size_t... Ints>
+    struct make_index_sequence : make_index_sequence<N - 1, N - 1, Ints...> {};
+
+    template <std::size_t... Ints>
+    struct make_index_sequence<0, Ints...> {
+        using type = index_sequence<Ints...>;
+    };
 }  // namespace std

@@ -27,7 +27,7 @@ void TM::add_vma(VMA::Type type, void *vaddr, size_t size)
 
 void TM::clone_vma(TM &other, VMA *vma)
 {
-    // assert (vma->tm == this);
+    assert (vma->tm == this);
     VMA *new_vma = new VMA(&other, *vma);
     other.vma_list.push_back(*new_vma);
 }
@@ -44,7 +44,7 @@ VMA *TM::find_vma(void *vaddr)
 
 void TM::remove_vma(VMA *vma)
 {
-    // assert (vma->tm == this);
+    assert (vma->tm == this);
     vma_list.remove(*vma);
     delete vma;
 }

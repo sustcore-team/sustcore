@@ -38,6 +38,8 @@ concept CapCallTrait =
         {
             CCALL::basic::downgrade(cap, new_perm)
         } -> std::same_as<CapErrCode>;
+        // CCALL::basic::create() 函数
+        // 比较复杂, 暂时先不对其进行约束
     };
 
 template <typename Payload>
@@ -87,8 +89,6 @@ class CSpaceCalls : public BasicCalls<CSpaceBase> {
 protected:
     using Base = BasicCalls<CSpaceBase>;
     using Cap  = Base::Cap;
-    static constexpr int BITMAP_SIZE =
-        PermissionBits::to_bitmap_size(PermissionBits::Type::CAPSPACE);
     static Cap *_clone(Cap *src, CapHolder *owner, CapIdx idx);
     static Cap *_migrate(Cap *src, CapHolder *owner, CapIdx idx);
 
@@ -100,6 +100,12 @@ public:
         static CapOptional<Cap *> migrate(Cap *src, CapHolder *owner,
                                           CapIdx idx);
         static CapErrCode downgrade(Cap *src, const PermissionBits &new_perm);
+
+        using CreateArgs = std::tuple<CSpaceBase *, CapHolder *, size_t,
+                                      const PermissionBits &>;
+        static CapOptional<Cap *> create(CSpaceBase *space, CapHolder *owner,
+                                         CapIdx idx,
+                                         const PermissionBits &bits);
     };
 
     // CSpace Operations
@@ -161,18 +167,21 @@ public:
         return space->lookup(slot_idx);
     }
 
-    static bool from(Cap *space_cap, size_t space_idx, const CapHolder *owner);
-    static size_t index(Cap *space_cap);
+    static constexpr CapHolder *owner(Cap *space_cap) {
+        return _payload(space_cap)->_holder;
+    }
+    static constexpr size_t index(Cap *space_cap) {
+        return _payload(space_cap)->index();
+    }
 
     template <ExtendedPayloadTrait Payload>
-    static CapErrCode clone(Cap *dst_space, CapHolder *dst_owner,
-                            CapIdx dst_idx, CapHolder *src_owner,
-                            CapIdx src_idx) {
+    static CapErrCode clone(Cap *dst_space, CapIdx dst_idx,
+                            CapHolder *src_owner, CapIdx src_idx) {
         using BC   = Payload::CCALL::basic;
         using CapP = Capability<Payload>;
 
         // 检测space_cap是否来自于dst_owner
-        if (!from(dst_space, dst_idx.space, dst_owner)) {
+        if (index(dst_space) != dst_idx.space) {
             return CapErrCode::INVALID_CAPABILITY;
         }
 
@@ -185,7 +194,7 @@ public:
 
         // 复制源能力
         CapOptional<CapP *> cloned_opt =
-            BC::clone(src_opt.value(), dst_owner, dst_idx);
+            BC::clone(src_opt.value(), owner(dst_space), dst_idx);
         if (!cloned_opt.present()) {
             return cloned_opt.error();
         }
@@ -194,21 +203,22 @@ public:
         CapErrCode code = insert(dst_space, dst_idx.slot, cloned_opt.value());
         if (code != CapErrCode::SUCCESS) {
             // 其实可以用RAII的, 但是, 就这一个分支, 还是手动清理比较好
-            cloned_opt.value()->discard();
             delete cloned_opt.value();
+            return code;
         }
-        return code;
+        // 成功插入后, 接受该能力
+        cloned_opt.value()->accept();
+        return CapErrCode::SUCCESS;
     }
 
     template <ExtendedPayloadTrait Payload>
-    static CapErrCode migrate(Cap *dst_space, CapHolder *dst_owner,
-                              CapIdx dst_idx, CapHolder *src_owner,
-                              CapIdx src_idx) {
+    static CapErrCode migrate(Cap *dst_space, CapIdx dst_idx,
+                              CapHolder *src_owner, CapIdx src_idx) {
         using BC   = Payload::CCALL::basic;
         using CapP = Capability<Payload>;
 
         // 检测space_cap是否来自于dst_owner
-        if (!from(dst_space, dst_idx.space, dst_owner)) {
+        if (index(dst_space) != dst_idx.space) {
             return CapErrCode::INVALID_CAPABILITY;
         }
 
@@ -221,7 +231,7 @@ public:
 
         // 迁移源能力
         CapOptional<CapP *> migrated_opt =
-            BC::migrate(src_opt.value(), dst_owner, dst_idx);
+            BC::migrate(src_opt.value(), owner(dst_space), dst_idx);
         if (!migrated_opt.present()) {
             return migrated_opt.error();
         }
@@ -230,15 +240,18 @@ public:
         CapErrCode code = insert(dst_space, dst_idx.slot, migrated_opt.value());
         if (code != CapErrCode::SUCCESS) {
             // 其实可以用RAII的, 但是, 就这一个分支, 还是手动清理比较好
-            migrated_opt.value()->discard();
             delete migrated_opt.value();
             return code;
         }
+        // 成功插入后, 接受该能力
+        migrated_opt.value()->accept();
 
         // 从源holder中删除该能力
         CapOptional<CSpace<Payload> *> sp_opt =
-            src_owner->space<Payload>(src_idx.space);
-        // assert(sp_opt.present());
+            src_owner->lookup_space<Payload>(src_idx.space);
+        // 逻辑上, 源索引是一定存在的
+        // 我们在此处添加assert以验证这一点
+        assert(sp_opt.present());
         sp_opt.value()->__remove(src_idx.slot);
 
         // migrate方法中, 迁移后的能力已经替代了迁移前的能力
@@ -246,6 +259,89 @@ public:
         src_opt.value()->discard();
         delete src_opt.value();
 
+        return CapErrCode::SUCCESS;
+    }
+
+    // Should be called by the source owner only
+    template <ExtendedPayloadTrait Payload>
+    static CapOptional<size_t> try_migrate(CapHolder *dst_owner, CapIdx dst_idx,
+                                           CapHolder *src_owner,
+                                           CapIdx src_idx) {
+        using CapP = Capability<Payload>;
+
+        // 首先, 获得源能力
+        CapOptional<CapP *> src_opt = src_owner->lookup<Payload>(src_idx);
+        if (!src_opt.present()) {
+            return src_opt.error();
+        }
+
+        // 构造migrate token
+        size_t mt_idx = src_owner->template create_migrate_token<Payload>(
+            src_idx, dst_owner);
+        return mt_idx;
+    }
+
+    // Should be called by the destination owner only
+    template <ExtendedPayloadTrait Payload>
+    static CapErrCode accept_migrate(Cap *dst_space, CapIdx dst_idx,
+                                     CapHolder *src_owner, size_t mt_idx) {
+        using namespace perm::cspace;
+        using MTok = typename CapHolder::template MigrateToken<Payload>;
+
+        // 通过mt_idx获取migrate token
+        MTok token = src_owner->template peer_migrate_token<Payload>(mt_idx);
+        if (token.src_idx.nullable()) {
+            return CapErrCode::INVALID_INDEX;
+        }
+
+        if (token.dst_holder != owner(dst_space)) {
+            return CapErrCode::INVALID_CAPABILITY;
+        }
+
+        // 然后调用migrate方法进行能力迁移
+        CapErrCode ret = migrate(dst_space, dst_idx, src_owner, token.src_idx);
+        if (ret == CapErrCode::SUCCESS) {
+            src_owner->template fetch_migrate_token<Payload>(
+            mt_idx);  // clear the token
+        }
+
+        return ret;
+    }
+
+    template <ExtendedPayloadTrait Payload, typename... Args>
+    static CapErrCode create(Cap *space_cap, CapHolder *owner, CapIdx idx,
+                             const PermissionBits &bits, Args &&...args) {
+        using namespace perm::cspace;
+        using BC = Payload::CCALL::basic;
+        // 检查权限
+        if (!imply<ALLOC>(space_cap)) {
+            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        }
+
+        // 获得space_cap的Payload
+        CSpace<Payload> *space = _payload(space_cap)->as<CSpace<Payload>>();
+        if (space == nullptr) {
+            return CapErrCode::TYPE_NOT_MATCHED;
+        }
+
+        // 创建能力对象
+        auto cap_opt =
+            BC::create(std::forward<Args>(args)..., owner, idx, bits);
+        if (!cap_opt.present()) {
+            return cap_opt.error();
+        }
+
+        Capability<Payload> *cap = cap_opt.value();
+
+        // 插入到dst中
+        CapErrCode code = insert(space_cap, idx.slot, cap);
+        if (code != CapErrCode::SUCCESS) {
+            // 如果失败则将其删除
+            delete cap;
+            return code;
+        }
+        // 成功插入后, 接受该能力
+        cap->accept();
         return CapErrCode::SUCCESS;
     }
 
@@ -264,11 +360,15 @@ public:
         }
 
         // 遍历槽位, 寻找第一个可用的空闲槽位
-        for (size_t i = 0; i < BITMAP_SIZE; i++) {
+        for (size_t i = 0; i < CSpace<Payload>::SpaceSize; i++) {
             if (space->_slots[i] == nullptr &&
                 _perm(space_cap).imply(SLOT_INSERT, slot_offset(i)))
             {
                 // 找到一个可用的空闲槽位
+                // 额外检验: 其索引不为(0, 0)
+                if (space->index() + i == 0) {
+                    continue;  // 跳过(0, 0)槽位
+                }
                 return i;
             }
         }

@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <cap/capdef.h>
 #include <string.h>
 #include <sus/types.h>
@@ -29,7 +30,8 @@ namespace perm {
         // 从CSpace中寻找一个可用槽位
         // 对应方法寻找的槽位一定具有SLOT_INSERT权限
         // 且一定为空
-        constexpr b64 ALLOC = 0x1'0000;
+        constexpr b64 ALLOC  = 0x1'0000;
+        constexpr b64 ACCEPT = 0x2'0000;
         // 对每个槽位, 其权限控制存储在位图中
 
         // permission bits per slot
@@ -85,116 +87,34 @@ struct PermissionBits {
 
     constexpr static size_t to_bitmap_size(Type type) noexcept {
         switch (type) {
-            case Type::NONE:  return 0;
-            case Type::BASIC: return 0;
-            case Type::CAPSPACE:
-                return CAP_SPACE_SIZE / 64 *
-                       perm::cspace::SLOT_BITS;  // 每个b64可以表示64个位
+            case Type::NONE:     return 0;
+            case Type::BASIC:    return 0;
+            case Type::CAPSPACE: {
+                size_t total_bits = perm::cspace::SLOT_BITS * CAP_SPACE_SIZE;
+                return (total_bits + 63) / 64;  // 向上取整为b64的数量
+            }
             default: return 0;
         }
     }
 
-    constexpr PermissionBits(b64 basic, b64 *bitmap, Type type)
-        : basic_permissions(basic),
-          permission_bitmap(new b64[to_bitmap_size(type)]),
-          type(type) {
-        memcpy(permission_bitmap, bitmap, to_bitmap_size(type));
-    }
-    constexpr PermissionBits(b64 basic, Type type)
-        : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
-        // assert (to_bitmap_size(type) == 0);
-    }
-    constexpr ~PermissionBits() {
-        if (permission_bitmap != nullptr) {
-            delete[] permission_bitmap;
-            permission_bitmap = nullptr;
-        }
-    }
+    PermissionBits(b64 basic, b64 *bitmap, Type type);
+    // used by capability with no permission bitmap
+    PermissionBits(b64 basic, Type type);
+    ~PermissionBits();
 
-    constexpr PermissionBits(PermissionBits &&other) noexcept
-        : basic_permissions(other.basic_permissions),
-          permission_bitmap(other.permission_bitmap),
-          type(other.type) {
-        other.permission_bitmap = nullptr;
-    }
-    constexpr PermissionBits &operator=(PermissionBits &&other) noexcept {
-        // assert (this.type == other.type);
-        if (this != &other) {
-            basic_permissions = other.basic_permissions;
+    PermissionBits(PermissionBits &&other);
+    PermissionBits &operator=(PermissionBits &&other);
 
-            if (permission_bitmap != nullptr)
-                delete[] permission_bitmap;
-            permission_bitmap       = other.permission_bitmap;
-            other.permission_bitmap = nullptr;
-        }
-        return *this;
-    }
+    PermissionBits(const PermissionBits &other);
+    PermissionBits &operator=(const PermissionBits &other);
 
-    PermissionBits(const PermissionBits &other)
-        : PermissionBits(other.basic_permissions, other.permission_bitmap,
-                         other.type) {}
-    PermissionBits &operator=(const PermissionBits &other) {
-        // assert (this.type == other.type);
-        if (this != &other) {
-            basic_permissions = other.basic_permissions;
-            memcpy(permission_bitmap, other.permission_bitmap,
-                   to_bitmap_size(type));
-        }
-        return *this;
-    }
+    bool imply(const PermissionBits &other) const noexcept;
 
-    constexpr bool imply(const PermissionBits &other) const noexcept {
-        if (this->type != other.type) {
-            return false;
-        }
-        // 首先比较 basic_permissions
-        if (!BITS_IMPLIES(this->basic_permissions, other.basic_permissions)) {
-            return false;
-        }
-        // 之后再比较 permission_bitmap
-        size_t bitmap_size      = to_bitmap_size(this->type);
-        bool permission_implied = true;
-        /**
-         * 为什么采用逐b64比较并将结果进行累加,
-         * 而不是在判定到某一位不满足时直接返回false? 在这里, 我的考量是,
-         * 权限位图并不会特别巨大(不超过4096字节), 且绝大多数情况下,
-         * 权限校验都是成功的. 因此, 提前返回无法节省多少时间,
-         * 甚至可能因为分支预测失败而带来额外的开销(虽然概率不大) 而且,
-         * 我选择相信编译器.
-         * 编译器极有可能会使用SIMD指令来优化这个循环(尽管RISC-V下好像没有,
-         * 但似乎存在类似的向量指令集) 同时也能够避免分支预测失败带来的性能损失.
-         * 综上所述, 我认为这种实现方式在大多数情况下性能更优.
-         * 也许我是错的? 但我确实认为这种方法是效率更加的选择.
-         * 也许需要做一个测试, 但还是等到后面说吧.
-         * TODO: 进行性能测试, 比较提前返回与否的性能差异
-         */
-        for (size_t i = 0; i < bitmap_size; i++) {
-            permission_implied &= BITS_IMPLIES(this->permission_bitmap[i],
-                                               other.permission_bitmap[i]);
-        }
-        return permission_implied;
-    }
-
-    constexpr bool imply(b64 basic_permission) const noexcept {
+    inline bool imply(b64 basic_permission) const noexcept {
         return BITS_IMPLIES(this->basic_permissions, basic_permission);
     }
 
     // 从第offset个位出发, 检查至多64个位的权限是否被包含
     // 注: 当 offset + 64 超过权限位图范围时, 只检查至多权限位图范围的部分
-    constexpr bool imply(b64 permission_b64, size_t offset) const noexcept {
-        if (this->type != Type::CAPSPACE) {
-            return false;
-        }
-        size_t bit_pos      = offset;
-        size_t bitmap_index = bit_pos / 64;
-        size_t bit_offset   = bit_pos % 64;
-
-        b64 relevant_bits = this->permission_bitmap[bitmap_index] >> bit_offset;
-        // 如果 permission_b64 跨越了两个b64
-        if (bit_offset + 64 > 64) {
-            relevant_bits |= this->permission_bitmap[bitmap_index + 1]
-                             << (64 - bit_offset);
-        }
-        return BITS_IMPLIES(relevant_bits, permission_b64);
-    }
+    bool imply(b64 permission_b64, size_t offset) const noexcept;
 };

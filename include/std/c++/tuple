@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -91,7 +92,7 @@ namespace std {
 
     template <typename... Types>
     auto make_tuple(Types &&...args) {
-        return tuple<std::remove_cv_t<Types>...>(std::forward<Types>(args)...);
+        return tuple<std::decay_t<Types>...>(std::forward<Types>(args)...);
     }
 
     // get

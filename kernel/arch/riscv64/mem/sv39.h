@@ -17,6 +17,7 @@
 #include <mem/gfp.h>
 #include <sus/types.h>
 #include <kio.h>
+#include <cassert>
 #include <cstring>
 #include <sus/logger.h>
 
@@ -286,7 +287,7 @@ public:
             PTE *pt = (PTE *)PA2KPA(from_ppn(pte->ppn));
             // TODO: check pt not null
             pte     = &pt[vpn[level - 1]];
-            // assert(level - 1 >= 0);
+            assert(level - 1 >= 0);
         }
         return {pte, PageSize::SIZE_4K};
     }
@@ -501,7 +502,7 @@ public:
                 // 页面不存在, 无法修改
                 return;
             }
-            // assert(get_size(psize) >= PAGESIZE)
+            assert(get_size(psize) >= PAGESIZE);
             _va += get_size(psize);
             cnt_remaining -= get_size(psize) / PAGESIZE;
         }

@@ -13,6 +13,7 @@
 #include <arch/trait.h>
 #include <cap/capability.h>
 #include <cap/capcall.h>
+#include <cap/permission.h>
 #include <configuration.h>
 #include <kio.h>
 #include <mem/alloc.h>
@@ -163,7 +164,7 @@ void pre_init(void) {
 }
 
 void cap_test(void) {
-    // 目前为止, 只是为了测试其是否会产生编译错误
+    // 这部分的测试仅仅是为了测试编译有效性
     CapHolder holder;
     auto cap_opt = holder.lookup<CSpaceBase>(CapIdx(0));
     // 绝大多数情况下, 你都不应该这么做来解包
@@ -202,8 +203,11 @@ void cap_test(void) {
         LOGGER::ERROR("分配槽位slot2失败");
         return;
     }
-    CSpaceCalls::clone<CSpaceBase>(cap, &holder, CapIdx(space_idx, slot2),
+    CSpaceCalls::clone<CSpaceBase>(cap, CapIdx(space_idx, slot2),
                                    &holder, CapIdx(space_idx, slot));
+    // to check the compiler errors
+    CSpaceCalls::create<CSpaceBase>(cap, &holder, CapIdx(space_idx, slot2 + 1),
+                                   PermissionBits(1, PermissionBits::Type::NONE), sp_opt.value());
 }
 
 void kernel_setup(void) {

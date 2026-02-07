@@ -9,12 +9,13 @@
  *
  */
 
-#include <string.h>
 #include <sus/mstring.h>
 #include <sus/raii.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
 
+#include <cassert>
+#include <cstring>
 #include <type_traits>
 
 namespace path_util {
@@ -70,7 +71,7 @@ namespace path_util {
     bool prefix(const T &path, const T &pfx) {
         size_t pfx_len = _strlen(pfx);
         if (pfx_len == 1) {
-            // assert (*pfx == '/');
+            assert(*pfx == '/');
             return true;  // 根路径是所有路径的前缀
         }
         return _prefix(path, pfx) &&

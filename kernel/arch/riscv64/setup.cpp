@@ -18,6 +18,7 @@
 #include <libfdt.h>
 #include <sbi/sbi.h>
 #include <sus/logger.h>
+#include <sus/units.h>
 
 int hart_id;
 void *dtb_ptr;
@@ -41,13 +42,13 @@ void Riscv64Initialization::pre_init(void) {
         while (true);
     }
 
-    int hz = get_clock_freq_hz();
-    if (hz <= 0) {
+    units::frequency hz = get_clock_freq();
+    if (hz.to_hz() == 0) {
         // 时钟频率获取失败
         while (true);
     }
 
-    DEVICE::DEBUG("时钟频率为 %d Hz", hz);
+    DEVICE::DEBUG("时钟频率为 %d Hz", hz.to_hz());
 }
 
 // 触发非法指令异常
@@ -72,16 +73,14 @@ void Riscv64Initialization::post_init(void) {
     trigger_illegal_instruction();
 
     // 我们希望50ms触发1次时钟中断(调试用)
-    // 下面第一个单位为Hz, 第二个单位为mHz(10^-3 Hz)
-    int freq = get_clock_freq_hz();
+    units::frequency freq = get_clock_freq();
     if (freq < 0) {
         // 使用QEMU virt机器的默认值10MHz
-        freq = 10000000;
+        freq = 10_MHz;
         DEVICE::ERROR("获取时钟频率失败, 使用默认值 %d Hz", freq);
     }
-    DEVICE::INFO("时钟频率: %d Hz = %d KHz = %d MHz", freq, freq / 1000,
-             freq / 1000000);
-    init_timer(freq, 20000);
+    DEVICE::INFO("时钟频率: %d Hz = %d KHz = %d MHz", freq.to_hz(), freq.to_khz(), freq.to_mhz());
+    init_timer(freq, 100_Hz); //希望 每10ms触发一次时钟中断
     DEVICE::INFO("启用时钟中断...");
 
     // 开启中断

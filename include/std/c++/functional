@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include <utility>
 #include <cstring>
+#include <utility>
 
 namespace std {
 
@@ -37,11 +37,10 @@ namespace std {
         }
     };
 
-    template<>
+    template <>
     struct equal_to<const char *> {
         constexpr bool operator()(const char *a, const char *b) const noexcept {
             return strcmp(a, b) == 0;
         }
     };
-
 }  // namespace std

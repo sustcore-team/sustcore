@@ -167,6 +167,6 @@ namespace Handlers {
 
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval, ArchContext *ctx) {
         // 重新设置下一次时钟中断
-        sbi_legacy_set_timer(csr_get_time() + timer_info.increasment);
+        sbi_legacy_set_timer(csr_get_time() + timer_info.increment);
     }
 }  // namespace Handlers
