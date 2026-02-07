@@ -302,8 +302,8 @@ namespace util {
             if (other.empty()) {
                 U_init_sentinel(D_sentinel);
             } else {
-                U_next(&D_sentinel)         = U_next(&D_sentinel);
-                U_prev(&D_sentinel)         = U_prev(&D_sentinel);
+                U_next(&D_sentinel)         = U_next(&other.D_sentinel);
+                U_prev(&D_sentinel)         = U_prev(&other.D_sentinel);
                 U_prev(U_next(&D_sentinel)) = &D_sentinel;
                 U_next(U_prev(&D_sentinel)) = &D_sentinel;
                 U_init_sentinel(other.D_sentinel);
@@ -922,6 +922,11 @@ namespace util {
         friend class ArrayList<_Tp>;
     };
 
+    /**
+     * @brief 数组形式的动态列表，支持随机访问和动态扩容
+     *
+     * @tparam _Tp 对象结构。其应当是一个POD类型
+     */
     template <typename _Tp>
     class ArrayList {
     public:
@@ -953,10 +958,14 @@ namespace util {
         }
         ArrayList& operator=(const ArrayList& other) {
             if (this != &other) {
+                _Tp* new_space = new _Tp[other.D_capacity];
+                if (new_space == nullptr) {
+                    return *this;
+                }
                 if (D_data != nullptr) {
                     delete[] D_data;
                 }
-                D_data     = new _Tp[other.D_capacity];
+                D_data     = new_space;
                 D_size     = other.D_size;
                 D_capacity = other.D_capacity;
                 memcpy(D_data, other.D_data, D_capacity * sizeof(_Tp));

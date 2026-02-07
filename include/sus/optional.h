@@ -23,6 +23,7 @@ namespace util {
         };
     };
 
+    // _Tp应当为一个POD类型
     enum class HasValueType { HAS_VALUE = 0, NO_VALUE = 1 };
     template <typename _Tp, typename _Ep = HasValueType,
               _Ep _Success = HasValueType::HAS_VALUE,

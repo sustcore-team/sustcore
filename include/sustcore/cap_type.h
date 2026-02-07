@@ -19,6 +19,7 @@ enum class CapType {
 };
 
 union CapIdx {
+    // Note: 我们不考虑大端序机器
     struct {
         // 低位
         b32 slot : 32;

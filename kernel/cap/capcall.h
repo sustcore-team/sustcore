@@ -174,6 +174,8 @@ public:
         return _payload(space_cap)->index();
     }
 
+    // 注意保持clone和migrate操作的原子性(进入SMP后)
+    // 到时候注意加锁
     template <ExtendedPayloadTrait Payload>
     static CapErrCode clone(Cap *dst_space, CapIdx dst_idx,
                             CapHolder *src_owner, CapIdx src_idx) {
@@ -366,7 +368,7 @@ public:
             {
                 // 找到一个可用的空闲槽位
                 // 额外检验: 其索引不为(0, 0)
-                if (space->index() + i == 0) {
+                if (CapIdx(space->index(), i).nullable()) {
                     continue;  // 跳过(0, 0)槽位
                 }
                 return i;

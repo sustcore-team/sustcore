@@ -179,7 +179,7 @@ public:
         requires DrvdSpaceTrait<T>
     static T *cast(CSpaceBase *base) {
         if (base->is<T>()) {
-            return reinterpret_cast<T *>(base);
+            return static_cast<T *>(base);
         }
         return nullptr;
     }
@@ -188,7 +188,7 @@ public:
         requires DrvdSpaceTrait<T>
     static const T *cast(CSpaceBase *base) {
         if (base->is<T>()) {
-            return reinterpret_cast<T *>(base);
+            return static_cast<T *>(base);
         }
         return nullptr;
     }
@@ -197,7 +197,7 @@ public:
         requires DrvdSpaceTrait<T>
     T *as() {
         if (is<T>()) {
-            return reinterpret_cast<T *>(this);
+            return static_cast<T *>(this);
         }
         return nullptr;
     }
@@ -206,7 +206,7 @@ public:
         requires DrvdSpaceTrait<T>
     const T *as() const {
         if (is<T>()) {
-            return reinterpret_cast<T *>(this);
+            return static_cast<T *>(this);
         }
         return nullptr;
     }
@@ -337,6 +337,7 @@ protected:
      * 当某个通过CUniverse提供的space()方法作为Capability对象的Payload被访问时
      * 才会通过__new_space方法创建对应的CSpace对象
      * 并在CUniverse析构时销毁所有已创建的CSpace对象
+     * CUniverse对CSpace拥有绝对所有权
      */
     Space *_spaces[SpaceCount];
     CapHolder *_holder;
@@ -354,7 +355,7 @@ protected:
         // 因此只在CUniverse被销毁时再销毁CSpace
         // 该函数只是为了说明引用计数达到零时的处理方式,
         // 实际上我们并不需要在此处销毁CSpace
-        CAPABILITY::DEBUG("Space at %u ref_count reached zero.", sp->index());
+        CAPABILITY::DEBUG("空间%u的引用计数归零", sp->index());
     }
 
 public:
@@ -362,8 +363,11 @@ public:
         memset(_spaces, 0, sizeof(_spaces));
     }
     ~__CUniverse() {
-        for (int i = 0; i < SpaceCount; i++) {
+        for (size_t i = 0; i < SpaceCount; i++) {
             if (_spaces[i] != nullptr) {
+                if (_spaces[i]->ref_count() > 0) {
+                    CAPABILITY::WARN("空间%u在销毁时引用计数不为零, 可能存在资源泄漏", i);
+                }
                 delete _spaces[i];
             }
         }

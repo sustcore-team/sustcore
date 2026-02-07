@@ -47,12 +47,7 @@ auto CSpaceCalls::basic::migrate(Cap *src, CapHolder *owner,
 
 auto CSpaceCalls::basic::downgrade(Cap *src, const PermissionBits &new_perm)
     -> CapErrCode {
-    if (!_perm(src).imply(new_perm)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
-    }
-
-    _perm(src) = new_perm;
-    return CapErrCode::SUCCESS;
+    return _perm(src).downgrade(new_perm);
 }
 
 auto CSpaceCalls::basic::create(CSpaceBase *space, CapHolder *owner, CapIdx idx,

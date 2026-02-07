@@ -15,6 +15,7 @@
 #include <cap/capdef.h>
 #include <string.h>
 #include <sus/types.h>
+#include <sustcore/cap_type.h>
 
 namespace perm {
     namespace basic {
@@ -82,7 +83,7 @@ struct PermissionBits {
     // 对这些对象进行更细粒度的权限控制时, 就需要使用权限位图
     b64 *permission_bitmap;
 
-    enum class Type { NONE = 0, BASIC = 1, CAPSPACE = 2 };
+    enum class Type : int { NONE = 0, BASIC = 1, CAPSPACE = 2 };
     const Type type;
 
     constexpr static size_t to_bitmap_size(Type type) noexcept {
@@ -103,10 +104,14 @@ struct PermissionBits {
     ~PermissionBits();
 
     PermissionBits(PermissionBits &&other);
-    PermissionBits &operator=(PermissionBits &&other);
-
     PermissionBits(const PermissionBits &other);
-    PermissionBits &operator=(const PermissionBits &other);
+
+    // permission bits不允许被赋值
+    PermissionBits &operator=(PermissionBits &&) = delete;
+    PermissionBits &operator=(const PermissionBits &)  = delete;
+
+    // 但是我们提供一个downgrade方法, 允许在不改变权限类型的前提下, 将权限位进行降级
+    CapErrCode downgrade(const PermissionBits &new_perm);
 
     bool imply(const PermissionBits &other) const noexcept;
 

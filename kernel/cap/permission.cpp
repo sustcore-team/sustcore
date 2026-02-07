@@ -10,16 +10,27 @@
  */
 
 #include <cap/permission.h>
+#include <kio.h>
 
 PermissionBits::PermissionBits(b64 basic, b64 *bitmap, Type type)
-    : basic_permissions(basic),
-      permission_bitmap(new b64[to_bitmap_size(type)]),
-      type(type) {
-    memcpy(permission_bitmap, bitmap, to_bitmap_size(type) * sizeof(b64));
+    : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
+    size_t bitmap_size = to_bitmap_size(type);
+    if (bitmap_size > 0) {
+        permission_bitmap = new b64[bitmap_size];
+        if (bitmap != nullptr)
+            memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
+        else
+            memset(permission_bitmap, 0, bitmap_size * sizeof(b64));
+    } else if (bitmap != nullptr) {
+        CAPABILITY::WARN(
+            "具有类型%u的权限对象不应提供权限位图, 但实际提供了非空指针, "
+            "已忽略该指针",
+            static_cast<int>(type));
+    }
 }
 PermissionBits::PermissionBits(b64 basic, Type type)
     : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
-    assert (to_bitmap_size(type) == 0);
+    assert(to_bitmap_size(type) == 0);
 }
 PermissionBits::~PermissionBits() {
     if (permission_bitmap != nullptr) {
@@ -35,40 +46,9 @@ PermissionBits::PermissionBits(PermissionBits &&other)
     other.permission_bitmap = nullptr;
 }
 
-PermissionBits &PermissionBits::operator=(PermissionBits &&other) {
-    assert (this->type == other.type);
-    if (this != &other) {
-        basic_permissions = other.basic_permissions;
-
-        if (permission_bitmap != nullptr)
-            delete[] permission_bitmap;
-        permission_bitmap       = other.permission_bitmap;
-        other.permission_bitmap = nullptr;
-    }
-    return *this;
-}
-
 PermissionBits::PermissionBits(const PermissionBits &other)
     : PermissionBits(other.basic_permissions, other.permission_bitmap,
                      other.type) {}
-
-PermissionBits &PermissionBits::operator=(const PermissionBits &other) {
-    assert (this->type == other.type);
-    if (this != &other) {
-        basic_permissions = other.basic_permissions;
-        if (other.permission_bitmap == nullptr) {
-            if (this->permission_bitmap != nullptr)
-                delete[] this->permission_bitmap;
-            this->permission_bitmap = nullptr;
-        } else {
-            if (permission_bitmap == nullptr)
-                permission_bitmap = new b64[to_bitmap_size(type)];
-            memcpy(permission_bitmap, other.permission_bitmap,
-                   to_bitmap_size(type) * sizeof(b64));
-        }
-    }
-    return *this;
-}
 
 bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     if (this->type != other.type) {
@@ -139,4 +119,22 @@ bool PermissionBits::imply(b64 permission_b64, size_t offset) const noexcept {
                          << (64 - bit_offset);
     }
     return BITS_IMPLIES(relevant_bits, permission_b64);
+}
+
+CapErrCode PermissionBits::downgrade(const PermissionBits &new_perm) {
+    if (this->type != new_perm.type) {
+        return CapErrCode::TYPE_NOT_MATCHED;
+    }
+    if (!imply(new_perm)) {
+        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+    }
+
+    this->basic_permissions = new_perm.basic_permissions;
+    // imply方法会帮我们保证this->permission_bitmap与new_perm.permission_bitmap非空
+    // however, 我们依然在这个地方放个断言
+    assert(this->permission_bitmap != nullptr);
+    assert(new_perm.permission_bitmap != nullptr);
+    memcpy(this->permission_bitmap, new_perm.permission_bitmap,
+           to_bitmap_size(this->type) * sizeof(b64));
+    return CapErrCode::SUCCESS;
 }
