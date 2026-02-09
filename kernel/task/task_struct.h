@@ -13,29 +13,21 @@
 
 #include <configuration.h>
 #include <sus/list.h>
+#include <task/schedule.h>
+
+// 选择调度算法
+template <typename SU>
+using Scheduler   = scheduler::RR<SU, 10>;
+using ThreadState = SUState;
 
 typedef int tid_t;
 typedef int pid_t;
 
-enum class ThreadState { EMPTY = 0, READY = 1, RUNNING = 2, YIELD = 3 };
-
-constexpr const char *to_string(ThreadState state) {
-    switch (state) {
-        case ThreadState::EMPTY:   return "EMPTY";
-        case ThreadState::READY:   return "READY";
-        case ThreadState::RUNNING: return "RUNNING";
-        case ThreadState::YIELD:   return "YIELD";
-        default:                   return "UNKNOWN";
-    }
-}
-
 struct PCB;
-
-struct TCB {
+struct TCB : public Scheduler<TCB>::Storage {
     // 总线程链表
     util::ListHead<TCB> __total_head;
     util::ListHead<TCB> __process_head;
-    util::ListHead<TCB> __schedule_head;
 
     // TID
     tid_t tid;
@@ -50,22 +42,7 @@ struct TCB {
         // 入口点
         void *const entrypoint;
     } runtime;
-    union Schedule {
-        struct {
-        } rp0;
-        struct {
-            int priority;
-            int count;
-        } rp1;
-        struct {
-            int priority;
-            int count;
-        } rp2;
-        struct {
-            int runtime;
-        } rp3;
-    } schedule;
-    TCB(tid_t tid, PCB *pcb, Runtime runtime, Schedule schedule);
+    TCB(tid_t tid, PCB *pcb, Runtime runtime);
     // 默认Constructor
     TCB();
 };
@@ -85,8 +62,7 @@ struct PCB {
     int rp_level;
 
     // 线程链表
-    using ThreadList =
-        util::IntrusiveList<TCB, &TCB::__process_head>;
+    using ThreadList = util::IntrusiveList<TCB, &TCB::__process_head>;
     ThreadList threads;
     TCB *main_thread;
 

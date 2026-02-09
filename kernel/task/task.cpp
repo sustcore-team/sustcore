@@ -15,14 +15,14 @@
 
 // task_struct.h
 
-TCB::TCB(tid_t tid, PCB *pcb, Runtime runtime, Schedule schedule)
-    : tid(tid), pcb(pcb), runtime(runtime), schedule(schedule)
+TCB::TCB(tid_t tid, PCB *pcb, Runtime runtime)
+    : tid(tid), pcb(pcb), runtime(runtime)
 {
 }
 
 // Empty Constructor, for intrusive linked list
 TCB::TCB()
-    : tid(0), pcb(nullptr), runtime({}), schedule({})
+    : tid(0), pcb(nullptr), runtime({})
 {
 }
 

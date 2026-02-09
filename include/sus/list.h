@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include <string.h>
-
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
