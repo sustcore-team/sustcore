@@ -1,4 +1,4 @@
-# 关于 qemu 模拟时 vectored 模式的 stvec 行为异常的报告
+# 旧版本qemu中对stvec寄存器处理逻辑的错误
 
 ## 1. `stvec` 的正常行为
 
@@ -12,7 +12,7 @@
 当 `MODE = 0(direct)` 时, 中断发生时 `pc = BASE << 2`. 或者说 `pc = stvec & ~0b11`.
 当 `MODE = 1(vectored)`时, 如果是异步中断发生, 则`pc = BASE << 2 + cause * 4`.
 
-在最新版的`qemu`中, 其表现为
+在最新版的`qemu`中, 其表现为([target/riscv/cpu_helper.c#L2368](https://gitlab.com/qemu-project/qemu/-/blob/c4a9d49c7b23a02c646ebac756519c15a24f7ecc/target/riscv/cpu_helper.c#L2368))
 
 ```c
 env->pc = (env->stvec >> 2 << 2) +
@@ -37,9 +37,14 @@ env->pc = (env->stvec >> 2 << 2) +
 ## 5. 原因分析
 
 查看`qemu`源码, 发现在2019年之前的`qemu`, 对于`stvec`的处理为
+
 ```c
-en
+/* handle the trap in S-mode */
+/* No need to check STVEC for misaligned - lower 2 bits cannot be set */
+env->pc = env->stvec;
 ```
+
+是直接将`stvec`的值赋给了`pc`, 而没有进行任何处理. 因此在`vectored`模式下, `pc`寄存器的值就等于`stvec`, 而不是正确的中断向量地址.
 
 由于使用的`qemu`为从`ubuntu`官方源下载的, 猜测错误在于该版本的`qemu`还未使用正确的处理逻辑.
 
@@ -54,11 +59,12 @@ Copyright (c) 2003-2023 Fabrice Bellard and the QEMU Project developers
 
 该部分处理逻辑在2019年已被更新. 而我们使用的`qemu`版本为8.2.0, 依理论应已修复。
 
-## 7. 解决方案
-
-更新`qemu`至10.1.0, 问题解决. 发现10.0.3版本的`qemu`中该问题仍然存在。
-
 在qemu仓库中发现该issue
 https://gitlab.com/qemu-project/qemu/-/issues/2855
 
-因此该问题刚被发现不久。
+新的处理逻辑则是由commit [RISC-V: Add support for vectored interrupts](https://gitlab.com/qemu-project/qemu/-/commit/acbbb94e5730c9808830938e869d243014e2923a) 提交的, 该commit提交于2019-03-16.
+但新处理逻辑直到10.1.0版本才被合并进master分支中, 因此先前版本中该问题仍然存在.
+
+## 7. 解决方案
+
+更新`qemu`至10.1.0.
