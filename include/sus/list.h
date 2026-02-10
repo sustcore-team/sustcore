@@ -29,6 +29,10 @@ namespace util {
     struct ListHead {
         Node* prev;
         Node* next;
+
+        void clear(void) {
+            prev = next = nullptr;
+        }
     };
 
     // 侵入式链表节点

@@ -29,4 +29,8 @@ namespace std {
         static_cast<To>(declval<From>());
     } && is_convertible_v<From, To>;
 
+    template <class Derived, class Base>
+    concept derived_from =
+        std::is_base_of_v<Base, Derived> &&
+        std::is_convertible_v<const volatile Derived *, const volatile Base *>;
 }  // namespace std

@@ -13,21 +13,17 @@
 
 #include <configuration.h>
 #include <sus/list.h>
-#include <task/schedule.h>
-
-// 选择调度算法
-template <typename SU>
-using Scheduler   = scheduler::RR<SU, 10>;
-using ThreadState = SUState;
+#include <task/schedule/configuration.h>
 
 typedef int tid_t;
 typedef int pid_t;
 
 struct PCB;
-struct TCB : public Scheduler<TCB>::Storage {
+struct TCB : public Scheduler::ThreadBase {
     // 总线程链表
-    util::ListHead<TCB> __total_head;
-    util::ListHead<TCB> __process_head;
+    util::ListHead<TCB> __total_head = {nullptr, nullptr};
+    util::ListHead<TCB> __process_head = {nullptr, nullptr};
+    util::ListHead<TCB> __waitrel_head = {nullptr, nullptr};
 
     // TID
     tid_t tid;
@@ -42,6 +38,7 @@ struct TCB : public Scheduler<TCB>::Storage {
         // 入口点
         void *const entrypoint;
     } runtime;
+
     TCB(tid_t tid, PCB *pcb, Runtime runtime);
     // 默认Constructor
     TCB();
