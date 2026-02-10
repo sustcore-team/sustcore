@@ -12,6 +12,7 @@
 #pragma once
 
 #include <sus/units.h>
+#include <cstddef>
 
 /**
  * @brief 获得时钟频率
@@ -23,7 +24,8 @@ units::frequency get_clock_freq(void);
 struct TimerInfo {
     units::frequency freq;
     units::frequency expected_freq;
-    int increment;
+    size_t last_ticks;
+    size_t increment;
 };
 
 extern TimerInfo timer_info;

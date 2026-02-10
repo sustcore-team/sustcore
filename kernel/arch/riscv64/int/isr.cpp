@@ -12,9 +12,11 @@
 #include <arch/riscv64/configuration.h>
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
+#include <schd/hooks.h>
 #include <sus/logger.h>
 #include <kio.h>
 #include <sbi/sbi.h>
+#include <task/task_struct.h>
 
 namespace Exceptions {
     constexpr umb_t INST_MISALIGNED    = 0;   // 指令地址不对齐
@@ -166,7 +168,22 @@ namespace Handlers {
     }
 
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval, ArchContext *ctx) {
+        // 计算时间差
+        size_t current_ticks = csr_get_time();
+
+        if (scheduler != nullptr) {
+            TCB *current_thread = scheduler->current();
+            // 信息收集
+            if (current_thread != nullptr) {
+                size_t gap_ticks = current_ticks - timer_info.last_ticks;
+                schd::hooks::on_tick(current_thread, gap_ticks);
+            }
+
+            // 调用调度方法
+        }
+
+        timer_info.last_ticks = current_ticks;
         // 重新设置下一次时钟中断
-        sbi_legacy_set_timer(csr_get_time() + timer_info.increment);
+        sbi_legacy_set_timer(current_ticks + timer_info.increment);
     }
 }  // namespace Handlers

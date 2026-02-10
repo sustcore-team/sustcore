@@ -12,16 +12,19 @@
 #pragma once
 
 #include <configuration.h>
+#include <schd/configuration.h>
 #include <sus/list.h>
-#include <task/schedule/configuration.h>
 
 typedef int tid_t;
 typedef int pid_t;
 
 struct PCB;
-struct TCB : public Scheduler::ThreadBase {
+
+struct TCB : public _Scheduler<TCB>::MetadataType {
+    using MetadataType = _Scheduler<TCB>::MetadataType;
+
     // 总线程链表
-    util::ListHead<TCB> __total_head = {nullptr, nullptr};
+    util::ListHead<TCB> __total_head   = {nullptr, nullptr};
     util::ListHead<TCB> __process_head = {nullptr, nullptr};
     util::ListHead<TCB> __waitrel_head = {nullptr, nullptr};
 
@@ -43,6 +46,9 @@ struct TCB : public Scheduler::ThreadBase {
     // 默认Constructor
     TCB();
 };
+
+using Scheduler = _Scheduler<TCB>;
+extern Scheduler *scheduler;
 
 struct PCB {
     // 总进程链表

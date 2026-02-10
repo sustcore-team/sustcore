@@ -12,7 +12,7 @@ objects := main.o cxa.o
 deps := main.d cxa.d
 attachments :=
 
-subdirs := ./arch/$(architecture)/ ./mem ./task ./device ./vfs ./cap
+subdirs := ./arch/$(architecture)/  ./cap  ./device ./mem ./schd ./task ./vfs
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)

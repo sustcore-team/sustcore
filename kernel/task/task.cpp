@@ -13,6 +13,8 @@
 #include <sus/id.h>
 #include <task/task.h>
 
+Scheduler *scheduler = nullptr;
+
 // task_struct.h
 
 TCB::TCB(tid_t tid, PCB *pcb, Runtime runtime)

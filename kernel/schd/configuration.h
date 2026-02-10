@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include <task/schedule/fcfs.h>
-#include <task/schedule/rr.h>
+#include <schd/fcfs.h>
+#include <schd/rr.h>
 
-using Scheduler = scheduler::RR;
-using ThreadBase = Scheduler::ThreadBase;
+template <typename TCBType>
+using _Scheduler = schd::RR<TCBType>;
