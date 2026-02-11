@@ -21,6 +21,7 @@
 #include <mem/kaddr.h>
 #include <sus/baseio.h>
 #include <sus/logger.h>
+#include <sus/tree.h>
 #include <sus/types.h>
 #include <symbols.h>
 #include <task/task.h>
@@ -32,6 +33,7 @@
 bool post_init_flag = false;
 
 void buddy_test_complex();
+void tree_test(void);
 
 int kputs(const char *str) {
     if (!post_init_flag) {
@@ -116,7 +118,8 @@ void post_init(void) {
     // 架构后初始化
     Initialization::post_init();
 
-    buddy_test_complex();
+    // buddy_test_complex();
+    tree_test();
 
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
@@ -203,11 +206,12 @@ void cap_test(void) {
         LOGGER::ERROR("分配槽位slot2失败");
         return;
     }
-    CSpaceCalls::clone<CSpaceBase>(cap, CapIdx(space_idx, slot2),
-                                   &holder, CapIdx(space_idx, slot));
+    CSpaceCalls::clone<CSpaceBase>(cap, CapIdx(space_idx, slot2), &holder,
+                                   CapIdx(space_idx, slot));
     // to check the compiler errors
-    CSpaceCalls::create<CSpaceBase>(cap, &holder, CapIdx(space_idx, slot2 + 1),
-                                   PermissionBits(1, PermissionBits::Type::NONE), sp_opt.value());
+    CSpaceCalls::create<CSpaceBase>(
+        cap, &holder, CapIdx(space_idx, slot2 + 1),
+        PermissionBits(1, PermissionBits::Type::NONE), sp_opt.value());
 }
 
 void kernel_setup(void) {
@@ -301,4 +305,75 @@ void buddy_test_complex() {
     }
 
     LOGGER::INFO("========== Complex Buddy Allocator Test End ==========");
+}
+
+constexpr size_t TREE_SIZE = 8192;
+struct TestTree {
+    util::TreeNode<TestTree, util::tree_lca_tag> tree_node;
+    int idx;
+} NODES[TREE_SIZE];
+
+void tree_test(void) {
+    for (size_t i = 0 ; i < TREE_SIZE ; i ++) {
+        NODES[i].idx = i;
+    }
+
+    using Tree = util::Tree<TestTree, &TestTree::tree_node, util::tree_lca_tag>;
+    Tree::link_child(NODES[0], NODES[1]);
+    Tree::link_child(NODES[0], NODES[2]);
+    Tree::link_child(NODES[0], NODES[3]);
+    Tree::link_child(NODES[0], NODES[4]);
+
+    Tree::link_child(NODES[1], NODES[5]);
+    Tree::link_child(NODES[1], NODES[6]);
+    Tree::link_child(NODES[1], NODES[7]);
+
+    Tree::link_child(NODES[2], NODES[8]);
+    Tree::link_child(NODES[2], NODES[9]);
+
+    Tree::link_child(NODES[3], NODES[10]);
+
+    Tree::link_child(NODES[4], NODES[11]);
+
+    Tree::link_child(NODES[5], NODES[12]);
+    Tree::link_child(NODES[5], NODES[13]);
+
+    Tree::link_child(NODES[3], NODES[14]);
+
+    Tree::link_child(NODES[13], NODES[15]);
+
+    for (int i = 0 ; i < 16 ; i ++) {
+        if (Tree::is_root(NODES[i])) {
+            int cs = Tree::get_children(NODES[i]).size();
+            kprintf("节点 %d 为根, 拥有 %d 个子节点\n", i, cs);
+        }
+        else {
+            int p = Tree::get_parent(NODES[i]).idx;
+            int cs = Tree::get_children(NODES[i]).size();
+            kprintf("节点 %d 的父亲为节点 %d, 拥有 %d 个子节点\n", i, p ,cs);
+        }
+    }
+
+    Tree::foreach_pre(NODES[0], [](TestTree &node) {
+        kprintf("%d ", node.idx);
+    });
+
+    kprintf("\n");
+
+    auto print_lca = [=](size_t a, size_t b) {
+        kprintf ("%d 与 %d 的 LCA 为 %d \n", a, b, Tree::lca(&NODES[a], &NODES[b])->idx);
+    };
+
+    print_lca(0, 1);
+    print_lca(0, 2);
+
+    print_lca(1, 2);
+    print_lca(5, 7);
+    print_lca(4, 8);
+    print_lca(10, 14);
+    print_lca(11, 13);
+    print_lca(12, 15);
+
+    print_lca(0, 0);
+    print_lca(12, 12);
 }
