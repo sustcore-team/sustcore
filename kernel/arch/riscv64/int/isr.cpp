@@ -174,8 +174,15 @@ namespace Handlers {
         size_t gap_ticks = current_ticks - timer_info.last_ticks;
 
         // 发布TimerTickEvent
-        TimerTickEvent event(gap_ticks);
-        EventDispatcher<TimerTickEvent>::dispatch(event);
+        TimerTickEvent tick_event(gap_ticks);
+        EventDispatcher<TimerTickEvent>::dispatch(tick_event);
+
+        // 发布SchedulerEvent
+        SchedulerEvent schd_event(ctx);
+        EventDispatcher<SchedulerEvent>::dispatch(schd_event);
+        if (schd_event.ret_ctx != nullptr) {
+            ctx->kstack_sp = (umb_t)schd_event.ret_ctx;
+        }
 
         timer_info.last_ticks = current_ticks;
         // 重新设置下一次时钟中断

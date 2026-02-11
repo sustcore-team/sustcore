@@ -12,6 +12,7 @@
 #pragma once
 
 #include <schd/metadata.h>
+#include <configuration.h>
 
 namespace schd {
     // 调度器概念
@@ -33,6 +34,12 @@ namespace schd {
         {
             policy->exit(thread)
         } -> std::same_as<void>;
+        {
+            Policy::get_instance()
+        } -> std::same_as<Policy *>;
+        {
+            Policy::init_instance()
+        } -> std::same_as<void>;
     };
 
     template <typename TCBType, typename Metadata>
@@ -49,4 +56,6 @@ namespace schd {
             return reinterpret_cast<MetadataType *>(tcb);
         }
     };
+
+    Context *do_schedule(Context *ctx);
 }  // namespace schd

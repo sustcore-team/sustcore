@@ -12,13 +12,17 @@
 #pragma once
 
 #include <configuration.h>
-#include <schd/configuration.h>
+#include <schd/policies.h>
 #include <sus/list.h>
 
 typedef int tid_t;
 typedef int pid_t;
 
 struct PCB;
+
+// 调度算法选择
+template <typename TCB>
+using _Scheduler = schd::RR<TCB>;
 
 struct TCB : public _Scheduler<TCB>::MetadataType {
     using MetadataType = _Scheduler<TCB>::MetadataType;
@@ -33,13 +37,13 @@ struct TCB : public _Scheduler<TCB>::MetadataType {
     PCB *pcb;
     struct Runtime {
         // 上下文
-        Context *const ctx;
+        Context *ctx;
         // 内核栈
-        void *const kstack;
+        void *kstack;
         // 栈顶
-        void *const stack_top;
+        void *stack_top;
         // 入口点
-        void *const entrypoint;
+        void *entrypoint;
     } runtime;
 
     TCB(tid_t tid, PCB *pcb, Runtime runtime);
@@ -48,7 +52,6 @@ struct TCB : public _Scheduler<TCB>::MetadataType {
 };
 
 using Scheduler = _Scheduler<TCB>;
-extern Scheduler *scheduler;
 
 struct PCB {
     // 总进程链表

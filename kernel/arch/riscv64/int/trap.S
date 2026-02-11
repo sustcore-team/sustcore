@@ -9,6 +9,8 @@
  *
  */
 
+STACK_SIZE = 272
+
 .section .text
 .globl isr_entry
 .extern handle_trap
@@ -22,10 +24,10 @@ isr_sstkp:
     /* 第2步: 从sscratch中恢复sp */
     csrrw sp, sscratch, sp
     /* 分配栈空间并保存x1, x2 */
-    addi sp, sp, -264
+    addi sp, sp, -STACK_SIZE
     sd x1, 0(sp)
     /* 令 x1 指向原栈顶, 即原x2(sp) */
-    addi x1, sp, 264
+    addi x1, sp, STACK_SIZE
     /* 保存x2 */
     sd x1, 8(sp)
     j isr_regp
@@ -33,7 +35,7 @@ isr_sstkp:
 isr_ustkp:
     /* 此时, sp 为内核栈顶地址 */
     /* 分配栈空间并保存x1, x2 */
-    addi sp, sp, -264
+    addi sp, sp, -STACK_SIZE
     sd x1, 0(sp)
     /* 令 x1 指向原栈顶, 即原x2(sp) */
     csrr x1, sscratch
@@ -78,6 +80,8 @@ isr_regp:
     sd t0, 248(sp)
     csrr t0, sstatus
     sd t0, 256(sp)
+    /* 保存 kstack sp */
+    sd sp, 264(sp)
     /* 传参 */
     csrr a0, scause
     csrr a1, sepc
@@ -85,17 +89,9 @@ isr_regp:
     mv   a3, sp
     /* 调用C异常处理函数 */
     call handle_trap
-    /* 判断sstatus的SPP位，决定返回U-Mode还是S-Mode */
-    /* 读取sstatus */
-    csrr t0, sstatus
-    /* 检查SPP位 */
-    andi t1, t0, 0x100
-    /* 根据结果选择栈恢复路径 */
-    beqz t1, isr_regr
-    /* 此时 t1 != 0, 说明之前是S-Mode */
-    /* 将8(sp), 即原sp设置为0 */
-    sd zero, 8(sp)
-    /* 恢复栈空间 */
+    /* 恢复 kstack sp */
+    ld sp, 264(sp)
+    /* 如果返回到S-MODE, 则handle_trap中应当将8(sp)值设置为0 */
 isr_regr:
     /* 恢复关键 CSR */
     ld t0, 256(sp)
@@ -104,7 +100,8 @@ isr_regr:
     csrw sepc, t0
     /* 接下来是特殊的对sscratch的处理 */
     ld x1, 8(sp)
-    /* 这里, 被处理过的sp值将被写入sscratch中 */
+    /* 这里, sp值将被写入sscratch中 */
+    /* 8(sp) 即为用户栈指针, 因此如果返回到U-MODE, 8(sp)的值, 即sscratch的值应当为用户栈指针 */
     csrw sscratch, x1
     /* 恢复通用寄存器 */
     ld x1, 0(sp)
@@ -137,8 +134,8 @@ isr_regr:
     ld x29, 224(sp)
     ld x30, 232(sp)
     ld x31, 240(sp)
-    /* 恢复栈空间 */
-    addi sp, sp, 264
+    /* 恢复内核栈空间 */
+    addi sp, sp, STACK_SIZE
     /* 第4步: 切换回原栈空间 */
     csrrw sp, sscratch, sp
     /* 如果 sp 为0, 说明要返回 S-Mode, 那么此时sscratch中保存的就是原sp */

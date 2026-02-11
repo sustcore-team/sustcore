@@ -11,19 +11,25 @@
 
 #include <schd/hooks.h>
 #include <event/event.h>
+#include <schd/schedule.h>
 #include <task/task_struct.h>
 
 namespace schd {
-    void TimerTickListener::handle(const TimerTickEvent &event)
+    void SchedulerListener::handle(TimerTickEvent &event)
     {
-        if (scheduler != nullptr) {
-            TCB *current_thread = scheduler->current();
-            // 信息收集
-            if (current_thread != nullptr) {
-                schd::hooks::on_tick(current_thread, event.gap_ticks);
-            }
-
-            // 调用调度方法
+        Scheduler *scheduler = Scheduler::get_instance();
+        if (scheduler == nullptr) {
+            return;
         }
+        TCB *current_thread = scheduler->current();
+        // 信息收集
+        if (current_thread != nullptr) {
+            schd::hooks::on_tick(current_thread, event.gap_ticks);
+        }
+    }
+
+    void SchedulerListener::handle(SchedulerEvent &event)
+    {
+        event.ret_ctx = do_schedule(event.ctx);
     }
 }

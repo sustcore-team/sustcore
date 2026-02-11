@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <configuration.h>
+#include <task/task_struct.h>
 #include <cstddef>
 #include <concepts>
 
@@ -45,6 +47,14 @@ public:
 
 // events
 
+struct SchedulerEvent {
+public:
+    Context *ctx;
+    Context *ret_ctx;
+    constexpr SchedulerEvent(Context *ctx)
+        : ctx(ctx), ret_ctx(ctx) {}
+};
+
 struct TimerTickEvent {
 public:
     size_t gap_ticks;
@@ -54,9 +64,10 @@ public:
 // listeners
 
 namespace schd {
-    class TimerTickListener {
+    class SchedulerListener {
     public:
-        static void handle(const TimerTickEvent &event);
+        static void handle(SchedulerEvent &event);
+        static void handle(TimerTickEvent &event);
     };
 }
 
@@ -65,7 +76,14 @@ namespace schd {
 template<>
 class EventRegistry::EventInfo<TimerTickEvent> {
 public:
-    using Listeners = ListenerList<schd::TimerTickListener>;
+    using Listeners = ListenerList<schd::SchedulerListener>;
+    static constexpr size_t count = 1;
+};
+
+template<>
+class EventRegistry::EventInfo<SchedulerEvent> {
+public:
+    using Listeners = ListenerList<schd::SchedulerListener>;
     static constexpr size_t count = 1;
 };
 
@@ -81,12 +99,12 @@ protected:
 
     template<typename... _Ls>
     struct DispatcherImpl<ListenerList<_Ls...>> {
-        static void dispatch(const EventType &event) {
+        static void dispatch(EventType &event) {
             (_Ls::handle(event), ...);
         }
     };
 public:
-    static void dispatch(const EventType &event) {
+    static void dispatch(EventType &event) {
         DispatcherImpl<Listeners>::dispatch(event);
     }
 

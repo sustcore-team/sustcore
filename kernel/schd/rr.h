@@ -26,6 +26,7 @@ namespace schd {
     protected:
         util::IntrusiveList<MetadataType, &MetadataType::_schedule_head>
             _ready_queue;
+        TCBType *_current = nullptr;
         constexpr static bool is_ready(const MetadataType &thread) {
             return thread.state == ThreadState::READY ||
                    thread.state == ThreadState::RUNNING;
@@ -42,24 +43,7 @@ namespace schd {
             _ready_queue.push_back(*thread);
         }
 
-    public:
-        RR() : Base(), _ready_queue() {}
-        ~RR() {}
-    
-        inline void add(TCBType *thread) {
-            if (thread != nullptr) {
-                _add(this->downcast(thread));
-            }
-        }
-
-        inline TCBType *current(void) {
-            if (_ready_queue.empty()) {
-                return nullptr;
-            }
-            return this->upcast(&_ready_queue.front());
-        }
-
-        TCBType *schedule(void) {
+        TCBType *_schedule(void) {
             while (! _ready_queue.empty()) {
                 // 首先查看就绪队列头部的线程是否可运行
                 auto &thread = _ready_queue.front();
@@ -77,6 +61,36 @@ namespace schd {
             }
 
             return nullptr;
+        }
+
+        // 单例模式
+        RR() : Base(), _ready_queue() {}
+        ~RR() {}
+
+        static RR _instance;
+    public:
+        static RR *get_instance() {
+            return &_instance;
+        }
+
+        // 全局对象的构造函数并不会被默认触发, 需要我们手动调用
+        static void init_instance() {
+            _instance = RR();
+        }
+        
+        inline void add(TCBType *thread) {
+            if (thread != nullptr) {
+                _add(this->downcast(thread));
+            }
+        }
+
+        inline TCBType *current(void) {
+            return _current;
+        }
+
+        inline TCBType *schedule(void) {
+            _current = this->_schedule();
+            return this->current();
         }
 
         void yield(TCBType *thread) {
@@ -101,4 +115,7 @@ namespace schd {
             }
         }
     };
+
+    template <typename TCBType>
+    RR<TCBType> RR<TCBType>::_instance;
 }  // namespace schd

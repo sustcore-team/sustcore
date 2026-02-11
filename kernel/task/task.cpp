@@ -12,8 +12,7 @@
 #include <kio.h>
 #include <sus/id.h>
 #include <task/task.h>
-
-Scheduler *scheduler = nullptr;
+#include <task/task_struct.h>
 
 // task_struct.h
 

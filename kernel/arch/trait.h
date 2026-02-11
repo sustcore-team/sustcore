@@ -268,10 +268,10 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
 template <typename T>
 concept ArchContextTrait = requires(T *ctx) {
     {
-        T::pc(ctx)
+        ctx->pc()
     } -> std::same_as<umb_t &>;
     {
-        T::sp(ctx)
+        ctx->sp()
     } -> std::same_as<umb_t &>;
 };
 

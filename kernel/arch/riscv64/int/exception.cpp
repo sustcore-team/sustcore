@@ -17,6 +17,7 @@
 #include <sus/types.h>
 
 extern "C"
+
 void handle_trap(void) {
     // 读取寄存器值
     register umb_t val_scause asm("a0");
@@ -36,6 +37,10 @@ void handle_trap(void) {
     } else {
         // 异常
         Handlers::exception(scause, sepc, stval, ctx);
+    }
+
+    if (ctx->sstatus.spp) {
+        ctx->sp() = 0;
     }
 }
 

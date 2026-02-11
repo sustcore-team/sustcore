@@ -46,3 +46,6 @@ DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, INTERRUPT);
 
 // Capability相关Logger
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, CAPABILITY);
+
+// 调度相关Logger
+DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, SCHEDULER);

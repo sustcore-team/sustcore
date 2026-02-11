@@ -56,13 +56,14 @@ struct Riscv64Context {
     umb_t regs[31];
     umb_t sepc;
     csr_sstatus_t sstatus;
+    umb_t kstack_sp;
 
-    static umb_t &pc(Riscv64Context *ctx) {
-        return ctx->sepc;
+    umb_t &pc(void) {
+        return this->sepc;
     }
 
-    static umb_t &sp(Riscv64Context *ctx) {
-        return ctx->regs[2 - 1];  // x2 = sp
+    umb_t &sp(void) {
+        return this->regs[2 - 1];  // x2 = sp
     }
 };
 
