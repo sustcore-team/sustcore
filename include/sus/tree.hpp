@@ -114,3 +114,26 @@ struct Tree {
         }
     }
 };
+
+
+/*
+Usage:
+
+struct MyNode {
+    int value;
+    TreeNode<MyNode, tree_lca_tag> tree_node;
+};
+
+using MyTree = Tree<MyNode, &MyNode::tree_node>;
+
+MyNode root{.value = 1};
+MyNode child1{.value = 2};
+MyNode child2{.value = 3};
+
+MyTree::link_child(root, child1);
+MyTree::link_child(root, child2);
+
+MyTree::foreach_pre(root, [](const MyNode &node) {
+    std::cout << node.value << std::endl;
+});
+*/
