@@ -12,6 +12,7 @@
 #include <arch/riscv64/configuration.h>
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
+#include <event/event.h>
 #include <schd/hooks.h>
 #include <sus/logger.h>
 #include <kio.h>
@@ -170,17 +171,11 @@ namespace Handlers {
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval, ArchContext *ctx) {
         // 计算时间差
         size_t current_ticks = csr_get_time();
+        size_t gap_ticks = current_ticks - timer_info.last_ticks;
 
-        if (scheduler != nullptr) {
-            TCB *current_thread = scheduler->current();
-            // 信息收集
-            if (current_thread != nullptr) {
-                size_t gap_ticks = current_ticks - timer_info.last_ticks;
-                schd::hooks::on_tick(current_thread, gap_ticks);
-            }
-
-            // 调用调度方法
-        }
+        // 发布TimerTickEvent
+        TimerTickEvent event(gap_ticks);
+        EventDispatcher<TimerTickEvent>::dispatch(event);
 
         timer_info.last_ticks = current_ticks;
         // 重新设置下一次时钟中断
