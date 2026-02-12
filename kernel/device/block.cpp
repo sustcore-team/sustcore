@@ -12,6 +12,10 @@
 #include <device/block.h>
 #include <cstring>
 
+BlockDeviceType RamDiskDevice::type_id() const {
+    return IDENTIFIER;
+}
+
 size_t RamDiskDevice::block_sz(void) const {
     return D_block_size;
 }

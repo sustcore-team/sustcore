@@ -11,11 +11,17 @@
 
 #pragma once
 
+#include <sus/rtti.h>
 #include <cstddef>
 
 using lba_t = size_t;
 
-class IBlockDevice {
+enum class BlockDeviceType {
+    BASIC = 0,
+    RAMDISK = 1
+};
+
+class IBlockDevice : public RTTIBase<IBlockDevice, BlockDeviceType> {
 public:
     virtual ~IBlockDevice() = default;
     /**
@@ -62,6 +68,8 @@ private:
     size_t D_block_size;
     size_t D_block_count;
 public:
+    constexpr static BlockDeviceType IDENTIFIER = BlockDeviceType::RAMDISK;
+    virtual BlockDeviceType type_id() const override;
     virtual ~RamDiskDevice() = default;
     constexpr RamDiskDevice(void *base, size_t block_size, size_t block_count)
         : D_base(base), D_block_size(block_size), D_block_count(block_count) {}
@@ -70,4 +78,5 @@ public:
     virtual size_t read_blocks(lba_t lba, void *buf, size_t cnt) override;
     virtual size_t write_blocks(lba_t lba, const void *buf, size_t cnt) override;
     virtual bool sync(void) override;
+    constexpr void *base() const { return D_base; }
 };
