@@ -80,7 +80,7 @@ void Riscv64Initialization::post_init(void) {
         DEVICE::ERROR("获取时钟频率失败, 使用默认值 %d Hz", freq);
     }
     DEVICE::INFO("时钟频率: %d Hz = %d KHz = %d MHz", freq.to_hz(), freq.to_khz(), freq.to_mhz());
-    init_timer(freq, 100_Hz); //希望 每10ms触发一次时钟中断
+    init_timer(freq, 100_Hz); 
     DEVICE::INFO("启用时钟中断...");
 
     // 开启中断

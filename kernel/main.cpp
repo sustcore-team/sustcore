@@ -19,6 +19,7 @@
 #include <mem/alloc.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
+#include <mem/slub.h>
 #include <sus/baseio.h>
 #include <sus/logger.h>
 #include <sus/tree.h>
@@ -28,12 +29,24 @@
 
 #include <cstdarg>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 
 bool post_init_flag = false;
 
 void buddy_test_complex();
+void slub_test_basic();
 void tree_test(void);
+
+struct SlubSmallObj {
+    uint32_t a;
+    uint64_t b;
+    char pad[24];
+};
+
+struct SlubHugeObj {
+    char data[3000];
+};
 
 int kputs(const char *str) {
     if (!post_init_flag) {
@@ -118,8 +131,8 @@ void post_init(void) {
     // 架构后初始化
     Initialization::post_init();
 
-    // buddy_test_complex();
-    tree_test();
+    buddy_test_complex();
+    slub_test_basic();
 
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
@@ -305,6 +318,82 @@ void buddy_test_complex() {
     }
 
     LOGGER::INFO("========== Complex Buddy Allocator Test End ==========");
+}
+
+void slub_test_basic() {
+    LOGGER::INFO("========== SLUB Test Start ==========");
+
+    slub::SlubAllocator<SlubSmallObj> alloc;
+    constexpr int kSmallCount = 16;
+    SlubSmallObj *small_objs[kSmallCount] = {nullptr};
+    int small_alloc_ok = 0;
+
+    LOGGER::INFO("SLUB Scenario A: small object alloc/free");
+    for (int i = 0; i < kSmallCount; i++) {
+        small_objs[i] = reinterpret_cast<SlubSmallObj *>(alloc.alloc());
+        if (!small_objs[i]) {
+            LOGGER::WARN("small alloc failed at idx=%d", i);
+            continue;
+        }
+        small_objs[i]->a = static_cast<uint32_t>(0x1000 + i);
+        small_objs[i]->b = static_cast<uint64_t>(0x20000000ull + i);
+        small_alloc_ok++;
+    }
+    LOGGER::INFO("small alloc success count=%d/%d", small_alloc_ok, kSmallCount);
+
+    for (int i = 0; i < kSmallCount; i++) {
+        if (small_objs[i]) {
+            alloc.free(small_objs[i]);
+            small_objs[i] = nullptr;
+        }
+    }
+
+    auto small_stats = alloc.get_stats();
+    LOGGER::INFO(
+        "small stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
+        static_cast<unsigned long>(small_stats.total_slabs),
+        static_cast<unsigned long>(small_stats.objects_inuse),
+        static_cast<unsigned long>(small_stats.objects_total),
+        static_cast<unsigned long>(small_stats.memory_usage_bytes));
+
+    LOGGER::INFO("SLUB Scenario B: small object reuse trend");
+    void *p1 = alloc.alloc();
+    if (!p1) {
+        LOGGER::ERROR("reuse test first alloc failed");
+    } else {
+        alloc.free(p1);
+    }
+    void *p2 = alloc.alloc();
+    LOGGER::INFO("reuse observe: p1=%p p2=%p", p1, p2);
+    if (p2) {
+        alloc.free(p2);
+    }
+
+    LOGGER::INFO("SLUB Scenario C: huge object path");
+    slub::SlubAllocator<SlubHugeObj> huge_alloc;
+    void *h1 = huge_alloc.alloc();
+    void *h2 = huge_alloc.alloc();
+    LOGGER::INFO("huge alloc: h1=%p h2=%p", h1, h2);
+    if (!h1 || !h2) {
+        LOGGER::WARN("huge alloc has failure: h1=%p h2=%p", h1, h2);
+    }
+    if (h1) {
+        huge_alloc.free(h1);
+    }
+    if (h2) {
+        huge_alloc.free(h2);
+    }
+    LOGGER::INFO("Test free nullptr");
+    huge_alloc.free(nullptr);
+
+    auto huge_stats = huge_alloc.get_stats();
+    LOGGER::INFO("huge stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
+                 static_cast<unsigned long>(huge_stats.total_slabs),
+                 static_cast<unsigned long>(huge_stats.objects_inuse),
+                 static_cast<unsigned long>(huge_stats.objects_total),
+                 static_cast<unsigned long>(huge_stats.memory_usage_bytes));
+
+    LOGGER::INFO("========== SLUB Test End ==========");
 }
 
 constexpr size_t TREE_SIZE = 8192;

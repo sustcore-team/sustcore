@@ -8,8 +8,8 @@ include $(path-script)/helper.mk
 target := $(path-kernel)
 target-phy := $(path-kernel-phy)
 
-objects := main.o cxa.o
-deps := main.d cxa.d
+objects := main.o cxa.o assert.o
+deps := main.d cxa.d assert.d
 attachments :=
 
 subdirs := ./arch/$(architecture)/  ./cap  ./device ./event ./mem ./schd ./task ./vfs

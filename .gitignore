@@ -16,4 +16,5 @@ build-setup.sh
 gdb-setup.sh
 .github/
 documents/
+.cache/
 compile_commands.json
