@@ -261,7 +261,7 @@ public:
      * @param sb 超级块
      * @return FSErrCode 错误码
      */
-    virtual FSErrCode unmount(ISuperblock *sb)                   = 0;
+    virtual FSErrCode unmount(ISuperblock *&sb)                   = 0;
 };
 
 static_assert(ISyncable<IFile>);
