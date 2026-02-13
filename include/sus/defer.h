@@ -35,5 +35,14 @@ namespace util {
             assert(initialized);
             return *reinterpret_cast<T *>(storage);
         }
+        inline T *operator->() {
+            return &get();
+        }
+        inline T &operator*() {
+            return get();
+        }
+        operator T() {
+            return get();
+        }
     };
 }  // namespace util

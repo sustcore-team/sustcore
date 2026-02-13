@@ -80,8 +80,8 @@ public:
     static void free_frame_in_order(void *ptr, int order);
 
 private:
-    static util::Defer<util::IntrusiveList<BuddyAllocator::FreeBlock>>
-        free_area[MAX_BUDDY_ORDER + 1];
+    using BlockList = util::IntrusiveList<FreeBlock>;
+    static util::Defer<BlockList> free_area[MAX_BUDDY_ORDER + 1];
     /**
      * @brief 页数转换为order阶数
      *
