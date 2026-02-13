@@ -133,7 +133,6 @@ void post_init(void) {
 
     buddy_test_complex();
     slub_test_basic();
-    LOGGER::INFO("here");
 
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
