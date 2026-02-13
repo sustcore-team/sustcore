@@ -384,6 +384,7 @@ void slub_test_basic() {
     if (h2) {
         huge_alloc.free(h2);
     }
+    LOGGER::INFO("Test free nullptr");
     huge_alloc.free(nullptr);
 
     auto huge_stats = huge_alloc.get_stats();
