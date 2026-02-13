@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <configuration.h>
+#include <arch/description.h>
 #include <schd/policies.h>
 #include <sus/list.h>
 

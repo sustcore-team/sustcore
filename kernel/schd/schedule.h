@@ -11,8 +11,8 @@
 
 #pragma once
 
+#include <arch/description.h>
 #include <schd/metadata.h>
-#include <configuration.h>
 
 namespace schd {
     // 调度器概念
@@ -46,6 +46,7 @@ namespace schd {
     class BaseScheduler {
     public:
         using MetadataType = Metadata;
+
     protected:
         BaseScheduler() {}
         ~BaseScheduler() {}

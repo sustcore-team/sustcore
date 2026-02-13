@@ -9,9 +9,9 @@
  *
  */
 
-#include <arch/riscv64/configuration.h>
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/int/isr.h>
+#include <arch/riscv64/trait.h>
 #include <sus/logger.h>
 #include <kio.h>
 #include <sus/types.h>
@@ -28,7 +28,7 @@ void handle_trap(void) {
     csr_scause_t scause = {.value = val_scause};
     umb_t sepc       = val_sepc;
     umb_t stval      = val_stval;
-    ArchContext *ctx = (ArchContext *)valp_ctx;
+    Riscv64Context *ctx = (Riscv64Context *)valp_ctx;
 
     if (scause.interrupt) {
         if (scause.cause == 5) {

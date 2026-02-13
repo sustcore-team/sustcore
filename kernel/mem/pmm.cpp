@@ -9,8 +9,9 @@
  *
  */
 
-#include <configuration.h>
 #include <mem/pmm.h>
+
+#include <cassert>
 
 PMM::page *PMM::__base_address;
 size_t PMM::__arraysz;

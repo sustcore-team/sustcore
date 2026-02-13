@@ -13,25 +13,26 @@
 
 #include <arch/riscv64/csr.h>
 #include <arch/trait.h>
-#include <mem/kaddr_defs.h>
-#include <mem/gfp.h>
-#include <sus/types.h>
 #include <kio.h>
+#include <mem/gfp.h>
+#include <mem/kaddr_defs.h>
+#include <sus/logger.h>
+#include <sus/types.h>
+
 #include <cassert>
 #include <cstring>
-#include <sus/logger.h>
 
 enum class Riscv64SV39RWX : umb_t {
     // 基本权限
-    P   = 0b000,
-    R   = 0b001,
-    W   = 0b010,
-    X   = 0b100,
+    P    = 0b000,
+    R    = 0b001,
+    W    = 0b010,
+    X    = 0b100,
     // 组合权限
-    RO  = R,
-    RW  = R | W,
-    RX  = R | X,
-    RWX = R | W | X,
+    RO   = R,
+    RW   = R | W,
+    RX   = R | X,
+    RWX  = R | W | X,
     // 空
     NONE = 0b000,
 };
@@ -90,12 +91,11 @@ constexpr Riscv64SV39ModifyMask operator|(Riscv64SV39ModifyMask lhs,
                                               static_cast<uint8_t>(rhs));
 }
 
-template <PageFrameAllocatorTrait GFP>
 class Riscv64SV39PageMan {
 public:
     // 前初始化与后初始化
-    static void pre_init(void){}
-    static void post_init(void){}
+    static void pre_init(void);
+    static void post_init(void);
 
     using RWX = Riscv64SV39RWX;
 
@@ -169,16 +169,16 @@ public:
 
     // PTE信息解析
     static constexpr RWX rwx(PTE pte) {
-        switch (pte->rwx) {
-        case 0b000: return RWX::P;
-        case 0b001: return RWX::R;
-        case 0b110: return RWX::NONE;
-        case 0b011: return RWX::RW;
-        case 0b100: return RWX::X;
-        case 0b101: return RWX::RX;
-        case 0b110: return RWX::NONE;
-        case 0b111: return RWX::RWX;
-        default:    return RWX::NONE;
+        switch (pte.rwx) {
+            case 0b000: return RWX::P;
+            case 0b001: return RWX::R;
+            case 0b010: return RWX::NONE;  // W不能单独存在
+            case 0b011: return RWX::RW;
+            case 0b100: return RWX::X;
+            case 0b101: return RWX::RX;
+            case 0b110: return RWX::NONE;
+            case 0b111: return RWX::RWX;
+            default:    return RWX::NONE;
         }
     }
 
@@ -198,17 +198,17 @@ public:
         return pte.v;
     }
 
-    static void *from_ppn(umb_t ppn) {
+    static inline void *from_ppn(umb_t ppn) {
         umb_t addr = ppn << 12;
         return (void *)(addr);
     }
 
-    static umb_t to_ppn(void *addr) {
+    static inline umb_t to_ppn(void *addr) {
         umb_t addr_val = (umb_t)(addr);
         return addr_val >> 12;
     }
 
-    static void *get_physical_address(PTE pte) {
+    static inline void *get_physical_address(PTE pte) {
         return from_ppn(pte.ppn);
     }
 
@@ -238,59 +238,21 @@ public:
     }
 
     // 页表管理操作
-
-    static PTE *read_root(void) {
-        csr_satp_t satp = csr_get_satp();
-        if (satp.mode != SATPMode::SV39) {
-            return nullptr;
-        }
-        umb_t root_ppn = satp.ppn;
-        return (PTE *)PA2KPA(from_ppn(root_ppn));
-    }
-
-    static PTE *make_root(void) {
-        PTE *root = (PTE *)PA2KPA(GFP::alloc_frame());
-        memset(root, 0, PAGESIZE);
-        return root;
-    }
+    static PTE *read_root(void);
+    static PTE *make_root(void);
 
 private:
     PTE *_root;
-    PTE *root() { return (PTE *)PA2KPA(_root); }
+    inline PTE *root() {
+        return (PTE *)PA2KPA(_root);
+    }
+
 public:
-    Riscv64SV39PageMan() : _root(make_root()) {}
-    explicit Riscv64SV39PageMan(PTE *__root) : _root(__root) {}
+    Riscv64SV39PageMan();
+    explicit constexpr Riscv64SV39PageMan(PTE *__root) : _root(__root) {}
 
     // 查询页
-    ExtendedPTE query_page(void *vaddr) {
-        // 将vaddr拆分为三级索引
-        umb_t vpn[3];
-        umb_t va = (umb_t)vaddr;
-        vpn[0]   = (va >> 12) & 0x1FF;  // VPN[0]: bits 12-20
-        vpn[1]   = (va >> 21) & 0x1FF;  // VPN[1]: bits 21-29
-        vpn[2]   = (va >> 30) & 0x1FF;  // VPN[2]: bits 30-38
-
-        // TODO: check _root not null
-        PTE *pte = &(root()[vpn[2]]);
-        for (int level = 2; level > 0; level--) {
-            if (!pte->v) {
-                return {nullptr, PageSize::SIZE_NULL};
-            }
-            if (pte->rwx != RWX::P) {
-                // 大页映射
-                PageSize size =
-                    (level == 2) ? PageSize::SIZE_1G : PageSize::SIZE_2M;
-                return {pte, size};
-            }
-
-            // 否则, 取下一级页表
-            PTE *pt = (PTE *)PA2KPA(from_ppn(pte->ppn));
-            // TODO: check pt not null
-            pte     = &pt[vpn[level - 1]];
-            assert(level - 1 >= 0);
-        }
-        return {pte, PageSize::SIZE_4K};
-    }
+    ExtendedPTE query_page(void *vaddr);
 
     static constexpr int size_to_level(PageSize size) {
         switch (size) {
@@ -305,7 +267,8 @@ public:
     void map_page(void *vaddr, void *paddr, RWX rwx, bool u, bool g) {
         // do nothing when size is SIZE_NULL
         // in fact, it should be an error
-        static_assert(size != PageSize::SIZE_NULL, "Cannot map page with SIZE_NULL");
+        static_assert(size != PageSize::SIZE_NULL,
+                      "Cannot map page with SIZE_NULL");
         // check rwx != RWX_MODE_P
         constexpr int tot_levels = size_to_level(size);  // SV39有3级页表
 
@@ -337,9 +300,15 @@ public:
                 pte->rwx = rwx_cast(RWX::P);  // 标记为非叶子节点
                 pte->u   = u;
                 pte->g   = g;
-                PAGING::DEBUG("VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
+                PAGING::DEBUG(
+                    "VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, "
+                    "&pte = %p",
+                    i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
             } else if (pte->rwx != RWX::P) {
-                PAGING::DEBUG("VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, &pte = %p", i - 1, vpn[i - 1], pte->rwx, pte->value);
+                PAGING::DEBUG(
+                    "VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, "
+                    "&pte = %p",
+                    i - 1, vpn[i - 1], pte->rwx, pte->value);
                 return;
             } else if (pte->np) {
                 // 非存在页，do sth...
@@ -366,10 +335,6 @@ public:
         pte->u     = u;
         pte->g     = g;
         pte->ppn   = to_ppn(paddr);
-    }
-
-    void unmap_page(void *vaddr) {
-        // TODO: implement unmap_page
     }
 
     template <bool use_hugepage>
@@ -434,9 +399,8 @@ public:
         }
     }
 
-    void unmap_range(void *vstart, size_t size) {
-        // TODO: implement unmap_range
-    }
+    void unmap_page(void *vaddr);
+    void unmap_range(void *vstart, size_t size);
 
     static constexpr umb_t to_rwx_mask(ModifyMask mask) {
         umb_t rwx_m = 0b000;
@@ -462,13 +426,13 @@ public:
         constexpr umb_t rwx_mask = to_rwx_mask(mask);
         if constexpr (rwx_mask != 0b000) {
             umb_t rwx_bits = rwx_cast(rwx);
-            umb_t old_bits = rwx_cast(pte->rwx);
+            umb_t old_bits = pte->rwx;
             // 将 old_bits, rwx_bits 按 rwx_mask 进行修改
-            // 我们考虑按位计算, 那么对于单个位 o(old_bits), n(rwx_bits), m(rwx_mask)
-            // 我们有 f(o, n, 0) = o, f(o, n, 1) = n
-            // 因此 f(o, n, m) = (o & ~m) | (n & m)
+            // 我们考虑按位计算, 那么对于单个位 o(old_bits), n(rwx_bits),
+            // m(rwx_mask) 我们有 f(o, n, 0) = o, f(o, n, 1) = n 因此 f(o, n, m)
+            // = (o & ~m) | (n & m)
             umb_t new_bits = (old_bits & ~rwx_mask) | (rwx_bits & rwx_mask);
-            pte->rwx        = new_bits;
+            pte->rwx       = new_bits;
         }
         if constexpr (mask & ModifyMask::U) {
             pte->u = u;
@@ -480,18 +444,19 @@ public:
         return ext_pte.size;
     }
 
-    template<ModifyMask mask>
+    template <ModifyMask mask>
     void modify_flags(void *vaddr, RWX rwx, bool u, bool g) {
         __modify_flags<mask>(vaddr, rwx, u, g);
     }
 
-    template<ModifyMask mask>
-    void modify_range_flags(void *vstart, size_t size, RWX rwx, bool u, bool g) {
+    template <ModifyMask mask>
+    void modify_range_flags(void *vstart, size_t size, RWX rwx, bool u,
+                            bool g) {
         // 将 vaddr 向下对齐到4K
-        const umb_t _vs    = page_align_down((umb_t)vstart);
+        const umb_t _vs      = page_align_down((umb_t)vstart);
         // 将 size 向上对齐到4K
-        const size_t _size = (size_t)page_align_up((umb_t)size);
-        const size_t _cnt  = _size / PAGESIZE;
+        const size_t _size   = (size_t)page_align_up((umb_t)size);
+        const size_t _cnt    = _size / PAGESIZE;
         // 逐页修改, 直至完成
         // 中间可能存在大页
         size_t cnt_remaining = _cnt;
@@ -503,7 +468,7 @@ public:
                 return;
             }
             assert(get_size(psize) >= PAGESIZE);
-            _va += get_size(psize);
+            _va           += get_size(psize);
             cnt_remaining -= get_size(psize) / PAGESIZE;
         }
     }
@@ -517,12 +482,12 @@ public:
         csr_set_satp(new_satp);
     }
 
-    void switch_root() {
+    inline void switch_root() {
         __switch_root(_root);
     }
 
     // 获得页表根
-    PTE *&get_root() {
+    constexpr PTE *&get_root() {
         return _root;
     }
 
@@ -532,4 +497,4 @@ public:
     }
 };
 
-static_assert(ArchPageManTrait<Riscv64SV39PageMan<LinearGrowGFP>>);
+static_assert(ArchPageManTrait<Riscv64SV39PageMan>);

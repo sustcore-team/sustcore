@@ -1,7 +1,7 @@
 #pragma once
 
-#include <configuration.h>
 #include <kio.h>
+#include <mem/gfp.h>
 #include <sus/list.h>
 
 #include <cassert>

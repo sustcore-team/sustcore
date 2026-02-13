@@ -9,7 +9,6 @@
  *
  */
 
-#include <arch/riscv64/configuration.h>
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/misc.h>
@@ -84,5 +83,5 @@ void Riscv64Initialization::post_init(void) {
     DEVICE::INFO("启用时钟中断...");
 
     // 开启中断
-    ArchInterrupt::sti();
+    Riscv64Interrupt::sti();
 }

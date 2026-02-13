@@ -27,8 +27,7 @@ public:
     static void serial_write_string(const char *str);
 };
 
-static_assert(ArchSerialTrait<Riscv64Serial>);
-typedef Riscv64Serial ArchSerial;
+static_assert(SerialTrait<Riscv64Serial>);
 
 class Riscv64Initialization {
 public:
@@ -36,7 +35,7 @@ public:
     static void post_init(void);
 };
 
-static_assert(ArchInitializationTrait<Riscv64Initialization>);
+static_assert(InitializationTrait<Riscv64Initialization>);
 
 class Riscv64MemoryLayout {
 public:
@@ -50,7 +49,7 @@ public:
     static int detect_memory_layout(MemRegion *regions, int cnt);
 };
 
-static_assert(ArchMemLayoutTrait<Riscv64MemoryLayout>);
+static_assert(MemoryLayoutTrait<Riscv64MemoryLayout>);
 
 struct Riscv64Context {
     umb_t regs[31];
@@ -67,7 +66,7 @@ struct Riscv64Context {
     }
 };
 
-static_assert(ArchContextTrait<Riscv64Context>);
+static_assert(ContextTrait<Riscv64Context>);
 
 struct Riscv64Interrupt {
     /**
@@ -89,11 +88,11 @@ struct Riscv64Interrupt {
     static void cli(void);
 };
 
-static_assert(ArchInterruptTrait<Riscv64Interrupt>);
+static_assert(InterruptTrait<Riscv64Interrupt>);
 
 struct Riscv64WPFault {
     int reserved;
 };
-static_assert(ArchWPFaultTrait<Riscv64WPFault>);
+static_assert(WPFaultTrait<Riscv64WPFault>);
 
 #include <arch/riscv64/mem/sv39.h>

@@ -9,7 +9,7 @@
  *
  */
 
-#include <mem/alloc.h>
+#include <mem/alloc_def.h>
 #include <sus/logger.h>
 #include <kio.h>
 

@@ -21,7 +21,7 @@
  * @tparam T 架构串口类
  */
 template <typename T>
-concept ArchSerialTrait = requires(char ch, const char *str) {
+concept SerialTrait = requires(char ch, const char *str) {
     {
         T::serial_write_char(ch)
     } -> std::same_as<void>;
@@ -42,7 +42,7 @@ void kernel_setup(void);
  * @tparam T 架构初始化类
  */
 template <typename T>
-concept ArchInitializationTrait = requires() {
+concept InitializationTrait = requires() {
     {
         T::pre_init()
     } -> std::same_as<void>;
@@ -79,7 +79,7 @@ struct MemRegion {
  * @tparam T 架构内存布局类
  */
 template <typename T>
-concept ArchMemLayoutTrait = requires(MemRegion *regions, int cnt) {
+concept MemoryLayoutTrait = requires(MemRegion *regions, int cnt) {
     {
         T::detect_memory_layout(regions, cnt)
     } -> std::same_as<int>;
@@ -266,7 +266,7 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
 };
 
 template <typename T>
-concept ArchContextTrait = requires(T *ctx) {
+concept ContextTrait = requires(T *ctx) {
     {
         ctx->pc()
     } -> std::same_as<umb_t &>;
@@ -277,7 +277,7 @@ concept ArchContextTrait = requires(T *ctx) {
 
 // 中断管理器 Trait
 template <typename T>
-concept ArchInterruptTrait = requires() {
+concept InterruptTrait = requires() {
     {
         T::init()
     } -> std::same_as<void>;
@@ -291,6 +291,6 @@ concept ArchInterruptTrait = requires() {
 
 // Write-Protection Fault Infomation Trait
 template <typename T>
-concept ArchWPFaultTrait = requires() {
+concept WPFaultTrait = requires() {
     true;
 };

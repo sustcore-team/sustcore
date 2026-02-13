@@ -14,7 +14,6 @@
 #include <cap/capability.h>
 #include <cap/capcall.h>
 #include <cap/permission.h>
-#include <configuration.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
@@ -148,7 +147,7 @@ void pre_init(void) {
     Initialization::pre_init();
 
     memset(regions, 0, sizeof(regions));
-    int cnt           = MemLayout::detect_memory_layout(regions, 128);
+    int cnt           = MemoryLayout::detect_memory_layout(regions, 128);
     void *upper_bound = nullptr;
     for (int i = 0; i < cnt; i++) {
         LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,

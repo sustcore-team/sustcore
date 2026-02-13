@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <configuration.h>
+#include <arch/description.h>
 #include <task/task_struct.h>
 #include <cstddef>
 #include <concepts>

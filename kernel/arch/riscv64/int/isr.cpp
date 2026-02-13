@@ -9,7 +9,6 @@
  *
  */
 
-#include <arch/riscv64/configuration.h>
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
 #include <event/event.h>
@@ -65,7 +64,7 @@ namespace Exceptions {
 
 namespace Handlers {
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                           ArchContext *ctx) {
+                           Riscv64Context *ctx) {
         switch (scause.cause) {
             case Exceptions::ECALL_U: {
                 break;
@@ -107,7 +106,7 @@ namespace Handlers {
     }
 
     void illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
-                             ArchContext *ctx) {
+                             Riscv64Context *ctx) {
         INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
                         Exceptions::MSG[scause.cause], scause.cause);
         INTERRUPT::INFO("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc,
@@ -144,7 +143,7 @@ namespace Handlers {
     }
 
     void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
-                      ArchContext *ctx) {
+                      Riscv64Context *ctx) {
         INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
                         Exceptions::MSG[scause.cause], scause.cause);
         INTERRUPT::INFO("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
@@ -168,7 +167,7 @@ namespace Handlers {
         // 3. 如果是权限错误, 则终止相关进程
     }
 
-    void timer(csr_scause_t scause, umb_t sepc, umb_t stval, ArchContext *ctx) {
+    void timer(csr_scause_t scause, umb_t sepc, umb_t stval, Riscv64Context *ctx) {
         // 计算时间差
         size_t current_ticks = csr_get_time();
         size_t gap_ticks = current_ticks - timer_info.last_ticks;

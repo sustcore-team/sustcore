@@ -9,7 +9,7 @@
  *
  */
 
-#include <configuration.h>
+#include <mem/alloc.h>
 
 // 全局new/delete操作符重载，使用线性增长分配器
 // 但绝大多数情况下, 你都应该使用slab分配器或其他更高级的分配器

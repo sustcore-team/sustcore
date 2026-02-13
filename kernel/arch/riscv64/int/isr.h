@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/riscv64/configuration.h>
+#include <arch/riscv64/trait.h>
 
 namespace Handlers {
     /**
@@ -21,7 +21,7 @@ namespace Handlers {
      * @param reglist_ptr 指向中断上下文寄存器列表的指针
      */
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                           ArchContext *ctx);
+                           Riscv64Context *ctx);
 
     /**
      * @brief 非法指令处理程序
@@ -32,7 +32,7 @@ namespace Handlers {
      * @param reglist_ptr 指向中断上下文寄存器列表的指针
      */
     void illegal_instruction(csr_scause_t scause, umb_t sepc,
-                                     umb_t stval, ArchContext *ctx);
+                                     umb_t stval, Riscv64Context *ctx);
 
     /**
      * @brief 页相关异常处理
@@ -43,7 +43,7 @@ namespace Handlers {
      * @param reglist_ptr 指向中断上下文寄存器列表的指针
      */
     void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
-                        ArchContext *ctx);
+                        Riscv64Context *ctx);
 
     /**
      * @brief 定时器中断处理程序
@@ -54,5 +54,5 @@ namespace Handlers {
      * @param reglist_ptr 指向中断上下文寄存器列表的指针
      */
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval,
-                       ArchContext *ctx);
+                       Riscv64Context *ctx);
 }  // namespace Handlers

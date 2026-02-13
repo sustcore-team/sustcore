@@ -12,7 +12,7 @@
 #pragma once
 
 #include <mem/kaddr_defs.h>
-#include <configuration.h>
+#include <arch/description.h>
 
 namespace ker_paddr {
     void init(void *upper_bound);
