@@ -45,7 +45,9 @@ void panic_failure(const char *expression, const char *file,
  */
 void panic(const char *format, ...);
 
+#ifndef ASSERT_IMPLEMENTED
 #define ASSERT_IMPLEMENTED 0
+#endif
 
 // 不开启DEBUG
 #if defined(NDEBUG) || ! ASSERT_IMPLEMENTED

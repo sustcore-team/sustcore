@@ -1,0 +1,19 @@
+/**
+ * @file listener.h
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 监听器
+ * @version alpha-1.0.0
+ * @date 2026-02-13
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
+
+#pragma once
+
+#include <event/init_events.h>
+
+class TaskListener {
+public:
+    static void handle(PostGlobalObjectInitEvent &event);
+};

@@ -14,12 +14,15 @@
 #include <cap/capability.h>
 #include <cap/capcall.h>
 #include <cap/permission.h>
+#include <event/init_events.h>
+#include <event/registries.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/slub.h>
 #include <sus/baseio.h>
+#include <sus/defer.h>
 #include <sus/logger.h>
 #include <sus/tree.h>
 #include <sus/types.h>
@@ -124,6 +127,11 @@ void post_init(void) {
     // 初始化默认 Allocator 子系统
     Allocator::init();
 
+    // 发布PostGlobalObjectInitEvent
+    // 收集全局对象Defer并执行构造
+    PostGlobalObjectInitEvent pre_init_event;
+    EventDispatcher<PostGlobalObjectInitEvent>::dispatch(pre_init_event);
+
     // 初始化中断
     Interrupt::init();
 
@@ -160,7 +168,11 @@ void pre_init(void) {
         }
     }
 
-    LOGGER::INFO("初始化线性增长GFP");
+    // 发布PreGlobalObjectInitEvent
+    PreGlobalObjectInitEvent pre_init_event;
+    EventDispatcher<PreGlobalObjectInitEvent>::dispatch(pre_init_event);
+
+    LOGGER::INFO("初始化GFP");
     GFP::pre_init(regions, cnt);
 
     LOGGER::INFO("初始化内核地址空间管理器");

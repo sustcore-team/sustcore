@@ -10,6 +10,7 @@
  */
 
 #include <kio.h>
+#include <sus/defer.h>
 #include <sus/id.h>
 #include <task/task.h>
 #include <task/task_struct.h>
@@ -32,9 +33,12 @@ PCB::PCB() : pid(0), rp_level(0), threads(), main_thread(nullptr) {}
 
 // task.h
 
-util::IDManager<> TID;
+util::Defer<util::IDManager<>> TID;
+
+void TaskListener::handle(PostGlobalObjectInitEvent &event)
+{
+    TID.construct();
+}
 
 void TCBManager::init() {
-    // Construct TID
-    TID = util::IDManager<>();
 }

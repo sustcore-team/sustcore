@@ -12,8 +12,10 @@
 #pragma once
 
 #include <arch/trait.h>
+#include <event/event.h>
 #include <mem/gfp_def.h>
 #include <stddef.h>
+#include <sus/defer.h>
 #include <sus/list.h>
 #include <sus/types.h>
 
@@ -33,84 +35,86 @@ public:
 
     /**
      * @brief 分配单个页
-     * 
-     * @return void* 
+     *
+     * @return void*
      */
     static void *alloc_frame();
 
     /**
      * @brief 分配多个页
-     * 
-     * @param frame_count 
-     * @return void* 
+     *
+     * @param frame_count
+     * @return void*
      */
     static void *alloc_frame(size_t frame_count);
 
     /**
      * @brief 按order阶数分配
-     * 
-     * @param order 
-     * @return void* 
+     *
+     * @param order
+     * @return void*
      */
     static void *alloc_frames_in_order(size_t order);
 
     /**
      * @brief 释放单个页
-     * 
-     * @param ptr 
+     *
+     * @param ptr
      */
     static void free_frame(void *ptr);
 
     /**
      * @brief 释放多个页
-     * 
-     * @param ptr 
-     * @param frame_count 
+     *
+     * @param ptr
+     * @param frame_count
      */
     static void free_frame(void *ptr, size_t frame_count);
-    
+
     /**
      * @brief 按order阶数释放页
-     * 
-     * @param ptr 
-     * @param order 
+     *
+     * @param ptr
+     * @param order
      */
     static void free_frame_in_order(void *ptr, int order);
 
 private:
-    static util::IntrusiveList<BuddyAllocator::FreeBlock>
+    static util::Defer<util::IntrusiveList<BuddyAllocator::FreeBlock>>
         free_area[MAX_BUDDY_ORDER + 1];
     /**
      * @brief 页数转换为order阶数
-     * 
-     * @param count 
-     * @return int 
+     *
+     * @param count
+     * @return int
      */
     static int pages2order(size_t count);
-    
+
     /**
      * @brief 物理地址转换为FreeBlock指针
-     * 
-     * @param paddr 
-     * @return FreeBlock* 
+     *
+     * @param paddr
+     * @return FreeBlock*
      */
     static FreeBlock *pa2block(const umb_t paddr);
 
     /**
      * @brief FreeBlock指针转换为物理地址
-     * 
-     * @param block 
-     * @return void* 
+     *
+     * @param block
+     * @return void*
      */
     static void *block2pa(FreeBlock *block);
 
     /**
      * @brief 按order阶数分配内存块
-     * 
-     * @param order 
-     * @return void* 
+     *
+     * @param order
+     * @return void*
      */
     static void *fetch_frame_order(size_t order);
+
+    friend class BuddyListener;
 };
 
 static_assert(PageFrameAllocatorTrait<BuddyAllocator>,

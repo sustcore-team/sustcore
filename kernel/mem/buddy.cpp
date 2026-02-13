@@ -9,18 +9,26 @@
  *
  */
 #include <arch/trait.h>
-#include <sus/logger.h>
 #include <kio.h>
 #include <mem/buddy.h>
 #include <mem/kaddr_defs.h>
+#include <mem/listeners.h>
 #include <sus/list.h>
+#include <sus/logger.h>
 #include <sus/types.h>
 
 #include <cstddef>
 #include <new>
 
-util::IntrusiveList<BuddyAllocator::FreeBlock>
+util::Defer<util::IntrusiveList<BuddyAllocator::FreeBlock>>
     BuddyAllocator::free_area[BuddyAllocator::MAX_BUDDY_ORDER + 1];
+
+void BuddyListener::handle(PreGlobalObjectInitEvent &event) {
+    BUDDY::DEBUG("BuddyListener handling PreGlobalObjectInitEvent");
+    for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
+        BuddyAllocator::free_area[i].construct();
+    }
+}
 
 /**
  * @brief 按页数添加一段物理内存范围到Buddy分配器
@@ -54,10 +62,6 @@ static void add_memory_range(void *paddr, size_t pages) {
 }
 
 void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
-    for (size_t i = 0; i <= MAX_BUDDY_ORDER; ++i) {
-        free_area[i] = util::IntrusiveList<FreeBlock>();
-    }
-
     for (size_t i = 0; i < region_count; ++i) {
         MemRegion &region = regions[i];
         if (region.status == MemRegion::MemoryStatus::FREE) {
@@ -86,7 +90,7 @@ void BuddyAllocator::post_init() {
     BUDDY::DEBUG("enter post_init");
 
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
-        auto &list = free_area[i];
+        auto &list = free_area[i].get();
 
         // 哨兵节点
         // 将其从 KA 转换为 PA, 再从 PA 转换回 KPA
@@ -158,7 +162,7 @@ void BuddyAllocator::free_frame_in_order(void *ptr, int order) {
         // 在指定的内存地址 address 上构造一个 Type 类型的对象
         FreeBlock *node = new (block_kva) FreeBlock();
 
-        auto &list = free_area[order];
+        auto &list = free_area[order].get();
 
         // 插入到有序链表中
         auto it = list.begin();
@@ -265,7 +269,7 @@ void *BuddyAllocator::fetch_frame_order(size_t order) {
     size_t current_order = order;
 
     while (current_order <= BuddyAllocator::MAX_BUDDY_ORDER) {
-        auto &list = free_area[current_order];
+        auto &list = free_area[current_order].get();
         if (!list.empty()) {
             break;
         }
@@ -278,7 +282,7 @@ void *BuddyAllocator::fetch_frame_order(size_t order) {
         return nullptr;
     }
 
-    auto &list      = free_area[current_order];
+    auto &list      = free_area[current_order].get();
     FreeBlock &node = list.front();
     umb_t paddr     = (umb_t)block2pa(&node);
 

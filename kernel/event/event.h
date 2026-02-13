@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include <arch/description.h>
-#include <task/task_struct.h>
 #include <cstddef>
 #include <concepts>
 
@@ -43,72 +41,4 @@ public:
         using Listeners = ListenerList<>;
         static constexpr size_t count = 0;
     };
-};
-
-// events
-
-struct SchedulerEvent {
-public:
-    Context *ctx;
-    Context *ret_ctx;
-    constexpr SchedulerEvent(Context *ctx)
-        : ctx(ctx), ret_ctx(ctx) {}
-};
-
-struct TimerTickEvent {
-public:
-    size_t gap_ticks;
-    constexpr TimerTickEvent(size_t gap_ticks) : gap_ticks(gap_ticks) {}
-};
-
-// listeners
-
-namespace schd {
-    class SchedulerListener {
-    public:
-        static void handle(SchedulerEvent &event);
-        static void handle(TimerTickEvent &event);
-    };
-}
-
-// Registries
-
-template<>
-class EventRegistry::EventInfo<TimerTickEvent> {
-public:
-    using Listeners = ListenerList<schd::SchedulerListener>;
-    static constexpr size_t count = 1;
-};
-
-template<>
-class EventRegistry::EventInfo<SchedulerEvent> {
-public:
-    using Listeners = ListenerList<schd::SchedulerListener>;
-    static constexpr size_t count = 1;
-};
-
-// dispatcher
-template<typename EventType>
-class EventDispatcher {
-protected:
-    using Info = typename EventRegistry::EventInfo<EventType>;
-    using Listeners = typename Info::Listeners;
-
-    template <typename Lst>
-    struct DispatcherImpl;
-
-    template<typename... _Ls>
-    struct DispatcherImpl<ListenerList<_Ls...>> {
-        static void dispatch(EventType &event) {
-            (_Ls::handle(event), ...);
-        }
-    };
-public:
-    static void dispatch(EventType &event) {
-        DispatcherImpl<Listeners>::dispatch(event);
-    }
-
-    static size_t listener_count() {
-        return Info::count;
-    }
 };

@@ -28,7 +28,7 @@ void* LinearGrowAllocator::malloc(size_t size) {
 
 void LinearGrowAllocator::free(void* ptr) {
     // 线性增长分配器不支持释放内存
-    MEMORY::FATAL("%s", "线性增长分配器不支持释放内存");
+    MEMORY::DEBUG("%s", "线性增长分配器不支持释放内存");
     (void)ptr;  // 避免未使用参数警告
 }
 

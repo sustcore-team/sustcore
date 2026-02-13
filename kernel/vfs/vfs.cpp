@@ -71,7 +71,7 @@ namespace path_util {
     bool prefix(const T &path, const T &pfx) {
         size_t pfx_len = _strlen(pfx);
         if (pfx_len == 1) {
-            assert(*pfx == '/');
+            assert(pfx[0] == '/');
             return true;  // 根路径是所有路径的前缀
         }
         return _prefix(path, pfx) &&

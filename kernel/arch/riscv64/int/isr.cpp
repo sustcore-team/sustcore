@@ -11,7 +11,7 @@
 
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
-#include <event/event.h>
+#include <event/registries.h>
 #include <schd/hooks.h>
 #include <sus/logger.h>
 #include <kio.h>
