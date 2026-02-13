@@ -4,14 +4,14 @@
 
 extern "C" void assertion_failure(const char *expression, const char *file,
                                   const char *base_file, int line) {
-    LOGGER.ERROR("assertion failed: %s (%s:%d, base=%s)", expression, file,
+    LOGGER::ERROR("assertion failed: %s (%s:%d, base=%s)", expression, file,
                  line, base_file);
     while (true);
 }
 
 extern "C" void panic_failure(const char *expression, const char *file,
                               const char *base_file, int line) {
-    LOGGER.ERROR("panic_assert failed: %s (%s:%d, base=%s)", expression, file,
+    LOGGER::ERROR("panic_assert failed: %s (%s:%d, base=%s)", expression, file,
                  line, base_file);
     while (true);
 }

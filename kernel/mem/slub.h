@@ -52,22 +52,21 @@ namespace slub {
 
     struct SlabHeader {
         enum class SlabState { EMPTY, PARTIAL, FULL };
-        SlabHeader *prev{};
-        SlabHeader *next{};
+        util::ListHead<SlabHeader> list_head{};
         void *freelist{};
         size_t inuse{};
         size_t total{};
         SlabState state{};
         SlabHeader()
-            : prev(nullptr),
-              next(nullptr),
+            : list_head({}),
               freelist(nullptr),
               inuse(0),
               total(0),
               state(SlabState::EMPTY) {}
     };
 
-    static_assert(util::IntrusiveListNodeTrait<SlabHeader>,
+    static_assert(util::IntrusiveListNodeTrait<SlabHeader,
+                  &SlabHeader::list_head>,
                   "SlabHeader fails to be a valid intrusive list node");
 
     template <typename ObjType>
