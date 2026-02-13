@@ -36,6 +36,9 @@ namespace std {
     // 布尔类型特化
     template <bool __v>
     using bool_constant = integral_constant<bool, __v>;
+    // 实际上, 这并非标准库的一部分, 但是我们用的多, 所以就直接定义了
+    template <size_t __v>
+    using size_constant = integral_constant<size_t, __v>;
     using true_type     = bool_constant<true>;
     using false_type    = bool_constant<false>;
 
@@ -255,11 +258,11 @@ namespace std {
 
     // 默认情况: 非数组类型，大小为0
     template <typename, unsigned _Uint = 0>
-    struct extent : public integral_constant<size_t, 0> {};
+    struct extent : public size_constant<0> {};
 
     // 如果是数组类型, 且已递归到最外层, 则返回数组大小
     template <typename _Tp, unsigned _Size>
-    struct extent<_Tp[_Size], 0> : public integral_constant<size_t, _Size> {};
+    struct extent<_Tp[_Size], 0> : public size_constant<_Size> {};
 
     // 如果还未递归到最外层, 继续递归
     template <typename _Tp, unsigned _Uint, unsigned _Size>
@@ -267,7 +270,7 @@ namespace std {
 
     // 特化: 不定长数组
     template <typename _Tp>
-    struct extent<_Tp[], 0> : public integral_constant<size_t, 0> {};
+    struct extent<_Tp[], 0> : public size_constant<0> {};
     template <typename _Tp, unsigned _Uint>
     struct extent<_Tp[], _Uint> : public extent<_Tp, _Uint - 1>::type {};
 
@@ -277,7 +280,7 @@ namespace std {
 
     // rank
     template <typename _Tp>
-    struct rank : public integral_constant<size_t, __array_rank(_Tp)> {};
+    struct rank : public size_constant<__array_rank(_Tp)> {};
 
     // 别名
     template <typename _Tp>

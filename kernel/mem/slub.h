@@ -67,11 +67,11 @@ namespace slub {
 
     template <typename ObjType>
     struct size_of_type
-        : public std::integral_constant<size_t, sizeof(ObjType)> {};
+        : public std::size_constant<sizeof(ObjType)> {};
 
     template <typename ObjType>
     struct align_of_type
-        : public std::integral_constant<size_t, alignof(ObjType)> {};
+        : public std::size_constant<alignof(ObjType)> {};
 
     template <typename ObjType>
     concept HugeObjectType = (size_of_type<ObjType>::value >= SLAB_KMAX);
