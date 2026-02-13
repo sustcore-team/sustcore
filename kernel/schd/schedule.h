@@ -57,5 +57,6 @@ namespace schd {
         }
     };
 
+    extern bool schedule_start_flag;
     Context *do_schedule(Context *ctx);
 }  // namespace schd
