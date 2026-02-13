@@ -34,10 +34,18 @@ PCB::PCB() : pid(0), rp_level(0), threads(), main_thread(nullptr) {}
 // task.h
 
 util::Defer<util::IDManager<>> TID;
+AutoDeferPost(TID);
+
+struct TEST {
+    TEST() {
+        LOGGER::DEBUG("TEST constructor called");
+    }
+};
+util::Defer<TEST> test_defer;
+AutoDeferPost(test_defer);
 
 void TaskListener::handle(PostGlobalObjectInitEvent &event)
 {
-    TID.construct();
 }
 
 void TCBManager::init() {

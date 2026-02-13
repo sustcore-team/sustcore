@@ -30,6 +30,27 @@ SECTIONS
     .rodata : {
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
+
+        . = ALIGN(4K);
+        s_attach_license = .;
+        *(.attach.license)
+        e_attach_license = .;
+
+        . = ALIGN(4K);
+        s_attach_test = .;
+        *(.attach.test)
+        e_attach_test = .;
+
+        . = ALIGN(4K);
+        s_defer_pre = .;
+        *(.defer.pre)
+        e_defer_pre = .;
+
+        . = ALIGN(4K);
+        s_defer_post = .;
+        *(.defer.post)
+        e_defer_post = .;
+
         . = ALIGN(4K);
         e_rodata = .;
     }
@@ -55,20 +76,6 @@ SECTIONS
 
     . = ALIGN(4K);
     s_misc = .;
-
-    . = ALIGN(4K);
-    s_attach_license = .;
-    .attach.license : {
-        *(.attach.license)
-        e_attach_license = .;
-    }
-
-    . = ALIGN(4K);
-    s_attach_test = .;
-    .attach.test : {
-        *(.attach.test)
-        e_attach_test = .;
-    }
 
     . = ALIGN(4K);
     .comment : { *(.comment .comment.*) }

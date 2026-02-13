@@ -20,15 +20,31 @@
 #include <new>
 
 namespace util {
-    template <typename T, auto... Args>
+    struct DeferEntry {
+        using ctor_type = void (*)(void *);
+        void *_instance;
+        ctor_type _constructor;
+    };
+
+    consteval DeferEntry __make_defer_entry(void *instance,
+                                            DeferEntry::ctor_type constructor) {
+        return DeferEntry{instance, constructor};
+    }
+
+    template <typename T, auto... args>
     class Defer {
     protected:
         alignas(T) char storage[sizeof(T)];
         bool initialized = false;
+        inline static void static_construct(void *defer) {
+            assert(defer != nullptr);
+            Defer<T> *_defer = static_cast<Defer<T> *>(defer);
+            _defer->construct();
+        }
     public:
         inline void construct() {
-            assert(! initialized);
-            new (storage) T(Args...);
+            assert(!initialized);
+            new (storage) T(args...);
             initialized = true;
         }
         inline T &get() {
@@ -44,5 +60,15 @@ namespace util {
         operator T() {
             return get();
         }
+
+        consteval DeferEntry make_defer(void) {
+            return __make_defer_entry((void *)this, &Defer<T>::static_construct);
+        }
     };
+
+#define AutoDefer(x, phase)                                                \
+    __attribute__((section(".defer."#phase))) util::DeferEntry __auto_defer_##x = \
+        x.make_defer()
+#define AutoDeferPre(x)  AutoDefer(x, pre)
+#define AutoDeferPost(x) AutoDefer(x, post)
 }  // namespace util

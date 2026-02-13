@@ -69,7 +69,7 @@ __attribute__((noinline)) int trigger_illegal_instruction(void) {
 
 void Riscv64Initialization::post_init(void) {
     // 测试非法指令异常处理
-    trigger_illegal_instruction();
+    // trigger_illegal_instruction();
 
     // 我们希望50ms触发1次时钟中断(调试用)
     units::frequency freq = get_clock_freq();

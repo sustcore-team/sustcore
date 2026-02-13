@@ -23,6 +23,7 @@
 util::Defer<BuddyAllocator::BlockList>
     BuddyAllocator::free_area[BuddyAllocator::MAX_BUDDY_ORDER + 1];
 
+// 这种数组式的不适用于AutoDefer
 void BuddyListener::handle(PreGlobalObjectInitEvent &event) {
     BUDDY::DEBUG("BuddyListener handling PreGlobalObjectInitEvent");
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {

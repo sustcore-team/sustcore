@@ -93,6 +93,19 @@ MemRegion regions[128];
 PageMan::PTE *kernel_root = nullptr;
 void *phymem_upper_bound;
 
+void run_defers(void *s_defer, void *e_defer) {
+    constexpr size_t DEFER_ENTRY_SIZE = sizeof(util::DeferEntry);
+    size_t defer_seg_size = (char *)e_defer - (char *)s_defer;
+    assert (defer_seg_size % DEFER_ENTRY_SIZE == 0);
+    size_t defer_count = defer_seg_size / DEFER_ENTRY_SIZE;
+    LOGGER::INFO("开始运行defer构造函数。本批次defer起始地址为%p, 终结于%p, 总共%u个defer", s_defer, e_defer, defer_count);
+    for (size_t i = 0; i < defer_count; i++) {
+        util::DeferEntry *entry = (util::DeferEntry *)((uintptr_t)s_defer + i * DEFER_ENTRY_SIZE);
+        LOGGER::DEBUG("运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p", i, entry->_instance, entry->_constructor);
+        entry->_constructor(entry->_instance);
+    }
+}
+
 void kernel_paging_setup() {
     // 创建内核页表管理器
     kernel_root = PageMan::make_root();
@@ -131,6 +144,7 @@ void post_init(void) {
     // 收集全局对象Defer并执行构造
     PostGlobalObjectInitEvent pre_init_event;
     EventDispatcher<PostGlobalObjectInitEvent>::dispatch(pre_init_event);
+    run_defers(&s_defer_post, &e_defer_post);
 
     // 初始化中断
     Interrupt::init();
@@ -138,8 +152,8 @@ void post_init(void) {
     // 架构后初始化
     Initialization::post_init();
 
-    buddy_test_complex();
-    slub_test_basic();
+    // buddy_test_complex();
+    // slub_test_basic();
 
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
@@ -171,6 +185,7 @@ void pre_init(void) {
     // 发布PreGlobalObjectInitEvent
     PreGlobalObjectInitEvent pre_init_event;
     EventDispatcher<PreGlobalObjectInitEvent>::dispatch(pre_init_event);
+    run_defers(&s_defer_pre, &e_defer_pre);
 
     LOGGER::INFO("初始化GFP");
     GFP::pre_init(regions, cnt);

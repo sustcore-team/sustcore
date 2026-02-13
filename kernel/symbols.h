@@ -82,10 +82,11 @@ extern void *s_attach_license, *e_attach_license;
 extern void *s_attach_test, *e_attach_test;
 
 /**
- * @brief 存放临时用户态代码
+ * @brief Defer Constructors
  * 
  */
-extern void *s_ptest1, *e_ptest1;
+extern void *s_defer_pre, *e_defer_pre;
+extern void *s_defer_post, *e_defer_post;
 
 #ifdef __cplusplus
 }

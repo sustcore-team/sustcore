@@ -36,10 +36,10 @@ static_assert(basecpp::IOTrait<KernelIO>, "KernelIO does not satisfy IOTrait");
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, LOGGER);
 
 // 内存管理相关Logger
-DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, MEMORY)
-DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, PAGING);
-DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, PMMLOG);
-DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, BUDDY)
+DECLARE_LOGGER(KernelIO, LogLevel::INFO, MEMORY)
+DECLARE_LOGGER(KernelIO, LogLevel::INFO, PAGING);
+DECLARE_LOGGER(KernelIO, LogLevel::INFO, PMMLOG);
+DECLARE_LOGGER(KernelIO, LogLevel::INFO, BUDDY)
 DECLARE_LOGGER(KernelIO, LogLevel::DEBUG, SLUB);
 
 // 设备相关Logger
