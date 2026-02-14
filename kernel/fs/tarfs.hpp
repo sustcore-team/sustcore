@@ -4,9 +4,13 @@
  * @brief Tar Based initramfs
  * @version alpha-1.0.0
  * @date 2026-02-13
- * 
+ *
+ * 生命周期由 Dentry 树管理，INode 和 Dentry 保证一一对应；
+ * 所以 TarNode 糅合了 Dentry 与 INode，
+ * 负责析构 File/Directory 视图
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -14,296 +18,294 @@
 #include <device/block.h>
 #include <stdio.h>
 #include <string.h>
+#include <sus/list.h>
+#include <sus/mstring.h>
 #include <vfs/ops.h>
 
-#include <cassert>
-#include <cstdint>
+#include <cstddef>
 
-using uint8_t = unsigned char;
+namespace tarfs {
 
-static constexpr size_t BLOCK_SIZE = 512;
+    using uint8_t = unsigned char;
 
-template <typename T>
-size_t parse_octal(const T &field) {
-    // 使用模板来适配不同长度的 octal 字段
-    size_t result = 0;
-    for (size_t i = 0; i < sizeof(field); ++i) {
-        char c = field[i];
-        if (c == '\0') {
-            break;
-        }
-        if (c < '0' || c > '7') {
-            // 非法字符，返回当前结果
-            break;
-        }
-        result = (result << 3) + (c - '0');
-    }
-    return result;
-}
+    static constexpr size_t BLOCK_SIZE = 512;
 
-union TarBlock {
-    struct ustar_header {
-        char name[100];
-        char mode[8];
-        char uid[8];
-        char gid[8];
-        char size[12];
-        char mtime[12];
-        char checksum[8];
-        char typeflag[1];
-        char linkname[100];
-        char magic[6];
-        char version[2];
-        char uname[32];
-        char gname[32];
-        char devmajor[8];
-        char devminor[8];
-        char prefix[155];
-        char pad[12];
-    } header;
-    uint8_t raw[512];
-
-    bool is_header() const {
-        if (strcmp(this->header.magic, "ustar") != 0) {
-            // 必须是 ustar 格式
-            return false;
-        }
-        return true;
-    }
-
-    bool is_empty() const {
-        for (size_t i = 0; i < BLOCK_SIZE; ++i) {
-            if (raw[i] != 0)
+    /**
+     * @brief 判断pfx是否是str的前缀
+     */
+    inline bool prefix(const char *str, const char *pfx) {
+        while (*pfx != 0) {
+            if (*str != *pfx) {
                 return false;
-        }
-        return true;
-    }
-
-    unsigned int calc_checksum() const {
-        TarBlock temp           = *this;
-        temp.header.checksum[0] = ' ';
-        temp.header.checksum[1] = ' ';
-        temp.header.checksum[2] = ' ';
-        temp.header.checksum[3] = ' ';
-        temp.header.checksum[4] = ' ';
-        temp.header.checksum[5] = ' ';
-        temp.header.checksum[6] = ' ';
-        temp.header.checksum[7] = ' ';
-
-        unsigned int sum = 0;
-        for (size_t i = 0; i < BLOCK_SIZE; ++i) {
-            sum += static_cast<unsigned int>(temp.raw[i]);
-        }
-        return sum;
-    }
-};
-
-class TarFile : public IFile {
-public:
-    FSOptional<size_t> read(void *buf, size_t len) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSOptional<size_t> write(const void *buf, size_t len) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSOptional<off_t> seek(off_t offset, SeekWhence whence) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSErrCode sync(void) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-};
-
-class TarDirectory : public IDirectory {
-public:
-    FSOptional<IDentry *> lookup(const char *name) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSOptional<IDentry *> create(const char *name, bool is_dir) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSErrCode sync(void) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-};
-
-class TarDentry : public IDentry {
-private:
-    TarINode *inode_;
-
-public:
-    FSOptional<const char *> name(void) override {
-        return inode_->header_->header.name;
-    }
-
-    FSErrCode remove(void) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSErrCode rename(const char *new_name) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    FSOptional<IINode *> inode(void) override {
-        return inode_;
-    }
-};
-
-// INode 就是 header
-class TarINode : public IINode {
-private:
-    const TarBlock *header_;
-    const uint8_t *data_;  // 指向 header 之后的数据
-    union {
-        TarDirectory *dir;
-        TarFile *file;
-    } view_{};
-
-public:
-    TarINode(const uint8_t *header, const uint8_t *data) {
-        header_ = reinterpret_cast<const TarBlock *>(header);
-        data_   = data;
-    }
-
-    FSOptional<IDirectory *> as_directory(void) override {
-        if (header_->header.typeflag[0] != '5') {
-            return FSErrCode::INVALID_PARAM;  // 不是目录
-        }
-        if (!view_.dir) {
-            view_.dir = new TarDirectory();
-        }
-        return view_.dir;
-    }
-
-    FSOptional<IFile *> as_file(void) override {
-        if (header_->header.typeflag[0] != '0' &&
-            header_->header.typeflag[0] != '\0')
-        {
-            return FSErrCode::INVALID_PARAM;  // 不是普通文件
-        }
-        if (!view_.file) {
-            view_.file = new TarFile();
-        }
-        return view_.file;
-    }
-
-    FSOptional<IMetadata *> metadata(void) override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-    friend class TarDentry;
-};
-
-class TarSuperblock : public ISuperblock {
-private:
-    const uint8_t *data_;  // 只读数据
-    size_t size_;
-    TarFSDriver *fs_;
-    TarINode *root_{};
-
-public:
-    TarSuperblock(const uint8_t *data, size_t size, TarFSDriver *fs)
-        : data_(data), size_(size), fs_(fs) {}
-
-    ~TarSuperblock() override {
-        delete[] data_;
-        delete root_;
-    }
-
-    IFsDriver *fs() override {
-        return fs_;
-    }
-
-    FSErrCode sync() override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-
-    // tarfs 的根目录就是 tar 包中的第一个 header
-    // ! unsafe 不能从外部 delete INode
-    FSOptional<IINode *> root() override {
-        // 返回根目录 inode
-        if (!root_) {
-            root_ = new TarINode(data_, data_ + BLOCK_SIZE);
-        }
-        return root_;
-    }
-
-    FSOptional<IMetadata *> metadata() override {
-        return FSErrCode::NOT_SUPPORTED;
-    }
-};
-
-// Like a SuperBlock factory
-class TarFSDriver : public IFsDriver {
-private:
-    bool is_valid(size_t size_, const uint8_t *data_) {
-        // 检查文件大小是否为 BLOCK_SIZE 的整数倍
-        if (size_ % BLOCK_SIZE != 0)
-            return false;
-
-        // 检查 checksum
-        for (size_t offset = 0; offset < size_;) {
-            const TarBlock *block =
-                reinterpret_cast<const TarBlock *>(data_ + offset);
-            auto stored = parse_octal(block->header.checksum);
-            if (stored == block->calc_checksum()) {
-                size_t file_size   = parse_octal(block->header.size);
-                size_t file_block  = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                offset            += BLOCK_SIZE * (file_block + 1);
-                // offset 跳到下一个 header 块
-            } else {
-                if (block->is_empty()) {
-                    offset += BLOCK_SIZE;
-                    // 允许文件有空块
-                } else {
-                    return false;
-                }
             }
+            str++;
+            pfx++;
         }
         return true;
     }
 
-public:
-    const char *name() const override {
-        return "tarfs";
+    template <typename T>
+    inline size_t parse_octal(const T &field) {
+        // 使用模板来适配不同长度的字符八进制字段
+        size_t result = 0;
+        for (size_t i = 0; i < sizeof(field); ++i) {
+            char c = field[i];
+            if (c == '\0') {
+                break;
+            }
+            if (c < '0' || c > '7') {
+                // 非法字符，返回当前结果
+                break;
+            }
+            result = (result << 3) + (c - '0');
+        }
+        return result;
+    }
+
+    union TarBlock {
+        struct ustar_header {
+            char name[100];
+            char mode[8];
+            char uid[8];
+            char gid[8];
+            char size[12];
+            char mtime[12];
+            char checksum[8];
+            char typeflag[1];
+            char linkname[100];
+            char magic[6];
+            char version[2];
+            char uname[32];
+            char gname[32];
+            char devmajor[8];
+            char devminor[8];
+            char prefix[155];
+            char pad[12];
+        } header;
+        uint8_t raw[512];
+
+        inline bool is_header() const {
+            if (strcmp(this->header.magic, "ustar") != 0) {
+                // 必须是 ustar 格式
+                return false;
+            }
+            return true;
+        }
+
+        inline bool is_empty() const {
+            for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+                if (raw[i] != 0)
+                    return false;
+            }
+            return true;
+        }
+
+        inline unsigned int calc_checksum() const {
+            TarBlock temp           = *this;
+            temp.header.checksum[0] = ' ';
+            temp.header.checksum[1] = ' ';
+            temp.header.checksum[2] = ' ';
+            temp.header.checksum[3] = ' ';
+            temp.header.checksum[4] = ' ';
+            temp.header.checksum[5] = ' ';
+            temp.header.checksum[6] = ' ';
+            temp.header.checksum[7] = ' ';
+
+            unsigned int sum = 0;
+            for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+                sum += static_cast<unsigned int>(temp.raw[i]);
+            }
+            return sum;
+        }
     };
 
-    FSErrCode probe(IBlockDevice *device, const char *options) override {
-        size_t size        = device->block_sz() * device->block_cnt();
-        uint8_t *data      = new uint8_t[size];
-        size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
-        if (read_blocks != device->block_cnt()) {
-            delete[] data;
-            return FSErrCode::IO_ERROR;
+    class TarNode;
+
+    class TarFile : public IFile {
+    private:
+        TarNode *node_;
+        const uint8_t *ptr_;
+        const uint8_t *data_;
+        const uint8_t *end_;
+
+    public:
+        TarFile(TarNode *node);
+        FSOptional<size_t> read(void *buf, size_t len) override;
+        FSOptional<off_t> seek(off_t offset, SeekWhence whence) override;
+        FSOptional<size_t> write(const void *buf, size_t len) override {
+            return FSErrCode::NOT_SUPPORTED;
         }
-        if (is_valid(size, data)) {
-            delete[] data;
+        FSErrCode sync(void) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+    };
+
+    class TarDirectory : public IDirectory {
+    private:
+        TarNode *node_;
+
+    public:
+        TarDirectory(TarNode *node) : node_(node) {}
+        FSOptional<IDentry *> lookup(const char *name) override;
+        FSOptional<IDentry *> create(const char *name, bool is_dir) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+        FSErrCode sync(void) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+    };
+
+    class TarNode : public IINode, public IDentry {
+    private:
+        // 理论上，多个 Dentry 可能指向同一个 INode
+        // 但在 tarfs 中，每个 Dentry 都对应一个 INode
+        // 这样可以简化生命期管理，增加缓存命中
+        // 否则就得上引用计数了
+        bool is_dir_;
+        const TarBlock *header_;
+
+        union {
+            TarDirectory *dir;
+            TarFile *file;
+        } view_{};
+        util::ArrayList<TarNode *> children_{};
+
+    public:
+        TarNode(const uint8_t *header) {
+            header_ = reinterpret_cast<const TarBlock *>(header);
+            is_dir_ = header_->header.typeflag[0] == '5';
+        }
+
+        TarNode(const TarBlock *header) {
+            header_ = header;
+            is_dir_ = header_->header.typeflag[0] == '5';
+        }
+
+        ~TarNode() noexcept {
+            if (is_dir_)
+                delete view_.dir;
+            else
+                delete view_.file;
+
+            for (auto child : children_) {
+                delete child;
+            }
+        }
+
+        // IINode
+
+        FSOptional<IDirectory *> as_directory(void) override {
+            if (!is_dir_)
+                return FSErrCode::INVALID_PARAM;
+            if (!view_.dir) {
+                view_.dir = new TarDirectory{this};
+            }
+            return view_.dir;
+        }
+
+        FSOptional<IFile *> as_file(void) override {
+            if (is_dir_)
+                return FSErrCode::INVALID_PARAM;
+            if (!view_.file) {
+                view_.file = new TarFile{this};
+            }
+            return view_.file;
+        }
+
+        FSOptional<IMetadata *> metadata(void) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+
+        // IDentry
+
+        FSOptional<const char *> name(void) override {
+            return header_->header.name;
+        }
+
+        FSErrCode remove(void) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+
+        FSErrCode rename(const char *new_name) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+
+        FSOptional<IINode *> inode(void) override {
+            return dynamic_cast<IINode *>(this);
+        }
+
+        friend class TarFile;
+        friend class TarDirectory;
+    };
+
+    // Like a SuperBlock factory
+    class TarFSDriver : public IFsDriver {
+    private:
+        inline bool is_valid(size_t size_, const uint8_t *data_);
+
+    public:
+        inline const char *name() const override {
+            return "tarfs";
+        };
+
+        FSErrCode probe(IBlockDevice *device, const char *options) override;
+
+        FSOptional<ISuperblock *> mount(IBlockDevice *device,
+                                        const char *options) override;
+
+        FSErrCode unmount(ISuperblock *&sb) override {
+            delete sb;
+            sb = nullptr;
             return FSErrCode::SUCCESS;
-        } else {
-            delete[] data;
-            return FSErrCode::INVALID_PARAM;
         }
-    }
+    };
 
-    FSOptional<ISuperblock *> mount(IBlockDevice *device,
-                                    const char *options) override {
-        size_t size        = device->block_sz() * device->block_cnt();
-        uint8_t *data      = new uint8_t[size];
-        size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
-        if (read_blocks != device->block_cnt()) {
-            delete[] data;
-            return FSErrCode::IO_ERROR;
+    class TarSuperblock : public ISuperblock {
+    private:
+        const uint8_t *data_;  // 只读数据段
+        const size_t size_;
+        TarFSDriver *fs_;
+        TarNode *root_{};
+
+    public:
+        TarSuperblock(const uint8_t *data, size_t size, TarFSDriver *fs)
+            : data_(data), size_(size), fs_(fs) {}
+
+        ~TarSuperblock() override {
+            delete[] data_;
+            delete root_;
+            // 触发全部析构
         }
-        return new TarSuperblock(data, size, this);
-    }
 
-    FSErrCode unmount(ISuperblock *&sb) override {
-        delete sb;
-        sb = nullptr;
-        return FSErrCode::SUCCESS;
-    }
-};
+        IFsDriver *fs() override {
+            return dynamic_cast<IFsDriver *>(fs_);
+        }
+
+        FSErrCode sync() override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+
+        // tarfs 的根目录就是 tar 包中的第一个 header
+        // ! unsafe 不能从外部 delete root_
+        // 否则除了数据指针，tarfs 对象的所有指针都会失效
+        FSOptional<IINode *> root() override {
+            // 返回根目录 inode
+            if (!root_) {
+                root_ = new TarNode(data_);
+            }
+            return root_;
+        }
+
+        // FSOptional<IDentry *> root_d() {
+        //     if (!root_) {
+        //         root_ = new TarDentry(data_);
+        //     }
+        //     return root_;
+        // }
+
+        FSOptional<IMetadata *> metadata() override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+    };
+
+};  // namespace tarfs
