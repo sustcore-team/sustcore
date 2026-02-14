@@ -33,8 +33,9 @@ build:
 	$(q)$(MAKE) -f $(path-e)/libs/basecpp/Makefile $(arg-basic) $@
 	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
 
-	$(call if_mkdir, $(path-attach))
-	$(q)$(copy) ./LICENSE $(path-attach)/license
+	$(call if_mkdir, $(path-initrd))
+	$(q)$(copy) ./LICENSE $(path-initrd)/license
+	$(q)$(copy) -r ./kernel $(path-initrd)/kernel
 
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@
 

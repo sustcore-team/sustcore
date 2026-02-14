@@ -32,14 +32,9 @@ SECTIONS
         *(.srodata .srodata.*)
 
         . = ALIGN(4K);
-        s_attach_license = .;
-        *(.attach.license)
-        e_attach_license = .;
-
-        . = ALIGN(4K);
-        s_attach_test = .;
-        *(.attach.test)
-        e_attach_test = .;
+        s_initrd = .;
+        *(.attach.initrd.tar)
+        e_initrd = .;
 
         . = ALIGN(4K);
         s_defer_pre = .;

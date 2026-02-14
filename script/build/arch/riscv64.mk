@@ -8,4 +8,7 @@ define make-attachment
 	$(q)$(prefix-compiler)objcopy -I binary -O riscv64-unknown-elf -B riscv --rename-section .data=.attach.$(basename $(notdir $(1))) $(1) $(2)
 endef
 
+define make-tar
+endef
+
 $(warning "ARCH=riscv64")

@@ -70,16 +70,10 @@ extern void *s_bss, *e_bss;
 extern void *s_misc;
 
 /**
- * @brief 内核附加文件:license 起始/结束处位置
+ * @brief 内核附加文件: initrd 起始/结束处位置
  *
  */
-extern void *s_attach_license, *e_attach_license;
-
-/**
- * @brief 内核附加文件:test.mod 起始/结束处位置
- *
- */
-extern void *s_attach_test, *e_attach_test;
+extern void *s_initrd, *e_initrd;
 
 /**
  * @brief Defer Constructors

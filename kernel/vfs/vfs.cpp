@@ -370,3 +370,11 @@ FSErrCode VFS::_close(VFile *vfile) {
     delete vfile;
     return FSErrCode::SUCCESS;
 }
+
+FSOptional<size_t> VFS::_read(VFile *file, void *buf, size_t len)
+{
+    if (!open_file_list.contains(file->fd)) {
+        return FSErrCode::INVALID_PARAM;  // 文件未打开
+    }
+    return file->ifile->read(buf, len);
+}

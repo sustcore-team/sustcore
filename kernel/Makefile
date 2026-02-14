@@ -10,7 +10,7 @@ target-phy := $(path-kernel-phy)
 
 objects := main.o cxa.o assert.o
 deps := main.d cxa.d assert.d
-attachments :=
+attachments := initrd.tar.attachment.o
 
 subdirs := ./arch/$(architecture)/  ./cap  ./device ./event ./mem ./schd ./task ./vfs
 

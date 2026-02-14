@@ -15,6 +15,7 @@
 #include <vfs/ops.h>
 #include <sus/map.h>
 #include <sus/mstring.h>
+#include <cassert>
 
 typedef int fd_t;
 
@@ -51,10 +52,16 @@ public:
                            const char *mountpoint, MountFlags flags,
                            const char *options);
     FSErrCode umount(const char *mountpoint);
+
+    inline FSOptional<VFile *> get_file(fd_t fd) {
+        if (! open_file_list.contains(fd))
+            return FSErrCode::INVALID_PARAM;
+        util::Optional<VFile *> opt = open_file_list.get(fd);
+        assert (opt.present());
+        return opt.value();
+    }
     // 打开/关闭文件
     FSOptional<VFile *> _open(const char *path, int flags);
-    FSErrCode _close(VFile *vfile);
-
     inline FSOptional<fd_t> open(const char *path, int flags) {
         auto _vfile_opt = _open(path, flags);
         return _vfile_opt.map<fd_t>([](VFile *vfile) {
@@ -62,6 +69,7 @@ public:
         });
     }
 
+    FSErrCode _close(VFile *vfile);
     inline FSErrCode close(fd_t fd) {
         auto _vfile_opt = open_file_list.get(fd);
         if (! _vfile_opt.present()) {
@@ -69,5 +77,16 @@ public:
         }
         VFile *vfile = _vfile_opt.value();
         return _close(vfile);
+    }
+
+    // 读文件
+    FSOptional<size_t> _read(VFile *file, void *buf, size_t len);
+    inline FSOptional<size_t> read(fd_t fd, void *buf, size_t len) {
+        auto _vfile_opt = open_file_list.get(fd);
+        if (! _vfile_opt.present()) {
+            return FSErrCode::INVALID_PARAM;
+        }
+        VFile *vfile = _vfile_opt.value();
+        return _read(vfile, buf, len);
     }
 };

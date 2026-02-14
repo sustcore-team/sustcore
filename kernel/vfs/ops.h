@@ -28,6 +28,20 @@ enum class FSErrCode {
     UNKNOWN_ERROR = -255
 };
 
+constexpr const char *to_string(FSErrCode code)
+{
+    switch (code) {
+    case FSErrCode::SUCCESS: return "SUCCESS";
+    case FSErrCode::INVALID_PARAM: return "INVALID_PARAM";
+    case FSErrCode::NO_SPACE: return "NO_SPACE";
+    case FSErrCode::IO_ERROR: return "IO_ERROR";
+    case FSErrCode::NOT_SUPPORTED: return "NOT_SUPPORTED";
+    case FSErrCode::BUSY: return "BUSY";
+    case FSErrCode::UNKNOWN_ERROR: return "UNKNOWN_ERROR";
+    default: return "UNKNOWN_ERROR";
+    }
+}
+
 template <typename T>
 using FSOptional = util::Optional<T, FSErrCode, FSErrCode::SUCCESS, FSErrCode::UNKNOWN_ERROR>;
 

@@ -14,6 +14,7 @@
 #include <cap/capability.h>
 #include <cap/capcall.h>
 #include <cap/permission.h>
+#include <device/block.h>
 #include <event/init_events.h>
 #include <event/registries.h>
 #include <kio.h>
@@ -28,6 +29,8 @@
 #include <sus/types.h>
 #include <symbols.h>
 #include <task/task.h>
+#include <vfs/ops.h>
+#include <vfs/vfs.h>
 
 #include <cstdarg>
 #include <cstddef>
@@ -89,19 +92,31 @@ int kprintf(const char *fmt, ...) {
     return len;
 }
 
+RamDiskDevice *make_initrd(void) {
+    size_t sz             = (char *)&e_initrd - (char *)&s_initrd;
+    RamDiskDevice *device = new RamDiskDevice(&s_initrd, sz, 1);
+    LOGGER::INFO("initrd大小为 %u KB", sz / 1024, sz / 1024 / 1024);
+    return device;
+}
+
 MemRegion regions[128];
 PageMan::PTE *kernel_root = nullptr;
 void *phymem_upper_bound;
 
 void run_defers(void *s_defer, void *e_defer) {
     constexpr size_t DEFER_ENTRY_SIZE = sizeof(util::DeferEntry);
-    size_t defer_seg_size = (char *)e_defer - (char *)s_defer;
-    assert (defer_seg_size % DEFER_ENTRY_SIZE == 0);
+    size_t defer_seg_size             = (char *)e_defer - (char *)s_defer;
+    assert(defer_seg_size % DEFER_ENTRY_SIZE == 0);
     size_t defer_count = defer_seg_size / DEFER_ENTRY_SIZE;
-    LOGGER::INFO("开始运行defer构造函数。本批次defer起始地址为%p, 终结于%p, 总共%u个defer", s_defer, e_defer, defer_count);
+    LOGGER::INFO(
+        "开始运行defer构造函数。本批次defer起始地址为%p, 终结于%p, "
+        "总共%u个defer",
+        s_defer, e_defer, defer_count);
     for (size_t i = 0; i < defer_count; i++) {
-        util::DeferEntry *entry = (util::DeferEntry *)((uintptr_t)s_defer + i * DEFER_ENTRY_SIZE);
-        LOGGER::DEBUG("运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p", i, entry->_instance, entry->_constructor);
+        util::DeferEntry *entry =
+            (util::DeferEntry *)((uintptr_t)s_defer + i * DEFER_ENTRY_SIZE);
+        LOGGER::DEBUG("运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p",
+                      i, entry->_instance, entry->_constructor);
         entry->_constructor(entry->_instance);
     }
 }
@@ -161,6 +176,33 @@ void post_init(void) {
         (void *)0, (size_t)phymem_upper_bound, PageMan::RWX::NONE, true, false);
 
     TCBManager::init();
+
+    VFS vfs;
+    // Register Tarfs
+    // ...
+
+    RamDiskDevice *initrd = make_initrd();
+    FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
+    if (code != FSErrCode::SUCCESS) {
+        LOGGER::ERROR("vfs.mount()失败, errcode=%s", to_string(code));
+        while (true);
+    }
+
+    FSOptional<VFile *> file_opt = vfs._open("/initrd/kernel/main.cpp", 0);
+    if (! file_opt.present()) {
+        LOGGER::ERROR("vfs._open()失败, errcode=%s", to_string(file_opt.error()));
+    }
+    VFile *file = file_opt.value();
+
+    char *source_code = (char *)GFP::alloc_frame(10);
+    vfs._read(file, source_code, 10 * PAGESIZE);
+    kputs(source_code);
+
+    code = vfs.umount("/initrd");
+    if (code != FSErrCode::SUCCESS) {
+        LOGGER::ERROR("vfs.umount()失败, errcode=%s", to_string(code));
+        while (true);
+    }
 
     while (true);
 }
@@ -350,9 +392,9 @@ void slub_test_basic() {
     LOGGER::INFO("========== SLUB Test Start ==========");
 
     slub::SlubAllocator<SlubSmallObj> alloc;
-    constexpr int kSmallCount = 16;
+    constexpr int kSmallCount             = 16;
     SlubSmallObj *small_objs[kSmallCount] = {nullptr};
-    int small_alloc_ok = 0;
+    int small_alloc_ok                    = 0;
 
     LOGGER::INFO("SLUB Scenario A: small object alloc/free");
     for (int i = 0; i < kSmallCount; i++) {
@@ -365,7 +407,8 @@ void slub_test_basic() {
         small_objs[i]->b = static_cast<uint64_t>(0x20000000ull + i);
         small_alloc_ok++;
     }
-    LOGGER::INFO("small alloc success count=%d/%d", small_alloc_ok, kSmallCount);
+    LOGGER::INFO("small alloc success count=%d/%d", small_alloc_ok,
+                 kSmallCount);
 
     for (int i = 0; i < kSmallCount; i++) {
         if (small_objs[i]) {
@@ -429,7 +472,7 @@ struct TestTree {
 } NODES[TREE_SIZE];
 
 void tree_test(void) {
-    for (size_t i = 0 ; i < TREE_SIZE ; i ++) {
+    for (size_t i = 0; i < TREE_SIZE; i++) {
         NODES[i].idx = i;
     }
 
@@ -457,26 +500,25 @@ void tree_test(void) {
 
     Tree::link_child(NODES[13], NODES[15]);
 
-    for (int i = 0 ; i < 16 ; i ++) {
+    for (int i = 0; i < 16; i++) {
         if (Tree::is_root(NODES[i])) {
             int cs = Tree::get_children(NODES[i]).size();
             kprintf("节点 %d 为根, 拥有 %d 个子节点\n", i, cs);
-        }
-        else {
-            int p = Tree::get_parent(NODES[i]).idx;
+        } else {
+            int p  = Tree::get_parent(NODES[i]).idx;
             int cs = Tree::get_children(NODES[i]).size();
-            kprintf("节点 %d 的父亲为节点 %d, 拥有 %d 个子节点\n", i, p ,cs);
+            kprintf("节点 %d 的父亲为节点 %d, 拥有 %d 个子节点\n", i, p, cs);
         }
     }
 
-    Tree::foreach_pre(NODES[0], [](TestTree &node) {
-        kprintf("%d ", node.idx);
-    });
+    Tree::foreach_pre(NODES[0],
+                      [](TestTree &node) { kprintf("%d ", node.idx); });
 
     kprintf("\n");
 
     auto print_lca = [=](size_t a, size_t b) {
-        kprintf ("%d 与 %d 的 LCA 为 %d \n", a, b, Tree::lca(&NODES[a], &NODES[b])->idx);
+        kprintf("%d 与 %d 的 LCA 为 %d \n", a, b,
+                Tree::lca(&NODES[a], &NODES[b])->idx);
     };
 
     print_lca(0, 1);
