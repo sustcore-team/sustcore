@@ -37,6 +37,23 @@
                 "engineLogging": false
             },
             "MIMode": "gdb"
+        },
+        {
+            "name": "test-module-debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "miDebuggerPath": "riscv64-unknown-elf-gdb",
+            "miDebuggerServerAddress": "127.0.0.1:1234",
+            "program": "${workspaceFolder}/build/bin/mods/riscv64/test.mod",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "logging": {
+                "engineLogging": false
+            },
+            "MIMode": "gdb"
         }
     ]
 }

@@ -1,5 +1,16 @@
-#include <kio.h>
+/**
+ * @file assert.cpp
+ * @author jeromeyao (yaoshengqi726@outlook.com)
+ * theflysong(song_of_the_fly@163.com)
+ * @brief SLUB Allocator
+ * @version alpha-1.0.0
+ * @date 2026-02-13
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
 
+#include <kio.h>
 #include <cstdarg>
 
 extern "C" void assertion_failure(const char *expression, const char *file,

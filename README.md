@@ -24,9 +24,26 @@
 
 ## 命名规范
 
-变量名与函数名采用 `c_style`. 类型名则采用 `UpperCamelCase`. 宏采用 `MACRO`.
+变量名与函数名采用 `c_style`. 命名空间也应采用 `c_style`, 可以使用缩写并尽量避免下划线的使用。类型名则采用 `UpperCamelCase`. 宏采用 `MACRO`.
 
 ## 代码规范
+
+文件开头应该有文件头注释, 包含文件名, 作者, 版本等信息. 格式参考
+
+```cpp
+/**
+ * @file filename
+ * @author author (email)
+ * @brief A brief description of the file
+ * @version alpha-1.0.0
+ * @date the date
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+```
+
+可考虑使用fileHeaderComment插件自动生成文件头注释.
 
 无参数的函数应写作 `return_type func_name(void)`.
 注意注释含量. 可使用 `make stat_code` 统计代码的注释含量与密度.

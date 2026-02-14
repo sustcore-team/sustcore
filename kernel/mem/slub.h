@@ -1,3 +1,15 @@
+/**
+ * @file slub.h
+ * @author jeromeyao (yaoshengqi726@outlook.com)
+ * theflysong(song_of_the_fly@163.com)
+ * @brief SLUB Allocator
+ * @version alpha-1.0.0
+ * @date 2026-02-13
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #pragma once
 
 #include <kio.h>
@@ -66,12 +78,10 @@ namespace slub {
         "SlabHeader fails to be a valid intrusive list node");
 
     template <typename ObjType>
-    struct size_of_type
-        : public std::size_constant<sizeof(ObjType)> {};
+    struct size_of_type : public std::size_constant<sizeof(ObjType)> {};
 
     template <typename ObjType>
-    struct align_of_type
-        : public std::size_constant<alignof(ObjType)> {};
+    struct align_of_type : public std::size_constant<alignof(ObjType)> {};
 
     template <typename ObjType>
     concept HugeObjectType = (size_of_type<ObjType>::value >= SLAB_KMAX);

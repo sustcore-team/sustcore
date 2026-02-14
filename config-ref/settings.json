@@ -1,9 +1,9 @@
 {
     "fileHeaderComment.parameter":{
         "*":{
-            "author": "your_name",
+            "author": "author",
             "lic_sustcore": [
-                " * Sustcore",
+                " Sustcore",
                 " ",
                 " 作者: ${author}",
                 " ",
@@ -28,11 +28,43 @@
         "${workspaceFolder}/"
     ],
     "doxdocgen.file.versionTag": "@version alpha-1.0.0",
-    "doxdocgen.generic.authorName": "your_name",
-    "doxdocgen.generic.authorEmail": "your_email@sth.com",
+    "doxdocgen.generic.authorName": "author",
+    "doxdocgen.generic.authorEmail": "email",
     "files.associations": {
-        "*.S": "gas",
-        "*.h": "c",
-        "*.c": "c"
-    }
+        "*.S": "riscv",
+        "*.h": "cpp",
+        "type_trait": "cpp",
+        "concept": "cpp",
+        "*.c": "c",
+        "*.inc": "c",
+        "*.idef": "c",
+        "*.def": "c",
+        "*.code": "c"
+    },
+    "clangd.path": "clangd",
+    "clangd.arguments": [
+        "--all-scopes-completion",
+        "--background-index",
+        "--clang-tidy",
+        "--clang-tidy-checks=performance-*, bugprone-*, misc-*, google-*, modernize-*, readability-*, portability-*",
+        "--compile-commands-dir=${workspaceFolder}/.vscode/",
+        "--completion-parse=auto",
+        "--completion-style=detailed",
+        "--enable-config",
+        "--function-arg-placeholders=true",
+        "--header-insertion-decorators",
+        "--header-insertion=iwyu",
+        "--include-cleaner-stdlib",
+        "--log=verbose",
+        "--pch-storage=memory",
+        "--pretty",
+        "--ranking-model=decision_forest",
+        "--query-driver=riscv64-unknown-elf-g++",
+        "-j=12"
+    ],
+    "clangd.onConfigChanged": "restart",
+    "clangd.serverCompletionRanking": true,
+    "clangd.detectExtensionConflicts": true,
+    "editor.suggest.snippetsPreventQuickSuggestions": true,
+    "GitCommitPlugin.MaxSubjectCharacters": 40
 }
