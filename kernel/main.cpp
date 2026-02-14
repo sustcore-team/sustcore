@@ -31,6 +31,7 @@
 #include <task/task.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+#include <fs/tarfs.hpp>
 
 #include <cstdarg>
 #include <cstddef>
@@ -196,6 +197,12 @@ void post_init(void) {
     vfs.register_fs(new TestFS());
     // Register Tarfs
     // ...
+    
+    auto p = new tarfs::TarFSDriver();
+    // tarfs::TarFSDriver tarfs;
+    // auto p = &tarfs;
+
+    vfs.register_fs(p);
 
     RamDiskDevice *initrd = make_initrd();
     FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
