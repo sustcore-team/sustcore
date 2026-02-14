@@ -194,15 +194,8 @@ void post_init(void) {
             return FSErrCode::UNKNOWN_ERROR;
         }
     };
-    vfs.register_fs(new TestFS());
-    // Register Tarfs
-    // ...
-    
-    auto p = new tarfs::TarFSDriver();
-    // tarfs::TarFSDriver tarfs;
-    // auto p = &tarfs;
-
-    vfs.register_fs(p);
+    // Register Tarfs    
+    vfs.register_fs(new tarfs::TarFSDriver());
 
     RamDiskDevice *initrd = make_initrd();
     FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");

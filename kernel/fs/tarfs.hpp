@@ -23,11 +23,9 @@
 #include <vfs/ops.h>
 
 #include <cstddef>
+#include <cstdint>
 
 namespace tarfs {
-
-    using uint8_t = unsigned char;
-
     static constexpr size_t BLOCK_SIZE = 512;
 
     /**
