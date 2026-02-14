@@ -190,7 +190,7 @@ void post_init(void) {
                                                 const char *options) {
             return FSErrCode::UNKNOWN_ERROR;
         }
-        virtual FSErrCode unmount(ISuperblock *sb) {
+        virtual FSErrCode unmount(ISuperblock *&sb) {
             return FSErrCode::UNKNOWN_ERROR;
         }
     };

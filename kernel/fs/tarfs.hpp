@@ -22,6 +22,7 @@
 #include <sus/mstring.h>
 #include <vfs/ops.h>
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -83,11 +84,9 @@ namespace tarfs {
         uint8_t raw[512];
 
         inline bool is_header() const {
-            if (strcmp(this->header.magic, "ustar") != 0) {
-                // 必须是 ustar 格式
-                return false;
-            }
-            return true;
+            return header.magic[0] == 'u' && header.magic[1] == 's' &&
+                   header.magic[2] == 't' && header.magic[3] == 'a' &&
+                   header.magic[4] == 'r';
         }
 
         inline bool is_empty() const {
@@ -114,6 +113,32 @@ namespace tarfs {
                 sum += static_cast<unsigned int>(temp.raw[i]);
             }
             return sum;
+        }
+
+        inline util::string get_short_name() const {
+            // 约定 short name 是 header.name 的最后一个路径
+            // header.name == "foo/bar/baz.txt" -> "baz.txt"
+            // 但文件夹会以 '/' 结尾
+            // header.name == "foo/bar/" -> "bar"
+            assert(is_header() && header.name[0] != '/');
+            const char *start      = header.name;
+            const char *last_slash = start - 1;
+            for (const char *p = start; *p != '\0'; p++) {
+                if (*p == '/') {
+                    start      = last_slash + 1;
+                    last_slash = p;
+                }
+            }
+            if (last_slash < header.name) {
+                return util::string(header.name);
+            } else {
+                if (*(last_slash + 1) == '\0') {
+                    // 以 '/' 结尾，说明是文件夹
+                    return util::string(start, last_slash);
+                } else {
+                    return util::string(last_slash + 1);
+                }
+            }
         }
     };
 
@@ -160,6 +185,7 @@ namespace tarfs {
         // 这样可以简化生命期管理，增加缓存命中
         // 否则就得上引用计数了
         bool is_dir_;
+        util::string name_;  // short name, 约定为 header.name 的最后一个路径
         const TarBlock *header_;
 
         union {
@@ -172,11 +198,13 @@ namespace tarfs {
         TarNode(const uint8_t *header) {
             header_ = reinterpret_cast<const TarBlock *>(header);
             is_dir_ = header_->header.typeflag[0] == '5';
+            name_   = header_->get_short_name();
         }
 
         TarNode(const TarBlock *header) {
             header_ = header;
             is_dir_ = header_->header.typeflag[0] == '5';
+            name_   = header_->get_short_name();
         }
 
         ~TarNode() noexcept {
@@ -217,7 +245,7 @@ namespace tarfs {
         // IDentry
 
         FSOptional<const char *> name(void) override {
-            return header_->header.name;
+            return name_.c_str();
         }
 
         FSErrCode remove(void) override {
@@ -229,11 +257,12 @@ namespace tarfs {
         }
 
         FSOptional<IINode *> inode(void) override {
-            return dynamic_cast<IINode *>(this);
+            return static_cast<IINode *>(this);
         }
 
         friend class TarFile;
         friend class TarDirectory;
+        friend class TarSuperblock;
     };
 
     // Like a SuperBlock factory
@@ -276,7 +305,7 @@ namespace tarfs {
         }
 
         IFsDriver *fs() override {
-            return dynamic_cast<IFsDriver *>(fs_);
+            return static_cast<IFsDriver *>(fs_);
         }
 
         FSErrCode sync() override {
@@ -293,13 +322,6 @@ namespace tarfs {
             }
             return root_;
         }
-
-        // FSOptional<IDentry *> root_d() {
-        //     if (!root_) {
-        //         root_ = new TarDentry(data_);
-        //     }
-        //     return root_;
-        // }
 
         FSOptional<IMetadata *> metadata() override {
             return FSErrCode::NOT_SUPPORTED;

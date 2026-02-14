@@ -9,8 +9,12 @@
  *
  */
 
+#include <device/block.h>
+
 #include <cstddef>
 #include <fs/tarfs.hpp>
+
+#include "sus/mstring.h"
 
 namespace tarfs {
 
@@ -49,31 +53,42 @@ namespace tarfs {
     }
 
     FSOptional<IDentry *> TarDirectory::lookup(const char *name) {
-        util::string_builder path{node_->header_->header.name};
-        util::string pfx = path.build();
-        if (path[path.size() - 1] != '/')
-            path.append('/');
-        path.append(name);
-        util::string full_path = path.build();
+        if (*name == '\0')
+            return node_;  // 约定空字符串表示目录自身
 
         for (auto p : node_->children_) {
-            if (strcmp(p->header_->header.name, full_path.c_str()) == 0) {
+            if (p->name_ == name) {
                 return p;
             }
         }
 
+        // 缓存中没有，则遍历寻找
         IDentry *ret = nullptr;
+        util::string_builder sb(sizeof(TarBlock::header.name));
+        sb.append(node_->header_->header.name);
+        sb.append(name);
+        util::string path = sb.build();
 
         for (auto p = node_->header_ + 1;;) {
-            // 当 pfx 不再是 tar块 的前缀时，说明已经超出目录范围了
-            if (!prefix(p->header.name, pfx.c_str()))
-                break;
             if (!p->is_header())
-                return FSErrCode::UNKNOWN_ERROR;
+                break;
 
-            node_->children_.emplace_back(p);
-            if (full_path == p->header.name) {
-                ret = node_->children_.at(node_->children_.size() - 1);
+            // 末尾相差一个 '/' 也算匹配，只有 b 可能以 '/' 结尾，也比 a 长
+            auto is_same = [](const char *a, const char *b) {
+                while (*a != '\0') {
+                    if (*a != *b) {
+                        return false;
+                    }
+                    a++;
+                    b++;
+                }
+                return *b == '/' || *b == '\0';
+            };
+
+            if (is_same(path.c_str(), p->header.name)) {
+                ret = new TarNode(p);
+                node_->children_.push_back(static_cast<TarNode *>(ret));
+                break;
             }
 
             size_t file_size   = parse_octal(p->header.size);
@@ -85,6 +100,8 @@ namespace tarfs {
             return FSErrCode::INVALID_PARAM;  // 没有找到对应目录项
         else
             return ret;
+
+        return FSErrCode::ENTRY_NOT_FOUND;
     }
 
     bool TarFSDriver::is_valid(size_t size_, const uint8_t *data_) {
@@ -134,12 +151,18 @@ namespace tarfs {
     // 注意，没有做检验。需要确保 probe 过是 Tarfs
     FSOptional<ISuperblock *> TarFSDriver::mount(IBlockDevice *device,
                                                  const char *options) {
-        size_t size        = device->block_sz() * device->block_cnt();
-        uint8_t *data      = new uint8_t[size];
-        size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
-        if (read_blocks != device->block_cnt()) {
-            delete[] data;
-            return FSErrCode::IO_ERROR;
+        size_t size   = device->block_sz() * device->block_cnt();
+        uint8_t *data = nullptr;
+        if (device->is<RamDiskDevice>()) {
+            // 直接使用其内存作为数据源，减少复制
+            data = static_cast<uint8_t *>(device->as<RamDiskDevice>()->base());
+        } else {
+            data          = new uint8_t[size];
+            size_t blocks = device->read_blocks(0, data, device->block_cnt());
+            if (blocks != device->block_cnt()) {
+                delete[] data;
+                return FSErrCode::IO_ERROR;
+            }
         }
         return new TarSuperblock(data, size, this);
     }
