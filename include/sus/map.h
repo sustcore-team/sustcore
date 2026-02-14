@@ -190,6 +190,7 @@ namespace util {
         ListType entries;
 
     public:
+        LinkedMap() : entries() {};
         ~LinkedMap() {
             for (auto &e : entries) {
                 delete &e;

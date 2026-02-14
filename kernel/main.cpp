@@ -138,10 +138,8 @@ void kernel_paging_setup() {
     kernelman.flush_tlb();
 }
 
+extern "C"
 void post_init(void) {
-    // 将 sp 移动到高位内存
-    RELOAD_SP();
-
     // 设置post_init标志
     post_init_flag = true;
 
@@ -178,6 +176,24 @@ void post_init(void) {
     TCBManager::init();
 
     VFS vfs;
+    class TestFS : public IFsDriver {
+    public:
+        virtual const char *name() const {
+            return "test";
+        }
+        virtual FSErrCode probe(IBlockDevice *device,
+                                    const char *options) {
+            return FSErrCode::UNKNOWN_ERROR;
+        }
+        virtual FSOptional<ISuperblock *> mount(IBlockDevice *device,
+                                                const char *options) {
+            return FSErrCode::UNKNOWN_ERROR;
+        }
+        virtual FSErrCode unmount(ISuperblock *sb) {
+            return FSErrCode::UNKNOWN_ERROR;
+        }
+    };
+    vfs.register_fs(new TestFS());
     // Register Tarfs
     // ...
 
@@ -206,6 +222,9 @@ void post_init(void) {
 
     while (true);
 }
+
+extern "C"
+void redive(void);
 
 void pre_init(void) {
     Initialization::pre_init();
@@ -239,12 +258,12 @@ void pre_init(void) {
 
     // 进入 post-init 阶段
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
-    typedef void (*PostTestFuncType)(void);
-    PostTestFuncType post_test_func =
-        (PostTestFuncType)PA2KA((void *)post_init);
-    LOGGER::DEBUG("跳转到内核虚拟地址空间中的post_init函数: %p",
-                  post_test_func);
-    post_test_func();
+    typedef void (*RediveFuncType)(void);
+    RediveFuncType redive_func =
+        (RediveFuncType)PA2KA((void *)redive);
+    LOGGER::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p",
+                  redive_func);
+    redive_func();
 }
 
 void cap_test(void) {

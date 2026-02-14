@@ -13,6 +13,9 @@
 .extern hart_id
 .extern dtb_ptr
 
+.extern c_setup
+.extern post_init
+
 .section .text.entry, "ax"
 .globl _start
 _start:
@@ -25,6 +28,13 @@ _start:
     la sp, boot_stack_top
     # 跳转到 Rust/C 主函数
     call c_setup
+
+.section .text, "ax"
+.globl redive
+redive:
+    # 设置栈指针
+    la sp, boot_stack_top
+    j post_init
 
 .section .bss.stack
 .align 12
