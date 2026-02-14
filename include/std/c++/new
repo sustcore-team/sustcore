@@ -4,9 +4,9 @@
  * @brief new
  * @version alpha-1.0.0
  * @date 2026-02-04
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -18,3 +18,10 @@ void* operator new(size_t size, void* ptr) noexcept;
 void operator delete(void* ptr, void*) noexcept;
 void* operator new[](size_t size, void* ptr) noexcept;
 void operator delete[](void* ptr, void*) noexcept;
+
+namespace std {
+    template <typename T>
+    [[nodiscard]] constexpr T* launder(T* p) noexcept {
+        return __builtin_launder(p);
+    }
+}  // namespace std

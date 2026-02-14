@@ -41,6 +41,9 @@ namespace util {
             Defer<T> *_defer = static_cast<Defer<T> *>(defer);
             _defer->construct();
         }
+        inline T*_get(void) {
+            return std::launder(reinterpret_cast<T *>(storage));
+        }
     public:
         inline void construct() {
             assert(!initialized);
@@ -49,7 +52,7 @@ namespace util {
         }
         inline T &get() {
             assert(initialized);
-            return *reinterpret_cast<T *>(storage);
+            return *_get();
         }
         inline T *operator->() {
             return &get();
@@ -57,7 +60,7 @@ namespace util {
         inline T &operator*() {
             return get();
         }
-        operator T() {
+        operator T&() {
             return get();
         }
 
