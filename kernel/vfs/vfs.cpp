@@ -108,7 +108,7 @@ namespace path_util {
                 path_c++;
             }
         }
-        if (sb[sb.length() - 1]) {
+        if (sb[sb.length() - 1] == '/') {
             // 去掉结尾的斜杠
             sb.revert(1);
         }
