@@ -10,6 +10,7 @@
  */
 
 #include <mem/alloc_def.h>
+#include <mem/gfp.h>
 #include <sus/logger.h>
 #include <kio.h>
 
@@ -17,6 +18,9 @@ char LinearGrowAllocator::LGA_HEAP[LinearGrowAllocator::SIZE];
 size_t LinearGrowAllocator::lga_offset = 0;
 
 void* LinearGrowAllocator::malloc(size_t size) {
+    if (size >= 4096) {
+        return GFP::alloc_frame(page_align_up(size)/PAGESIZE);
+    }
     if (lga_offset + size > SIZE) {
         MEMORY::FATAL("%s", "内存不足");
         return nullptr;  // 内存不足
