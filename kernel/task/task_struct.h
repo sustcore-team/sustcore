@@ -36,8 +36,6 @@ struct TCB : public _Scheduler<TCB>::MetadataType {
     tid_t tid;
     PCB *pcb;
     struct Runtime {
-        // 上下文
-        Context *ctx;
         // 内核栈
         void *kstack;
         // 栈顶

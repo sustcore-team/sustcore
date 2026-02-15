@@ -16,6 +16,13 @@
 #include <sus/logger.h>
 #include <sus/types.h>
 
+static bool test_flag = false;
+
+void test() {
+    LOGGER::INFO("进入测试函数!");
+    while (true);
+}
+
 extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
                             Riscv64Context *ctx) {
     if (scause.interrupt) {
@@ -25,6 +32,19 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
     } else {
         // 异常
         Handlers::exception(scause, sepc, stval, ctx);
+    }
+
+    if (!test_flag) {
+        test_flag            = true;
+        size_t stack_page_cnt = 1;
+        void *kstack         = PA2KPA(GFP::alloc_frame(stack_page_cnt));
+        void *kstack_top     = (void *)((umb_t)kstack + stack_page_cnt * PAGESIZE);
+        void *ctx_addr = (void *)((umb_t)kstack_top - sizeof(Riscv64Context));
+        Riscv64Context *_ctx = new (ctx_addr) Riscv64Context();
+        memcpy(_ctx, ctx, sizeof(Riscv64Context));
+        _ctx->pc() = (umb_t)test;
+        _ctx->sp() = (umb_t)PA2KPA(GFP::alloc_frame());
+        Riscv64Context::switch_to(kstack_top);
     }
 }
 
@@ -57,4 +77,8 @@ void Riscv64Interrupt::cli(void) {
     csr_sstatus_t sstatus = csr_get_sstatus();
     sstatus.sie           = 0;
     csr_set_sstatus(sstatus);
+}
+
+void Riscv64Context::switch_to(void *kstack) {
+    csr_set_sscratch((umb_t)kstack);
 }

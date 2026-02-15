@@ -15,15 +15,15 @@
 
 namespace schd {
     bool schedule_start_flag = false;
-    Context *do_schedule(Context *ctx) {
+    void do_schedule(void) {
         // 未开始调度
         if (!schedule_start_flag) {
-            return nullptr;
+            return;
         }
         // 获得调度器
         Scheduler *scheduler = Scheduler::get_instance();
         if (scheduler == nullptr) {
-            return nullptr;
+            return;
         }
 
         // 获得当前线程和下一个线程
@@ -40,7 +40,7 @@ namespace schd {
         // 保持当前线程不变
         if (current_thread == next_thread) {
             SCHEDULER::DEBUG("继续运行线程 TID=%d", current_thread->tid);
-            return ctx;
+            return;
         }
 
         if (current_thread != nullptr) {
@@ -60,6 +60,6 @@ namespace schd {
             // switch pgd
         }
 
-        return next_thread->runtime.ctx;
+        Context::switch_to(next_thread->runtime.kstack);
     }
 }  // namespace schd

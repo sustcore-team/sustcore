@@ -50,3 +50,13 @@ void TaskListener::handle(PostGlobalObjectInitEvent &event)
 
 void TCBManager::init() {
 }
+
+/**
+ * @brief 默认任务
+ * 当没有其他任务可运行时, 调度器将运行该任务
+ * 该任务仅仅是一个死循环, 不执行任何有意义的操作
+ * 
+ */
+void default_task(void) {
+    while(true);
+}

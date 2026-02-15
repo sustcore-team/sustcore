@@ -9,6 +9,7 @@
  *
  */
 
+#include <arch/riscv64/description.h>
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
 #include <cap/capability.h>

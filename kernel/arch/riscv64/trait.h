@@ -57,13 +57,15 @@ struct Riscv64Context {
     csr_sstatus_t sstatus;
     umb_t kstack_sp;
 
-    umb_t &pc(void) {
+    inline umb_t &pc(void) {
         return this->sepc;
     }
 
-    umb_t &sp(void) {
+    inline umb_t &sp(void) {
         return this->regs[2 - 1];  // x2 = sp
     }
+
+    static void switch_to(void *kstack);
 };
 
 static_assert(ContextTrait<Riscv64Context>);
