@@ -366,7 +366,7 @@ FSErrCode VFS::_close(VFile *vfile) {
         return FSErrCode::INVALID_PARAM;  // 文件未打开
     }
     open_file_list.remove(vfile->fd);
-    delete vfile->ifile;
+    // delete vfile->ifile;
     delete vfile;
     return FSErrCode::SUCCESS;
 }
