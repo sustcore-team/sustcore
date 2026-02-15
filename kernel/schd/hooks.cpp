@@ -26,8 +26,4 @@ namespace schd {
             schd::hooks::on_tick(current_thread, event.gap_ticks);
         }
     }
-
-    void SchedulerListener::handle(SchedulerEvent &event) {
-        event.ret_ctx = do_schedule(event.ctx);
-    }
 }  // namespace schd

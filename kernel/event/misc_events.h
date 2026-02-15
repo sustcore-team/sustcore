@@ -11,15 +11,7 @@
 
 #pragma once
 
-#include <arch/description.h>
-
-struct SchedulerEvent {
-public:
-    Context *ctx;
-    Context *ret_ctx;
-    constexpr SchedulerEvent(Context *ctx)
-        : ctx(ctx), ret_ctx(ctx) {}
-};
+#include <cstddef>
 
 struct TimerTickEvent {
 public:

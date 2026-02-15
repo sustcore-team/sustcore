@@ -14,14 +14,18 @@ STACK_SIZE = 272
 .section .text
 .globl isr_entry
 .extern handle_trap
+/* ISR入口 */
 isr_entry:
-    /* 第1步：切换栈空间 */
+save_context:
+    /* 第1步: 切换到内核栈空间 */
+    /* 按约定, sscratch存放了该线程的内核栈顶地址, 因此直接交换sp和sscratch即可切换到内核栈空间 */
     csrrw sp, sscratch, sp
-    /* 如果sp为零，说明之前是S-Mode, 否则是U-Mode, 进入不同情况对栈寄存器的处理 */
-    bne sp, zero, isr_ustkp
-    /* S-Mode Stack Protection*/
-isr_sstkp:
+    /* 但如果sp为零, 说明之前是S-Mode, 否则是U-Mode, 进入不同情况对栈寄存器的处理 */
+    bnez sp, isr_ustks
+/* S-Mode Stack Save*/
+isr_sstks:
     /* 第2步: 从sscratch中恢复sp */
+    /* 此时sp = 0, sscratch中保存的就是原sp, 直接交换即可恢复sp */
     csrrw sp, sscratch, sp
     /* 分配栈空间并保存x1, x2 */
     addi sp, sp, -STACK_SIZE
@@ -30,9 +34,9 @@ isr_sstkp:
     addi x1, sp, STACK_SIZE
     /* 保存x2 */
     sd x1, 8(sp)
-    j isr_regp
-    /* U-Mode Stack Protection*/
-isr_ustkp:
+    j isr_sregs
+/* U-Mode Stack Save*/
+isr_ustks:
     /* 此时, sp 为内核栈顶地址 */
     /* 分配栈空间并保存x1, x2 */
     addi sp, sp, -STACK_SIZE
@@ -41,10 +45,12 @@ isr_ustkp:
     csrr x1, sscratch
     /* 保存 x2 */
     sd x1, 8(sp)
-    /* 清空sscratch */
-    csrw sscratch, zero
-isr_regp:
-    /* 第3步: 保存通用寄存器 */
+    /* 此时将sscratch设置为原内核栈顶地址(依约定, sscratch中保存的就是内核栈顶地址) */
+    /* 原内核栈顶 - STACK_SIZE = sp => 原内核栈顶 = sp + STACK_SIZE */
+    addi x1, sp, STACK_SIZE
+    csrw sscratch, x1
+/* 通用寄存器保存(除了x1, x2) */
+isr_sregs:
     sd x3, 16(sp)
     sd x4, 24(sp)
     sd x5, 32(sp)
@@ -74,36 +80,57 @@ isr_regp:
     sd x29, 224(sp)
     sd x30, 232(sp)
     sd x31, 240(sp)
-    /* 接下来寄存器就可以随意使用了 */
+    /* 在这之后, 通用寄存器就任我们摆布了 */
+isr_scsrs:
     /* 保存关键 CSR */
     csrr t0, sepc
     sd t0, 248(sp)
     csrr t0, sstatus
     sd t0, 256(sp)
-    /* 保存 kstack sp */
-    sd sp, 264(sp)
+    /* 跳转至C异常处理函数 */
+    j __handle_trap
+
+__handle_trap:
     /* 传参 */
     csrr a0, scause
     csrr a1, sepc
     csrr a2, stval
     mv   a3, sp
-    /* 调用C异常处理函数 */
     call handle_trap
-    /* 恢复 kstack sp */
-    ld sp, 264(sp)
-    /* 如果返回到S-MODE, 则handle_trap中应当将8(sp)值设置为0 */
-isr_regr:
-    /* 恢复关键 CSR */
+    /* 处理完成后, 跳转至ISR出口 */
+    j isr_exit
+
+isr_exit:
+restore_context:
+    /* 理论上, 此时的sp就是我们的内核栈sp了 */
+    /* 然而, 此时的sp可能并非sscratch中保存的内核栈顶地址 */
+    /* 我们将再次从sscratch中恢复sp. 这样, 内核就可以通过操纵sscratch来控制sp */
+    csrrw sp, sscratch, sp
+    /* 然而, 若此时sp为0, 则sscratch原先即为0, 即原先并不存在所谓内核栈 */
+    /* 因此, 如果sp为0, 我们要从sscratch中恢复sp */
+    /* 否则, sp = sscratch - STACK_SIZE */
+    bnez sp, isr_ustkr
+/* S-Mode Stack Restore */
+isr_sstkr:
+    /* 此时, sp = 0, sscratch中保存的就是原sp, 直接交换即可恢复sp */
+    csrrw sp, sscratch, sp
+    /* 恢复通用寄存器 */
+    j isr_rcsrs
+/* U-Mode Stack Restore */
+isr_ustkr:
+    /* 此时, sp = 内核栈顶地址 */
+    /* 我们需要恢复sscratch, 使其依然指向内核栈顶地址 */
+    csrw sscratch, sp
+    /* sp 减去STACK_SIZE就是保存寄存器的栈底地址 */
+    addi sp, sp, -STACK_SIZE
+/* CSR恢复 */
+isr_rcsrs:
     ld t0, 256(sp)
     csrw sstatus, t0
     ld t0, 248(sp)
     csrw sepc, t0
-    /* 接下来是特殊的对sscratch的处理 */
-    ld x1, 8(sp)
-    /* 这里, sp值将被写入sscratch中 */
-    /* 8(sp) 即为用户栈指针, 因此如果返回到U-MODE, 8(sp)的值, 即sscratch的值应当为用户栈指针 */
-    csrw sscratch, x1
-    /* 恢复通用寄存器 */
+/* 通用寄存器恢复(除x2(sp)) */
+isr_rregs:
     ld x1, 0(sp)
     ld x3, 16(sp)
     ld x4, 24(sp)
@@ -134,14 +161,9 @@ isr_regr:
     ld x29, 224(sp)
     ld x30, 232(sp)
     ld x31, 240(sp)
-    /* 恢复内核栈空间 */
-    addi sp, sp, STACK_SIZE
-    /* 第4步: 切换回原栈空间 */
-    csrrw sp, sscratch, sp
-    /* 如果 sp 为0, 说明要返回 S-Mode, 那么此时sscratch中保存的就是原sp */
-    /* 否则返回 U-Mode, sscratch中保存的就是内核栈顶地址 */
-    bnez sp, isr_rtn
-    /* 再次从sscratch中恢复sp */
-    csrrw sp, sscratch, sp
 isr_rtn:
+    /* 直接从当前内核栈中恢复sp */
+    ld sp, 8(sp)
+    /* 此时, sp指向了之前的栈顶指针 */
+    /* 上下文此时已彻底恢复 */
     sret

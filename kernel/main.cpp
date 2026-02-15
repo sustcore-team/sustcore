@@ -17,6 +17,7 @@
 #include <device/block.h>
 #include <event/init_events.h>
 #include <event/registries.h>
+#include <fs/tarfs.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
@@ -31,7 +32,6 @@
 #include <task/task.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
-#include <fs/tarfs.h>
 
 #include <cstdarg>
 #include <cstddef>
@@ -40,19 +40,10 @@
 
 bool post_init_flag = false;
 
-void buddy_test_complex();
-void slub_test_basic();
+void buddy_test_complex(void);
+void slub_test_basic(void);
 void tree_test(void);
-
-struct SlubSmallObj {
-    uint32_t a;
-    uint64_t b;
-    char pad[24];
-};
-
-struct SlubHugeObj {
-    char data[3000];
-};
+void fs_test(void);
 
 int kputs(const char *str) {
     if (!post_init_flag) {
@@ -62,12 +53,10 @@ int kputs(const char *str) {
             // 还没有进入内核虚拟地址空间，直接输出
             Serial::serial_write_string(strlen(str), str);
             return strlen(str);
-        }
-        else if (str < (const char *)KERNEL_VA_OFFSET) {
+        } else if (str < (const char *)KERNEL_VA_OFFSET) {
             const char *_str = (const char *)KPA2PA(str);
             Serial::serial_write_string(strlen(str), _str);
-        }
-        else {
+        } else {
             const char *_str = (const char *)KA2PA(str);
             Serial::serial_write_string(strlen(str), _str);
         }
@@ -150,8 +139,7 @@ void kernel_paging_setup() {
     kernelman.flush_tlb();
 }
 
-extern "C"
-void post_init(void) {
+extern "C" void post_init(void) {
     // 设置post_init标志
     post_init_flag = true;
 
@@ -177,9 +165,6 @@ void post_init(void) {
     // 架构后初始化
     Initialization::post_init();
 
-    // buddy_test_complex();
-    // slub_test_basic();
-
     // 将低端内存设置为用户态
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
@@ -187,56 +172,14 @@ void post_init(void) {
 
     TCBManager::init();
 
-    VFS vfs;
-    class TestFS : public IFsDriver {
-    public:
-        virtual const char *name() const {
-            return "test";
-        }
-        virtual FSErrCode probe(IBlockDevice *device,
-                                    const char *options) {
-            return FSErrCode::UNKNOWN_ERROR;
-        }
-        virtual FSOptional<ISuperblock *> mount(IBlockDevice *device,
-                                                const char *options) {
-            return FSErrCode::UNKNOWN_ERROR;
-        }
-        virtual FSErrCode unmount(ISuperblock *&sb) {
-            return FSErrCode::UNKNOWN_ERROR;
-        }
-    };
-    // Register Tarfs    
-    vfs.register_fs(new tarfs::TarFSDriver());
-
-    RamDiskDevice *initrd = make_initrd();
-    FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
-    if (code != FSErrCode::SUCCESS) {
-        LOGGER::ERROR("vfs.mount()失败, errcode=%s", to_string(code));
-        while (true);
-    }
-
-    FSOptional<VFile *> file_opt = vfs._open("/initrd/kernel/main.cpp", 0);
-    if (! file_opt.present()) {
-        LOGGER::ERROR("vfs._open()失败, errcode=%s", to_string(file_opt.error()));
-    }
-    VFile *file = file_opt.value();
-
-    char *source_code = (char *)PA2KPA(GFP::alloc_frame(10));
-    vfs._read(file, source_code, 10 * PAGESIZE);
-    kputs(source_code);
-    vfs._close(file);
-
-    code = vfs.umount("/initrd");
-    if (code != FSErrCode::SUCCESS) {
-        LOGGER::ERROR("vfs.umount()失败, errcode=%s", to_string(code));
-        while (true);
-    }
+    // buddy_test_complex();
+    // slub_test_basic();
+    // fs_test();
 
     while (true);
 }
 
-extern "C"
-void redive(void);
+extern "C" void redive(void);
 
 void pre_init(void) {
     Initialization::pre_init();
@@ -271,10 +214,8 @@ void pre_init(void) {
     // 进入 post-init 阶段
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
     typedef void (*RediveFuncType)(void);
-    RediveFuncType redive_func =
-        (RediveFuncType)PA2KA((void *)redive);
-    LOGGER::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p",
-                  redive_func);
+    RediveFuncType redive_func = (RediveFuncType)PA2KA((void *)redive);
+    LOGGER::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p", redive_func);
     redive_func();
 }
 
@@ -420,6 +361,15 @@ void buddy_test_complex() {
 }
 
 void slub_test_basic() {
+    struct SlubSmallObj {
+        uint32_t a;
+        uint64_t b;
+        char pad[24];
+    };
+
+    struct SlubHugeObj {
+        char data[3000];
+    };
     LOGGER::INFO("========== SLUB Test Start ==========");
 
     slub::SlubAllocator<SlubSmallObj> alloc;
@@ -564,4 +514,36 @@ void tree_test(void) {
 
     print_lca(0, 0);
     print_lca(12, 12);
+}
+
+void fs_test(void) {
+    VFS vfs;
+    // Register Tarfs
+    vfs.register_fs(new tarfs::TarFSDriver());
+
+    RamDiskDevice *initrd = make_initrd();
+    FSErrCode code =
+        vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
+    if (code != FSErrCode::SUCCESS) {
+        LOGGER::ERROR("vfs.mount()失败, errcode=%s", to_string(code));
+        while (true);
+    }
+
+    FSOptional<VFile *> file_opt = vfs._open("/initrd/kernel/main.cpp", 0);
+    if (!file_opt.present()) {
+        LOGGER::ERROR("vfs._open()失败, errcode=%s",
+                      to_string(file_opt.error()));
+    }
+    VFile *file = file_opt.value();
+
+    char *source_code = (char *)PA2KPA(GFP::alloc_frame(10));
+    vfs._read(file, source_code, 10 * PAGESIZE);
+    kputs(source_code);
+    vfs._close(file);
+
+    code = vfs.umount("/initrd");
+    if (code != FSErrCode::SUCCESS) {
+        LOGGER::ERROR("vfs.umount()失败, errcode=%s", to_string(code));
+        while (true);
+    }
 }

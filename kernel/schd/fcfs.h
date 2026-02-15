@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include <sus/list.h>
-#include <schd/schedule.h>
 #include <schd/metadata.h>
+#include <schd/schedule.h>
+#include <sus/list.h>
 
 // Schedule Policies
 namespace schd {
@@ -22,6 +22,7 @@ namespace schd {
     public:
         using MetadataType = FCFSData;
         using Base         = BaseScheduler<TCBType, FCFSData>;
+
     protected:
         util::IntrusiveList<MetadataType, &MetadataType::_schedule_head>
             _ready_queue;
@@ -47,7 +48,7 @@ namespace schd {
         static FCFS _instance;
 
         TCBType *_schedule(void) {
-            while (! _ready_queue.empty()) {
+            while (!_ready_queue.empty()) {
                 // 首先查看就绪队列头部的线程是否可运行
                 auto &thread = _ready_queue.front();
                 if (runnable(&thread)) {
@@ -65,6 +66,7 @@ namespace schd {
 
             return nullptr;
         }
+
     public:
         static FCFS *get_instance() {
             return &_instance;

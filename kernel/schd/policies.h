@@ -4,16 +4,16 @@
  * @brief 调度策略
  * @version alpha-1.0.0
  * @date 2026-02-11
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
 
+#include <schd/fcfs.h>
 #include <schd/metadata.h>
 #include <schd/rr.h>
-#include <schd/fcfs.h>
 
 namespace schd {
     // doing asserts
@@ -21,4 +21,4 @@ namespace schd {
                   "RR does not satisfy SchedulerTrait");
     static_assert(SchedulerTrait<FCFS<FCFSData>, FCFSData>,
                   "FCFS does not satisfy SchedulerTrait");
-}
+}  // namespace schd

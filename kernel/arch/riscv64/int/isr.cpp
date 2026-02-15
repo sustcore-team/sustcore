@@ -12,10 +12,10 @@
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
 #include <event/registries.h>
-#include <schd/hooks.h>
-#include <sus/logger.h>
 #include <kio.h>
 #include <sbi/sbi.h>
+#include <schd/hooks.h>
+#include <sus/logger.h>
 #include <task/task_struct.h>
 
 namespace Exceptions {
@@ -64,7 +64,7 @@ namespace Exceptions {
 
 namespace Handlers {
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                           Riscv64Context *ctx) {
+                   Riscv64Context *ctx) {
         switch (scause.cause) {
             case Exceptions::ECALL_U: {
                 break;
@@ -83,15 +83,16 @@ namespace Handlers {
                     sizeof(Exceptions::MSG) / sizeof(Exceptions::MSG[0]))
                 {
                     INTERRUPT::ERROR("发生异常! 类型: %s (%lu)",
-                                    Exceptions::MSG[scause.cause],
-                                    scause.cause);
+                                     Exceptions::MSG[scause.cause],
+                                     scause.cause);
                 } else {
-                    INTERRUPT::ERROR("发生异常! 类型: 未知 (%lu)", scause.cause);
+                    INTERRUPT::ERROR("发生异常! 类型: 未知 (%lu)",
+                                     scause.cause);
                 }
 
                 // 输出寄存器状态
                 INTERRUPT::ERROR("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx",
-                                scause.value, sepc, stval);
+                                 scause.value, sepc, stval);
                 INTERRUPT::ERROR("ctx: 0x%lx", ctx);
 
                 // 输出异常发生特权级
@@ -108,9 +109,9 @@ namespace Handlers {
     void illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
                              Riscv64Context *ctx) {
         INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
-                        Exceptions::MSG[scause.cause], scause.cause);
+                         Exceptions::MSG[scause.cause], scause.cause);
         INTERRUPT::INFO("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc,
-                       stval);
+                        stval);
         if (ctx->sstatus.spp) {
             INTERRUPT::DEBUG("异常发生在S-Mode");
         } else {
@@ -145,9 +146,9 @@ namespace Handlers {
     void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
                       Riscv64Context *ctx) {
         INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
-                        Exceptions::MSG[scause.cause], scause.cause);
+                         Exceptions::MSG[scause.cause], scause.cause);
         INTERRUPT::INFO("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
-                       scause.value, sepc, stval);
+                        scause.value, sepc, stval);
 
         INTERRUPT::INFO("异常页地址: 0x%016lx", stval);
 
@@ -167,23 +168,18 @@ namespace Handlers {
         // 3. 如果是权限错误, 则终止相关进程
     }
 
-    void timer(csr_scause_t scause, umb_t sepc, umb_t stval, Riscv64Context *ctx) {
+    void timer(csr_scause_t scause, umb_t sepc, umb_t stval,
+               Riscv64Context *ctx) {
         // 计算时间差
         size_t current_ticks = csr_get_time();
-        size_t gap_ticks = current_ticks - timer_info.last_ticks;
+        size_t gap_ticks     = current_ticks - timer_info.last_ticks;
 
         // 发布TimerTickEvent
         TimerTickEvent tick_event(gap_ticks);
         EventDispatcher<TimerTickEvent>::dispatch(tick_event);
 
-        // 发布SchedulerEvent
-        SchedulerEvent schd_event(ctx);
-        EventDispatcher<SchedulerEvent>::dispatch(schd_event);
-        if (schd_event.ret_ctx != nullptr) {
-            ctx->kstack_sp = (umb_t)schd_event.ret_ctx;
-        }
-
         timer_info.last_ticks = current_ticks;
+
         // 重新设置下一次时钟中断
         sbi_legacy_set_timer(current_ticks + timer_info.increment);
     }

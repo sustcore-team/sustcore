@@ -12,24 +12,12 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/int/isr.h>
 #include <arch/riscv64/trait.h>
-#include <sus/logger.h>
 #include <kio.h>
+#include <sus/logger.h>
 #include <sus/types.h>
 
-extern "C"
-
-void handle_trap(void) {
-    // 读取寄存器值
-    register umb_t val_scause asm("a0");
-    register umb_t val_sepc asm("a1");
-    register umb_t val_stval asm("a2");
-    register umb_t valp_ctx asm("a3");
-
-    csr_scause_t scause = {.value = val_scause};
-    umb_t sepc       = val_sepc;
-    umb_t stval      = val_stval;
-    Riscv64Context *ctx = (Riscv64Context *)valp_ctx;
-
+extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
+                            Riscv64Context *ctx) {
     if (scause.interrupt) {
         if (scause.cause == 5) {
             Handlers::timer(scause, sepc, stval, ctx);
@@ -38,14 +26,9 @@ void handle_trap(void) {
         // 异常
         Handlers::exception(scause, sepc, stval, ctx);
     }
-
-    if (ctx->sstatus.spp) {
-        ctx->sp() = 0;
-    }
 }
 
-extern "C"
-void isr_entry(void);
+extern "C" void isr_entry(void);
 
 void Riscv64Interrupt::init(void) {
     // 重置 sscratch 寄存器

@@ -4,25 +4,26 @@
  * @brief Round Robin Schedule Algorithm
  * @version alpha-1.0.0
  * @date 2026-02-10
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
 
-#include <sus/list.h>
-#include <schd/schedule.h>
 #include <schd/metadata.h>
+#include <schd/schedule.h>
+#include <sus/list.h>
 
 // Schedule Policies
 namespace schd {
     template <typename TCBType>
     class RR : public BaseScheduler<TCBType, RRData> {
     public:
-        using MetadataType = RRData;
-        using Base         = BaseScheduler<TCBType, RRData>;
+        using MetadataType                 = RRData;
+        using Base                         = BaseScheduler<TCBType, RRData>;
         static constexpr size_t RR_QUANTUM = 5;
+
     protected:
         util::IntrusiveList<MetadataType, &MetadataType::_schedule_head>
             _ready_queue;
@@ -39,12 +40,12 @@ namespace schd {
         }
         inline void _add(MetadataType *thread) {
             thread->state = ThreadState::READY;
-            thread->_cnt = RR_QUANTUM;
+            thread->_cnt  = RR_QUANTUM;
             _ready_queue.push_back(*thread);
         }
 
         TCBType *_schedule(void) {
-            while (! _ready_queue.empty()) {
+            while (!_ready_queue.empty()) {
                 // 首先查看就绪队列头部的线程是否可运行
                 auto &thread = _ready_queue.front();
                 if (runnable(&thread)) {
@@ -68,6 +69,7 @@ namespace schd {
         ~RR() {}
 
         static RR _instance;
+
     public:
         static RR *get_instance() {
             return &_instance;
@@ -77,7 +79,7 @@ namespace schd {
         static void init_instance() {
             _instance = RR();
         }
-        
+
         inline void add(TCBType *thread) {
             if (thread != nullptr) {
                 _add(this->downcast(thread));

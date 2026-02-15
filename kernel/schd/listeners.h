@@ -4,9 +4,9 @@
  * @brief 监听器
  * @version alpha-1.0.0
  * @date 2026-02-13
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -16,7 +16,6 @@
 namespace schd {
     class SchedulerListener {
     public:
-        static void handle(SchedulerEvent &event);
         static void handle(TimerTickEvent &event);
     };
-}
+}  // namespace schd

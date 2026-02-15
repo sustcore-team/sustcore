@@ -17,7 +17,7 @@ namespace schd {
     bool schedule_start_flag = false;
     Context *do_schedule(Context *ctx) {
         // 未开始调度
-        if (! schedule_start_flag) {
+        if (!schedule_start_flag) {
             return nullptr;
         }
         // 获得调度器
