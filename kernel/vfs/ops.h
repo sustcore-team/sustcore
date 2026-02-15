@@ -19,31 +19,33 @@
 #include <cstddef>
 
 enum class FSErrCode {
-    SUCCESS       = 0,
-    INVALID_PARAM = -1,
-    NO_SPACE      = -2,
-    IO_ERROR      = -3,
-    NOT_SUPPORTED = -4,
-    BUSY          = -5,
-    UNKNOWN_ERROR = -255
+    SUCCESS         = 0,
+    INVALID_PARAM   = -1,
+    NO_SPACE        = -2,
+    IO_ERROR        = -3,
+    NOT_SUPPORTED   = -4,
+    BUSY            = -5,
+    ENTRY_NOT_FOUND = -6,
+    UNKNOWN_ERROR   = -255
 };
 
-constexpr const char *to_string(FSErrCode code)
-{
+constexpr const char *to_string(FSErrCode code) {
     switch (code) {
-    case FSErrCode::SUCCESS: return "SUCCESS";
-    case FSErrCode::INVALID_PARAM: return "INVALID_PARAM";
-    case FSErrCode::NO_SPACE: return "NO_SPACE";
-    case FSErrCode::IO_ERROR: return "IO_ERROR";
-    case FSErrCode::NOT_SUPPORTED: return "NOT_SUPPORTED";
-    case FSErrCode::BUSY: return "BUSY";
-    case FSErrCode::UNKNOWN_ERROR: return "UNKNOWN_ERROR";
-    default: return "UNKNOWN_ERROR";
+        case FSErrCode::SUCCESS:         return "SUCCESS";
+        case FSErrCode::INVALID_PARAM:   return "INVALID_PARAM";
+        case FSErrCode::NO_SPACE:        return "NO_SPACE";
+        case FSErrCode::IO_ERROR:        return "IO_ERROR";
+        case FSErrCode::NOT_SUPPORTED:   return "NOT_SUPPORTED";
+        case FSErrCode::BUSY:            return "BUSY";
+        case FSErrCode::ENTRY_NOT_FOUND: return "ENTRY_NOT_FOUND";
+        case FSErrCode::UNKNOWN_ERROR:   return "UNKNOWN_ERROR";
+        default:                         return "UNKNOWN_ERROR";
     }
 }
 
 template <typename T>
-using FSOptional = util::Optional<T, FSErrCode, FSErrCode::SUCCESS, FSErrCode::UNKNOWN_ERROR>;
+using FSOptional =
+    util::Optional<T, FSErrCode, FSErrCode::SUCCESS, FSErrCode::UNKNOWN_ERROR>;
 
 enum class SeekWhence { SET = 0, CUR = 1, END = 2 };
 
@@ -57,16 +59,12 @@ class IFsDriver;
 
 template <typename T>
 concept ISyncable = requires(T a) {
-    {
-        a.sync()
-    } -> std::same_as<FSErrCode>;
+    { a.sync() } -> std::same_as<FSErrCode>;
 };
 
 template <typename T>
 concept IMetadataProvider = requires(T a) {
-    {
-        a.metadata()
-    } -> std::same_as<FSOptional<IMetadata *>>;
+    { a.metadata() } -> std::same_as<FSOptional<IMetadata *>>;
 };
 
 /**
@@ -184,7 +182,7 @@ public:
     virtual ~IDentry()                             = default;
     /**
      * @brief 获得目录项名称
-     * 
+     *
      * @return FSOptional<const char *> 目录项名称
      */
     virtual FSOptional<const char *> name(void)    = 0;
@@ -218,10 +216,10 @@ public:
     virtual ~ISuperblock()                         = default;
     /**
      * @brief 获得所属的文件系统驱动
-     * 
+     *
      * @return IFsDriver* 文件系统驱动
      */
-    virtual IFsDriver *fs(void) = 0;
+    virtual IFsDriver *fs(void)                    = 0;
     /**
      * @brief 同步超级块数据到存储设备
      *
@@ -244,38 +242,37 @@ public:
 
 class IFsDriver {
 public:
-    virtual ~IFsDriver()                                         = default;
+    virtual ~IFsDriver()             = default;
     /**
      * @brief 获得文件系统名称
-     * 
+     *
      * @return const char* 文件系统名称
      */
-    virtual const char *name() const                             = 0;
+    virtual const char *name() const = 0;
     /**
      * @brief 探测文件系统
-     * 
+     *
      * @param device 设备
      * @param options 选项
      * @return FSErrCode 错误码. 当为SUCCESS时, 说明该文件系统符合要求.
      */
-    virtual FSErrCode probe(IBlockDevice *device,
-                                   const char *options)          = 0;
+    virtual FSErrCode probe(IBlockDevice *device, const char *options) = 0;
     /**
      * @brief 挂载文件系统
-     * 
+     *
      * @param device 设备
      * @param options 选项
      * @return FSOptional<ISuperblock *> 文件系统超级块
      */
     virtual FSOptional<ISuperblock *> mount(IBlockDevice *device,
-                                            const char *options) = 0;
+                                            const char *options)       = 0;
     /**
      * @brief 解挂文件系统
-     * 
+     *
      * @param sb 超级块
      * @return FSErrCode 错误码
      */
-    virtual FSErrCode unmount(ISuperblock *sb)                   = 0;
+    virtual FSErrCode unmount(ISuperblock *&sb)                        = 0;
 };
 
 static_assert(ISyncable<IFile>);

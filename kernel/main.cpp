@@ -31,6 +31,7 @@
 #include <task/task.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+#include <fs/tarfs.h>
 
 #include <cstdarg>
 #include <cstddef>
@@ -189,13 +190,12 @@ void post_init(void) {
                                                 const char *options) {
             return FSErrCode::UNKNOWN_ERROR;
         }
-        virtual FSErrCode unmount(ISuperblock *sb) {
+        virtual FSErrCode unmount(ISuperblock *&sb) {
             return FSErrCode::UNKNOWN_ERROR;
         }
     };
-    vfs.register_fs(new TestFS());
-    // Register Tarfs
-    // ...
+    // Register Tarfs    
+    vfs.register_fs(new tarfs::TarFSDriver());
 
     RamDiskDevice *initrd = make_initrd();
     FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
