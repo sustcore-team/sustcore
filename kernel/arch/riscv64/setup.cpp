@@ -26,8 +26,8 @@ void Riscv64Serial::serial_write_char(char ch) {
     sbi_dbcn_console_write_byte(ch);
 }
 
-void Riscv64Serial::serial_write_string(const char *str) {
-    sbi_dbcn_console_write(strlen(str), str);
+void Riscv64Serial::serial_write_string(size_t len, const char *str) {
+    sbi_dbcn_console_write(len, str);
 }
 
 extern "C" void c_setup(void) {

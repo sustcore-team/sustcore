@@ -21,12 +21,12 @@
  * @tparam T 架构串口类
  */
 template <typename T>
-concept SerialTrait = requires(char ch, const char *str) {
+concept SerialTrait = requires(char ch, size_t len, const char *str) {
     {
         T::serial_write_char(ch)
     } -> std::same_as<void>;
     {
-        T::serial_write_string(str)
+        T::serial_write_string(len, str)
     } -> std::same_as<void>;
 };
 

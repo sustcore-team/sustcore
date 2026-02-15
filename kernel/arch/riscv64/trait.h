@@ -24,7 +24,7 @@
 class Riscv64Serial {
 public:
     static void serial_write_char(char ch);
-    static void serial_write_string(const char *str);
+    static void serial_write_string(size_t len, const char *str);
 };
 
 static_assert(SerialTrait<Riscv64Serial>);

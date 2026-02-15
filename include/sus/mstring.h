@@ -31,6 +31,7 @@ namespace util {
     public:
         string(const char *str);
         string();
+        string(const char *begin, const char *end);
         ~string();
 
         constexpr char* c_str() const noexcept {

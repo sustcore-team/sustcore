@@ -12,8 +12,13 @@
 #include <sus/mstring.h>
 
 namespace util {
+    string::string(const char *begin, const char *end)
+        : D_length(end - begin), D_data(new char[D_length + 1]) {
+        strcpy_s(D_data, D_length, begin);
+        D_data[D_length] = '\0';
+    }
     string::string(const char* str)
-        : D_length(strlen(str)), D_data(new char[strlen(str) + 1]) {
+        : D_length(strlen(str)), D_data(new char[D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str);
     }
     string::string() : string("") {}

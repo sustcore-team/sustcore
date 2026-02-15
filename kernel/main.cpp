@@ -31,6 +31,7 @@
 #include <task/task.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+#include <fs/tarfs.h>
 
 #include <cstdarg>
 #include <cstddef>
@@ -55,10 +56,21 @@ struct SlubHugeObj {
 
 int kputs(const char *str) {
     if (!post_init_flag) {
-        Serial::serial_write_string(str);
+        Serial::serial_write_string(strlen(str), str);
     } else {
-        const char *_str = (const char *)KA2PA((void *)str);
-        Serial::serial_write_string(_str);
+        if (str < (const char *)KPHY_VA_OFFSET) {
+            // 还没有进入内核虚拟地址空间，直接输出
+            Serial::serial_write_string(strlen(str), str);
+            return strlen(str);
+        }
+        else if (str < (const char *)KERNEL_VA_OFFSET) {
+            const char *_str = (const char *)KPA2PA(str);
+            Serial::serial_write_string(strlen(str), _str);
+        }
+        else {
+            const char *_str = (const char *)KA2PA(str);
+            Serial::serial_write_string(strlen(str), _str);
+        }
     }
     return strlen(str);
 }
@@ -189,13 +201,12 @@ void post_init(void) {
                                                 const char *options) {
             return FSErrCode::UNKNOWN_ERROR;
         }
-        virtual FSErrCode unmount(ISuperblock *sb) {
+        virtual FSErrCode unmount(ISuperblock *&sb) {
             return FSErrCode::UNKNOWN_ERROR;
         }
     };
-    vfs.register_fs(new TestFS());
-    // Register Tarfs
-    // ...
+    // Register Tarfs    
+    vfs.register_fs(new tarfs::TarFSDriver());
 
     RamDiskDevice *initrd = make_initrd();
     FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
@@ -210,9 +221,10 @@ void post_init(void) {
     }
     VFile *file = file_opt.value();
 
-    char *source_code = (char *)GFP::alloc_frame(10);
+    char *source_code = (char *)PA2KPA(GFP::alloc_frame(10));
     vfs._read(file, source_code, 10 * PAGESIZE);
     kputs(source_code);
+    vfs._close(file);
 
     code = vfs.umount("/initrd");
     if (code != FSErrCode::SUCCESS) {
