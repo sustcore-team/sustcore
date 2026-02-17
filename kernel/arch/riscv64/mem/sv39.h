@@ -96,7 +96,10 @@ class Riscv64SV39PageMan {
 public:
     using RWX       = Riscv64SV39RWX;
     using StageAddr = _StageAddr<Stage>;
-    using StageGFP = _GFP<Stage>;
+
+    static PhyAddr new_page(void) {
+        return GFP::get_free_page<Stage>();
+    }
 
     // 前初始化与后初始化
     static void init(void);
@@ -266,7 +269,7 @@ public:
         return _as<PTE>(from_ppn(root_ppn));
     }
     static PhyAddr make_root(void) {
-        PhyAddr __root = StageGFP::get_free_page();
+        PhyAddr __root = new_page();
         memset(_convert(__root).addr(), 0, PAGESIZE);
         return __root;
     }
@@ -380,7 +383,7 @@ public:
                     break;
                 }
                 // 分配下一级页表
-                PhyAddr new_pt = StageGFP::get_free_page();
+                PhyAddr new_pt = new_page();
                 assert(new_pt.nonnull());
                 // 初始化该页
                 memset(_convert(new_pt).addr(), 0, PAGESIZE);

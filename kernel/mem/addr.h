@@ -230,17 +230,17 @@ constexpr AddrT convert(KvaAddr kva) {
 enum class KernelStage { PRE_INIT, POST_INIT };
 
 template <KernelStage Stage>
-struct __StageAddr;
+struct _StageAddrConf;
 
 template <>
-struct __StageAddr<KernelStage::PRE_INIT> {
+struct _StageAddrConf<KernelStage::PRE_INIT> {
     using Type = PhyAddr;
 };
 
 template <>
-struct __StageAddr<KernelStage::POST_INIT> {
+struct _StageAddrConf<KernelStage::POST_INIT> {
     using Type = KpaAddr;
 };
 
 template <KernelStage Stage>
-using _StageAddr = typename __StageAddr<Stage>::Type;
+using _StageAddr = typename _StageAddrConf<Stage>::Type;

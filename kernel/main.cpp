@@ -145,7 +145,7 @@ extern "C" void post_init(void) {
     LOGGER::INFO("已进入 post-init 阶段");
 
     // 将 pre-init 阶段中初始化的子系统再次初始化, 以适应内核虚拟地址空间
-    GFP::init(regions, region_cnt);
+    GFP::post_init(regions, region_cnt);
     PageMan::init();
 
     // 初始化默认 Allocator 子系统
@@ -204,7 +204,7 @@ void pre_init(void) {
     run_defers(&s_defer_pre, &e_defer_pre);
 
     LOGGER::INFO("初始化GFP");
-    EarlyGFP::init(regions, region_cnt);
+    GFP::pre_init(regions, region_cnt);
 
     LOGGER::INFO("初始化内核地址空间管理器");
     EarlyPageMan::init();

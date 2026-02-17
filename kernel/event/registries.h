@@ -28,8 +28,8 @@ public:
 template <>
 class EventRegistry::EventInfo<PreGlobalObjectInitEvent> {
 public:
-    using Listeners               = ListenerList<>;
-    static constexpr size_t count = 0;
+    using Listeners               = ListenerList<BuddyListener>;
+    static constexpr size_t count = 1;
 };
 
 template <>

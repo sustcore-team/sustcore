@@ -15,6 +15,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <utility>
@@ -239,7 +240,7 @@ namespace util {
         using const_iterator = IntrusiveListConstIterator<Node, Head>;
         using size_type      = std::size_t;
 
-    private:
+    protected:
         // 哨兵节点
         NodeType D_sentinel;
         size_type D_size;
@@ -450,6 +451,37 @@ namespace util {
                 }
             }
             return false;
+        }
+    };
+
+    template <typename Node, auto Head, typename Cmp = std::less<Node>>
+        requires IntrusiveListNodeTrait<Node, Head>
+    class OrderedIntrusiveList : public IntrusiveList<Node, Head> {
+    public:
+        using NodeType       = Node;
+        using Base           = IntrusiveList<Node, Head>;
+        using iterator       = IntrusiveListIterator<Node, Head>;
+        using const_iterator = IntrusiveListConstIterator<Node, Head>;
+        using size_type      = std::size_t;
+
+        // 不允许任意的插入
+        iterator insert(iterator pos, NodeType& node) noexcept = delete;
+        void push_front(NodeType& node) noexcept = delete;
+        void push_back(NodeType& node) noexcept  = delete;
+
+        // 根据Cmp比较函数插入
+        iterator insert(NodeType& node) noexcept {
+            // 节点已在链表中，无法插入
+            if (Base::P_link(&node)) {
+                return Base::end();
+            }
+            auto cmp = Cmp();
+            for (auto it = Base::begin(); it != Base::end(); ++it) {
+                if (cmp(node, *it)) {
+                    return Base::insert(it, node);
+                }
+            }
+            return Base::insert(Base::end(), node);
         }
     };
 
@@ -1168,12 +1200,12 @@ namespace util {
             insert(begin(), value);
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void emplace_front(Args&&... args) noexcept {
             emplace(begin(), std::forward<Args>(args)...);
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void emplace_back(Args&&... args) noexcept {
             emplace(end(), std::forward<Args>(args)...);
         }

@@ -17,11 +17,14 @@
 
 #include <cstddef>
 
-template <typename T, KernelStage Stage>
+template <typename T>
 concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr,
                             size_t page_count) {
     {
-        T::init(regions, region_count)
+        T::pre_init(regions, region_count)
+    } -> std::same_as<void>;
+    {
+        T::post_init(regions, region_count)
     } -> std::same_as<void>;
     {
         T::get_free_page()
@@ -30,10 +33,34 @@ concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr
         T::get_free_page(page_count)
     } -> std::same_as<PhyAddr>;
     {
+        T::template get_free_page<KernelStage::PRE_INIT>()
+    } -> std::same_as<PhyAddr>;
+    {
+        T::template get_free_page<KernelStage::PRE_INIT>(page_count)
+    } -> std::same_as<PhyAddr>;
+    {
+        T::template get_free_page<KernelStage::POST_INIT>()
+    } -> std::same_as<PhyAddr>;
+    {
+        T::template get_free_page<KernelStage::POST_INIT>(page_count)
+    } -> std::same_as<PhyAddr>;
+    {
         T::put_page(ptr)
     } -> std::same_as<void>;
     {
         T::put_page(ptr, page_count)
+    } -> std::same_as<void>;
+    {
+        T::template put_page<KernelStage::PRE_INIT>(ptr)
+    } -> std::same_as<void>;
+    {
+        T::template put_page<KernelStage::PRE_INIT>(ptr, page_count)
+    } -> std::same_as<void>;
+    {
+        T::template put_page<KernelStage::POST_INIT>(ptr)
+    } -> std::same_as<void>;
+    {
+        T::template put_page<KernelStage::POST_INIT>(ptr, page_count)
     } -> std::same_as<void>;
 };
 
@@ -41,13 +68,14 @@ concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr
  * @brief 线性增长GFP
  *
  */
-template <KernelStage Stage>
 class LinearGrowGFP {
     static PhyAddr baseaddr;
     static PhyAddr curaddr;
     static PhyAddr boundary;
 public:
-    static void init(MemRegion *regions, size_t region_count);
+    static void pre_init(MemRegion *regions, size_t region_count);
+    static void post_init(MemRegion *regions, size_t region_count);
+    template <KernelStage Stage = KernelStage::POST_INIT>
     static PhyAddr get_free_page(size_t page_count = 1) {
         PhyAddr _bound = curaddr + page_count * PAGESIZE;
         if (_bound > boundary) {
@@ -57,24 +85,12 @@ public:
         curaddr = _bound;
         return ptr;
     }
+    template <KernelStage Stage = KernelStage::POST_INIT>
     static void put_page(PhyAddr addr, size_t page_count = 1) {
         // 线性增长GFP不支持释放页框，因此该函数不执行任何操作
     }
-
-    friend class LinearGrowGFP<KernelStage::PRE_INIT>;
-    friend class LinearGrowGFP<KernelStage::POST_INIT>;
 };
 
-template <KernelStage Stage>
-PhyAddr LinearGrowGFP<Stage>::baseaddr = PhyAddr::null;
-template <KernelStage Stage>
-PhyAddr LinearGrowGFP<Stage>::curaddr = PhyAddr::null;
-template <KernelStage Stage>
-PhyAddr LinearGrowGFP<Stage>::boundary = PhyAddr::null;
-
 static_assert(
-    GFPTrait<LinearGrowGFP<KernelStage::PRE_INIT>, KernelStage::PRE_INIT>,
-    "LinearGrowthGFP 不满足 GFPTrait");
-static_assert(
-    GFPTrait<LinearGrowGFP<KernelStage::POST_INIT>, KernelStage::POST_INIT>,
+    GFPTrait<LinearGrowGFP>,
     "LinearGrowthGFP 不满足 GFPTrait");
