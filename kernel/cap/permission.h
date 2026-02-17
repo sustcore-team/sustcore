@@ -11,11 +11,13 @@
 
 #pragma once
 
-#include <cassert>
 #include <cap/capdef.h>
 #include <string.h>
+#include <sus/raii.h>
 #include <sus/types.h>
 #include <sustcore/cap_type.h>
+
+#include <cassert>
 
 namespace perm {
     namespace basic {
@@ -59,11 +61,12 @@ namespace perm {
 
         // 向权限位图中写入某个槽位的权限
         constexpr void set_slot(b64 *bitmap, size_t slot_idx, b64 permission) {
-            size_t bit_pos        = slot_offset(slot_idx);
-            size_t bitmap_index   = bit_pos / 64;
-            size_t bit_offset     = bit_pos % 64;
-            // TODO: 保证bit_offset + SLOT_BITS不超过64, 否则需要跨越两个b64进行写入
-            assert (bit_offset + SLOT_BITS <= 64);
+            size_t bit_pos      = slot_offset(slot_idx);
+            size_t bitmap_index = bit_pos / 64;
+            size_t bit_offset   = bit_pos % 64;
+            // TODO: 保证bit_offset + SLOT_BITS不超过64,
+            // 否则需要跨越两个b64进行写入
+            assert(bit_offset + SLOT_BITS <= 64);
             // 清除原有权限位
             b64 aligned_perm      = (permission & SLOT_MASK) << bit_offset;
             // clear the original bits
@@ -83,7 +86,7 @@ struct PermissionBits {
     // 例如 FILE 能力, NOTIFICATION 能力,
     // CSPACE能力指向的内核对象实质上包含了一系列对象
     // 对这些对象进行更细粒度的权限控制时, 就需要使用权限位图
-    b64 *permission_bitmap;
+    util::Raii<b64[]> permission_bitmap;
 
     enum class Type : int { NONE = 0, BASIC = 1, CAPSPACE = 2 };
     const Type type;
@@ -100,19 +103,20 @@ struct PermissionBits {
         }
     }
 
-    PermissionBits(b64 basic, b64 *bitmap, Type type);
+    PermissionBits(b64 basic, const b64 *bitmap, Type type);
     // used by capability with no permission bitmap
     PermissionBits(b64 basic, Type type);
     ~PermissionBits();
 
     PermissionBits(PermissionBits &&other);
-    PermissionBits(const PermissionBits &other);
+    PermissionBits(const PermissionBits &other) = delete;
 
     // permission bits不允许被赋值
-    PermissionBits &operator=(PermissionBits &&) = delete;
-    PermissionBits &operator=(const PermissionBits &)  = delete;
+    PermissionBits &operator=(PermissionBits &&)      = delete;
+    PermissionBits &operator=(const PermissionBits &) = delete;
 
-    // 但是我们提供一个downgrade方法, 允许在不改变权限类型的前提下, 将权限位进行降级
+    // 但是我们提供一个downgrade方法, 允许在不改变权限类型的前提下,
+    // 将权限位进行降级
     CapErrCode downgrade(const PermissionBits &new_perm);
 
     bool imply(const PermissionBits &other) const noexcept;
@@ -124,4 +128,7 @@ struct PermissionBits {
     // 从第offset个位出发, 检查至多64个位的权限是否被包含
     // 注: 当 offset + 64 超过权限位图范围时, 只检查至多权限位图范围的部分
     bool imply(b64 permission_b64, size_t offset) const noexcept;
+
+    // 复制权限
+    PermissionBits clone() const;
 };

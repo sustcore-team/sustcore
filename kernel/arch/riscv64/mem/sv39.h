@@ -15,7 +15,7 @@
 #include <arch/trait.h>
 #include <kio.h>
 #include <mem/gfp.h>
-#include <mem/kaddr_defs.h>
+#include <mem/addr.h>
 #include <sus/logger.h>
 #include <sus/types.h>
 

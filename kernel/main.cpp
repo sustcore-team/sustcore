@@ -20,6 +20,7 @@
 #include <event/registries.h>
 #include <fs/tarfs.h>
 #include <kio.h>
+#include <mem/addr.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
@@ -27,6 +28,7 @@
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>
+#include <sus/raii.h>
 #include <sus/tree.h>
 #include <sus/types.h>
 #include <symbols.h>
@@ -39,28 +41,22 @@
 #include <cstdint>
 #include <cstring>
 
-bool post_init_flag = false;
-
 void buddy_test_complex(void);
 void slub_test_basic(void);
 void tree_test(void);
 void fs_test(void);
 
 int kputs(const char *str) {
-    if (!post_init_flag) {
+    if (str < (const char *)KPA_OFFSET) {
+        // 还没有进入内核虚拟地址空间，直接输出
         Serial::serial_write_string(strlen(str), str);
+        return strlen(str);
+    } else if (str < (const char *)KVA_OFFSET) {
+        const char *_str = (const char *)KPA2PA((umb_t)str);
+        Serial::serial_write_string(strlen(str), _str);
     } else {
-        if (str < (const char *)KPHY_VA_OFFSET) {
-            // 还没有进入内核虚拟地址空间，直接输出
-            Serial::serial_write_string(strlen(str), str);
-            return strlen(str);
-        } else if (str < (const char *)KERNEL_VA_OFFSET) {
-            const char *_str = (const char *)KPA2PA(str);
-            Serial::serial_write_string(strlen(str), _str);
-        } else {
-            const char *_str = (const char *)KA2PA(str);
-            Serial::serial_write_string(strlen(str), _str);
-        }
+        const char *_str = (const char *)KVA2PA((umb_t)str);
+        Serial::serial_write_string(strlen(str), _str);
     }
     return strlen(str);
 }
@@ -102,8 +98,10 @@ RamDiskDevice *make_initrd(void) {
 }
 
 MemRegion regions[128];
-PageMan::PTE *kernel_root = nullptr;
-void *phymem_upper_bound;
+PageMan::PTE *kernel_root     = nullptr;
+constexpr void *lowpm = nullptr;
+constexpr void *lowvm = nullptr;
+void *uppm;
 
 void run_defers(void *s_defer, void *e_defer) {
     constexpr size_t DEFER_ENTRY_SIZE = sizeof(util::DeferEntry);
@@ -128,22 +126,19 @@ void kernel_paging_setup() {
     kernel_root = PageMan::make_root();
     PageMan kernelman(kernel_root);
 
-    ker_paddr::init(phymem_upper_bound);
+    ker_paddr::init(uppm);
     ker_paddr::mapping_kernel_areas(kernelman);
 
-    // 对[0, phymem_upper_bound)进行恒等映射
-    size_t sz = (size_t)phymem_upper_bound;
-    kernelman.map_range<true>((void *)0, (void *)0, sz,
-                              PageMan::rwx(true, true, true), false, true);
+    // 对[0, uppm)进行恒等映射
+    size_t sz = (size_t)uppm;
+    kernelman.map_range<true>(lowvm, lowpm, sz, PageMan::rwx(true, true, true),
+                              false, true);
 
     kernelman.switch_root();
     kernelman.flush_tlb();
 }
 
 extern "C" void post_init(void) {
-    // 设置post_init标志
-    post_init_flag = true;
-
     // logger
     LOGGER::INFO("已进入 post-init 阶段");
 
@@ -167,9 +162,10 @@ extern "C" void post_init(void) {
     Initialization::post_init();
 
     // 将低端内存设置为用户态
+
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
-        (void *)0, (size_t)phymem_upper_bound, PageMan::RWX::NONE, true, false);
+        lowvm, (char *)uppm - (char *)lowpm, PageMan::RWX::NONE, true, false);
 
     TCBManager::init();
 
@@ -186,16 +182,16 @@ void pre_init(void) {
     Initialization::pre_init();
 
     memset(regions, 0, sizeof(regions));
-    int cnt           = MemoryLayout::detect_memory_layout(regions, 128);
-    void *upper_bound = nullptr;
+    int cnt          = MemoryLayout::detect_memory_layout(regions, 128);
+    addr_t upper_bound = 0;
     for (int i = 0; i < cnt; i++) {
-        LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
-                     regions[i].ptr,
-                     (void *)((umb_t)(regions[i].ptr) + regions[i].size),
-                     static_cast<int>(regions[i].status));
-        void *this_bound = (void *)((umb_t)(regions[i].ptr) + regions[i].size);
-        if (upper_bound < this_bound) {
-            upper_bound = this_bound;
+        addr_t start = (addr_t)regions[i].ptr;
+        addr_t end   = start + regions[i].size;
+
+        LOGGER::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, (void *)start,
+                     (void *)end, static_cast<int>(regions[i].status));
+        if (upper_bound < end) {
+            upper_bound = end;
         }
     }
 
@@ -209,13 +205,17 @@ void pre_init(void) {
 
     LOGGER::INFO("初始化内核地址空间管理器");
     PageMan::pre_init();
-    phymem_upper_bound = upper_bound;
+    uppm = (void *)upper_bound;
     kernel_paging_setup();
+
+    // 设置地址转换偏移
+    g_kpa_offset = KPA_OFFSET;
+    g_kva_offset = KVA_OFFSET;
 
     // 进入 post-init 阶段
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
     typedef void (*RediveFuncType)(void);
-    RediveFuncType redive_func = (RediveFuncType)PA2KA((void *)redive);
+    RediveFuncType redive_func = (RediveFuncType)PA2KVA((umb_t)redive);
     LOGGER::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p", redive_func);
     redive_func();
 }
@@ -252,9 +252,9 @@ void cap_test(void) {
         LOGGER::ERROR("分配槽位slot失败");
         return;
     }
-    CSpaceCalls::insert(cap, slot, cap);
+    CSpaceCalls::insert(cap, slot, util::make_raii(cap));
     CSpaceCalls::remove<CSpaceBase>(cap, slot);
-    CSpaceCalls::insert(cap, slot, cap);
+    CSpaceCalls::insert(cap, slot, util::make_raii(cap));
     size_t slot2 = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
     if (slot == 0) {
         LOGGER::ERROR("分配槽位slot2失败");
@@ -284,8 +284,8 @@ void buddy_test_complex() {
     void *p3 = GFP::alloc_frame(3);  // 3 pages (odd size)
 
     if (p1 && p2 && p3 && p4) {
-        LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p", p1, p2,
-                     p4, p3);
+        LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p",
+                     p1, p2, p4, p3);
 
         // Free middle blocks to create fragmentation
         GFP::free_frame(p2, 2);

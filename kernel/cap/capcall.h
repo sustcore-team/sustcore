@@ -16,6 +16,7 @@
 #include <cap/capability.h>
 #include <cap/capdef.h>
 #include <cap/permission.h>
+#include <sus/raii.h>
 #include <sustcore/cap_type.h>
 
 #include <cstddef>
@@ -111,7 +112,7 @@ public:
     // CSpace Operations
     template <ExtendedPayloadTrait Payload>
     static CapErrCode insert(Cap *space_cap, size_t slot_idx,
-                             Capability<Payload> *cap) {
+                             util::Raii<Capability<Payload>> &&cap) {
         using namespace perm::cspace;
         // 检查权限
         if (!imply<SLOT_INSERT>(space_cap, slot_offset(slot_idx))) {
@@ -125,7 +126,9 @@ public:
         }
 
         // 插入能力对象
-        space->__insert(slot_idx, cap);
+        space->__insert(slot_idx, cap.get());
+        // 自此之后, cap的生命周期由space管理, 我们不再拥有它
+        cap.release();
         return CapErrCode::SUCCESS;
     }
 
@@ -202,10 +205,9 @@ public:
         }
 
         // 插入到dst中
-        CapErrCode code = insert(dst_space, dst_idx.slot, cloned_opt.value());
+        CapErrCode code = insert(dst_space, dst_idx.slot, util::make_raii(cloned_opt.value()));
         if (code != CapErrCode::SUCCESS) {
             // 其实可以用RAII的, 但是, 就这一个分支, 还是手动清理比较好
-            delete cloned_opt.value();
             return code;
         }
         // 成功插入后, 接受该能力
@@ -239,10 +241,9 @@ public:
         }
 
         // 插入到dst中
-        CapErrCode code = insert(dst_space, dst_idx.slot, migrated_opt.value());
+        CapErrCode code = insert(dst_space, dst_idx.slot, util::make_raii(migrated_opt.value()));
         if (code != CapErrCode::SUCCESS) {
             // 其实可以用RAII的, 但是, 就这一个分支, 还是手动清理比较好
-            delete migrated_opt.value();
             return code;
         }
         // 成功插入后, 接受该能力
@@ -333,17 +334,13 @@ public:
             return cap_opt.error();
         }
 
-        Capability<Payload> *cap = cap_opt.value();
-
         // 插入到dst中
-        CapErrCode code = insert(space_cap, idx.slot, cap);
+        CapErrCode code = insert(space_cap, idx.slot, util::make_raii(cap_opt.value()));
         if (code != CapErrCode::SUCCESS) {
-            // 如果失败则将其删除
-            delete cap;
             return code;
         }
         // 成功插入后, 接受该能力
-        cap->accept();
+        cap_opt.value()->accept();
         return CapErrCode::SUCCESS;
     }
 

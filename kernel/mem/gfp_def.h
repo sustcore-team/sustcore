@@ -57,15 +57,3 @@ public:
 
 static_assert(PageFrameAllocatorTrait<LinearGrowGFP>,
               "LinearGrowthGFP 不满足 PageFrameAllocatorTrait");
-
-constexpr size_t PAGESIZE = 0x1000;  // 4KB
-
-// 向上对齐到页边界
-constexpr umb_t page_align_up(umb_t addr_val) {
-    return (addr_val + 0xFFF) & ~0xFFF;
-}
-
-// 向下对齐到页边界
-constexpr umb_t page_align_down(umb_t addr_val) {
-    return addr_val & ~0xFFF;
-}

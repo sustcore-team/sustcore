@@ -12,15 +12,15 @@
 #include <mem/kaddr.h>
 #include <symbols.h>
 
+addr_t g_kva_offset = 0;
+addr_t g_kpa_offset = 0;
+
 namespace ker_paddr {
     struct Segment {
         void *start, *end;
         void *vstart, *vend;
 
         Segment() = default;
-
-        Segment(void *s, void *e)
-            : start(s), end(e), vstart(PA2KA(s)), vend(PA2KA(e)) {}
 
         Segment(void *s, void *e, void *vs, void *ve)
             : start(s), end(e), vstart(vs), vend(ve) {}
@@ -39,18 +39,28 @@ namespace ker_paddr {
 
     Segment kphy_space;
 
-    void init(void *upper_bound) {
-        ker_paddr::kernel = Segment(&skernel, &ekernel);
-        ker_paddr::text   = Segment(&s_text, &e_text);
-        ker_paddr::ivt    = Segment(&s_ivt, &e_ivt);
-        ker_paddr::rodata = Segment(&s_rodata, &e_rodata);
-        ker_paddr::data   = Segment(&s_data, &e_data);
-        ker_paddr::bss    = Segment(&s_bss, &e_bss);
-        ker_paddr::misc   = Segment(&s_misc, &ekernel);
+    Segment make_kva_seg(void *ps, void *pe) {
+        void *vs = (void *)((umb_t)ps + KVA_OFFSET);
+        void *ve = (void *)((umb_t)pe + KVA_OFFSET);
+        return Segment(ps, pe, vs, ve);
+    }
 
-        ker_paddr::kphy_space =
-            Segment((void *)0, upper_bound, (void *)(0 + KPHY_VA_OFFSET),
-                    (void *)((umb_t)(upper_bound) + KPHY_VA_OFFSET));
+    Segment make_kpa_seg(void *ps, void *pe) {
+        void *vs = (void *)((umb_t)ps + KPA_OFFSET);
+        void *ve = (void *)((umb_t)pe + KPA_OFFSET);
+        return Segment(ps, pe, vs, ve);
+    }
+
+    void init(void *upper_bound) {
+        ker_paddr::kernel = make_kva_seg(&skernel, &ekernel);
+        ker_paddr::text   = make_kva_seg(&s_text, &e_text);
+        ker_paddr::ivt    = make_kva_seg(&s_ivt, &e_ivt);
+        ker_paddr::rodata = make_kva_seg(&s_rodata, &e_rodata);
+        ker_paddr::data   = make_kva_seg(&s_data, &e_data);
+        ker_paddr::bss    = make_kva_seg(&s_bss, &e_bss);
+        ker_paddr::misc   = make_kva_seg(&s_misc, &ekernel);
+
+        ker_paddr::kphy_space = make_kpa_seg((void *)0, upper_bound);
     }
 
     void map_seg(PageMan &man, const Segment &seg, PageMan::RWX rwx, bool u,

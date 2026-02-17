@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <mem/kaddr_defs.h>
+#include <mem/addr.h>
 #include <arch/description.h>
 
 namespace ker_paddr {

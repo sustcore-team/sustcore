@@ -11,16 +11,18 @@
 
 #include <cap/permission.h>
 #include <kio.h>
+#include <sus/raii.h>
 
-PermissionBits::PermissionBits(b64 basic, b64 *bitmap, Type type)
-    : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
+PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, Type type)
+    : basic_permissions(basic),
+      permission_bitmap(util::make_array_raii(new b64[to_bitmap_size(type)])),
+      type(type) {
     size_t bitmap_size = to_bitmap_size(type);
     if (bitmap_size > 0) {
-        permission_bitmap = new b64[bitmap_size];
         if (bitmap != nullptr)
-            memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
+            memcpy(permission_bitmap.get(), bitmap, bitmap_size * sizeof(b64));
         else
-            memset(permission_bitmap, 0, bitmap_size * sizeof(b64));
+            memset(permission_bitmap.get(), 0, bitmap_size * sizeof(b64));
     } else if (bitmap != nullptr) {
         CAPABILITY::WARN(
             "具有类型%u的权限对象不应提供权限位图, 但实际提供了非空指针, "
@@ -29,26 +31,15 @@ PermissionBits::PermissionBits(b64 basic, b64 *bitmap, Type type)
     }
 }
 PermissionBits::PermissionBits(b64 basic, Type type)
-    : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
+    : basic_permissions(basic), permission_bitmap(), type(type) {
     assert(to_bitmap_size(type) == 0);
 }
-PermissionBits::~PermissionBits() {
-    if (permission_bitmap != nullptr) {
-        delete[] permission_bitmap;
-        permission_bitmap = nullptr;
-    }
-}
+PermissionBits::~PermissionBits() {}
 
 PermissionBits::PermissionBits(PermissionBits &&other)
     : basic_permissions(other.basic_permissions),
-      permission_bitmap(other.permission_bitmap),
-      type(other.type) {
-    other.permission_bitmap = nullptr;
-}
-
-PermissionBits::PermissionBits(const PermissionBits &other)
-    : PermissionBits(other.basic_permissions, other.permission_bitmap,
-                     other.type) {}
+      permission_bitmap(std::move(other.permission_bitmap)),
+      type(other.type) {}
 
 bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     if (this->type != other.type) {
@@ -63,14 +54,14 @@ bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     if (bitmap_size == 0) {
         return true;
     }
-    if (this->permission_bitmap == nullptr ||
-        other.permission_bitmap == nullptr)
-    {
+    if (!(this->permission_bitmap.valid() && other.permission_bitmap.valid())) {
         // 如果类型需要权限位图, 但其中一个权限对象的位图为nullptr,
         // 则视为不满足权限要求
         return false;
     }
     bool permission_implied = true;
+    const b64 *this_bitmap  = this->permission_bitmap.get();
+    const b64 *other_bitmap = other.permission_bitmap.get();
     /**
      * 为什么采用逐b64比较并将结果进行累加,
      * 而不是在判定到某一位不满足时直接返回false? 在这里, 我的考量是,
@@ -86,8 +77,7 @@ bool PermissionBits::imply(const PermissionBits &other) const noexcept {
      * TODO: 进行性能测试, 比较提前返回与否的性能差异
      */
     for (size_t i = 0; i < bitmap_size; i++) {
-        permission_implied &= BITS_IMPLIES(this->permission_bitmap[i],
-                                           other.permission_bitmap[i]);
+        permission_implied &= BITS_IMPLIES(this_bitmap[i], other_bitmap[i]);
     }
     return permission_implied;
 }
@@ -103,7 +93,7 @@ bool PermissionBits::imply(b64 permission_b64, size_t offset) const noexcept {
     size_t bit_offset   = bit_pos % 64;
     size_t bitmap_size  = to_bitmap_size(this->type);
 
-    if (bitmap_size == 0 || this->permission_bitmap == nullptr) {
+    if (bitmap_size == 0 || !this->permission_bitmap.valid()) {
         return false;
     }
 
@@ -112,10 +102,12 @@ bool PermissionBits::imply(b64 permission_b64, size_t offset) const noexcept {
         return permission_b64 == 0;
     }
 
-    b64 relevant_bits = this->permission_bitmap[bitmap_index] >> bit_offset;
+    const b64 *bitmap = this->permission_bitmap.get();
+
+    b64 relevant_bits = bitmap[bitmap_index] >> bit_offset;
     // 如果 permission_b64 跨越了两个b64
     if ((bit_offset != 0) && (bitmap_index + 1 < bitmap_size)) {
-        relevant_bits |= this->permission_bitmap[bitmap_index + 1]
+        relevant_bits |= bitmap[bitmap_index + 1]
                          << (64 - bit_offset);
     }
     return BITS_IMPLIES(relevant_bits, permission_b64);
@@ -132,9 +124,13 @@ CapErrCode PermissionBits::downgrade(const PermissionBits &new_perm) {
     this->basic_permissions = new_perm.basic_permissions;
     // imply方法会帮我们保证this->permission_bitmap与new_perm.permission_bitmap非空
     // however, 我们依然在这个地方放个断言
-    assert(this->permission_bitmap != nullptr);
-    assert(new_perm.permission_bitmap != nullptr);
-    memcpy(this->permission_bitmap, new_perm.permission_bitmap,
+    assert(this->permission_bitmap.valid());
+    assert(new_perm.permission_bitmap.valid());
+    memcpy(this->permission_bitmap.get(), new_perm.permission_bitmap.get(),
            to_bitmap_size(this->type) * sizeof(b64));
     return CapErrCode::SUCCESS;
+}
+
+PermissionBits PermissionBits::clone() const {
+    return PermissionBits(this->basic_permissions, this->permission_bitmap.get(), this->type);
 }

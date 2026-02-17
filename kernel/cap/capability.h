@@ -66,17 +66,6 @@ public:
         assert(owner != nullptr);
         _payload->retain();
     }
-    Capability(CapHolder *owner, CapIdx idx, Payload *payload,
-               const PermissionBits &permissions)
-        : _owner(owner),
-          _idx(idx),
-          _payload(payload),
-          _permissions(permissions),
-          _accepted(false) {
-        assert(payload != nullptr);
-        assert(owner != nullptr);
-        _payload->retain();
-    }
     virtual ~Capability() {
         // 将自身从继承树中剥离
 

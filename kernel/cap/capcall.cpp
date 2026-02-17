@@ -14,12 +14,12 @@
 
 auto CSpaceCalls::_clone(Cap *src, CapHolder *owner, CapIdx idx) -> Cap * {
     // TODO: 将其添加到派生树中
-    return new Cap(owner, idx, _payload(src), _perm(src));
+    return new Cap(owner, idx, _payload(src), _perm(src).clone());
 }
 
 auto CSpaceCalls::_migrate(Cap *src, CapHolder *owner, CapIdx idx) -> Cap * {
     // TODO: 将其替换到派生树中
-    return new Cap(owner, idx, _payload(src), _perm(src));
+    return new Cap(owner, idx, _payload(src), _perm(src).clone());
 }
 
 auto CSpaceCalls::basic::payload(Cap *cap) -> CapOptional<CSpaceBase *> {
@@ -53,5 +53,5 @@ auto CSpaceCalls::basic::downgrade(Cap *src, const PermissionBits &new_perm)
 auto CSpaceCalls::basic::create(CSpaceBase *space, CapHolder *owner, CapIdx idx,
                                 const PermissionBits &bits)
     -> CapOptional<Cap *> {
-    return new Cap(owner, idx, space, bits);
+    return new Cap(owner, idx, space, bits.clone());
 }

@@ -10,7 +10,7 @@
  */
 
 #include <mem/pmm.h>
-
+#include <mem/addr.h>
 #include <cassert>
 
 PMM::page *PMM::__base_address;

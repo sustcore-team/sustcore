@@ -10,6 +10,7 @@
  */
 
 #include <mem/gfp.h>
+#include <mem/addr.h>
 #include <kio.h>
 #include <sus/types.h>
 

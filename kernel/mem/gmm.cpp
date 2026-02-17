@@ -11,7 +11,7 @@
 
 #include <mem/gmm.h>
 #include <mem/pmm.h>
-#include <mem/kaddr_defs.h>
+#include <mem/addr.h>
 #include <cassert>
 
 void GMM::init() {

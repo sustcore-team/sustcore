@@ -11,7 +11,7 @@
 #include <arch/trait.h>
 #include <kio.h>
 #include <mem/buddy.h>
-#include <mem/kaddr_defs.h>
+#include <mem/addr.h>
 #include <mem/listeners.h>
 #include <sus/list.h>
 #include <sus/logger.h>
@@ -43,7 +43,7 @@ static void add_memory_range(void *paddr, size_t pages) {
 
     while (remain > 0) {
         size_t order = 0;
-        while (order <= BuddyAllocator::MAX_BUDDY_ORDER) {
+        while (order < BuddyAllocator::MAX_BUDDY_ORDER) {
             size_t try_pages = 1UL << (order + 1);
             size_t try_size  = try_pages << 12;
 
@@ -96,7 +96,7 @@ void BuddyAllocator::post_init() {
         // 哨兵节点
         // 将其从 KA 转换为 PA, 再从 PA 转换回 KPA
         // 这样做是为了确保链表中的所有指针都指向 Kernel Physical Memory Space
-        FreeBlock *sentinel = (FreeBlock *)PA2KPA(KA2PA(&list.sentinel()));
+        FreeBlock *sentinel = (FreeBlock *)PA2KPA(KVA2PA(&list.sentinel()));
         // 开始遍历
         FreeBlock *iter     = sentinel;
 
@@ -133,7 +133,7 @@ void BuddyAllocator::free_frame(void *ptr, size_t frame_count) {
     umb_t paddr  = (umb_t)ptr;
     size_t order = pages2order(frame_count);
 
-    if (paddr >= (umb_t)KPHY_VA_OFFSET) {
+    if (paddr >= (umb_t)KPA_OFFSET) {
         BUDDY::ERROR("free_frame: 地址 %p 超出物理地址范围", ptr);
         return;
     }

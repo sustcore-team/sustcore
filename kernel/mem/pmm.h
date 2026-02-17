@@ -12,6 +12,7 @@
 #pragma once
 
 #include <mem/gfp.h>
+#include <mem/addr.h>
 #include <sus/types.h>
 
 class PMM {
