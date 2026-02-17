@@ -10,6 +10,7 @@
  */
 
 #include <kio.h>
+#include <mem/addr.h>
 #include <mem/alloc_def.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
@@ -20,7 +21,9 @@ size_t LinearGrowAllocator::lga_offset = 0;
 
 void* LinearGrowAllocator::malloc(size_t size) {
     if (size >= 4096) {
-        return PA2KPA(GFP::alloc_frame(page_align_up(size) / PAGESIZE));
+        size_t pages = page_align_up(size) / PAGESIZE;
+        PhyAddr paddr = GFP::get_free_page(pages);
+        return convert<KpaAddr>(paddr).addr();
     }
     if (lga_offset + size > SIZE) {
         MEMORY::FATAL("%s", "内存不足");

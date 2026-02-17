@@ -14,8 +14,8 @@
 #include <arch/riscv64/csr.h>
 #include <arch/trait.h>
 #include <kio.h>
-#include <mem/gfp.h>
 #include <mem/addr.h>
+#include <mem/gfp.h>
 #include <sus/logger.h>
 #include <sus/types.h>
 
@@ -91,13 +91,25 @@ constexpr Riscv64SV39ModifyMask operator|(Riscv64SV39ModifyMask lhs,
                                               static_cast<uint8_t>(rhs));
 }
 
+template <KernelStage Stage>
 class Riscv64SV39PageMan {
 public:
-    // 前初始化与后初始化
-    static void pre_init(void);
-    static void post_init(void);
+    using RWX       = Riscv64SV39RWX;
+    using StageAddr = _StageAddr<Stage>;
+    using StageGFP = _GFP<Stage>;
 
-    using RWX = Riscv64SV39RWX;
+    // 前初始化与后初始化
+    static void init(void);
+
+    // PhyAddr -> StageAddr
+    static StageAddr _convert(PhyAddr paddr) {
+        return convert<StageAddr>(paddr);
+    }
+
+    template <typename T>
+    static T *_as(PhyAddr paddr) {
+        return _convert(paddr).template as<T>();
+    }
 
     // 构造RWX
     static constexpr RWX rwx(bool r, bool w, bool x) {
@@ -126,15 +138,24 @@ public:
         return rwx & Riscv64SV39RWX::X;
     }
 
-    enum class PageSize { SIZE_NULL, SIZE_4K, SIZE_2M, SIZE_1G };
+    enum class PageSize { _NULL, _4K, _2M, _1G };
 
     // 获得页大小
-    static constexpr size_t get_size(PageSize size) {
+    static constexpr size_t psize(PageSize size) {
         switch (size) {
-            case PageSize::SIZE_4K: return 0x1000;
-            case PageSize::SIZE_2M: return 0x200000;
-            case PageSize::SIZE_1G: return 0x40000000;
-            default:                return 0;
+            case PageSize::_4K: return 0x1000;
+            case PageSize::_2M: return 0x200000;
+            case PageSize::_1G: return 0x40000000;
+            default:            return 0;
+        }
+    }
+
+    static constexpr int level(PageSize size) {
+        switch (size) {
+            case PageSize::_1G: return 1;
+            case PageSize::_2M: return 2;
+            case PageSize::_4K: return 3;
+            default:            return 0;
         }
     }
 
@@ -198,17 +219,15 @@ public:
         return pte.v;
     }
 
-    static inline void *from_ppn(umb_t ppn) {
-        umb_t addr = ppn << 12;
-        return (void *)(addr);
+    static inline PhyAddr from_ppn(umb_t ppn) {
+        return PhyAddr(ppn << 12);
     }
 
-    static inline umb_t to_ppn(void *addr) {
-        umb_t addr_val = (umb_t)(addr);
-        return addr_val >> 12;
+    static inline umb_t to_ppn(PhyAddr addr) {
+        return addr.arith() >> 12;
     }
 
-    static inline void *get_physical_address(PTE pte) {
+    static inline PhyAddr get_physical_address(PTE pte) {
         return from_ppn(pte.ppn);
     }
 
@@ -238,169 +257,247 @@ public:
     }
 
     // 页表管理操作
-    static PTE *read_root(void);
-    static PTE *make_root(void);
+    static PTE *read_root(void) {
+        csr_satp_t satp = csr_get_satp();
+        if (satp.mode != SATPMode::SV39) {
+            return nullptr;
+        }
+        umb_t root_ppn = satp.ppn;
+        return _as<PTE>(from_ppn(root_ppn));
+    }
+    static PhyAddr make_root(void) {
+        PhyAddr __root = StageGFP::get_free_page();
+        memset(_convert(__root).addr(), 0, PAGESIZE);
+        return __root;
+    }
 
 private:
-    PTE *_root;
+    PhyAddr __root;
     inline PTE *root() {
-        return (PTE *)PA2KPA(_root);
+        return _as<PTE>(__root);
     }
 
 public:
-    Riscv64SV39PageMan();
-    explicit constexpr Riscv64SV39PageMan(PTE *__root) : _root(__root) {}
-
-    // 查询页
-    ExtendedPTE query_page(void *vaddr);
-
-    static constexpr int size_to_level(PageSize size) {
-        switch (size) {
-            case PageSize::SIZE_1G: return 1;
-            case PageSize::SIZE_2M: return 2;
-            case PageSize::SIZE_4K: return 3;
-            default:                return 0;
-        }
-    }
+    explicit constexpr Riscv64SV39PageMan(PhyAddr root) : __root(root) {}
+    Riscv64SV39PageMan() : Riscv64SV39PageMan(make_root()) {}
 
     template <PageSize size>
-    void map_page(void *vaddr, void *paddr, RWX rwx, bool u, bool g) {
-        // do nothing when size is SIZE_NULL
-        // in fact, it should be an error
-        static_assert(size != PageSize::SIZE_NULL,
-                      "Cannot map page with SIZE_NULL");
+    inline static void make_vpn(VirAddr vaddr, umb_t vpn[level(size)]) {
         // check rwx != RWX_MODE_P
-        constexpr int tot_levels = size_to_level(size);  // SV39有3级页表
+        constexpr int tot_levels = level(size);  // SV39有3级页表
 
         // 将vaddr拆分为三级索引
-        umb_t vpn[tot_levels];
-        umb_t va = (umb_t)vaddr;
+        umb_t va = vaddr.arith();
 
         vpn[0] = (va >> 30) & 0x1FF;  // VPN[0]: bits 30-38
         if constexpr (tot_levels >= 2) {
-            static_assert(size == PageSize::SIZE_4K ||
-                          size == PageSize::SIZE_2M);
+            static_assert(size == PageSize::_4K || size == PageSize::_2M);
             vpn[1] = (va >> 21) & 0x1FF;  // VPN[1]: bits 21-29
         }
         if constexpr (tot_levels == 3) {
-            static_assert(size == PageSize::SIZE_4K);
+            static_assert(size == PageSize::_4K);
             vpn[2] = (va >> 12) & 0x1FF;  // VPN[2]: bits 12-20
         }
 
         static_assert(tot_levels - 1 >= 0);
-        PTE *pte = &(root()[vpn[0]]);
-        for (int i = 1; i < tot_levels; i++) {
-            if (!pte->v) {
-                // 分配下一级页表
-                PTE *new_pt = (PTE *)GFP::alloc_frame();
-                // check new_pt not null
-                memset((PTE *)PA2KPA(new_pt), 0, PAGESIZE);
-                pte->ppn = to_ppn(KPA2PA(new_pt));
-                pte->v   = true;
-                pte->rwx = rwx_cast(RWX::P);  // 标记为非叶子节点
-                pte->u   = u;
-                pte->g   = g;
-                PAGING::DEBUG(
-                    "VPN[%d] = %d 处未存在, 构造为 pte->rwx = %d, pte = %p, "
-                    "&pte = %p",
-                    i - 1, vpn[i - 1], pte->rwx, pte->value, &pte);
-            } else if (pte->rwx != RWX::P) {
-                PAGING::DEBUG(
-                    "VPN[%d] = %d 处已有大页映射! pte->rwx = %d, pte = %p, "
-                    "&pte = %p",
-                    i - 1, vpn[i - 1], pte->rwx, pte->value);
-                return;
-            } else if (pte->np) {
-                // 非存在页，do sth...
-                return;
+    }
+
+    // 查询页
+    ExtendedPTE query_page(VirAddr vaddr) {
+        // 将vaddr拆分为三级索引
+        umb_t vpn[3];
+        make_vpn<PageSize::_4K>(vaddr, vpn);
+        constexpr size_t total_levels = level(PageSize::_4K);
+
+        // TODO: check _root not null
+        PTE *pt = root();
+        for (size_t level = 0; level < total_levels; level++) {
+            // 查询当前级页表项
+            PTE &pte = pt[vpn[level]];
+            if (!pte.v) {
+                return {nullptr, PageSize::_NULL};
             }
 
-            // 检查pte属性
-            // 如果pte->u/g与u/g不符，则无法继续
-            if ((pte->u ^ u) || (pte->g ^ g)) {
-                return;
+            // 不为P且有效，说明是叶子页表项
+            if (pte.rwx != RWX::P) {
+                // 大页映射
+                PageSize size = PageSize::_4K;
+                if (level == 0) {
+                    size = PageSize::_1G;
+                } else if (level == 1) {
+                    size = PageSize::_2M;
+                }
+                return {&pte, size};
             }
 
-            PTE *pt = (PTE *)PA2KPA(from_ppn(pte->ppn));
-            // check pt not null
-            pte     = &pt[vpn[i]];
+            // 否则, 取下一级页表
+            pt = _as<PTE>(from_ppn(pte.ppn));
         }
 
-        // 填充最终页表项
-        // 首先清空
-        pte->value = 0;
-        // 设置各个位
-        pte->v     = true;
-        pte->rwx   = rwx_cast(rwx);
-        pte->u     = u;
-        pte->g     = g;
-        pte->ppn   = to_ppn(paddr);
+        // 到达此处, 当且仅当最后一级页表项的RWX也为RWX::P
+        // 因此返回一个无效的页表项
+        return {nullptr, PageSize::_NULL};  // 不应该到达这里
+    }
+
+    template <PageSize size>
+    void map_page(VirAddr vaddr, PhyAddr paddr, RWX rwx, bool u, bool g) {
+        // 当size为_NULL时, 无法映射任何页, 因此直接返回
+        static_assert(size != PageSize::_NULL, "不能映射大小为0的页");
+
+        // 得到该等级页的页表层数
+        constexpr int tot_levels = level(size);
+        static_assert(tot_levels - 1 >= 0);
+
+        // 拆分vaddr
+        umb_t vpn[tot_levels];
+        make_vpn<size>(vaddr, vpn);
+
+        // 进行遍历
+        PTE *pt         = root();
+        PTE *target_pte = nullptr;
+        for (size_t level = 0; level < tot_levels; level++) {
+            PTE &pte = pt[vpn[level]];
+
+            // 已有映射, 无法继续
+            if (pte.rwx != RWX::P) {
+                PAGING::ERROR(
+                    "VPN[%d] = %d 处已有映射! pte->rwx = %d, pte = %p, &pte = "
+                    "%p",
+                    level, vpn[level], pte.rwx, pte.value, &pte);
+                break;
+            }
+
+            // 有效但不存在
+            if (pte.v && pte.np) {
+                PAGING::ERROR("VPN[%d] = %d 处页表项有效但不存在!");
+                break;
+            }
+
+            if (!pte.v) {
+                // 最后一级页表项, 携带着pte信息退出循环
+                if (level == tot_levels - 1) {
+                    target_pte = &pte;
+                    break;
+                }
+                // 分配下一级页表
+                PhyAddr new_pt = StageGFP::get_free_page();
+                assert(new_pt.nonnull());
+                // 初始化该页
+                memset(_convert(new_pt).addr(), 0, PAGESIZE);
+                // 添加到当前页表中
+                pte.ppn = to_ppn(new_pt);
+                pte.v   = true;
+                pte.rwx = rwx_cast(RWX::P);
+                pte.u   = u;
+                pte.g   = g;
+                PAGING::DEBUG(
+                    "VPN[%d] = %d 处页表项 %p 不存在, 构造为 pte = %p", level,
+                    vpn[level], &pte, pte.value);
+            }
+
+            // 确保 pte->u/g 与 u/g 参数匹配
+            if ((pte.u ^ u) || (pte.g ^ g)) {
+                PAGING::ERROR(
+                    "VPN[%d] = %d 处页表项用户/全局属性不匹配! pte->u = %d, "
+                    "pte->g = %d, 参数u = %d, 参数g = %d",
+                    level, vpn[level], pte.u, pte.g, u, g);
+                break;
+            }
+
+            pt = _as<PTE>(from_ppn(pte.ppn));
+        }
+
+        if (target_pte == nullptr) {
+            PAGING::ERROR("未找到目标页表项!");
+            return;
+        }
+
+        // 设置目标页表项
+        target_pte->ppn = to_ppn(paddr);
+        target_pte->v   = true;
+        target_pte->rwx = rwx_cast(rwx);
+        target_pte->u   = u;
+        target_pte->g   = g;
+        PAGING::DEBUG(
+            "成功映射 vaddr = %p 到 paddr = %p, rwx = %d, u = %d, g = %d",
+            vaddr.addr(), paddr.addr(), rwx_cast(rwx), u, g);
     }
 
     template <bool use_hugepage>
-    void map_range(void *vstart, void *pstart, size_t size, RWX rwx, bool u,
-                   bool g) {
-        // 将 vaddr 与 paddr 向下对齐到4K
-        const umb_t _vs    = page_align_down((umb_t)vstart);
-        const umb_t _ps    = page_align_down((umb_t)pstart);
-        // 将 size 向上对齐到4K
-        const size_t _size = (size_t)page_align_up((umb_t)size);
-        const size_t _cnt  = _size / PAGESIZE;
-
+    void map_range(const VirAddr vstart, const PhyAddr pstart, size_t range_sz,
+                   RWX rwx, bool u, bool g) {
         if constexpr (!use_hugepage) {
+            // 将 vaddr 与 paddr 向下对齐到4K
+            const VirAddr _vs  = vstart.page_align_down();
+            const PhyAddr _ps  = pstart.page_align_down();
+            // 将 size 向上对齐到4K
+            const size_t _size = page_align_up(range_sz);
+            const size_t _cnt  = _size / PAGESIZE;
+
             // 逐个小页映射
             for (size_t i = 0; i < _cnt; i++) {
-                void *vaddr = (void *)(_vs + i * PAGESIZE);
-                void *paddr = (void *)(_ps + i * PAGESIZE);
-                map_page<PageSize::SIZE_4K>(vaddr, paddr, rwx, u, g);
+                VirAddr vaddr = _vs + i * PAGESIZE;
+                PhyAddr paddr = _ps + i * PAGESIZE;
+                map_page<PageSize::_4K>(vaddr, paddr, rwx, u, g);
             }
         } else {
-            // 尝试使用大页映射
-            constexpr size_t cnt_1g = get_size(PageSize::SIZE_1G) / PAGESIZE;
-            constexpr size_t cnt_2m = get_size(PageSize::SIZE_2M) / PAGESIZE;
+            // 将 vaddr 与 paddr 向下对齐到4K
+            const VirAddr _vs  = vstart.page_align_down();
+            const PhyAddr _ps  = pstart.page_align_down();
+            // 将 size 向上对齐到4K
+            const size_t _size = page_align_up(range_sz);
+            const size_t _cnt  = _size / PAGESIZE;
 
-            size_t cnt_remaining = _cnt;
-            umb_t _va            = _vs;
-            umb_t _pa            = _ps;
+            // 尝试使用大页映射
+            constexpr size_t sz1g  = psize(PageSize::_1G);
+            constexpr size_t sz2m  = psize(PageSize::_2M);
+            constexpr size_t cnt1g = sz1g / PAGESIZE;
+            constexpr size_t cnt2m = sz2m / PAGESIZE;
+
+            size_t remcnt = _cnt;
+            VirAddr _va   = _vs;
+            PhyAddr _pa   = _ps;
 
             // 寻找合适的大页映射
             // 优先使用1G大页，其次2M大页，最后4K小页
             // 且使用时保证地址对齐
-            while (cnt_remaining > 0) {
-                if ((cnt_remaining >= cnt_1g) &&
-                    ((_va % get_size(PageSize::SIZE_1G)) == 0) &&
-                    ((_pa % get_size(PageSize::SIZE_1G)) == 0))
+            while (remcnt > 0) {
+                if ((remcnt >= cnt1g) && _va.aligned<sz1g>() &&
+                    _pa.aligned<sz1g>())
                 {
                     // 使用1G大页映射
-                    map_page<PageSize::SIZE_1G>((void *)_va, (void *)_pa, rwx,
-                                                u, g);
-                    _va           += get_size(PageSize::SIZE_1G);
-                    _pa           += get_size(PageSize::SIZE_1G);
-                    cnt_remaining -= cnt_1g;
-                } else if ((cnt_remaining >= cnt_2m) &&
-                           ((_va % get_size(PageSize::SIZE_2M)) == 0) &&
-                           ((_pa % get_size(PageSize::SIZE_2M)) == 0))
+                    map_page<PageSize::_1G>(_va, _pa, rwx, u, g);
+                    _va    += sz1g;
+                    _pa    += sz1g;
+                    remcnt -= cnt1g;
+                } else if ((remcnt >= cnt2m) && _va.aligned<sz2m>() &&
+                           _pa.aligned<sz2m>())
                 {
                     // 使用2M大页映射
-                    map_page<PageSize::SIZE_2M>((void *)_va, (void *)_pa, rwx,
-                                                u, g);
-                    _va           += get_size(PageSize::SIZE_2M);
-                    _pa           += get_size(PageSize::SIZE_2M);
-                    cnt_remaining -= cnt_2m;
+                    map_page<PageSize::_2M>(_va, _pa, rwx, u, g);
+                    _va    += sz2m;
+                    _pa    += sz2m;
+                    remcnt -= cnt2m;
                 } else {
                     // 使用4K小页映射
-                    map_page<PageSize::SIZE_4K>((void *)_va, (void *)_pa, rwx,
-                                                u, g);
-                    _va           += PAGESIZE;
-                    _pa           += PAGESIZE;
-                    cnt_remaining -= 1;
+                    map_page<PageSize::_4K>(_va, _pa, rwx, u, g);
+                    _va    += PAGESIZE;
+                    _pa    += PAGESIZE;
+                    remcnt -= 1;
                 }
             }
         }
     }
 
-    void unmap_page(void *vaddr);
-    void unmap_range(void *vstart, size_t size);
+    void unmap_page(VirAddr vaddr) {
+        // TODO: implement unmap_page
+        PAGING::ERROR("unmap_page尚未实现");
+    }
+
+    void unmap_range(VirAddr vstart, size_t size) {
+        // TODO: implement unmap_range
+        PAGING::ERROR("unmap_range尚未实现");
+    }
 
     static constexpr umb_t to_rwx_mask(ModifyMask mask) {
         umb_t rwx_m = 0b000;
@@ -414,11 +511,11 @@ public:
     }
 
     template <ModifyMask mask>
-    PageSize __modify_flags(void *vaddr, RWX rwx, bool u, bool g) {
+    PageSize __modify_flags(VirAddr vaddr, RWX rwx, bool u, bool g) {
         ExtendedPTE ext_pte = query_page(vaddr);
-        if (ext_pte.pte == nullptr || ext_pte.size == PageSize::SIZE_NULL) {
+        if (ext_pte.pte == nullptr || ext_pte.size == PageSize::_NULL) {
             // 错误, 页面不存在
-            return PageSize::SIZE_NULL;
+            return PageSize::_NULL;
         }
 
         PTE *pte = ext_pte.pte;
@@ -445,36 +542,36 @@ public:
     }
 
     template <ModifyMask mask>
-    void modify_flags(void *vaddr, RWX rwx, bool u, bool g) {
+    void modify_flags(VirAddr vaddr, RWX rwx, bool u, bool g) {
         __modify_flags<mask>(vaddr, rwx, u, g);
     }
 
     template <ModifyMask mask>
-    void modify_range_flags(void *vstart, size_t size, RWX rwx, bool u,
+    void modify_range_flags(VirAddr vstart, size_t size, RWX rwx, bool u,
                             bool g) {
         // 将 vaddr 向下对齐到4K
-        const umb_t _vs      = page_align_down((umb_t)vstart);
+        const VirAddr _vs  = vstart.page_align_down();
         // 将 size 向上对齐到4K
-        const size_t _size   = (size_t)page_align_up((umb_t)size);
-        const size_t _cnt    = _size / PAGESIZE;
+        const size_t _size = page_align_up(size);
+        const size_t _cnt  = _size / PAGESIZE;
         // 逐页修改, 直至完成
         // 中间可能存在大页
-        size_t cnt_remaining = _cnt;
-        umb_t _va            = _vs;
-        while (cnt_remaining > 0) {
-            PageSize psize = __modify_flags<mask>((void *)_va, rwx, u, g);
-            if (psize == PageSize::SIZE_NULL) {
+        size_t remcnt      = _cnt;
+        VirAddr _va        = _vs;
+        while (remcnt > 0) {
+            PageSize size_type = __modify_flags<mask>(_va, rwx, u, g);
+            if (size_type == PageSize::_NULL) {
                 // 页面不存在, 无法修改
                 return;
             }
-            assert(get_size(psize) >= PAGESIZE);
-            _va           += get_size(psize);
-            cnt_remaining -= get_size(psize) / PAGESIZE;
+            assert(psize(size_type) >= PAGESIZE);
+            _va    += psize(size_type);
+            remcnt -= psize(size_type) / PAGESIZE;
         }
     }
 
     // 更换页表根
-    inline static void __switch_root(PTE *__root) {
+    inline static void __switch_root(PhyAddr __root) {
         csr_satp_t new_satp;
         new_satp.mode = SATPMode::SV39;
         new_satp.asid = 0;  // TODO: ASID支持
@@ -483,12 +580,12 @@ public:
     }
 
     inline void switch_root() {
-        __switch_root(_root);
+        __switch_root(__root);
     }
 
     // 获得页表根
-    constexpr PTE *&get_root() {
-        return _root;
+    constexpr PhyAddr get_root() {
+        return __root;
     }
 
     // 刷新TLB
@@ -497,4 +594,5 @@ public:
     }
 };
 
-static_assert(ArchPageManTrait<Riscv64SV39PageMan>);
+static_assert(ArchPageManTrait<Riscv64SV39PageMan<KernelStage::PRE_INIT>>);
+static_assert(ArchPageManTrait<Riscv64SV39PageMan<KernelStage::POST_INIT>>);

@@ -11,10 +11,12 @@
 
 #pragma once
 
+#include <mem/addr.h>
+
 class GMM {
 public:
     static void init(void);
-    static void *get_page(int cnt = 1);
-    static void put_page(void *paddr, int cnt = 1);
-    static void *clone_page(void *paddr, int cnt = 1);
+    static PhyAddr get_page(int cnt = 1);
+    static void put_page(PhyAddr paddr, int cnt = 1);
+    static PhyAddr clone_page(PhyAddr paddr, int cnt = 1);
 };

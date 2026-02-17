@@ -20,4 +20,8 @@ using MemoryLayout   = Riscv64MemoryLayout;
 using Context        = Riscv64Context;
 using Interrupt      = Riscv64Interrupt;
 using WPFault        = Riscv64WPFault;
-using PageMan        = Riscv64SV39PageMan;
+template <KernelStage Stage>
+using _PageMan        = Riscv64SV39PageMan<Stage>;
+
+using EarlyPageMan = _PageMan<KernelStage::PRE_INIT>;
+using PageMan      = _PageMan<KernelStage::POST_INIT>;

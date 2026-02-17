@@ -9,49 +9,40 @@
  *
  */
 
-#include <mem/gfp.h>
-#include <mem/addr.h>
 #include <kio.h>
+#include <mem/addr.h>
+#include <mem/gfp.h>
 #include <sus/types.h>
 
-void *LinearGrowGFP::baseaddr = nullptr;
-void *LinearGrowGFP::curaddr  = nullptr;
-void *LinearGrowGFP::boundary = nullptr;
-
-void LinearGrowGFP::pre_init(MemRegion *regions, size_t region_count) {
+template <>
+void LinearGrowGFP<KernelStage::PRE_INIT>::init(MemRegion *regions,
+                                                size_t region_count) {
+    PhyAddr _baseaddr = PhyAddr::null;
     // 从regions中找到大小最大的可用内存区域，作为线性增长GFP的内存池
-    void *baseaddr  = nullptr;
-    size_t max_size = 0;
+    size_t max_size    = 0;
     for (size_t i = 0; i < region_count; i++) {
         if (regions[i].status == MemRegion::MemoryStatus::FREE) {
             if (regions[i].size > max_size) {
-                max_size = regions[i].size;
-                baseaddr = regions[i].ptr;
+                max_size  = regions[i].size;
+                _baseaddr = regions[i].ptr;
             }
         }
     }
 
     // 将 baseaddr 向上对齐, boundary 向下对齐
-    LinearGrowGFP::baseaddr = (void *)page_align_up((umb_t)baseaddr);
-    LinearGrowGFP::curaddr  = LinearGrowGFP::baseaddr;
-    umb_t _boundary           = (umb_t)baseaddr + max_size;
-    LinearGrowGFP::boundary = (void *)page_align_down(_boundary);
+    baseaddr           = _baseaddr.page_align_up();
+    curaddr            = baseaddr;
+    PhyAddr _boundary = baseaddr + max_size;
+    boundary           = _boundary.page_align_down();
 }
 
-void LinearGrowGFP::post_init() {}
-
-void *LinearGrowGFP::alloc_frame(size_t frame_count) {
-    umb_t _boundary = (umb_t)LinearGrowGFP::curaddr + frame_count * 0x1000;
-    if (_boundary > (umb_t)LinearGrowGFP::boundary) {
-        return nullptr;  // 内存不足
-    }
-    void *ptr = LinearGrowGFP::curaddr;
-    LinearGrowGFP::curaddr = (void *)_boundary;
-    return ptr;
-}
-
-void LinearGrowGFP::free_frame(void *ptr, size_t frame_count) {
-    // 不需要做任何操作
-    (void)ptr;
-    (void)frame_count;
+template <>
+void LinearGrowGFP<KernelStage::POST_INIT>::init(MemRegion *regions,
+                                                 size_t region_count) {
+    // 把INIT阶段中的元数据拷贝过来, 并做一些调整
+    using PreGFP = LinearGrowGFP<KernelStage::PRE_INIT>;
+    // 通过convert, 将其自动转换为POST_INIT阶段的地址类型
+    baseaddr = PreGFP::baseaddr;
+    curaddr  = PreGFP::curaddr;
+    boundary = PreGFP::boundary;
 }

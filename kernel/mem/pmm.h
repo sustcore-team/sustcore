@@ -27,27 +27,27 @@ private:
     static size_t __arraysz;
     static umb_t __lower_ppn, __upper_ppn;
 public:
-    static void init(void *lowerbound, void *upperbound);
-    static constexpr umb_t phys2ppn(umb_t paddr) {
-        return paddr / PAGESIZE;
+    static void init(PhyAddr lowerbound, PhyAddr upperbound);
+    static constexpr umb_t phys2ppn(PhyAddr paddr) {
+        return paddr.arith() / PAGESIZE;
     }
     static page *__get_page(umb_t ppn);
-    inline static page *get_page(void *paddr) {
-        return __get_page(phys2ppn((umb_t)paddr));
+    inline static page *get_page(PhyAddr paddr) {
+        return __get_page(phys2ppn(paddr));
     }
     static void __ref_page(page *pg);
-    inline static void ref_page(void *paddr) {
+    inline static void ref_page(PhyAddr paddr) {
         __ref_page(get_page(paddr));
     }
     static bool __unref_page(page *pg);
-    inline static bool unref_page(void *paddr) {
+    inline static bool unref_page(PhyAddr paddr) {
         return __unref_page(get_page(paddr));
     }
     inline static bool __refering(page *pg)
     {
         return pg->refcnt != 0;
     }
-    inline static bool refering(void *paddr) {
+    inline static bool refering(PhyAddr paddr) {
         return __refering(get_page(paddr));
     }
     static void reset_page(page *page);

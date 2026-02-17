@@ -11,6 +11,12 @@
 
 #pragma once
 
+#include <mem/addr.h>
 #include <mem/buddy.h>
+#include <mem/gfp_def.h>
 
-using GFP = BuddyAllocator;
+template <KernelStage Stage>
+using _GFP = LinearGrowGFP<Stage>;
+
+using EarlyGFP = _GFP<KernelStage::PRE_INIT>;
+using GFP = _GFP<KernelStage::POST_INIT>;

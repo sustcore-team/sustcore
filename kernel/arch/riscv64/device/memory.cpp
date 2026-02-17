@@ -105,7 +105,7 @@ static bool add_region(MemRegion *regions, int max_cnt, int &idx, void *addr,
         return false;
     }
     regions[idx] = (MemRegion){
-        .ptr    = addr,
+        .ptr    = PhyAddr(addr),
         .size   = size,
         .status = status,
     };

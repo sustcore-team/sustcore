@@ -12,30 +12,28 @@
 #pragma once
 
 #include <arch/trait.h>
+#include <mem/addr.h>
 #include <sus/types.h>
 
 #include <cstddef>
 
-template <typename T>
-concept PageFrameAllocatorTrait = requires(
-    MemRegion *regions, size_t region_count, void *ptr, size_t frame_count) {
+template <typename T, KernelStage Stage>
+concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr,
+                            size_t page_count) {
     {
-        T::pre_init(regions, region_count)
+        T::init(regions, region_count)
     } -> std::same_as<void>;
     {
-        T::post_init()
+        T::get_free_page()
+    } -> std::same_as<PhyAddr>;
+    {
+        T::get_free_page(page_count)
+    } -> std::same_as<PhyAddr>;
+    {
+        T::put_page(ptr)
     } -> std::same_as<void>;
     {
-        T::alloc_frame()
-    } -> std::same_as<void *>;
-    {
-        T::alloc_frame(frame_count)
-    } -> std::same_as<void *>;
-    {
-        T::free_frame(ptr)
-    } -> std::same_as<void>;
-    {
-        T::free_frame(ptr, frame_count)
+        T::put_page(ptr, page_count)
     } -> std::same_as<void>;
 };
 
@@ -43,17 +41,40 @@ concept PageFrameAllocatorTrait = requires(
  * @brief 线性增长GFP
  *
  */
+template <KernelStage Stage>
 class LinearGrowGFP {
-    static void *baseaddr;
-    static void *curaddr;
-    static void *boundary;
-
+    static PhyAddr baseaddr;
+    static PhyAddr curaddr;
+    static PhyAddr boundary;
 public:
-    static void pre_init(MemRegion *regions, size_t region_count);
-    static void post_init();
-    static void *alloc_frame(size_t frame_count = 1);
-    static void free_frame(void *ptr, size_t frame_count = 1);
+    static void init(MemRegion *regions, size_t region_count);
+    static PhyAddr get_free_page(size_t page_count = 1) {
+        PhyAddr _bound = curaddr + page_count * PAGESIZE;
+        if (_bound > boundary) {
+            return PhyAddr::null;  // 内存不足
+        }
+        PhyAddr ptr = curaddr;
+        curaddr = _bound;
+        return ptr;
+    }
+    static void put_page(PhyAddr addr, size_t page_count = 1) {
+        // 线性增长GFP不支持释放页框，因此该函数不执行任何操作
+    }
+
+    friend class LinearGrowGFP<KernelStage::PRE_INIT>;
+    friend class LinearGrowGFP<KernelStage::POST_INIT>;
 };
 
-static_assert(PageFrameAllocatorTrait<LinearGrowGFP>,
-              "LinearGrowthGFP 不满足 PageFrameAllocatorTrait");
+template <KernelStage Stage>
+PhyAddr LinearGrowGFP<Stage>::baseaddr = PhyAddr::null;
+template <KernelStage Stage>
+PhyAddr LinearGrowGFP<Stage>::curaddr = PhyAddr::null;
+template <KernelStage Stage>
+PhyAddr LinearGrowGFP<Stage>::boundary = PhyAddr::null;
+
+static_assert(
+    GFPTrait<LinearGrowGFP<KernelStage::PRE_INIT>, KernelStage::PRE_INIT>,
+    "LinearGrowthGFP 不满足 GFPTrait");
+static_assert(
+    GFPTrait<LinearGrowGFP<KernelStage::POST_INIT>, KernelStage::POST_INIT>,
+    "LinearGrowthGFP 不满足 GFPTrait");

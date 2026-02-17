@@ -14,6 +14,7 @@
 #include <concepts>
 #include <cstddef>
 #include <sus/types.h>
+#include <mem/addr.h>
 
 /**
  * @brief 架构串口 Trait
@@ -68,7 +69,7 @@ struct MemRegion {
         BAD_MEMORY       = 4
     };
 
-    void *ptr;
+    PhyAddr ptr;
     size_t size;
     MemoryStatus status;
 };
@@ -89,10 +90,7 @@ concept MemoryLayoutTrait = requires(MemRegion *regions, int cnt) {
 template <typename T>
 concept ArchPageManTrait_Initialization = requires() {
     {
-        T::pre_init()
-    } -> std::same_as<void>;
-    {
-        T::post_init()
+        T::init()
     } -> std::same_as<void>;
 };
 
@@ -124,10 +122,10 @@ concept ArchPageManTrait_PagingStructures =
         // 要求有4K页
         std::is_scoped_enum_v<typename T::PageSize>;
         {
-            T::PageSize::SIZE_4K
+            T::PageSize::_4K
         } -> std::same_as<typename T::PageSize>;
         {
-            T::get_size(size)
+            T::psize(size)
         } -> std::convertible_to<size_t>;
         // 页表项类型
         typename T::PTE;
@@ -163,7 +161,7 @@ concept ArchPageManTrait_PTEInfoReader = requires(typename T::PTE pte) {
     } -> std::convertible_to<bool>;
     {
         T::get_physical_address(pte)
-    } -> std::same_as<void *>;
+    } -> std::same_as<PhyAddr>;
     {
         T::is_dirty(pte)
     } -> std::convertible_to<bool>;
@@ -190,8 +188,8 @@ concept ArchPageManTrait_Mask =
 
 // 页表管理器 Trait
 template <typename T>
-concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
-                                    void *vaddr, void *paddr, T::RWX rwx,
+concept ArchPageManTrait = requires(T root, size_t size,
+                                    VirAddr vaddr, PhyAddr paddr, T::RWX rwx,
                                     bool u, bool g) {
     // 初始化条件
     requires ArchPageManTrait_Initialization<T>;
@@ -207,13 +205,13 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
     } -> std::same_as<typename T::PTE *>;
     {
         T::make_root()
-    } -> std::same_as<typename T::PTE *>;
+    } -> std::same_as<PhyAddr>;
     // 构造页表管理器
     {
         T()
     } -> std::same_as<T>;
     {
-        T(__root)
+        T(paddr)
     } -> std::same_as<T>;
     // 查询页
     {
@@ -221,7 +219,7 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
     } -> std::same_as<typename T::ExtendedPTE>;
     // 单页映射
     {
-        root.template map_page<T::PageSize::SIZE_4K>(vaddr, paddr, rwx, u, g)
+        root.template map_page<T::PageSize::_4K>(vaddr, paddr, rwx, u, g)
     } -> std::same_as<void>;
     // 解除单页映射
     {
@@ -249,7 +247,7 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
     } -> std::same_as<void>;
     // 更换页表根
     {
-        T::__switch_root(__root)
+        T::__switch_root(paddr)
     } -> std::same_as<void>;
     // 刷新TLB
     {
@@ -258,7 +256,7 @@ concept ArchPageManTrait = requires(T::PTE *__root, T root, size_t size,
     // 获得页表根
     {
         root.get_root()
-    } -> std::same_as<typename T::PTE *&>;
+    } -> std::same_as<PhyAddr>;
     // 更换页表根
     {
         root.switch_root()

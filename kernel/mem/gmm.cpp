@@ -13,43 +13,44 @@
 #include <mem/pmm.h>
 #include <mem/addr.h>
 #include <cassert>
+#include <cstring>
 
 void GMM::init() {
 }
 
-void *GMM::get_page(int cnt) {
-    void *paddr = GFP::alloc_frame(cnt);
-    for (int i = 0 ; i < cnt ; i ++) {
-        umb_t _paddr = (umb_t) paddr + i * PAGESIZE;
-        PMM::page *page = PMM::get_page((void *)_paddr);
-        assert(! PMM::refering(page));
+PhyAddr GMM::get_page(int cnt) {
+    PhyAddr paddr = GFP::get_free_page(cnt);
+    for (size_t i = 0 ; i < cnt ; i ++) {
+        PhyAddr _paddr = paddr + i * PAGESIZE;
+        PMM::page *page = PMM::get_page(_paddr);
+        assert(! PMM::__refering(page));
         PMM::reset_page(page);
-        PMM::ref_page(page);
+        PMM::__ref_page(page);
     }
     return paddr;
 }
 
-void GMM::put_page(void *paddr, int cnt) {
-    for (int i = 0 ; i < cnt ; i ++) {
-        umb_t _paddr = (umb_t) paddr + i * PAGESIZE;
-        PMM::page *page = PMM::get_page((void *)_paddr);
-        assert(PMM::refering(page));
-        bool flag = PMM::unref_page(page);
+void GMM::put_page(PhyAddr paddr, int cnt) {
+    for (size_t i = 0 ; i < cnt ; i ++) {
+        PhyAddr _paddr = paddr + i * PAGESIZE;
+        PMM::page *page = PMM::get_page(_paddr);
+        assert(PMM::__refering(page));
+        bool flag = PMM::__unref_page(page);
         // 引用计数 <= 0, 释放页
         // NOTE: 也许把连续的部分一次性释放更有利于性能?
         if (flag) {
-            GFP::free_frame((void *)_paddr, 1);
+            GFP::put_page(_paddr, 1);
         }
     }
 }
 
-void *GMM::clone_page(void *paddr, int cnt) {
+PhyAddr GMM::clone_page(PhyAddr paddr, int cnt) {
     // clone_page() 的一个简单实现
     // 获取这些页并将原内容复制进去
-    void *new_addr = get_page(cnt);
-    void *vaddr = PA2KPA(paddr);
-    void *new_vaddr = PA2KPA(new_addr);
+    PhyAddr new_addr = get_page(cnt);
+    KpaAddr vaddr = convert<KpaAddr>(paddr);
+    KpaAddr new_vaddr = convert<KpaAddr>(new_addr);
 
-    memcpy(new_vaddr, vaddr, cnt * PAGESIZE);
+    memcpy(new_vaddr.addr(), vaddr.addr(), cnt * PAGESIZE);
     return new_addr;
 }

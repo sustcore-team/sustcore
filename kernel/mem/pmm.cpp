@@ -12,21 +12,22 @@
 #include <mem/pmm.h>
 #include <mem/addr.h>
 #include <cassert>
+#include <cstring>
 
 PMM::page *PMM::__base_address;
 size_t PMM::__arraysz;
 umb_t PMM::__lower_ppn, PMM::__upper_ppn;
 
-void PMM::init(void *lowerbound, void *upperbound) {
-    __lower_ppn    = phys2ppn((umb_t)lowerbound);
-    __upper_ppn    = phys2ppn((umb_t)upperbound);
+void PMM::init(PhyAddr lowerbound, PhyAddr upperbound) {
+    __lower_ppn    = phys2ppn(lowerbound);
+    __upper_ppn    = phys2ppn(upperbound);
     // pages
     size_t pagecnt = (__upper_ppn - __lower_ppn) / PAGESIZE;
     // 物理页信息队列大小
     __arraysz      = pagecnt * sizeof(page);
     // 转化为页数并申请内存
     __base_address =
-        (page *)GFP::alloc_frame(page_align_up(__arraysz) / PAGESIZE);
+        (page *)GFP::get_free_page(page_align_up(__arraysz) / PAGESIZE).addr();
     // 初始化
     memset(__base_address, 0, __arraysz);
     for (int i = 0; i < pagecnt; i++) {
