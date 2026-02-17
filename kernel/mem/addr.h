@@ -244,3 +244,25 @@ struct _StageAddrConf<KernelStage::POST_INIT> {
 
 template <KernelStage Stage>
 using _StageAddr = typename _StageAddrConf<Stage>::Type;
+
+template <typename T>
+inline static PhyAddr convert_pointer(T *ptr) {
+    AddrType types[] = {AddrType::PA, AddrType::KPA, AddrType::KVA};
+    AddrType detected_type = AddrType::PA;  // Default to PA if no match
+    for (AddrType type : types) {
+        if (within_scope((addr_t)ptr, type)) {
+            detected_type = type;
+            break;
+        }
+    }
+    if (detected_type == AddrType::PA) {
+        return convert<PhyAddr>(PhyAddr((addr_t)ptr));
+    } else if (detected_type == AddrType::KPA) {
+        return convert<PhyAddr>(KpaAddr((addr_t)ptr));
+    } else if (detected_type == AddrType::KVA) {
+        return convert<PhyAddr>(KvaAddr((addr_t)ptr));
+    } else {
+        assert(false && "Pointer is out of known address scopes");
+        return PhyAddr::null;  // Unreachable, but silences compiler warning
+    }
+}

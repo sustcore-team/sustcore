@@ -47,17 +47,9 @@ void tree_test(void);
 void fs_test(void);
 
 int kputs(const char *str) {
-    if (str < (const char *)KPA_OFFSET) {
-        // 还没有进入内核虚拟地址空间，直接输出
-        Serial::serial_write_string(strlen(str), str);
-        return strlen(str);
-    } else if (str < (const char *)KVA_OFFSET) {
-        const char *_str = (const char *)KPA2PA((umb_t)str);
-        Serial::serial_write_string(strlen(str), _str);
-    } else {
-        const char *_str = (const char *)KVA2PA((umb_t)str);
-        Serial::serial_write_string(strlen(str), _str);
-    }
+    size_t len = strlen(str);
+    PhyAddr str_paddr = convert_pointer(str);
+    Serial::serial_write_string(len, str_paddr.as<char>());
     return strlen(str);
 }
 
