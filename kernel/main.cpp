@@ -523,17 +523,18 @@ void fs_test(void) {
         vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
     if (code != FSErrCode::SUCCESS) {
         LOGGER::ERROR("vfs.mount()失败, errcode=%s", to_string(code));
-        while (true);
+        return;
     }
 
     FSOptional<VFile *> file_opt = vfs._open("/initrd/kernel/main.cpp", 0);
     if (!file_opt.present()) {
         LOGGER::ERROR("vfs._open()失败, errcode=%s",
                       to_string(file_opt.error()));
+        return;
     }
     VFile *file = file_opt.value();
 
-    char *source_code = (char *)Allocator::malloc(10 * PAGESIZE);
+    char *source_code = new char[10 * PAGESIZE];
     vfs._read(file, source_code, 10 * PAGESIZE);
     kputs(source_code);
     vfs._close(file);
@@ -541,6 +542,7 @@ void fs_test(void) {
     code = vfs.umount("/initrd");
     if (code != FSErrCode::SUCCESS) {
         LOGGER::ERROR("vfs.umount()失败, errcode=%s", to_string(code));
-        while (true);
+        return;
     }
+    delete[] source_code;
 }

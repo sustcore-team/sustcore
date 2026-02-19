@@ -129,9 +129,6 @@ namespace path_util {
         }
         util::string_builder sb;
 
-        // 总是加入开头
-        sb.append('/');
-
         // 计算相对路径起始位置
         size_t mntpt_len     = _strlen(mntpt);
         const char *rel_path = _cstr(full_path) + mntpt_len;
@@ -344,6 +341,10 @@ FSOptional<VFile *> VFS::_open(const char *path, int flags) {
             curinode = _inode_opt.value();
             return true;
         });
+
+    if (errflag != FSErrCode::SUCCESS) {
+        return errflag;
+    }
 
     // 当前inode即为目标文件的inode
     // 将inode作为文件打开
