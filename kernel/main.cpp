@@ -163,8 +163,8 @@ extern "C" void post_init(void) {
 
     TCBManager::init();
 
-    // buddy_test_complex();
-    // slub_test_basic();
+    buddy_test_complex();
+    slub_test_basic();
     // fs_test();
 
     while (true);
@@ -269,179 +269,179 @@ void kernel_setup(void) {
     while (true);
 }
 
-// void buddy_test_complex() {
-//     LOGGER::INFO("========== Complex Buddy Allocator Test Start ==========");
+void buddy_test_complex() {
+    LOGGER::INFO("========== Complex Buddy Allocator Test Start ==========");
 
-//     // Scenario 1: Mixed Size Allocation & Fragmentation
-//     LOGGER::INFO("Scenario 1: Mixed Size & Fragmentation");
-//     void *p1 = GFP::get_free_page(1);  // 1 page
-//     void *p2 = GFP::get_free_page(2);  // 2 pages
-//     void *p4 = GFP::get_free_page(4);  // 4 pages
-//     void *p3 = GFP::get_free_page(3);  // 3 pages (odd size)
+    // Scenario 1: Mixed Size Allocation & Fragmentation
+    LOGGER::INFO("Scenario 1: Mixed Size & Fragmentation");
+    PhyAddr p1 = GFP::get_free_page(1);  // 1 page
+    PhyAddr p2 = GFP::get_free_page(2);  // 2 pages
+    PhyAddr p4 = GFP::get_free_page(4);  // 4 pages
+    PhyAddr p3 = GFP::get_free_page(3);  // 3 pages (odd size)
 
-//     if (p1 && p2 && p3 && p4) {
-//         LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p",
-//                      p1, p2, p4, p3);
+    if (p1.nonnull() && p2.nonnull() && p3.nonnull() && p4.nonnull()) {
+        LOGGER::INFO("Mixed Alloc Success: 1p@%p, 2p@%p, 4p@%p, 3p@%p",
+                     p1.addr(), p2.addr(), p4.addr(), p3.addr());
 
-//         // Free middle blocks to create fragmentation
-//         GFP::put_page(p2, 2);
-//         GFP::put_page(p3, 3);
-//         LOGGER::INFO("Freed middle blocks (2p, 3p)");
+        // Free middle blocks to create fragmentation
+        GFP::put_page(p2, 2);
+        GFP::put_page(p3, 3);
+        LOGGER::INFO("Freed middle blocks (2p, 3p)");
 
-//         // Try to alloc 2 pages again (should reuse p2 or part of p3)
-//         void *p_new = GFP::get_free_page(2);
-//         LOGGER::INFO("Re-alloc 2 pages: %p", p_new);
+        // Try to alloc 2 pages again (should reuse p2 or part of p3)
+        PhyAddr p_new = GFP::get_free_page(2);
+        LOGGER::INFO("Re-alloc 2 pages: %p", p_new.addr());
 
-//         if (p_new)
-//             GFP::put_page(p_new, 2);
-//         GFP::put_page(p1, 1);
-//         GFP::put_page(p4, 4);
-//     } else {
-//         LOGGER::ERROR("Mixed Alloc Failed");
-//         if (p1)
-//             GFP::put_page(p1, 1);
-//         if (p2)
-//             GFP::put_page(p2, 2);
-//         if (p4)
-//             GFP::put_page(p4, 4);
-//         if (p3)
-//             GFP::put_page(p3, 3);
-//     }
+        if (p_new.nonnull())
+            GFP::put_page(p_new, 2);
+        GFP::put_page(p1, 1);
+        GFP::put_page(p4, 4);
+    } else {
+        LOGGER::ERROR("Mixed Alloc Failed");
+        if (p1.nonnull())
+            GFP::put_page(p1, 1);
+        if (p2.nonnull())
+            GFP::put_page(p2, 2);
+        if (p4.nonnull())
+            GFP::put_page(p4, 4);
+        if (p3.nonnull())
+            GFP::put_page(p3, 3);
+    }
 
-//     // Scenario 2: Exhaustion Test (Specific Order)
-//     LOGGER::INFO("Scenario 2: Try to exhaust order 0 (1 page)");
-//     constexpr int MAX_singles = 32;
-//     void *singles[MAX_singles];
-//     int alloc_count = 0;
+    // Scenario 2: Exhaustion Test (Specific Order)
+    LOGGER::INFO("Scenario 2: Try to exhaust order 0 (1 page)");
+    constexpr int MAX_singles = 32;
+    PhyAddr singles[MAX_singles];
+    int alloc_count = 0;
 
-//     for (int i = 0; i < MAX_singles; i++) {
-//         singles[i] = GFP::get_free_page(1);
-//         if (!singles[i]) {
-//             LOGGER::WARN("Stopped at %d allocations", i);
-//             break;
-//         }
-//         alloc_count++;
-//     }
-//     LOGGER::INFO("Allocated %d single pages", alloc_count);
+    for (int i = 0; i < MAX_singles; i++) {
+        singles[i] = GFP::get_free_page(1);
+        if (!singles[i].nonnull()) {
+            LOGGER::WARN("Stopped at %d allocations", i);
+            break;
+        }
+        alloc_count++;
+    }
+    LOGGER::INFO("Allocated %d single pages", alloc_count);
 
-//     // Reverse free to encourage merging
-//     for (int i = alloc_count - 1; i >= 0; i--) {
-//         GFP::put_page(singles[i], 1);
-//     }
-//     LOGGER::INFO("Freed all single pages");
+    // Reverse free to encourage merging
+    for (int i = alloc_count - 1; i >= 0; i--) {
+        GFP::put_page(singles[i], 1);
+    }
+    LOGGER::INFO("Freed all single pages");
 
-//     // Scenario 3: Large Block Split & Merge
-//     LOGGER::INFO("Scenario 3: Large Block Split & Merge");
-//     void *huge = GFP::get_free_page(64);  // Request 64 pages
-//     if (huge) {
-//         LOGGER::INFO("Huge block allocated at %p", huge);
-//         GFP::put_page(huge, 64);
-//         LOGGER::INFO("Huge block freed");
+    // Scenario 3: Large Block Split & Merge
+    LOGGER::INFO("Scenario 3: Large Block Split & Merge");
+    PhyAddr huge = GFP::get_free_page(64);  // Request 64 pages
+    if (huge.nonnull()) {
+        LOGGER::INFO("Huge block allocated at %p", huge);
+        GFP::put_page(huge, 64);
+        LOGGER::INFO("Huge block freed");
 
-//         // Verify we can alloc it again (merge successful)
-//         void *huge2 = GFP::get_free_page(64);
-//         if (huge2 == huge) {
-//             LOGGER::INFO(
-//                 "Merge Verification Success: Same address re-allocated");
-//         } else {
-//             LOGGER::WARN(
-//                 "Merge Verification: Got different address %p (Original: %p)",
-//                 huge2, huge);
-//         }
-//         if (huge2)
-//             GFP::put_page(huge2, 64);
-//     } else {
-//         LOGGER::ERROR("Huge block alloc failed");
-//     }
+        // Verify we can alloc it again (merge successful)
+        PhyAddr huge2 = GFP::get_free_page(64);
+        if (huge2 == huge) {
+            LOGGER::INFO(
+                "Merge Verification Success: Same address re-allocated");
+        } else {
+            LOGGER::WARN(
+                "Merge Verification: Got different address %p (Original: %p)",
+                huge2, huge);
+        }
+        if (huge2.nonnull())
+            GFP::put_page(huge2, 64);
+    } else {
+        LOGGER::ERROR("Huge block alloc failed");
+    }
 
-//     LOGGER::INFO("========== Complex Buddy Allocator Test End ==========");
-// }
+    LOGGER::INFO("========== Complex Buddy Allocator Test End ==========");
+}
 
-// void slub_test_basic() {
-//     struct SlubSmallObj {
-//         uint32_t a;
-//         uint64_t b;
-//         char pad[24];
-//     };
+void slub_test_basic() {
+    struct SlubSmallObj {
+        uint32_t a;
+        uint64_t b;
+        char pad[24];
+    };
 
-//     struct SlubHugeObj {
-//         char data[3000];
-//     };
-//     LOGGER::INFO("========== SLUB Test Start ==========");
+    struct SlubHugeObj {
+        char data[3000];
+    };
+    LOGGER::INFO("========== SLUB Test Start ==========");
 
-//     slub::SlubAllocator<SlubSmallObj> alloc;
-//     constexpr int kSmallCount             = 16;
-//     SlubSmallObj *small_objs[kSmallCount] = {nullptr};
-//     int small_alloc_ok                    = 0;
+    slub::SlubAllocator<SlubSmallObj> alloc;
+    constexpr int kSmallCount             = 16;
+    SlubSmallObj *small_objs[kSmallCount] = {nullptr};
+    int small_alloc_ok                    = 0;
 
-//     LOGGER::INFO("SLUB Scenario A: small object alloc/free");
-//     for (int i = 0; i < kSmallCount; i++) {
-//         small_objs[i] = reinterpret_cast<SlubSmallObj *>(alloc.alloc());
-//         if (!small_objs[i]) {
-//             LOGGER::WARN("small alloc failed at idx=%d", i);
-//             continue;
-//         }
-//         small_objs[i]->a = static_cast<uint32_t>(0x1000 + i);
-//         small_objs[i]->b = static_cast<uint64_t>(0x20000000ull + i);
-//         small_alloc_ok++;
-//     }
-//     LOGGER::INFO("small alloc success count=%d/%d", small_alloc_ok,
-//                  kSmallCount);
+    LOGGER::INFO("SLUB Scenario A: small object alloc/free");
+    for (int i = 0; i < kSmallCount; i++) {
+        small_objs[i] = reinterpret_cast<SlubSmallObj *>(alloc.alloc());
+        if (!small_objs[i]) {
+            LOGGER::WARN("small alloc failed at idx=%d", i);
+            continue;
+        }
+        small_objs[i]->a = static_cast<uint32_t>(0x1000 + i);
+        small_objs[i]->b = static_cast<uint64_t>(0x20000000ull + i);
+        small_alloc_ok++;
+    }
+    LOGGER::INFO("small alloc success count=%d/%d", small_alloc_ok,
+                 kSmallCount);
 
-//     for (int i = 0; i < kSmallCount; i++) {
-//         if (small_objs[i]) {
-//             alloc.free(small_objs[i]);
-//             small_objs[i] = nullptr;
-//         }
-//     }
+    for (int i = 0; i < kSmallCount; i++) {
+        if (small_objs[i]) {
+            alloc.free(small_objs[i]);
+            small_objs[i] = nullptr;
+        }
+    }
 
-//     auto small_stats = alloc.get_stats();
-//     LOGGER::INFO(
-//         "small stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
-//         static_cast<unsigned long>(small_stats.total_slabs),
-//         static_cast<unsigned long>(small_stats.objects_inuse),
-//         static_cast<unsigned long>(small_stats.objects_total),
-//         static_cast<unsigned long>(small_stats.memory_usage_bytes));
+    auto small_stats = alloc.get_stats();
+    LOGGER::INFO(
+        "small stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
+        static_cast<unsigned long>(small_stats.total_slabs),
+        static_cast<unsigned long>(small_stats.objects_inuse),
+        static_cast<unsigned long>(small_stats.objects_total),
+        static_cast<unsigned long>(small_stats.memory_usage_bytes));
 
-//     LOGGER::INFO("SLUB Scenario B: small object reuse trend");
-//     void *p1 = alloc.alloc();
-//     if (!p1) {
-//         LOGGER::ERROR("reuse test first alloc failed");
-//     } else {
-//         alloc.free(p1);
-//     }
-//     void *p2 = alloc.alloc();
-//     LOGGER::INFO("reuse observe: p1=%p p2=%p", p1, p2);
-//     if (p2) {
-//         alloc.free(p2);
-//     }
+    LOGGER::INFO("SLUB Scenario B: small object reuse trend");
+    SlubSmallObj *p1 = alloc.alloc();
+    if (!p1) {
+        LOGGER::ERROR("reuse test first alloc failed");
+    } else {
+        alloc.free(p1);
+    }
+    SlubSmallObj *p2 = alloc.alloc();
+    LOGGER::INFO("reuse observe: p1=%p p2=%p", p1, p2);
+    if (p2) {
+        alloc.free(p2);
+    }
 
-//     LOGGER::INFO("SLUB Scenario C: huge object path");
-//     slub::SlubAllocator<SlubHugeObj> huge_alloc;
-//     void *h1 = huge_alloc.alloc();
-//     void *h2 = huge_alloc.alloc();
-//     LOGGER::INFO("huge alloc: h1=%p h2=%p", h1, h2);
-//     if (!h1 || !h2) {
-//         LOGGER::WARN("huge alloc has failure: h1=%p h2=%p", h1, h2);
-//     }
-//     if (h1) {
-//         huge_alloc.free(h1);
-//     }
-//     if (h2) {
-//         huge_alloc.free(h2);
-//     }
-//     LOGGER::INFO("Test free nullptr");
-//     huge_alloc.free(nullptr);
+    LOGGER::INFO("SLUB Scenario C: huge object path");
+    slub::SlubAllocator<SlubHugeObj> huge_alloc;
+    SlubHugeObj *h1 = huge_alloc.alloc();
+    SlubHugeObj *h2 = huge_alloc.alloc();
+    LOGGER::INFO("huge alloc: h1=%p h2=%p", h1, h2);
+    if (!h1 || !h2) {
+        LOGGER::WARN("huge alloc has failure: h1=%p h2=%p", h1, h2);
+    }
+    if (h1) {
+        huge_alloc.free(h1);
+    }
+    if (h2) {
+        huge_alloc.free(h2);
+    }
+    LOGGER::INFO("Test free nullptr");
+    huge_alloc.free(nullptr);
 
-//     auto huge_stats = huge_alloc.get_stats();
-//     LOGGER::INFO("huge stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
-//                  static_cast<unsigned long>(huge_stats.total_slabs),
-//                  static_cast<unsigned long>(huge_stats.objects_inuse),
-//                  static_cast<unsigned long>(huge_stats.objects_total),
-//                  static_cast<unsigned long>(huge_stats.memory_usage_bytes));
+    auto huge_stats = huge_alloc.get_stats();
+    LOGGER::INFO("huge stats: slabs=%lu inuse=%lu total_objs=%lu mem_bytes=%lu",
+                 static_cast<unsigned long>(huge_stats.total_slabs),
+                 static_cast<unsigned long>(huge_stats.objects_inuse),
+                 static_cast<unsigned long>(huge_stats.objects_total),
+                 static_cast<unsigned long>(huge_stats.memory_usage_bytes));
 
-//     LOGGER::INFO("========== SLUB Test End ==========");
-// }
+    LOGGER::INFO("========== SLUB Test End ==========");
+}
 
 constexpr size_t TREE_SIZE = 8192;
 struct TestTree {
@@ -533,7 +533,7 @@ void fs_test(void) {
     }
     VFile *file = file_opt.value();
 
-    char *source_code = (char *)PA2KPA(GFP::get_free_page(10));
+    char *source_code = (char *)Allocator::malloc(10 * PAGESIZE);
     vfs._read(file, source_code, 10 * PAGESIZE);
     kputs(source_code);
     vfs._close(file);

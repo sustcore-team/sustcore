@@ -139,10 +139,6 @@ public:
         return Addr(::page_align_down(this->_addr));
     }
 
-    constexpr operator bool() const noexcept {
-        return nonnull();
-    }
-
     constexpr bool operator==(const Addr &other) const noexcept {
         return this->_addr == other._addr;
     }

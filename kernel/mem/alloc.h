@@ -17,4 +17,4 @@
 using Allocator = LinearGrowAllocator;
 
 template <typename ObjType>
-using KOA = SimpleKOA<ObjType, Allocator>;
+using KOA = slub::SlubAllocator<ObjType>;

@@ -246,7 +246,7 @@ PhyAddr BuddyAllocator::get_free_pages_in_order(size_t order) {
 
 template <KernelStage Stage>
 void BuddyAllocator::put_page(PhyAddr paddr, size_t frame_count) {
-    if (!paddr)
+    if (!paddr.nonnull())
         return;
     size_t order = pages2order(frame_count);
 

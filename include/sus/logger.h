@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <sus/ansi.h>
 #include <sus/baseio.h>
 
 #include <cstdio>
@@ -22,12 +23,22 @@ static constexpr LogLevel GLOBAL_LOG_LEVEL = LogLevel::DEBUG;
 
 constexpr const char *level_to_string(LogLevel level) {
     switch (level) {
-        case LogLevel::DEBUG: return "DEBUG";
-        case LogLevel::INFO:  return "INFO";
-        case LogLevel::WARN:  return "WARN";
-        case LogLevel::ERROR: return "ERROR";
-        case LogLevel::FATAL: return "FATAL";
-        default:              return "UNKNOWN";
+        case LogLevel::DEBUG:
+            return ANSI_GRAPHIC(ANSI_FG_BLUE) "DEBUG" ANSI_GRAPHIC(
+                ANSI_GM_RESET);
+        case LogLevel::INFO:
+            return ANSI_GRAPHIC(ANSI_FG_GREEN) "INFO" ANSI_GRAPHIC(
+                ANSI_GM_RESET);
+        case LogLevel::WARN:
+            return ANSI_GRAPHIC(ANSI_FG_MAGENTA) "WARN" ANSI_GRAPHIC(
+                ANSI_GM_RESET);
+        case LogLevel::ERROR:
+            return ANSI_GRAPHIC(ANSI_FG_RED) "ERROR" ANSI_GRAPHIC(
+                ANSI_GM_RESET);
+        case LogLevel::FATAL:
+            return ANSI_GRAPHIC(ANSI_FG_RED) "FATAL" ANSI_GRAPHIC(
+                ANSI_GM_RESET);
+        default: return "UNKNOWN";
     }
 }
 
@@ -48,7 +59,7 @@ class Logger {
 private:
     template <LogLevel level, typename... Args>
     static void __log__(const char *file, const int line, const char *func,
-                 const char *fmt, Args... args);
+                        const char *fmt, Args... args);
 
     template <LogLevel level, typename... Args>
     static void __log__(const char *fmt, Args... args);
@@ -56,23 +67,23 @@ private:
 public:
     template <typename... Args>
     static void debug(const char *file, const int line, const char *func,
-               const char *fmt, Args... args);
+                      const char *fmt, Args... args);
 
     template <typename... Args>
     static void info(const char *file, const int line, const char *func,
-              const char *fmt, Args... args);
+                     const char *fmt, Args... args);
 
     template <typename... Args>
     static void warn(const char *file, const int line, const char *func,
-              const char *fmt, Args... args);
+                     const char *fmt, Args... args);
 
     template <typename... Args>
     static void error(const char *file, const int line, const char *func,
-               const char *fmt, Args... args);
+                      const char *fmt, Args... args);
 
     template <typename... Args>
     static void fatal(const char *file, const int line, const char *func,
-               const char *fmt, Args... args);
+                      const char *fmt, Args... args);
 };
 
 template <basecpp::IOTrait IOChannel, basecpp::LogInfo LogInfo>
