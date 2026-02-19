@@ -161,6 +161,9 @@ namespace tarfs {
         FSErrCode sync(void) override {
             return FSErrCode::NOT_SUPPORTED;
         }
+
+        void *operator new(size_t sz) noexcept;
+        void operator delete(void *ptr) noexcept;
     };
 
     class TarDirectory : public IDirectory {
@@ -176,6 +179,9 @@ namespace tarfs {
         FSErrCode sync(void) override {
             return FSErrCode::NOT_SUPPORTED;
         }
+
+        void *operator new(size_t sz) noexcept;
+        void operator delete(void *ptr) noexcept;
     };
 
     class TarNode : public IINode, public IDentry {
@@ -263,6 +269,9 @@ namespace tarfs {
         friend class TarFile;
         friend class TarDirectory;
         friend class TarSuperblock;
+
+        void *operator new(size_t sz) noexcept;
+        void operator delete(void *ptr) noexcept;
     };
 
     // Like a SuperBlock factory

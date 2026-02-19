@@ -165,7 +165,7 @@ extern "C" void post_init(void) {
 
     buddy_test_complex();
     slub_test_basic();
-    // fs_test();
+    fs_test();
 
     while (true);
 }
