@@ -39,6 +39,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 void buddy_test_complex(void);
@@ -47,7 +48,7 @@ void tree_test(void);
 void fs_test(void);
 
 int kputs(const char *str) {
-    size_t len = strlen(str);
+    size_t len        = strlen(str);
     PhyAddr str_paddr = convert_pointer(str);
     Serial::serial_write_string(len, str_paddr.as<char>());
     return strlen(str);
@@ -90,10 +91,10 @@ RamDiskDevice *make_initrd(void) {
 }
 
 MemRegion regions[128];
-size_t region_cnt = 0;
+size_t region_cnt   = 0;
 PhyAddr kernel_root = PhyAddr::null;
 const PhyAddr lowpm = PhyAddr::null;
-PhyAddr uppm = PhyAddr::null;
+PhyAddr uppm        = PhyAddr::null;
 const VirAddr lowvm = VirAddr::null;
 
 void run_defers(void *s_defer, void *e_defer) {
@@ -117,7 +118,7 @@ void run_defers(void *s_defer, void *e_defer) {
 void kernel_paging_setup(void) {
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     // 创建内核页表管理器
-    kernel_root = EarlyPageMan::make_root();
+    kernel_root                 = EarlyPageMan::make_root();
     EarlyPageMan kernelman(kernel_root);
 
     ker_paddr::init(lowpm, uppm);
@@ -125,8 +126,8 @@ void kernel_paging_setup(void) {
 
     // 对[0, uppm)进行恒等映射
     size_t sz = uppm - lowpm;
-    kernelman.map_range<true>(lowvm, lowpm, sz, EarlyPageMan::rwx(true, true, true),
-                              false, true);
+    kernelman.map_range<true>(lowvm, lowpm, sz,
+                              EarlyPageMan::rwx(true, true, true), false, true);
 
     kernelman.switch_root();
     kernelman.flush_tlb();
@@ -167,6 +168,12 @@ extern "C" void post_init(void) {
     slub_test_basic();
     fs_test();
 
+    for (size_t i = 0; i < 10; i++) {
+        TCB *t = new TCB();
+        PCB *p = new PCB();
+        kprintf("%p;%p\n", t, p);
+    }
+
     while (true);
 }
 
@@ -206,9 +213,10 @@ void pre_init(void) {
     // 进入 post-init 阶段
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
     typedef void (*RediveFuncType)(void);
-    PhyAddr redive_paddr = (PhyAddr)(void *)redive;
+    PhyAddr redive_paddr  = (PhyAddr)(void *)redive;
     KvaAddr redive_kvaddr = convert<KvaAddr>(redive_paddr);
-    LOGGER::DEBUG("redive函数物理地址: %p, 内核虚拟地址: %p", redive_paddr.addr(), redive_kvaddr.addr());
+    LOGGER::DEBUG("redive函数物理地址: %p, 内核虚拟地址: %p",
+                  redive_paddr.addr(), redive_kvaddr.addr());
     RediveFuncType redive_func = (RediveFuncType)redive_kvaddr.addr();
     LOGGER::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p", redive_func);
     redive_func();

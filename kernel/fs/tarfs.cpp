@@ -18,17 +18,6 @@
 #include <cstddef>
 
 namespace tarfs {
-    namespace koa {
-        static util::Defer<KOA<TarFile>> FILE;
-        AutoDeferPost(FILE);
-
-        static util::Defer<KOA<TarDirectory>> DIRECTORY;
-        AutoDeferPost(DIRECTORY);
-
-        static util::Defer<KOA<TarNode>> NODE;
-        AutoDeferPost(NODE);
-    }  // namespace koa
-
     TarFile::TarFile(TarNode *node) {
         node_ = node;
         data_ = reinterpret_cast<const uint8_t *>(node->header_) + BLOCK_SIZE;
@@ -65,11 +54,11 @@ namespace tarfs {
 
     void *TarFile::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarFile));
-        return koa::FILE->alloc();
+        return KOP<TarFile>::instance().alloc();
     }
 
     void TarFile::operator delete(void *ptr) noexcept {
-        koa::FILE->free(static_cast<TarFile *>(ptr));
+        KOP<TarFile>::instance().free(static_cast<TarFile *>(ptr));
     }
 
     FSOptional<IDentry *> TarDirectory::lookup(const char *name) {
@@ -126,20 +115,20 @@ namespace tarfs {
 
     void *TarDirectory::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarDirectory));
-        return koa::DIRECTORY->alloc();
+        return KOP<TarDirectory>::instance().alloc();
     }
 
     void TarDirectory::operator delete(void *ptr) noexcept {
-        koa::DIRECTORY->free(static_cast<TarDirectory *>(ptr));
+        KOP<TarDirectory>::instance().free(static_cast<TarDirectory *>(ptr));
     }
 
     void *TarNode::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarNode));
-        return koa::NODE->alloc();
+        return KOP<TarNode>::instance().alloc();
     }
 
     void TarNode::operator delete(void *ptr) noexcept {
-        koa::NODE->free(static_cast<TarNode *>(ptr));
+        KOP<TarNode>::instance().free(static_cast<TarNode *>(ptr));
     }
 
     bool TarFSDriver::is_valid(size_t size_, const uint8_t *data_) {

@@ -47,6 +47,15 @@ struct TCB : public _Scheduler<TCB>::MetadataType {
     TCB(tid_t tid, PCB *pcb, Runtime runtime);
     // 默认Constructor
     TCB();
+
+    // TCB不允许被复制或移动
+    TCB(const TCB &)            = delete;
+    TCB &operator=(const TCB &) = delete;
+    TCB(TCB &&)                 = delete;
+    TCB &operator=(TCB &&)      = delete;
+
+    void *operator new(size_t size);
+    void operator delete(void *ptr);
 };
 
 using Scheduler = _Scheduler<TCB>;
@@ -72,4 +81,7 @@ struct PCB {
 
     PCB(pid_t pid, int rp_level, TCB *main_thread);
     PCB();
+
+    void *operator new(size_t size);
+    void operator delete(void *ptr);
 };

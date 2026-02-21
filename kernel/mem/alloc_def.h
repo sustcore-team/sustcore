@@ -17,10 +17,10 @@
 #include <cstddef>
 
 template <typename T>
-concept AllocatorTrait = requires(size_t size, void* ptr) {
+concept AllocatorTrait = requires(size_t size, void *ptr) {
     {
         T::malloc(size)
-    } -> std::same_as<void*>;
+    } -> std::same_as<void *>;
     {
         T::free(ptr)
     } -> std::same_as<void>;
@@ -30,16 +30,16 @@ concept AllocatorTrait = requires(size_t size, void* ptr) {
 };
 
 template <typename T, typename ObjType>
-concept KOATrait = requires(T *koa, ObjType *obj) {
+concept KOPTrait = requires(T *kop, ObjType *obj) {
     {
-        new T()
-    } -> std::same_as<T *>;
+        kop->alloc()
+    } -> std::same_as<ObjType *>;
     {
-        koa->alloc()
-    } -> std::same_as<ObjType*>;
-    {
-        koa->free(obj)
+        kop->free(obj)
     } -> std::same_as<void>;
+    {
+        T::instance()
+    } -> std::same_as<T &>;
 };
 
 class LinearGrowAllocator {
@@ -55,16 +55,16 @@ public:
      * @param size 要分配的大小
      * @return void* 分配到的内存地址
      */
-    static void* malloc(size_t size);
+    static void *malloc(size_t size);
     /**
      * @brief 释放内存
      *
      * @param ptr 要释放的内存地址
      */
-    static void free(void* ptr);
+    static void free(void *ptr);
     /**
      * @brief 初始化函数
-     * 
+     *
      */
     static void init(void);
 };
@@ -72,19 +72,28 @@ public:
 static_assert(AllocatorTrait<LinearGrowAllocator>,
               "LinearGrowAllocator 不满足 AllocatorTrait");
 
-template<typename T, AllocatorTrait Allocator>
+template <typename T, AllocatorTrait Allocator>
 
-class SimpleKOA {
+class SimpleKOP {
+protected:
+    static SimpleKOP _INSTANCE;
+
 public:
-    SimpleKOA() = default;
-    ~SimpleKOA() = default;
-    T* alloc() {
+    SimpleKOP()  = default;
+    ~SimpleKOP() = default;
+    static SimpleKOP &instance() {
+        return _INSTANCE;
+    }
+    T *alloc() {
         return (T *)Allocator::malloc(sizeof(T));
     }
-    void free(T* obj) {
+    void free(T *obj) {
         Allocator::free((void *)obj);
     }
 };
 
-static_assert(KOATrait<SimpleKOA<int, LinearGrowAllocator>, int>,
-              "SimpleKOA 不满足 KOATrait");
+template <typename T, AllocatorTrait Allocator>
+SimpleKOP<T, Allocator> SimpleKOP<T, Allocator>::_INSTANCE;
+
+static_assert(KOPTrait<SimpleKOP<int, LinearGrowAllocator>, int>,
+              "SimpleKOP 不满足 KOPTrait");

@@ -69,9 +69,12 @@ namespace util {
         }
     };
 
+#define DEFER_SECTION(phase) __attribute__((section(".defer."#phase), used))
+#define PRE_DEFER DEFER_SECTION(pre)
+#define POST_DEFER DEFER_SECTION(post)
 #define AutoDefer(x, phase)                                                \
-    __attribute__((section(".defer."#phase))) util::DeferEntry __auto_defer_##x = \
-        x.make_defer()
+    inline __attribute__((section(".defer."#phase), used)) util::DeferEntry \
+        __auto_defer_##x = x.make_defer()
 #define AutoDeferPre(x)  AutoDefer(x, pre)
 #define AutoDeferPost(x) AutoDefer(x, post)
 }  // namespace util

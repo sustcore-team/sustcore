@@ -54,7 +54,7 @@ void BuddyAllocator::post_init(MemRegion *regions, size_t region_count) {
     // 先进行一次遍历, 打印迁移前的链表状态
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
         BuddyAllocator::BlockList &list = BuddyAllocator::free_area[i].get();
-        size_t count = 0;
+        size_t count                    = 0;
         for (auto iter = list.begin(); iter != list.end(); ++iter) {
             count++;
             if (PA2KVA((addr_t)iter.operator->()) == (addr_t)&list.sentinel()) {
@@ -87,11 +87,14 @@ void BuddyAllocator::post_init(MemRegion *regions, size_t region_count) {
             FreeBlock *prev_ka = convert<KpaAddr>(prev_pa).as<FreeBlock>();
 
             // 写回
-            iter->list_head.next = next_ka == sentinel ? &list.sentinel() : next_ka;
-            iter->list_head.prev = prev_ka == sentinel ? &list.sentinel() : prev_ka;
+            iter->list_head.next =
+                next_ka == sentinel ? &list.sentinel() : next_ka;
+            iter->list_head.prev =
+                prev_ka == sentinel ? &list.sentinel() : prev_ka;
 
             BUDDY::DEBUG("next PA: %p -> KPA: %p, prev PA: %p -> KPA: %p",
-                         next_pa.addr(), iter->list_head.next, prev_pa.addr(), iter->list_head.prev);
+                         next_pa.addr(), iter->list_head.next, prev_pa.addr(),
+                         iter->list_head.prev);
 
             // 迭代
             iter = iter->list_head.next;

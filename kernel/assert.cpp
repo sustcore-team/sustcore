@@ -2,7 +2,7 @@
  * @file assert.cpp
  * @author jeromeyao (yaoshengqi726@outlook.com)
  * theflysong(song_of_the_fly@163.com)
- * @brief SLUB Allocator
+ * @brief C Assertion Failure Handler
  * @version alpha-1.0.0
  * @date 2026-02-13
  *
@@ -11,19 +11,20 @@
  */
 
 #include <kio.h>
+
 #include <cstdarg>
 
 extern "C" void assertion_failure(const char *expression, const char *file,
                                   const char *base_file, int line) {
     LOGGER::ERROR("assertion failed: %s (%s:%d, base=%s)\n", expression, file,
-                 line, base_file);
+                  line, base_file);
     while (true);
 }
 
 extern "C" void panic_failure(const char *expression, const char *file,
                               const char *base_file, int line) {
-    LOGGER::ERROR("panic_assert failed: %s (%s:%d, base=%s)\n", expression, file,
-                 line, base_file);
+    LOGGER::ERROR("panic_assert failed: %s (%s:%d, base=%s)\n", expression,
+                  file, line, base_file);
     while (true);
 }
 

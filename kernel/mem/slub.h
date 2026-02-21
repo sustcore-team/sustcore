@@ -14,6 +14,7 @@
 
 #include <kio.h>
 #include <mem/addr.h>
+#include <mem/alloc_def.h>
 #include <mem/gfp.h>
 #include <sus/defer.h>
 #include <sus/list.h>
@@ -26,6 +27,11 @@
 #include <utility>
 
 namespace slub {
+    // Forward declaration to force instantiation of the registrar when the
+    // allocator is used.
+    template <typename ObjType>
+    class SlubCollection;
+
     constexpr size_t PAGES_PER_SLAB = 1;
     constexpr size_t SLAB_BYTES     = PAGESIZE * PAGES_PER_SLAB;
     constexpr size_t ALIGN          = 16;
@@ -108,6 +114,9 @@ namespace slub {
         static_assert(is_pow2(obj_align_), "obj_align_ must be power-of-two");
 
     public:
+        inline static SlubAllocator &instance() {
+            return SlubCollection<ObjType>::instance();
+        }
         SlubAllocator();
         ObjType *alloc();
         void free(ObjType *ptr);
@@ -157,6 +166,9 @@ namespace slub {
             page_align_up(sizeof(ObjType)) / PAGESIZE;
 
     public:
+        inline static SlubAllocator &instance() {
+            return SlubCollection<ObjType>::instance();
+        }
         SlubAllocator() : inuse_objects_(0) {}
         ObjType *alloc() {
             PhyAddr p = GFP::get_free_page(obj_pages);
@@ -186,6 +198,26 @@ namespace slub {
     private:
         size_t inuse_objects_;
     };
+
+    template <typename ObjType>
+    class SlubCollection {
+    protected:
+        static util::Defer<SlubAllocator<ObjType>> _INSTANCE;
+        static util::DeferEntry _SLUB_REGISTER;
+
+    public:
+        inline static SlubAllocator<ObjType> &instance() {
+            (void)_SLUB_REGISTER;  // Ensure the defer entry is linked in
+            return _INSTANCE.get();
+        }
+    };
+
+    template <typename ObjType>
+    util::Defer<SlubAllocator<ObjType>> SlubCollection<ObjType>::_INSTANCE;
+
+    template <typename ObjType>
+    POST_DEFER util::DeferEntry SlubCollection<ObjType>::_SLUB_REGISTER =
+        SlubCollection<ObjType>::_INSTANCE.make_defer();
 
     template <typename ObjType>
     SlabHeader *SlubAllocator<ObjType>::slab_of(void *p) {
@@ -525,4 +557,6 @@ namespace slub {
             remove_record(record);
         }
     };
+
+    static_assert(KOPTrait<SlubAllocator<int>, int>, "KOP 不满足 KOPTrait");
 }  // namespace slub

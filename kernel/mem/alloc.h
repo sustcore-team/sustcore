@@ -4,9 +4,9 @@
  * @brief Allocator
  * @version alpha-1.0.0
  * @date 2026-02-13
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -15,8 +15,8 @@
 #include <mem/slub.h>
 
 using Allocator = slub::MixedSizeAllocator;
-static_assert(AllocatorTrait<Allocator>,
-              "Allocator 不满足 AllocatorTrait");
+static_assert(AllocatorTrait<Allocator>, "Allocator 不满足 AllocatorTrait");
 
 template <typename ObjType>
-using KOA = slub::SlubAllocator<ObjType>;
+using KOP = slub::SlubAllocator<ObjType>;
+static_assert(KOPTrait<KOP<int>, int>, "KOP 不满足 KOPTrait");
