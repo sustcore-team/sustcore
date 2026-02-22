@@ -1,0 +1,182 @@
+/**
+ * @file ratio
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 编译器有理数计算
+ * @version alpha-1.0.0
+ * @date 2026-02-22
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <concepts>
+#include <cstdint>
+
+namespace std {
+    namespace _arith {
+        using _Z                       = intmax_t;
+        using _N                       = uintmax_t;
+        inline constexpr size_t _Zbits = sizeof(_Z) * 8;
+        inline constexpr _Z _1         = 1;
+        inline constexpr _Z _c         = (_1 << (_Zbits / 2));
+        inline constexpr _Z _max       = __INTMAX_MAX__;
+
+        consteval _Z sign(_Z N) {
+            return N < 0 ? -1 : 1;
+        }
+
+        consteval _N abs(_Z N) {
+            return N * sign(N);
+        }
+
+        consteval _Z gcd(_Z P, _Z Q) {
+            if (P == 0)
+                return Q;
+            if (Q == 0)
+                return P;
+            return gcd(Q, P % Q);
+        }
+
+        template <_Z P, _Z Q>
+        struct _mul {
+            // 参考自标准库safe_mul
+            // 令 c 为 2^(bits(_Z) / 2)
+            // P = a * c + s
+            // Q = b * c + t
+            // 则 P * Q = (a * b) * c^2 + (at + bs) c + st
+            // 可以发现, a, b为0, 1中的一者
+            // 因此, P * Q 不会溢出的要求是:
+            // (1) a与b中至少一者为0
+            // (2) at + bs < c / 2
+            // (3) st <= _max
+            // (4) (at + bs) c + st <= _max
+            static constexpr _N _a = abs(P) / _c;
+            static constexpr _N _b = abs(Q) / _c;
+            static constexpr _N _s = abs(P) % _c;
+            static constexpr _N _t = abs(Q) % _c;
+            static_assert(_a == 0 || _b == 0, "乘法运算溢出!");
+            static_assert(_a * _t + _b * _s < _c / 2, "乘法运算溢出!");
+            static_assert(_s * _t <= _max, "乘法运算溢出!");
+            // 在此处做了一个移项
+            static_assert((_a * _t + _b * _s) * _c <= _max - _s * _t,
+                          "乘法运算溢出!");
+
+            static constexpr _Z val = _mul(P, Q);
+        };
+
+        template <_Z P, _Z Q>
+        inline constexpr _Z mul = _mul<P, Q>::val;
+    };  // namespace _arith
+
+    // class template ratio
+    template <intmax_t N, intmax_t D = 1>
+    class ratio {
+    public:
+        static_assert(D != 0, "分母不能为0");
+        using type                    = ratio<N, D>;
+        static constexpr intmax_t num = _arith::sign(D) * N / _arith::gcd(N, D);
+        static constexpr intmax_t den = _arith::abs(D) / _arith::gcd(N, D);
+        static_assert(den != 0, "分母不能为0");
+    };
+
+    template <typename T>
+    concept __ratio_trait = requires {
+        {
+            T::num
+        } -> std::same_as<intmax_t>;
+        {
+            T::den
+        } -> std::same_as<intmax_t>;
+    };
+
+    namespace _arith {
+        // 规范化
+        template <__ratio_trait R>
+        using _normalize = ratio<R::num, R::den>;
+
+        // (p / q) + (m / n) = (pn / qn) + (qm / qn) = (pn + qm) / (qn)
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using __ratio_add = ratio<mul<_P, _N> + mul<_Q, _M>, mul<_Q, _N>>;
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using ratio_add = _normalize<__ratio_add<_P, _Q, _M, _N>>;
+
+        template <intmax_t _P, intmax_t _Q>
+        using __ratio_negate = ratio<-_P, _Q>;
+        template <intmax_t _P, intmax_t _Q>
+        using ratio_negate = _normalize<__ratio_negate<_P, _Q>>;
+
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using __ratio_subtract = ratio_add<_P, _Q, -_M, _N>;
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using ratio_subtract = _normalize<__ratio_subtract<_P, _Q, _M, _N>>;
+
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using __ratio_multiply = ratio<mul<_P, _M>, mul<_Q, _N>>;
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using ratio_multiply = _normalize<__ratio_multiply<_P, _Q, _M, _N>>;
+
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using __ratio_divide = __ratio_multiply<_P, _Q, _N, _M>;
+        template <intmax_t _P, intmax_t _Q, intmax_t _M, intmax_t _N>
+        using ratio_divide = _normalize<__ratio_divide<_P, _Q, _M, _N>>;
+    }  // namespace _arith
+
+    template <__ratio_trait R1, __ratio_trait R2>
+    using ratio_add = _arith::ratio_add<R1::num, R1::den, R2::num, R2::dem>;
+
+    template <__ratio_trait R1, __ratio_trait R2>
+    using ratio_subtract =
+        _arith::ratio_subtract<R1::num, R1::den, R2::num, R2::dem>;
+    template <__ratio_trait R1, __ratio_trait R2>
+    using ratio_multiply =
+        _arith::ratio_multiply<R1::num, R1::den, R2::num, R2::dem>;
+    template <__ratio_trait R1, __ratio_trait R2>
+    using ratio_divide =
+        _arith::ratio_divide<R1::num, R1::den, R2::num, R2::dem>;
+
+    // ratio comparison
+    template <class R1, class R2>
+    struct ratio_equal {
+        static constexpr bool val = R1::num == R2::num && R1::den == R2::den;
+    };
+    template <class R1, class R2>
+    struct ratio_not_equal {
+        static constexpr bool val = !ratio_equal<R1, R2>::val;
+    };
+    template <class R1, class R2>
+    struct ratio_less {
+        static constexpr bool val = R1::num * R2::den < R2::num * R1::den;
+    };
+    template <class R1, class R2>
+    struct ratio_less_equal {
+        static constexpr bool val = R1::num * R2::den <= R2::num * R1::den;
+    };
+    template <class R1, class R2>
+    struct ratio_greater {
+        static constexpr bool val = R1::num * R2::den > R2::num *R1::den;
+    };
+    template <class R1, class R2>
+    struct ratio_greater_equal {
+        static constexpr bool val = R1::num * R2::den >= R2::num * R1::den;
+    };
+
+    // convenience SI typedefs
+    typedef ratio<1, 1000000000000000000> atto;
+    typedef ratio<1, 1000000000000000> femto;
+    typedef ratio<1, 1000000000000> pico;
+    typedef ratio<1, 1000000000> nano;
+    typedef ratio<1, 1000000> micro;
+    typedef ratio<1, 1000> milli;
+    typedef ratio<1, 100> centi;
+    typedef ratio<1, 10> deci;
+    typedef ratio<10, 1> deca;
+    typedef ratio<100, 1> hecto;
+    typedef ratio<1000, 1> kilo;
+    typedef ratio<1000000, 1> mega;
+    typedef ratio<1000000000, 1> giga;
+    typedef ratio<1000000000000, 1> tera;
+    typedef ratio<1000000000000000, 1> peta;
+    typedef ratio<1000000000000000000, 1> exa;
+}  // namespace std

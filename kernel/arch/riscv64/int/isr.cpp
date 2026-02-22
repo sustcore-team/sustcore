@@ -171,8 +171,8 @@ namespace Handlers {
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval,
                Riscv64Context *ctx) {
         // 计算时间差
-        size_t current_ticks = csr_get_time();
-        size_t gap_ticks     = current_ticks - timer_info.last_ticks;
+        units::tick current_ticks = units::tick::from_ticks(csr_get_time());
+        units::tick gap_ticks     = current_ticks - timer_info.last_ticks;
 
         // 发布TimerTickEvent
         TimerTickEvent tick_event(gap_ticks);
@@ -181,6 +181,6 @@ namespace Handlers {
         timer_info.last_ticks = current_ticks;
 
         // 重新设置下一次时钟中断
-        sbi_legacy_set_timer(current_ticks + timer_info.increment);
+        sbi_legacy_set_timer((current_ticks + timer_info.increment).to_ticks());
     }
 }  // namespace Handlers

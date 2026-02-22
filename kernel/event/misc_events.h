@@ -12,9 +12,10 @@
 #pragma once
 
 #include <cstddef>
+#include <sus/units.h>
 
 struct TimerTickEvent {
 public:
-    size_t gap_ticks;
-    constexpr TimerTickEvent(size_t gap_ticks) : gap_ticks(gap_ticks) {}
+    units::tick gap_ticks;
+    constexpr TimerTickEvent(units::tick gap_ticks) : gap_ticks(gap_ticks) {}
 };

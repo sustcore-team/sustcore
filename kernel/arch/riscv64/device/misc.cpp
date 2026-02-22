@@ -51,13 +51,13 @@ units::frequency get_clock_freq(void) {
 }
 
 void init_timer(units::frequency freq, units::frequency expected_freq) {
-    int increment            = freq.to_hz() / expected_freq.to_hz();
+    units::tick increment    = 1_ticks * (freq.to_hz() / expected_freq.to_hz());
     timer_info.freq          = freq;
     timer_info.expected_freq = expected_freq;
     timer_info.increment     = increment;
 
     // 之后稳定触发
-    sbi_legacy_set_timer(csr_get_time() + increment);
+    sbi_legacy_set_timer(csr_get_time() + increment.to_ticks());
 
     // 启用S-Mode计时器中断
     csr_sie_t sie = csr_get_sie();

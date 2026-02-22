@@ -24,8 +24,8 @@ units::frequency get_clock_freq(void);
 struct TimerInfo {
     units::frequency freq;
     units::frequency expected_freq;
-    size_t last_ticks;
-    size_t increment;
+    units::tick last_ticks;
+    units::tick increment;
 };
 
 extern TimerInfo timer_info;
@@ -33,7 +33,7 @@ extern TimerInfo timer_info;
 /**
 * @brief 初始化计时器
 *
-* @param freq 计时器频率(Hz)
-* @param expected_freq 期望频率(mHz(10^-3 Hz))
+* @param freq 计时器频率
+* @param expected_freq 期望频率
 */
 void init_timer(units::frequency freq, units::frequency expected_freq);

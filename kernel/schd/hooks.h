@@ -13,12 +13,13 @@
 
 #include <cstddef>
 #include <concepts>
+#include <sus/units.h>
 #include <schd/metadata.h>
 
 namespace schd {
     namespace hooks {
         template <typename TCBType>
-        void on_tick(TCBType *thread, size_t gap_ticks) {
+        void on_tick(TCBType *thread, units::tick gap_ticks) {
             using Tags = typename TCBType::MetadataType::Tags;
             if constexpr (std::derived_from<Tags, tags::on_tick>) {
                 thread->on_tick(gap_ticks);
