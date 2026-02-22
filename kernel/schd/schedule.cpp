@@ -51,15 +51,15 @@ namespace schd {
         }
 
         bool switch_pgd_flag = current_thread == nullptr ||
-                               current_thread->pcb != next_thread->pcb;
+                               current_thread->pcb() != next_thread->pcb();
         if (switch_pgd_flag) {
             SCHEDULER::DEBUG(
                 "切换页表(from PID=%d to PID=%d)",
-                current_thread == nullptr ? -1 : current_thread->pcb->pid,
-                next_thread->pcb->pid);
+                current_thread == nullptr ? -1 : current_thread->pcb()->pid,
+                next_thread->pcb()->pid);
             // switch pgd
         }
 
-        Context::switch_to(next_thread->runtime.kstack);
+        Context::switch_to(next_thread->kstacktop());
     }
 }  // namespace schd

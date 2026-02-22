@@ -24,7 +24,6 @@ struct VMA {
         DATA      = 2,
         STACK     = 3,
         HEAP      = 4,
-        MMAP      = 5,
         SHARE_RW  = 6,
         SHARE_RO  = 7,
         SHARE_RX  = 8,
@@ -37,12 +36,56 @@ struct VMA {
             case Type::DATA:
             case Type::STACK:
             case Type::HEAP:
-            case Type::MMAP:
             case Type::SHARE_RW:  return PageMan::rwx(true, true, false);
             case Type::SHARE_RO:  return PageMan::rwx(true, false, false);
             case Type::SHARE_RX:  return PageMan::rwx(true, false, true);
             case Type::SHARE_RWX: return PageMan::rwx(true, true, true);
             default:              return PageMan::RWX::NONE;
+        }
+    }
+
+    static constexpr bool sharable(Type type) {
+        switch (type) {
+            case Type::SHARE_RW:
+            case Type::SHARE_RO:
+            case Type::SHARE_RX:
+            case Type::SHARE_RWX: return true;
+            default:              return false;
+        }
+    }
+
+    static constexpr bool growable(Type type) {
+        switch (type) {
+            case Type::STACK: return true;
+            default:          return false;
+        }
+    }
+
+    static constexpr bool cowable(Type type) {
+        switch (type) {
+            case Type::CODE:
+            case Type::DATA:
+            case Type::STACK:
+            case Type::HEAP:  return true;
+            default:          return false;
+        }
+    }
+
+    /**
+     * @brief 判断该VMA是否能够通过TM::map_vma映射到页表中
+     *
+     * 仅有CODE, DATA类型的VMA允许这么做, 因为程序加载时,
+     * 需要让CODE与DATA段的VMA映射 到内存中实际存储程序代码与数据的页上
+     *
+     * @param type
+     * @return true
+     * @return false
+     */
+    static constexpr bool mappable(Type type) {
+        switch (type) {
+            case Type::CODE:
+            case Type::DATA: return true;
+            default:         return false;
         }
     }
 
@@ -53,7 +96,11 @@ struct VMA {
     util::ListHead<VMA> list_head;
 
     constexpr VMA()
-        : tm(nullptr), type(Type::NONE), vaddr(nullptr), size(0), list_head({}) {}
+        : tm(nullptr),
+          type(Type::NONE),
+          vaddr(nullptr),
+          size(0),
+          list_head({}) {}
     constexpr VMA(TM *tm, Type t, void *v, size_t s)
         : tm(tm), type(t), vaddr(v), size(s), list_head({}) {}
     constexpr VMA(TM *tm, const VMA &other)
@@ -64,6 +111,21 @@ struct VMA {
           list_head({}) {}
     constexpr VMA(VMA &&other) = delete;
 };
+
+constexpr const char *to_string(VMA::Type type) {
+    switch (type) {
+        case VMA::Type::NONE:      return "NONE";
+        case VMA::Type::CODE:      return "CODE";
+        case VMA::Type::DATA:      return "DATA";
+        case VMA::Type::STACK:     return "STACK";
+        case VMA::Type::HEAP:      return "HEAP";
+        case VMA::Type::SHARE_RW:  return "SHARE_RW";
+        case VMA::Type::SHARE_RO:  return "SHARE_RO";
+        case VMA::Type::SHARE_RX:  return "SHARE_RX";
+        case VMA::Type::SHARE_RWX: return "SHARE_RWX";
+        default:                   return "UNKNOWN";
+    }
+}
 
 class TM {
     util::IntrusiveList<VMA> vma_list;
@@ -77,6 +139,7 @@ public:
     void clone_vma(TM &other, VMA *vma);
     VMA *find_vma(void *vaddr);
     void remove_vma(VMA *vma);
+    void map_vma(VMA *vma, void *paddr);
 
     constexpr PageMan &pgd() {
         return __pgd;

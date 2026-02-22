@@ -48,3 +48,12 @@ void TM::remove_vma(VMA *vma)
     vma_list.remove(*vma);
     delete vma;
 }
+
+void TM::map_vma(VMA *vma, void *paddr)
+{
+    assert (vma->tm == this);
+    if (!VMA::mappable(vma->type)) {
+        TASK::ERROR("%s类型的VMA不能被映射到页表中", to_string(vma->type));
+    }
+    __pgd.map_range<true>(vma->vaddr, paddr, vma->size, VMA::seg2rwx(vma->type), true, false);
+}

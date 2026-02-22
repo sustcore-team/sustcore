@@ -22,4 +22,5 @@ extern util::Defer<util::IDManager<>> TID;
 class TCBManager {
 public:
     static void init();
+    static void on_zero_ref(TCB *tcb);
 };

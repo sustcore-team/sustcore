@@ -19,11 +19,11 @@
 
 // task_struct.h
 
-TCB::TCB(tid_t tid, PCB *pcb, Runtime runtime)
-    : tid(tid), pcb(pcb), runtime(runtime) {}
+TCB::TCB(tid_t tid, PCB *pcb, SetupInfo *setup)
+    : tid(tid), _pcb(pcb), _setup(setup) {}
 
 // Empty Constructor, for intrusive linked list
-TCB::TCB() : tid(0), pcb(nullptr), runtime({}) {}
+TCB::TCB() : tid(0), _pcb(nullptr), _setup({}) {}
 
 void *TCB::operator new(size_t size) {
     assert(size == sizeof(TCB));
@@ -64,9 +64,12 @@ struct TEST {
 util::Defer<TEST> test_defer;
 AutoDeferPost(test_defer);
 
-void TaskListener::handle(PostGlobalObjectInitEvent &event) {}
+void TaskListener::handle(PostGlobalObjectInitEvent &event)
+{
+}
 
-void TCBManager::init() {}
+void TCBManager::init() {
+}
 
 /**
  * @brief 默认任务

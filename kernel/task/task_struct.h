@@ -24,7 +24,10 @@ struct PCB;
 template <typename TCB>
 using _Scheduler = schd::RR<TCB>;
 
-struct TCB : public _Scheduler<TCB>::MetadataType {
+class TCBManager;
+
+class TCB : public _Scheduler<TCB>::MetadataType {
+public:
     using MetadataType = _Scheduler<TCB>::MetadataType;
 
     // 总线程链表
@@ -32,19 +35,49 @@ struct TCB : public _Scheduler<TCB>::MetadataType {
     util::ListHead<TCB> __process_head = {nullptr, nullptr};
     util::ListHead<TCB> __waitrel_head = {nullptr, nullptr};
 
-    // TID
-    tid_t tid;
-    PCB *pcb;
-    struct Runtime {
-        // 内核栈
-        void *kstack;
-        // 栈顶
-        void *stack_top;
-        // 入口点
+    // setup infomations
+    struct SetupInfo {
+        void *stacktop;
         void *entrypoint;
-    } runtime;
+        void *kstacktop;
+        bool is_kernel_thread;
+    };
+    const tid_t tid;
+protected:
+    PCB *_pcb;
+    SetupInfo _setup;
+    // reference count
+    size_t _ref_count;
+public:
+    inline Context *context(size_t size) {
+        return (Context *)((umb_t)_setup.kstacktop - sizeof(Context));
+    }
 
-    TCB(tid_t tid, PCB *pcb, Runtime runtime);
+    inline PCB *pcb(void) const {
+        return _pcb;
+    }
+
+    inline size_t ref_count(void) const {
+        return _ref_count;
+    }
+
+    void *stacktop(void) const {
+        return _setup.stacktop;
+    }
+
+    void *entrypoint(void) const {
+        return _setup.entrypoint;
+    }
+
+    void *kstacktop(void) const {
+        return _setup.kstacktop;
+    }
+
+    void retain(void);
+    void release(void);
+
+    // constructors
+    TCB(tid_t tid, PCB *pcb, SetupInfo *setup);
     // 默认Constructor
     TCB();
 

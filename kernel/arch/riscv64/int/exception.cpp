@@ -17,13 +17,6 @@
 #include <sus/types.h>
 #include <new>
 
-static bool test_flag = false;
-
-void test() {
-    LOGGER::INFO("进入测试函数!");
-    while (true);
-}
-
 extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
                             Riscv64Context *ctx) {
     if (scause.interrupt) {
@@ -34,19 +27,6 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
         // 异常
         Handlers::exception(scause, sepc, stval, ctx);
     }
-
-    // if (!test_flag) {
-    //     test_flag            = true;
-    //     size_t stack_page_cnt = 1;
-    //     void *kstack         = GFP::get_free_page(stack_page_cnt).addr();
-    //     void *kstack_top     = (void *)((umb_t)kstack + stack_page_cnt * PAGESIZE);
-    //     void *ctx_addr = (void *)((umb_t)kstack_top - sizeof(Riscv64Context));
-    //     Riscv64Context *_ctx = new (ctx_addr) Riscv64Context();
-    //     memcpy(_ctx, ctx, sizeof(Riscv64Context));
-    //     _ctx->pc() = (umb_t)test;
-    //     _ctx->sp() = (umb_t)GFP::get_free_page();
-    //     Riscv64Context::switch_to(kstack_top);
-    // }
 }
 
 extern "C" void isr_entry(void);

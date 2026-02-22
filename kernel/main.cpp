@@ -157,7 +157,6 @@ extern "C" void post_init(void) {
     Initialization::post_init();
 
     // 将低端内存设置为用户态
-
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
         lowvm, uppm - lowpm, PageMan::RWX::NONE, true, false);
