@@ -18,3 +18,6 @@ deps += mem/gmm.d
 
 objects += mem/pmm.o
 deps += mem/pmm.d
+
+objects += mem/vma.o
+deps += mem/vma.d

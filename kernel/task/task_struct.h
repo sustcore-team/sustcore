@@ -12,6 +12,7 @@
 #pragma once
 
 #include <arch/description.h>
+#include <mem/vma.h>
 #include <schd/policies.h>
 #include <sus/list.h>
 
@@ -103,16 +104,16 @@ struct PCB {
 
     // PID
     pid_t pid;
+
     // Task Memory
-    // TM *tm;
-    int rp_level;
+    TM tm;
 
     // 线程链表
     using ThreadList = util::IntrusiveList<TCB, &TCB::__process_head>;
     ThreadList threads;
     TCB *main_thread;
 
-    PCB(pid_t pid, int rp_level, TCB *main_thread);
+    PCB(pid_t pid, TCB *main_thread);
     PCB();
 
     void *operator new(size_t size);

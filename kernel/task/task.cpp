@@ -34,13 +34,13 @@ void TCB::operator delete(void *ptr) {
     KOP<TCB>::instance().free(static_cast<TCB *>(ptr));
 }
 
-PCB::PCB(pid_t pid, int rp_level, TCB *main_thread)
-    : pid(pid), rp_level(rp_level), threads(), main_thread(main_thread) {
+PCB::PCB(pid_t pid, TCB *main_thread)
+    : pid(pid), threads(), main_thread(main_thread) {
     threads.push_back(*main_thread);
 }
 
 // Empty Constructor, for intrusive linked list
-PCB::PCB() : pid(0), rp_level(0), threads(), main_thread(nullptr) {}
+PCB::PCB() : pid(0), threads(), main_thread(nullptr) {}
 
 void *PCB::operator new(size_t size) {
     assert(size == sizeof(PCB));

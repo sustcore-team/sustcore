@@ -12,6 +12,7 @@
 #pragma once
 
 #include <arch/description.h>
+#include <mem/addr.h>
 #include <sus/list.h>
 #include <sus/types.h>
 
@@ -91,17 +92,17 @@ struct VMA {
 
     TM *tm;
     Type type;
-    void *vaddr;
+    VirAddr vaddr;
     size_t size;
     util::ListHead<VMA> list_head;
 
     constexpr VMA()
         : tm(nullptr),
           type(Type::NONE),
-          vaddr(nullptr),
+          vaddr(),
           size(0),
           list_head({}) {}
-    constexpr VMA(TM *tm, Type t, void *v, size_t s)
+    constexpr VMA(TM *tm, Type t, VirAddr v, size_t s)
         : tm(tm), type(t), vaddr(v), size(s), list_head({}) {}
     constexpr VMA(TM *tm, const VMA &other)
         : tm(tm),
@@ -130,16 +131,15 @@ constexpr const char *to_string(VMA::Type type) {
 class TM {
     util::IntrusiveList<VMA> vma_list;
     PageMan __pgd;
-
 public:
     TM();
     ~TM();
 
-    void add_vma(VMA::Type type, void *vaddr, size_t size);
+    void add_vma(VMA::Type type, VirAddr vaddr, size_t size);
     void clone_vma(TM &other, VMA *vma);
-    VMA *find_vma(void *vaddr);
+    VMA *find_vma(VirAddr vaddr);
     void remove_vma(VMA *vma);
-    void map_vma(VMA *vma, void *paddr);
+    void map_vma(VMA *vma, PhyAddr paddr, size_t size);
 
     constexpr PageMan &pgd() {
         return __pgd;
