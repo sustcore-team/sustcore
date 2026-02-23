@@ -6,6 +6,9 @@ include $(path-script)/build/build.mk
 include $(path-script)/tool.mk
 include $(path-script)/util.mk
 
+include $(path-script)/build/arch.mk
+include $(path-script)/build/compilers.mk
+
 include $(path-script)/build/asm.mk
 include $(path-script)/build/c.mk
 include $(path-script)/build/cpp.mk
@@ -13,9 +16,6 @@ include $(path-script)/build/ld.mk
 include $(path-script)/build/ar.mk
 include $(path-script)/build/attach.mk
 include $(path-script)/build/tar.mk
-
-include $(path-script)/build/arch.mk
-include $(path-script)/build/compilers.mk
 
 include $(foreach dep, $(deps), $(dir-obj)/$(dep))
 
@@ -32,9 +32,15 @@ endif
 # static-library
 ifeq ($(mode), s)
 
+ifeq ($(libc-mode), true)
+$(target): $(obj-crt0-libc) $(obj-crti-libc) $(obj-crtbegin-libc) $(build-objects) $(obj-crtend-libc) $(obj-crtn-libc)
+	$(call prepare, $@, $^)
+	$(call ar-link, $@, $^)
+else
 $(target): $(build-objects)
 	$(call prepare, $@, $^)
 	$(call ar-link, $@, $^)
+endif
 
 endif
 

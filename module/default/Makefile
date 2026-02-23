@@ -2,21 +2,20 @@ include $(global-env)
 
 include $(path-script)/env/local.mk
 include $(path-script)/helper.mk
+include $(path-script)/tool.mk
 
-.PHONY: build
+_output := default.mod
+target := $(path-bin)/mods/$(architecture)/$(_output)
+initrd-target := $(path-bin)/initrd/$(_output)
 
-target := $(path-kernel)
-target-phy := $(path-kernel-phy)
-
-objects :=
-deps :=
+objects := main.o
+deps := main.d
 
 subdirs :=
 
-include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
 
-flags-ld := -z max-page-size=0x100 -nostdlib
+flags-ld := -z max-page-size=0x100 -nostdlib -e_start
 
 # C
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc++ \
@@ -61,20 +60,19 @@ endif
 
 # Makefile args
 
-libs := kersbi kerbasecpp fdt
+libs := basecpp kmod
 
-args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/arch/$(architecture)/kernel.ld"
-args-phy-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/arch/$(architecture)/kernel-phy.ld"
+args-ld := flags-ld="$(flags-ld)"
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 args-cpp := defs-cpp="$(defs-cpp)" include-cpp="$(include-cpp)" flags-cpp="$(flags-cpp)"
 args-asm := flags-asm="$(flags-asm)"
 
 args := $(args-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"
-args-phy := $(args-phy-ld) $(args-c) $(args-cpp) $(args-asm) libraries="$(libs)"
 
-dir := dir-obj="$(path-objects)/kernel" dir-src="$(path-d)"
+dir := dir-obj="$(path-objects)/module/default" dir-src="$(path-d)"
 
+.PHONY: build
 build:
 	$(q)$(MAKE) $(builder-k)=$(target) architecture=$(architecture) attachments="$(attachments)" deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
-	$(q)$(MAKE) $(builder-k)=$(target-phy) architecture=$(architecture) attachments="$(attachments)" deps="$(deps)" objects="$(objects)" $(dir) $(args-phy) $(target-phy)
+	$(q)$(copy) $(target) $(initrd-target)

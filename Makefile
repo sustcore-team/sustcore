@@ -19,6 +19,7 @@ include $(path-script)/setup.mk
 include $(path-script)/run.mk
 
 .PHONY: build mount umount image __image stat_code all dbg clean
+.PHONY: build-libsbi build-libbasecpp build-libkmod build-libfdt build-libs
 
 path-bin := $(path-e)/build/bin
 path-objects := $(path-e)/build/objects
@@ -28,15 +29,33 @@ arg-basic := build-mode=$(build-mode) architecture=$(architecture) global-env=$(
 
 -include $(path-script)/config.mk
 
-build:
-	$(q)$(MAKE) -f $(path-e)/libs/sbi/Makefile $(arg-basic) $@
-	$(q)$(MAKE) -f $(path-e)/libs/basecpp/Makefile $(arg-basic) $@
-	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) $@
+build-libsbi:
+	$(q)$(MAKE) -f $(path-e)/libs/sbi/Makefile $(arg-basic) build
 
+build-libbasecpp:
+	$(q)$(MAKE) -f $(path-e)/libs/basecpp/Makefile $(arg-basic) build
+
+build-libkmod:
+	$(q)$(MAKE) -f $(path-e)/libs/kmod/Makefile $(arg-basic) build
+
+build-libfdt:
+	$(q)$(MAKE) -f $(path-e)/third_party/libs/libfdt/Makefile $(arg-basic) build
+
+build-libs: build-libsbi build-libbasecpp build-libkmod build-libfdt
+	$(q)echo "All libraries built successfully."
+
+build-moddefault: build-libs
+	$(q)$(MAKE) -f $(path-e)/module/default/Makefile $(arg-basic) build
+
+build-mods: build-moddefault
+	$(q)echo "All modules built successfully."
+
+make-initrd:
 	$(call if_mkdir, $(path-initrd))
-	$(q)$(copy) ./LICENSE $(path-initrd)/license
-	$(q)$(copy) -r ./kernel $(path-initrd)/kernel
+	$(q)echo "initrd path created"
 
+build: make-initrd build-mods
+	$(q)$(copy) ./LICENSE $(path-initrd)/license
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) $@
 
 mount:

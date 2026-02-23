@@ -22,5 +22,10 @@ dir-obj ?=
 build-objects := $(foreach obj, $(objects), $(dir-obj)/$(obj)) \
 				 $(foreach attachment, $(attachments), $(dir-obj)/attachment/$(attachment))
 
+# libc特殊对象
+obj-crt0-libc ?= $(dir-obj)/$(obj-crt0)
+obj-crti-libc ?= $(dir-obj)/$(obj-crti)
+obj-crtn-libc ?= $(dir-obj)/$(obj-crtn)
+
 # 架构(x86 x86_64 riscv loongrach)
 architecture ?= riscv
