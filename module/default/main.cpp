@@ -9,6 +9,19 @@
  * 
  */
 
+void kputs(const char *str) {
+    // do nothing
+}
+
+class Test {
+public:
+    Test() {
+        kputs("Test constructor called");
+    }
+};
+
+Test test_goc;
+
 int kmod_main(void) {
     return 0;
 }

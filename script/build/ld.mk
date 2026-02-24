@@ -9,7 +9,5 @@ script-ld-arg :=
 endif
 
 define ld-link
-	echo $(script-ld)
-	echo $(script-ld-arg)
 	$(q)$(compiler-ld)  -L"$(path-e)/build/bin/libs/$(architecture)" $(flags-ld) $(script-ld-arg) -o $(1) $(2) --start-group $(libraries-ld) --end-group
 endef

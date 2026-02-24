@@ -27,7 +27,7 @@ flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc++ \
 include-third_party-c := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt -I$(path-third_party)/include/std
 include-c := -I$(path-include) -I$(path-include)/std $(include-third_party-c) -I$(path-d) -I$(path-include)/arch
 
-defs-c := -DASSERT_IMPLEMENTED=1
+defs-c := -DASSERT_IMPLEMENTED=0
 
 # CPP
 flags-cpp := -std=gnu++26 -nostdlib -ffreestanding -nostdinc \
@@ -39,7 +39,7 @@ include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/i
 						   -I$(path-third_party)/include/std
 include-cpp := -I$(path-include) -I$(path-include)/std -I$(path-include)/std/c++ \
 			   $(include-third_party-cpp) -I$(path-d) -I$(path-include)/arch
-defs-cpp := -DASSERT_IMPLEMENTED=1
+defs-cpp := -DASSERT_IMPLEMENTED=0
 
 # ASM
 flags-asm := 
