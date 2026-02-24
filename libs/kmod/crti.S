@@ -2,12 +2,6 @@
 # 与gcc自带的crtbegin.o与crtend.o配合组成C运行时初始化和清理代码
 # 提供init节与fini节的头代码(Prologue)
 
-# 如果定义了 PREINIT_FUNCTION，链接器会将其地址放入 .init_array 节中，确保在程序启动时调用它
-#ifdef PREINIT_FUNCTION
-    .section .init_array, "a", @init_array
-    .dc.a PREINIT_FUNCTION
-#endif
-
 /* _init */
     .section .init, "ax", @progbits
     .global _init
