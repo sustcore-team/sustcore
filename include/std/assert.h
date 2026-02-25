@@ -52,9 +52,9 @@ void panic(const char *format, ...);
 // 不开启DEBUG
 #if defined(NDEBUG) || ! ASSERT_IMPLEMENTED
 /** 断言 */
-#define assert(expression)       ((void)0)
+#define assert(expression)       ((void)(expression))
 /** 崩溃断言 */
-#define panic_assert(expression) ((void)0)
+#define panic_assert(expression) ((void)(expression))
 #else
 
 #define assert(expression) \
