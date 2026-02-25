@@ -301,14 +301,17 @@ namespace tarfs {
         const uint8_t *data_;  // 只读数据段
         const size_t size_;
         TarFSDriver *fs_;
+        IBlockDevice *device_;
         TarNode *root_{};
 
     public:
-        TarSuperblock(const uint8_t *data, size_t size, TarFSDriver *fs)
-            : data_(data), size_(size), fs_(fs) {}
+        TarSuperblock(const uint8_t *data, size_t size, TarFSDriver *fs,
+                      IBlockDevice *device)
+            : data_(data), size_(size), fs_(fs), device_(device) {}
 
         ~TarSuperblock() override {
-            delete[] data_;
+            if (!device_->is<RamDiskDevice>())
+                delete[] data_;
             delete root_;
             // 触发全部析构
         }
