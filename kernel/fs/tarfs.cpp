@@ -191,7 +191,7 @@ namespace tarfs {
                 return FSErrCode::IO_ERROR;
             }
         }
-        return new TarSuperblock(data, size, this);
+        return new TarSuperblock(data, size, this, device);
     }
 
 };  // namespace tarfs
