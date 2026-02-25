@@ -48,7 +48,7 @@ namespace util {
         }
         Optional(_Ep err) noexcept : D_err(err) {}
 
-        _Tp &value() & noexcept {
+        _Tp value() noexcept {
             return *reinterpret_cast<_Tp *>(D_storage);
         }
 

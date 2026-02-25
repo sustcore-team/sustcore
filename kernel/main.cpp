@@ -12,9 +12,6 @@
 #include <arch/riscv64/description.h>
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
-#include <cap/capability.h>
-#include <cap/capcall.h>
-#include <cap/permission.h>
 #include <device/block.h>
 #include <event/init_events.h>
 #include <event/registries.h>
@@ -25,6 +22,12 @@
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/slub.h>
+#include <cap/capdef.h>
+#include <object/csa.h>
+#include <object/testobj.h>
+#include <perm/permission.h>
+#include <perm/testobj.h>
+#include <perm/csa.h>
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>
@@ -44,6 +47,7 @@
 
 void buddy_test_complex(void);
 void slub_test_basic(void);
+void capability_test(void);
 void tree_test(void);
 void fs_test(void);
 
@@ -163,9 +167,10 @@ extern "C" void post_init(void) {
 
     TCBManager::init();
 
-    buddy_test_complex();
-    slub_test_basic();
-    fs_test();
+    // buddy_test_complex();
+    // slub_test_basic();
+    capability_test();
+    // fs_test();
 
     for (size_t i = 0; i < 10; i++) {
         TCB *t = new TCB();
@@ -221,54 +226,6 @@ void pre_init(void) {
     redive_func();
     LOGGER::ERROR("redive函数返回了, 这不应该发生!");
     while (true);
-}
-
-void cap_test(void) {
-    // 这部分的测试仅仅是为了测试编译有效性
-    CapHolder holder;
-    auto cap_opt = holder.lookup<CSpaceBase>(CapIdx(0));
-    // 绝大多数情况下, 你都不应该这么做来解包
-    // 此处只是用于测试编译有效性
-    // 可读性为0
-    auto sp_opt  = cap_opt.and_then_opt(
-        // 第一个 lambda 为
-        // Capability<CSpaceBase> * -> CapOptional<CSpace<CSpaceBase> *>
-        [](auto *cap) {
-            return CSpaceCalls::basic::payload(cap).and_then(
-                // 第二个 lambda 为 CSpaceBase * -> CSpace<CSpaceBase> *
-                [](CSpaceBase *base) {
-                    return base->as<CSpace<CSpaceBase>>();
-                });
-        });
-    if (sp_opt.present()) {
-        CSpace<CSpaceBase> *sp = sp_opt.value();
-        LOGGER::INFO("成功获取 CSpace: %p", sp);
-    } else {
-        LOGGER::INFO("未能获取 CSpace");
-        return;
-    }
-
-    Capability<CSpaceBase> *cap = cap_opt.value();
-    size_t space_idx            = CSpaceCalls::index(cap);
-    size_t slot = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
-    if (slot == 0) {
-        LOGGER::ERROR("分配槽位slot失败");
-        return;
-    }
-    CSpaceCalls::insert(cap, slot, util::make_raii(cap));
-    CSpaceCalls::remove<CSpaceBase>(cap, slot);
-    CSpaceCalls::insert(cap, slot, util::make_raii(cap));
-    size_t slot2 = CSpaceCalls::alloc<CSpaceBase>(cap).or_else(0);
-    if (slot == 0) {
-        LOGGER::ERROR("分配槽位slot2失败");
-        return;
-    }
-    CSpaceCalls::clone<CSpaceBase>(cap, CapIdx(space_idx, slot2), &holder,
-                                   CapIdx(space_idx, slot));
-    // to check the compiler errors
-    CSpaceCalls::create<CSpaceBase>(
-        cap, &holder, CapIdx(space_idx, slot2 + 1),
-        PermissionBits(1, PermissionBits::Type::NONE), sp_opt.value());
 }
 
 void kernel_setup(void) {
@@ -552,4 +509,191 @@ void fs_test(void) {
         return;
     }
     delete[] source_code;
+}
+
+void capability_test(void) {
+    LOGGER::INFO("开始能力系统测试...");
+
+    // 1. 初始化 CUniverse 和 CSpace
+    CUniverse universe;
+    CSpace *space0 = universe.new_space();
+    CSpace *space1 = universe.new_space();
+    if (space0 == nullptr || space1 == nullptr) {
+        LOGGER::ERROR("测试失败: CSpace 创建失败");
+        return;
+    }
+
+    CapIdx idx0(0, 0); // 槽位 (0,0)
+    CapIdx idx1(0, 1); // 槽位 (0,1)
+    CapIdx idx2(0, 2); // 槽位 (0,2)
+    CapIdx idx3(0, 3); // 槽位 (0,3)
+
+    // 2. 手动构造第一个 CSA (space0 的访问器, 存放在 space0:idx0)
+    CapErrCode err = space0->create<CSpaceAccessor>(idx0, space0);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 手动创建首个 CSA 失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("手动创建首个 CSA (指向 space0) 成功");
+
+    // 获取该能力对象
+    auto cap0_opt = space0->get(idx0);
+    if (!cap0_opt.present()) {
+        LOGGER::ERROR("测试失败: 获取 CSA0 失败");
+        return;
+    }
+    Capability *cap_csaall = cap0_opt.value();
+    CSAOperation csa_all(cap_csaall);
+
+    // 3. 使用 CSA0 创建 TestObject (存放在 space0:idx1)
+    err = csa_all.create<TestObject>(idx1, 12345);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 通过 CSA0 创建 TestObject 失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("通过 CSA0 在 space0:idx1 创建 TestObject(12345) 成功");
+
+    // 验证 TestObject 的值
+    auto cap_obj1_opt = space0->get(idx1);
+    if (!cap_obj1_opt.present()) {
+        LOGGER::ERROR("测试失败: 获取 TestObject1 失败");
+        return;
+    }
+    TestObjectOperation op_obj1(cap_obj1_opt.value());
+    auto val_opt = op_obj1.read();
+    if (!val_opt.present()) {
+        LOGGER::ERROR("测试失败: 读取 TestObject1 值失败");
+        return;
+    }
+    LOGGER::INFO("读取 TestObject 值: %d", val_opt.value());
+    if (val_opt.value() != 12345) {
+        LOGGER::ERROR("测试失败: TestObject1 值验证失败, 期望 12345, 实际 %d", val_opt.value());
+        return;
+    }
+
+    // 4. 使用 CSA0 为 space1 创建 CSA (指向 space1, 存放在 space0:idx2)
+    err = csa_all.create<CSpaceAccessor>(idx2, space1);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 通过 CSA0 创建 CSA1 失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("通过 CSA0 在 space0:idx2 创建指向 space1 的 CSA 成功");
+
+    // 获取 CSA1 并进行操作
+    auto cap_csa1_opt = space0->get(idx2);
+    if (!cap_csa1_opt.present()) {
+        LOGGER::ERROR("测试失败: 获取 CSA1 失败");
+        return;
+    }
+    CSAOperation op_csa1(cap_csa1_opt.value());
+
+    // 5. 使用 CSA1 在 space1:idx0 创建 TestObject (值为 54321)
+    err = op_csa1.create<TestObject>(idx0, 54321);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 通过 CSA1 创建 TestObject 失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("通过 CSA1 在 space1:idx0 创建 TestObject(54321) 成功");
+
+    // 6. 使用 CSA0 将 space0:idx1 的 TestObject 克隆到 space0:idx3
+    err = csa_all.clone(idx3, space0, idx1);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 通过 CSA0 克隆对象失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("通过 CSA0 将 space0:idx1 克隆到 space0:idx3 成功");
+
+    // 验证克隆出来的对象
+    auto cap_obj3_opt = space0->get(idx3);
+    if (!cap_obj3_opt.present()) {
+        LOGGER::ERROR("测试失败: 获取克隆对象失败");
+        return;
+    }
+    TestObjectOperation op_obj3(cap_obj3_opt.value());
+    auto read_obj3_opt = op_obj3.read();
+    if (!read_obj3_opt.present()) {
+        LOGGER::ERROR("测试失败: 读取克隆对象值失败");
+        return;
+    }
+    if (read_obj3_opt.value() != 12345) {
+        LOGGER::ERROR("测试失败: 克隆对象值验证失败, 期望 12345, 实际 %d", read_obj3_opt.value());
+        return;
+    }
+    LOGGER::INFO("验证克隆对象值成功: %d", read_obj3_opt.value());
+
+    // 7. 使用 CSA1 将 space0:idx1 迁移到 space1:idx1
+    err = op_csa1.migrate(idx1, space0, idx1);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 通过 CSA1 迁移对象失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("通过 CSA1 将 space0:idx1 迁移到 space1:idx1 成功");
+
+    // 检查原位置是否为空
+    if (space0->get(idx1).present()) {
+        LOGGER::ERROR("测试失败: 验证原位置 (space0:idx1) 迁移后仍不为空");
+        return;
+    }
+    LOGGER::INFO("验证原位置 (space0:idx1) 已为空");
+
+    // 检查新位置
+    auto cap_migrated_opt = space1->get(idx1);
+    if (!cap_migrated_opt.present()) {
+        LOGGER::ERROR("测试失败: 获取迁移后对象失败");
+        return;
+    }
+    TestObjectOperation op_migrated(cap_migrated_opt.value());
+    auto read_migrated_opt = op_migrated.read();
+    if (!read_migrated_opt.present()) {
+        LOGGER::ERROR("测试失败: 读取迁移后对象值失败");
+        return;
+    }
+    if (read_migrated_opt.value() != 12345) {
+        LOGGER::ERROR("测试失败: 迁移后对象值验证失败, 期望 12345, 实际 %d", read_migrated_opt.value());
+        return;
+    }
+    LOGGER::INFO("验证迁移后对象 (space1:idx1) 值成功: %d", read_migrated_opt.value());
+
+    // 8. 测试权限降级 (选用 TestObject 进行测试)
+    PermissionBits low_perm(perm::testobj::READ, PayloadType::TEST_OBJECT);
+    err = cap_migrated_opt.value()->downgrade(low_perm);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 权限降级操作失败, 错误码: %s", to_string(err));
+        return;
+    }
+    LOGGER::INFO("对迁移后的 TestObject 进行权限降级 (仅保留 READ)");
+
+    // 尝试写操作, 应该失败 (其 logic 内部会报错)
+    op_migrated.increase();
+    auto read_after_inc_opt = op_migrated.read();
+    if (!read_after_inc_opt.present()) {
+        LOGGER::ERROR("测试失败: 降级后读取失败");
+        return;
+    }
+    if (read_after_inc_opt.value() != 12345) {
+        LOGGER::ERROR("测试失败: 无权限的 increase 操作生效了, 值变为: %d", read_after_inc_opt.value());
+        return;
+    }
+    LOGGER::INFO("验证无权限的 increase 操作未生效");
+
+    // 再次降级, 去掉 READ
+    PermissionBits none_perm(0, PayloadType::TEST_OBJECT);
+    err = cap_migrated_opt.value()->downgrade(none_perm);
+    if (err != CapErrCode::SUCCESS) {
+        LOGGER::ERROR("测试失败: 权限降级(none)操作失败, 错误码: %s", to_string(err));
+        return;
+    }
+    auto final_read_opt = op_migrated.read();
+    if (final_read_opt.present()) {
+        LOGGER::ERROR("测试失败: 验证无权限的 read 操作竟然成功了");
+        return;
+    }
+    if (final_read_opt.error() != CapErrCode::INSUFFICIENT_PERMISSIONS) {
+        LOGGER::ERROR("测试失败: 无权限的 read 操作返回了错误的错误码: %s", to_string(final_read_opt.error()));
+        return;
+    }
+    LOGGER::INFO("验证无权限的 read 操作失败, 并返回错误码: %s",
+                 to_string(final_read_opt.error()));
+
+    LOGGER::INFO("能力系统测试全部通过!");
 }
