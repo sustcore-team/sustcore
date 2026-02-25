@@ -1108,8 +1108,19 @@ namespace util {
         constexpr const _Tp& at(IndexType index) const noexcept {
             return D_data[index];
         }
+        constexpr _Tp& front() noexcept {
+            return D_data[0];
+        }
+        constexpr const _Tp& front() const noexcept {
+            return D_data[0];
+        }
+        constexpr _Tp& back() noexcept {
+            return D_data[D_size - 1];
+        }
+        constexpr const _Tp& back() const noexcept {
+            return D_data[D_size - 1];
+        }
 
-        // insert & erase
         // insert & erase
         iterator insert(iterator pos, const _Tp& value) noexcept {
             IndexType index = pos.D_index;
