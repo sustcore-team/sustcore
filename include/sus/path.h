@@ -28,23 +28,7 @@ namespace util {
         // 构造函数
         Path() : path_("") {}
         Path(const char *path) : path_(path) {}
-        Path(const util::string &path) : path_(path) {}
-
-        // 复制和移动构造函数和赋值运算符
-        Path(const Path &other) : path_(other.path_) {}
-        Path &operator=(const Path &other) {
-            if (this != &other) {
-                path_ = other.path_;
-            }
-            return *this;
-        }
-        Path(Path &&other) noexcept : path_(std::move(other.path_)) {}
-        Path &operator=(Path &&other) noexcept {
-            if (this != &other) {
-                path_ = std::move(other.path_);
-            }
-            return *this;
-        }
+        Path(util::string path) : path_(std::move(path)) {}
 
         // 路径拼接
         Path operator/(const Path &other) const {
