@@ -33,6 +33,7 @@
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>
+#include <sus/path.h>
 #include <sus/raii.h>
 #include <sus/tree.h>
 #include <sus/types.h>
@@ -54,6 +55,7 @@ void test_string_view(void);
 void tree_test(void);
 void tree_base_test(void);
 void fs_test(void);
+void path_test(void);
 
 int kputs(const char *str) {
     size_t len        = strlen(str);
@@ -193,6 +195,7 @@ extern "C" void post_init(void) {
     // slub_test_basic();
     capability_test();
     test_string_view();
+    path_test();
     // fs_test();
     // tree_test();
     // tree_base_test();
@@ -573,4 +576,40 @@ void fs_test(void) {
         return;
     }
     delete[] source_code;
+}
+
+void path_test(util::Path path) {
+    // 连接测试
+    util::Path p1 = "";
+    util::Path p2 = p1 / "home" / "user" / "docs";
+    kprintf("连接路径: %s\n", p2.c_str());
+
+    // util::Path path = "~/.bashrc";
+    // util::Path path = "//////.env";
+    kprintf("path: %s\n", path.c_str());
+    path = path.normalize();
+    kprintf("parent: %s\n", path.parent_path().c_str());
+    kprintf("filename: %s\n", path.filename().c_str());
+    kprintf("stem: %s\n", path.stem().c_str());
+    kprintf("extension: %s\n", path.extension().c_str());
+
+    kprintf("walk: ");
+    auto it = path.begin();
+    for (; it != path.end(); ++it) {
+        kprintf("%s ", (*it).c_str());
+    }
+    kprintf("\n");
+
+    kprintf("normalize: %s\n", path.normalize().c_str());
+
+    // TODO: relative_to 测试
+    util::Path base = "/../user";
+    kprintf("relative path: %s\n", path.relative_to(base).c_str());
+}
+
+void path_test(void) {
+    // for (const char *test_path : TEST_PATHS) {
+    //     path_test(util::Path(test_path));
+    // }
+    path_test("/home/user555/docs/report.txt");
 }
