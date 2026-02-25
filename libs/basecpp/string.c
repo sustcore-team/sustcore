@@ -80,8 +80,9 @@ char *strcpy(void *restrict dst, const char *restrict src) {
     return dst;
 }
 
+// 复制字符串，指定dst的buf总大小，并把最后一个字节设置为'\0'
 char *strcpy_s(void *restrict dst, size_t dstsz, const char *restrict src) {
-    size_t len = (size_t)strlen(src);
+    size_t len   = (size_t)strlen(src);
     size_t cplen = (len >= dstsz) ? (dstsz - 1) : len;
     memcpy(dst, src, cplen);
     *(char *)(dst + cplen) = '\0';

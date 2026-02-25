@@ -4,14 +4,15 @@
  * @brief 字符串
  * @version alpha-1.0.0
  * @date 2026-02-04
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
 
 #include <string.h>
+
 #include <cstddef>
 #include <cstring>
 
@@ -24,17 +25,18 @@ namespace util {
         void clear_data() {
             if (D_data != nullptr) {
                 delete[] D_data;
-                D_data = nullptr;
+                D_data   = nullptr;
                 D_length = 0;
             }
         }
+
     public:
         string(const char *str);
         string();
         string(const char *begin, const char *end);
         ~string();
 
-        constexpr char* c_str() const noexcept {
+        constexpr char *c_str() const noexcept {
             return D_data;
         }
         constexpr size_t size() const noexcept {
@@ -46,14 +48,17 @@ namespace util {
         constexpr size_t capacity() const noexcept {
             return D_length;
         }
+        
+        string substr(size_t pos, size_t count) const;
+        string substr(size_t pos) const;
 
-        string(const string& str);
-        string operator=(const string& str);
-        string(string&& str);
-        string operator=(string&& str);
+        string(const string &str);
+        string operator=(const string &str);
+        string(string &&str);
+        string operator=(string &&str);
 
-        bool operator==(const string& str) const;
-        constexpr bool operator!=(const string& str) const {
+        bool operator==(const string &str) const;
+        constexpr bool operator!=(const string &str) const {
             return !(*this == str);
         }
 
@@ -68,10 +73,13 @@ namespace util {
         size_t D_bufsz;
         size_t D_length;
         char *D_buf;
+
+        void ensure_bufsz(size_t target_bufsz);
+
     public:
         string_builder(size_t bufsz = 32);
-        string_builder(const string_builder&) = delete;
-        string_builder& operator=(const string_builder&) = delete;
+        string_builder(const string_builder &)            = delete;
+        string_builder &operator=(const string_builder &) = delete;
         string_builder(const char *str);
         string_builder(string str);
 
@@ -91,6 +99,8 @@ namespace util {
             return D_bufsz;
         }
 
+        void reserve(size_t new_bufsz);
+
         void append(const char *str);
         void append(string str);
         void append(char ch);
@@ -108,4 +118,4 @@ namespace util {
             return D_buf[index];
         }
     };
-}
+}  // namespace util

@@ -11,13 +11,14 @@
 
 #include <sus/mstring.h>
 
+#include <cassert>
+
 namespace util {
     string::string(const char *begin, const char *end)
         : D_length(end - begin), D_data(new char[D_length + 1]) {
-        strcpy_s(D_data, D_length, begin);
-        D_data[D_length] = '\0';
+        strcpy_s(D_data, D_length + 1, begin);
     }
-    string::string(const char* str)
+    string::string(const char *str)
         : D_length(strlen(str)), D_data(new char[D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str);
     }
@@ -26,11 +27,20 @@ namespace util {
         clear_data();
     }
 
-    string::string(const string& str)
+    string string::substr(size_t pos, size_t count) const {
+        assert(pos + count <= D_length);
+        return string(D_data + pos, D_data + pos + count);
+    }
+    string string::substr(size_t pos) const {
+        assert(pos <= D_length);
+        return string(D_data + pos, D_data + D_length);
+    }
+
+    string::string(const string &str)
         : D_length(str.D_length), D_data(new char[str.D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str.D_data);
     }
-    string string::operator=(const string& str) {
+    string string::operator=(const string &str) {
         if (this != &str) {
             clear_data();
             D_length = str.D_length;
@@ -40,12 +50,12 @@ namespace util {
         return *this;
     }
 
-    string::string(string&& str) : D_length(str.D_length), D_data(str.D_data) {
+    string::string(string &&str) : D_length(str.D_length), D_data(str.D_data) {
         str.D_data   = nullptr;
         str.D_length = 0;
     }
 
-    string string::operator=(string&& str) {
+    string string::operator=(string &&str) {
         if (this != &str) {
             clear_data();
             D_length     = str.D_length;
@@ -56,7 +66,7 @@ namespace util {
         return *this;
     }
 
-    bool string::operator==(const string& str) const {
+    bool string::operator==(const string &str) const {
         if (D_length != str.D_length) {
             return false;
         }
@@ -66,7 +76,7 @@ namespace util {
     string_builder::string_builder(size_t bufsz)
         : D_bufsz(bufsz), D_length(0), D_buf(new char[bufsz]) {}
 
-    string_builder::string_builder(const char* str)
+    string_builder::string_builder(const char *str)
         : string_builder(strlen(str) + 1) {
         append(str);
     }
@@ -79,33 +89,50 @@ namespace util {
         delete[] D_buf;
     }
 
-    void string_builder::append(const char* str) {
-        size_t str_len = strlen(str);
-        if (D_length + str_len + 1 > D_bufsz) {
-            // 超出缓冲区大小
+    void string_builder::ensure_bufsz(size_t target_bufsz) {
+        if (target_bufsz <= D_bufsz) {
             return;
         }
+        size_t new_bufsz = D_bufsz * 2;
+        while (target_bufsz > new_bufsz) {
+            new_bufsz *= 2;
+        }
+        char *new_buf = new char[new_bufsz];
+        strcpy_s(new_buf, new_bufsz, D_buf);
+        delete[] D_buf;
+        D_buf   = new_buf;
+        D_bufsz = new_bufsz;
+    }
+
+    void string_builder::append(const char *str) {
+        size_t str_len = strlen(str);
+        ensure_bufsz(D_length + str_len + 1);
         strcpy_s(D_buf + D_length, D_bufsz - D_length, str);
         D_length += str_len;
     }
 
     void string_builder::append(string str) {
         size_t str_len = str.length();
-        if (D_length + str_len + 1 > D_bufsz) {
-            // 超出缓冲区大小
-            return;
-        }
+        ensure_bufsz(D_length + str_len + 1);
         strcpy_s(D_buf + D_length, D_bufsz - D_length, str.c_str());
         D_length += str_len;
     }
 
     void string_builder::append(char ch) {
-        if (D_length + 2 > D_bufsz) {
-            // 超出缓冲区大小
+        ensure_bufsz(D_length + 2);
+        D_buf[D_length] = ch;
+        D_length++;
+        D_buf[D_length] = '\0';
+    }
+
+    void string_builder::reserve(size_t new_bufsz) {
+        if (new_bufsz <= D_bufsz) {
             return;
         }
-        D_buf[D_length]     = ch;
-        D_length++;
-        D_buf[D_length]     = '\0';
+        char *new_buf = new char[new_bufsz];
+        strcpy_s(new_buf, new_bufsz, D_buf);
+        delete[] D_buf;
+        D_buf   = new_buf;
+        D_bufsz = new_bufsz;
     }
 }  // namespace util
