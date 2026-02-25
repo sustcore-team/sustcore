@@ -267,6 +267,12 @@ namespace util::tree_base {
         }
     };
 
+    template <typename node_t>
+    using Tree = TreeNode<node_t, class TreeTag>;
+
+    template <typename node_t>
+    using TreeLCA = TreeLCANode<node_t, class TreeLCATag>;
+
     /**
     Usage:
 
