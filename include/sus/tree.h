@@ -14,7 +14,7 @@
 
 #include <concepts>
 
-namespace util {
+namespace util::tree {
     struct tree_tag {};
     struct tree_lca_tag : public tree_tag {};
 
@@ -31,7 +31,7 @@ namespace util {
 
     template <typename node_t>
     struct TreeNode<node_t, tree_lca_tag> {
-        size_t depth = 0;
+        size_t depth   = 0;
         node_t *parent = nullptr;
         util::ArrayList<node_t *> children;
     };
@@ -92,7 +92,7 @@ namespace util {
 
         template <is_node_t<node_t> T>
         static T &get_parent(T &node) {
-            return * (U_node(node).parent);
+            return *(U_node(node).parent);
         }
 
         template <is_node_t<node_t> T>
@@ -151,4 +151,150 @@ namespace util {
         std::cout << node.value << std::endl;
     });
     */
-}  // namespace util
+}  // namespace util::tree
+
+namespace util::tree_base {
+    // 子类注入的实现
+    // 在这里不是用CustomTag来条件编译，是用来让编译器区分不同的树结构，避免多树无法区分
+
+    template <typename node_t, typename CustomTag>
+    class TreeBase {
+    protected:
+        node_t *parent;
+        size_t size;
+        util::ArrayList<node_t *> children;
+
+        inline node_t *as() {
+            return static_cast<node_t *>(this);
+        }
+
+        inline const node_t *as() const {
+            return static_cast<const node_t *>(this);
+        }
+
+    public:
+        bool is_root() const {
+            return !parent;
+        }
+
+        void foreach_pre(auto func) {
+            func(*as());
+            for (auto p : children) {
+                static_cast<TreeBase<node_t, CustomTag> *>(p)->foreach_pre(
+                    func);
+            }
+        }
+
+        void foreach_post(auto func) {
+            for (auto p : children) {
+                static_cast<TreeBase<node_t, CustomTag> *>(p)->foreach_post(
+                    func);
+            }
+            func(*as());
+        }
+
+        void foreach_child(auto func) {
+            for (auto p : children) func(*p);
+        }
+
+        const node_t &get_parent() const {
+            return *parent;
+        }
+
+        node_t &get_parent() {
+            return *parent;
+        }
+
+        const util::ArrayList<node_t *> &get_children() const {
+            return children;
+        }
+
+        util::ArrayList<node_t *> &get_children() {
+            return children;
+        }
+
+        bool is_ancestor_of(const node_t &descendant) const {
+            const node_t *p = &descendant;
+            while (p != nullptr) {
+                if (p == this) {
+                    return true;
+                }
+                p = static_cast<TreeBase<node_t, CustomTag> *>(p)->parent;
+            }
+            return false;
+        }
+    };
+
+    template <typename node_t, typename CustomTag>
+    class TreeNode : public TreeBase<node_t, CustomTag> {
+    public:
+        void link_child(node_t &son) {
+            TreeNode &son_node = static_cast<TreeNode &>(son);
+            assert(son_node.parent == nullptr);
+            this->children.push_back(&son);
+            son_node.parent = this->as();
+        }
+    };
+
+    template <typename node_t, typename CustomTag>
+    class TreeLCANode : public TreeBase<node_t, CustomTag> {
+    private:
+        size_t depth;
+
+    public:
+        void link_child(node_t &son) {
+            TreeLCANode &son_node = static_cast<TreeLCANode &>(son);
+            assert(son_node.parent == nullptr);
+            this->children.push_back(&son);
+            son_node.parent = this->as();
+            son_node.depth  = this->depth + 1;
+            assert(son_node.children.size() == 0 && "只能插入叶子节点");
+        }
+
+        static node_t *lca(node_t *a, node_t *b) {
+            TreeLCANode *pa = static_cast<TreeLCANode *>(a);
+            TreeLCANode *pb = static_cast<TreeLCANode *>(b);
+            while (pa != pb) {
+                assert(pa != nullptr);
+                assert(pb != nullptr);
+                if (pa->depth > pb->depth) {
+                    pa = pa->parent;
+                } else {
+                    pb = pb->parent;
+                }
+            }
+            return static_cast<node_t *>(pa);
+        }
+    };
+
+    /**
+    Usage:
+
+    using TreeA = TreeNode<class Data, class TreeATag>;
+    using TreeB = TreeLCANode<class Data, class TreeBTag>;
+
+    class Data : public TreeA, public TreeB {
+    public:
+        int data;
+        int key() const {
+            return data;
+        }
+    } pool[1000];
+
+    void test() {
+        for (int i = 0; i < 1000; i++) {
+            pool[i].data = i;
+        }
+        auto &rt = pool[0];
+        rt.TreeA::link_child(pool[1]);
+        pool[1].TreeA::link_child(pool[2]);
+        pool[1].TreeA::link_child(pool[3]);
+        pool[3].TreeA::link_child(pool[4]);
+        rt.TreeB::link_child(pool[5]);
+        pool[5].TreeB::link_child(pool[6]);
+        pool[6].TreeB::link_child(pool[7]);
+        pool[6].TreeB::link_child(pool[8]);
+        pool[5].TreeB::link_child(pool[9]);
+    }
+    */
+}  // namespace util::tree_base

@@ -49,6 +49,7 @@ void buddy_test_complex(void);
 void slub_test_basic(void);
 void capability_test(void);
 void tree_test(void);
+void tree_base_test(void);
 void fs_test(void);
 
 int kputs(const char *str) {
@@ -171,6 +172,8 @@ extern "C" void post_init(void) {
     // slub_test_basic();
     capability_test();
     // fs_test();
+    tree_test();
+    tree_base_test();
 
     for (size_t i = 0; i < 10; i++) {
         TCB *t = new TCB();
@@ -409,7 +412,7 @@ void slub_test_basic() {
 
 constexpr size_t TREE_SIZE = 8192;
 struct TestTree {
-    util::TreeNode<TestTree, util::tree_lca_tag> tree_node;
+    util::tree::TreeNode<TestTree, util::tree::tree_lca_tag> tree_node;
     int idx;
 } NODES[TREE_SIZE];
 
@@ -418,7 +421,8 @@ void tree_test(void) {
         NODES[i].idx = i;
     }
 
-    using Tree = util::Tree<TestTree, &TestTree::tree_node, util::tree_lca_tag>;
+    using Tree = util::tree::Tree<TestTree, &TestTree::tree_node,
+                                  util::tree::tree_lca_tag>;
     Tree::link_child(NODES[0], NODES[1]);
     Tree::link_child(NODES[0], NODES[2]);
     Tree::link_child(NODES[0], NODES[3]);
@@ -475,6 +479,42 @@ void tree_test(void) {
 
     print_lca(0, 0);
     print_lca(12, 12);
+}
+
+using TreeA = util::tree_base::TreeNode<class Data, class TreeATag>;
+using TreeB = util::tree_base::TreeLCANode<class Data, class TreeBTag>;
+
+class Data : public TreeA, public TreeB {
+public:
+    int data;
+} pool[TREE_SIZE];
+
+void tree_base_test(void) {
+    for (int i = 0; i < TREE_SIZE; i++) {
+        pool[i].data = i;
+    }
+    auto &rt = pool[0];
+    rt.TreeA::link_child(pool[1]);
+    pool[1].TreeA::link_child(pool[2]);
+    pool[1].TreeA::link_child(pool[3]);
+    pool[3].TreeA::link_child(pool[4]);
+    rt.TreeB::link_child(pool[5]);
+    pool[5].TreeB::link_child(pool[6]);
+    pool[6].TreeB::link_child(pool[7]);
+    pool[6].TreeB::link_child(pool[8]);
+    pool[5].TreeB::link_child(pool[9]);
+    rt.TreeA::foreach_pre(
+        [](const Data &p) { kprintf("TreeA node: %d\n", p.data); });
+    rt.TreeB::foreach_pre(
+        [](const Data &p) { kprintf("TreeB node: %d\n", p.data); });
+
+    auto print_lca = [=](size_t a, size_t b) {
+        kprintf("%d 与 %d 的 LCA 为 %d \n", a, b,
+                TreeB::lca(&pool[a], &pool[b])->data);
+    };
+
+    print_lca(7, 9);
+    print_lca(7, 8);
 }
 
 void fs_test(void) {
