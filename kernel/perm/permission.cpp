@@ -17,10 +17,11 @@
 
 PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, PayloadType type)
     : basic_permissions(basic),
-      permission_bitmap(new b64[to_bitmap_size(type)]),
+      permission_bitmap(nullptr),
       type(type) {
     const size_t bitmap_size = to_bitmap_size(type);
     if (bitmap_size > 0) {
+        permission_bitmap = new b64[bitmap_size];
         if (bitmap != nullptr) {
             memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
         } else {
@@ -28,9 +29,9 @@ PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, PayloadType type)
         }
     } else if (bitmap != nullptr) {
         CAPABILITY::WARN(
-            "具有类型%u的权限对象不应提供权限位图, 但实际提供了非空指针, "
+            "具有类型%s的权限对象不应提供权限位图, 但实际提供了非空指针, "
             "已忽略该指针",
-            static_cast<int>(type));
+            to_string(type));
     }
 }
 PermissionBits::PermissionBits(b64 basic, PayloadType type)
@@ -109,24 +110,19 @@ PermissionBits PermissionBits::clone() const {
                           this->permission_bitmap, this->type);
 }
 
-class AllBitmapBuffer {
-public:
-    static constexpr size_t BITMAP_BUFFER_SIZE = 4096;
-    b64 bitmap_buffer[BITMAP_BUFFER_SIZE];
-    AllBitmapBuffer() {
-        memset(bitmap_buffer, 0xFF, sizeof(bitmap_buffer));
-    }
-};
-
-static util::Defer<AllBitmapBuffer> all_bitmap_buffer;
-AutoDeferPost(all_bitmap_buffer);
-
 PermissionBits PermissionBits::allperm(PayloadType type) {
-    const size_t bitmap_size = to_bitmap_size(type);
+    return PermissionBits(AllPermTag{}, type);
+}
+
+PermissionBits::PermissionBits(AllPermTag, PayloadType type)
+    : basic_permissions(~0ULL),
+      permission_bitmap(nullptr),
+      type(type) {
+    size_t bitmap_size = to_bitmap_size(type);
     if (bitmap_size > 0) {
-        assert(bitmap_size <= AllBitmapBuffer::BITMAP_BUFFER_SIZE);
-        return PermissionBits(~0ULL, &(all_bitmap_buffer->bitmap_buffer[0]),
-                              type);
+        permission_bitmap = new b64[bitmap_size];
+        memset(permission_bitmap, 0xFF, bitmap_size * sizeof(b64));
+    } else {
+        assert(permission_bitmap == nullptr);
     }
-    return PermissionBits(~0ULL, type);
 }

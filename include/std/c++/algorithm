@@ -47,4 +47,10 @@ namespace std {
     constexpr const T& max(const T& a, const T& b) {
         return (a > b) ? a : b;
     }
+
+    // abs
+    template <typename T>
+    constexpr T abs(const T& value) {
+        return (value < 0) ? -value : value;
+    }
 }  // namespace std

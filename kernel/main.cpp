@@ -172,14 +172,14 @@ extern "C" void post_init(void) {
     // slub_test_basic();
     capability_test();
     // fs_test();
-    tree_test();
-    tree_base_test();
+    // tree_test();
+    // tree_base_test();
 
-    for (size_t i = 0; i < 10; i++) {
-        TCB *t = new TCB();
-        PCB *p = new PCB();
-        kprintf("%p;%p\n", t, p);
-    }
+    // for (size_t i = 0; i < 10; i++) {
+    //     TCB *t = new TCB();
+    //     PCB *p = new PCB();
+    //     kprintf("%p;%p\n", t, p);
+    // }
 
     while (true);
 }
@@ -735,5 +735,99 @@ void capability_test(void) {
     LOGGER::INFO("验证无权限的 read 操作失败, 并返回错误码: %s",
                  to_string(final_read_opt.error()));
 
-    LOGGER::INFO("能力系统测试全部通过!");
+    // 9. 复杂派生树与 Revoke 测试 (增加宽度与跨 Space 深度)
+    LOGGER::INFO("开始复杂派生树 (宽度 6->1, 跨 Space 深度 4) 与 Revoke 测试...");
+    CapIdx idx_root(0, 10);
+    err = csa_all.create<TestObject>(idx_root, 999);
+    if (err != CapErrCode::SUCCESS) return;
+    auto cap_root = space0->get(idx_root).value();
+
+    // 构建测试矩阵: L1 (6个) -> L2 (5个) -> L3 (4个) -> L4 (1个)
+    // 其中 L3 存放在 space1 中实现跨 Space 验证
+    
+    // L1: 6个子节点在 space0 (idx 11-16)
+    for (int i = 0; i < 6; ++i) {
+        err = csa_all.clone(CapIdx(0, 11 + i), space0, idx_root);
+        if (err != CapErrCode::SUCCESS) return;
+    }
+    auto cap_L1_base = space0->get(CapIdx(0, 11)).value(); // 我们将以第一个 L1 为父节点继续派生
+    LOGGER::INFO("L1 层构建成功: 6 个子节点 (space0:idx11-16)");
+
+    // L2: 从 space0:idx11 派生 5个子节点在 space0 (idx 17-21)
+    for (int i = 0; i < 5; ++i) {
+        err = csa_all.clone(CapIdx(0, 17 + i), space0, CapIdx(0, 11));
+        if (err != CapErrCode::SUCCESS) return;
+    }
+    auto cap_L2_base = space0->get(CapIdx(0, 17)).value();
+    LOGGER::INFO("L2 层构建成功: 5 个子节点 (space0:idx17-21, 父节点 idx11)");
+
+    // L3: 从 space0:idx17 跨 Space 派生 4个子节点到 space1 (idx 10-13)
+    for (int i = 0; i < 4; ++i) {
+        err = op_csa1.clone(CapIdx(0, 10 + i), space0, CapIdx(0, 17));
+        if (err != CapErrCode::SUCCESS) return;
+    }
+    auto cap_L3_base = space1->get(CapIdx(0, 10)).value();
+    LOGGER::INFO("L3 层构建成功: 4 个跨 Space 子节点 (space1:idx10-13, 父节点 space0:idx17)");
+
+    // L4: 从 space1:idx10 派生 1个子节点在 space1 (idx 14)
+    err = op_csa1.clone(CapIdx(0, 14), space1, CapIdx(0, 10));
+    if (err != CapErrCode::SUCCESS) return;
+    LOGGER::INFO("L4 层构建成功: 1 个最终节点 (space1:idx14)");
+
+    // 执行核心 Revoke 操作: 删除 L1 中的第一个节点 (idx 11)
+    // 预期: 它的所有后代 (L2中的5个, L3中的4个, L4中的1个) 必须被全部自动清理
+    LOGGER::INFO("执行 Revoke 操作: 删除 L1 根节点 (space0:idx11)...");
+    err = csa_all.remove(CapIdx(0, 11));
+    if (err != CapErrCode::SUCCESS) return;
+
+    // 验证联动删除
+    bool revoke_failed = false;
+    LOGGER::INFO("验证 Revoke 结果: idx11 及其所有后代应该都被删除...");
+    LOGGER::INFO("检查 L2, 如果成功应报错: 槽位索引未被占用");
+    // 检查 L2
+    for (int i = 0; i < 5; ++i) {
+        if (space0->get(CapIdx(0, 17 + i)).present()) revoke_failed = true;
+    }
+    if (revoke_failed) {
+        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
+        return;
+    }
+    LOGGER::INFO("检查 L3, 如果成功应报错: 槽位索引未被占用");
+    // 检查 L3 (跨 Space)
+    for (int i = 0; i < 4; ++i) {
+        if (space1->get(CapIdx(0, 10 + i)).present()) revoke_failed = true;
+    }
+    if (revoke_failed) {
+        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
+        return;
+    }
+    LOGGER::INFO("检查 L4, 如果成功应报错: 槽位索引未被占用");
+    // 检查 L4
+    if (space1->get(CapIdx(0, 14)).present()) revoke_failed = true;
+
+    if (revoke_failed) {
+        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
+        return;
+    }
+
+    // 验证兄弟节点 (L1 的其它 5 个节点) 应该还活着
+    LOGGER::INFO("检查 L1 的其它5个节点是否依然存活");
+    for (int i = 1; i < 6; ++i) {
+        if (!space0->get(CapIdx(0, 11 + i)).present()) {
+            LOGGER::ERROR("Revoke 错误: 意外删除了兄弟节点 idx%d", 11 + i);
+            return;
+        }
+    }
+    LOGGER::INFO("验证兄弟节点存活成功");
+
+    LOGGER::INFO("检查根节点是否依然存活");
+    // 验证根节点
+    if (!space0->get(idx_root).present()) {
+        LOGGER::ERROR("Revoke 错误: 根节点被删除");
+        return;
+    }
+    LOGGER::INFO("验证根节点存活成功");
+
+    LOGGER::INFO("复杂宽度/深度派生树 Revoke 验证全部成功!");
+    LOGGER::INFO("所有能力系统测试已圆满完成!");
 }

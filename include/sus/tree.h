@@ -9,6 +9,8 @@
  *
  */
 
+#pragma once
+
 #include <sus/list.h>
 #include <sus/logger.h>
 
@@ -161,7 +163,6 @@ namespace util::tree_base {
     class TreeBase {
     protected:
         node_t *parent;
-        size_t size;
         util::ArrayList<node_t *> children;
 
         inline node_t *as() {
@@ -173,6 +174,26 @@ namespace util::tree_base {
         }
 
     public:
+        constexpr TreeBase()
+            : parent(nullptr), children()
+        {
+        }
+
+        TreeBase(node_t *par)
+            : parent(par), children()
+        {
+        }
+
+        TreeBase(node_t *par, util::ArrayList<node_t *> &&children)
+            : parent(par), children(std::move(children))
+        {
+        }
+
+        TreeBase(node_t *par, const util::ArrayList<node_t *> &children)
+            : parent(par), children(children)
+        {
+        }
+
         bool is_root() const {
             return !parent;
         }
@@ -213,6 +234,29 @@ namespace util::tree_base {
             return children;
         }
 
+        // 添加子节点
+        inline bool add_child(node_t *child) {
+            if (children.contains(child)) {
+                return false;
+            }
+            children.push_back(child);
+            return true;
+        }
+
+        // 移除子节点
+        inline bool remove_child(node_t *child) {
+            if (! children.contains(child)) {
+                return false;
+            }
+            children.remove(child);
+            return true;
+        }
+
+        // 设置父节点
+        inline void set_parent(node_t *par) {
+            this->parent = par;
+        }
+
         bool is_ancestor_of(const node_t &descendant) const {
             const node_t *p = &descendant;
             while (p != nullptr) {
@@ -228,11 +272,62 @@ namespace util::tree_base {
     template <typename node_t, typename CustomTag>
     class TreeNode : public TreeBase<node_t, CustomTag> {
     public:
+        using Base = TreeBase<node_t, CustomTag>;
+
+        constexpr TreeNode()
+            : Base()
+        {
+        }
+
+        inline TreeNode(node_t *par)
+            : Base(par)
+        {
+            if (par != nullptr)
+                par->add_child(this->as());
+        }
+
+        inline TreeNode(node_t *par, util::ArrayList<node_t *> &&children)
+            : Base(par, std::move(children))
+        {
+            if (par != nullptr)
+                par->add_child(this->as());
+            for (auto &nd : children) {
+                nd->set_parent(this->as());
+            }
+        }
+
+        inline TreeNode(node_t *par, const util::ArrayList<node_t *> &children)
+            : Base(par, children)
+        {
+            if (par != nullptr)
+                par->add_child(this->as());
+            for (auto &nd : children) {
+                nd->set_parent(this->as());
+            }
+        }
+
         void link_child(node_t &son) {
             TreeNode &son_node = static_cast<TreeNode &>(son);
             assert(son_node.parent == nullptr);
             this->children.push_back(&son);
             son_node.parent = this->as();
+        }
+
+        // 设置父节点, 并将自己添加到父节点的子节点列表中
+        bool link_parent(node_t *par) {
+            if (! par->add_child(this->as()))
+                return false;
+            this->set_parent(par);
+            return true;
+        }
+
+        // 移除子节点
+        bool unlink_child(node_t *child) {
+            if (! this->remove_child(child)) {
+                return false;
+            }
+            child->parent = nullptr;
+            return true;
         }
     };
 

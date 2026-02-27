@@ -10,6 +10,7 @@
  */
 
 #include <object/csa.h>
+#include <cassert>
 
 CapErrCode CSAOperation::clone(CapIdx dst_idx, CSpace *src_space,
                                CapIdx src_idx) {
@@ -79,7 +80,7 @@ CapErrCode CSAOperation::migrate(CapIdx dst_idx, CSpace *src_space,
             // 这是一个严重的问题, 需要在此处崩溃
             CAPABILITY::FATAL("迁移失败后撤销迁移操作时发生错误: %d",
                               static_cast<int>(err2));
-            // panic();
+            panic("无法撤销迁移操作, 能力空间已处于不一致状态!");
         }
         return err;
     }

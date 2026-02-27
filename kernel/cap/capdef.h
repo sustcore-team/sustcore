@@ -16,6 +16,7 @@
 #include <sus/raii.h>
 #include <sus/refcount.h>
 #include <sus/rtti.h>
+#include <sus/tree.h>
 #include <sustcore/capability.h>
 
 #include <new>
@@ -45,8 +46,9 @@ public:
 };
 
 // 能力
-class Capability {
+class Capability : public util::tree_base::Tree<Capability> {
 protected:
+    using TreeBase = util::tree_base::Tree<Capability>;
     // 根部Capability实际上持有这个Payload
     Payload *_payload;
     // 是否为根部Capability
@@ -57,7 +59,7 @@ protected:
 
     // 所在的CSpace与CapIdx, 用于定位该Capability
     CSpace *_space;
-    CapIdx _idx;
+    const CapIdx _idx;
 
     // 构造一个Capability
     // 其中, Payload被显式提供
@@ -75,6 +77,11 @@ protected:
     // 给出origin与当前能力所在的CUniverse与index
     // origin的permission bits与payload将被转移到新Capability中
     Capability(Capability *origin, CSpace *space, CapIdx idx);
+
+    static CapErrCode kill(Capability *cap);
+    // 如果 murder_flag 被标记,
+    // 说明该能力是通过 kill 函数被删除的
+    bool murder_flag = false;
 
     // 析构函数
     ~Capability();
@@ -111,6 +118,8 @@ protected:
                                CapIdx idx) {
         return new (ptr) Capability(origin, space, idx);
     }
+
+    CapErrCode revoke(Capability *subcap);
 
 public:
     // 获取载荷
@@ -247,14 +256,15 @@ protected:
     }
 
 public:
-    CSpace();
+    const size_t sp_idx;
+    CSpace(size_t sp_idx);
     ~CSpace();
 
     template <typename PayloadType, typename... Args>
     CapErrCode create(CapIdx idx, Args &&...args) {
         const size_t group_idx = idx.group;
         if (group_idx >= CSPACE_SIZE) {
-            CAPABILITY::ERROR("CGroup索引%u超出CSpace容量", group_idx);
+            CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, this->sp_idx);
             return CapErrCode::INVALID_INDEX;
         }
         CGroup *group = group_at(group_idx);
@@ -301,7 +311,7 @@ public:
             CAPABILITY::ERROR("CUniverse空间已满, 无法创建新的CSpace");
             return nullptr;
         }
-        _spaces[idx] = new CSpace();
+        _spaces[idx] = new CSpace(idx);
         return _spaces[idx];
     }
 

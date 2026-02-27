@@ -41,7 +41,6 @@ constexpr size_t CSPACE_SIZE = 1024;
 
 // CGroup中的槽位数
 // 每个槽位都存放着一个Capability
-// 每个CGroup中的所有Capability都拥有同样的载荷类型
 constexpr size_t CGROUP_SLOTS = 64;
 
 // 每个CSpace中都有若干个CGroup, 每个CGroup又有若干个Capability
@@ -69,6 +68,7 @@ union CapIdx {
         // rsvf
         b16 rsvd : 16;
     } __attribute__((packed));
+    static constexpr b64 MASK = 0x0000FFFFFFFFFFFF;
     b64 raw;
 
     // 然而, 构造函数中, 我们先指明group再指明slot,
@@ -92,7 +92,14 @@ protected:
 
 public:
     bool operator==(const CapIdx &other) const noexcept {
-        return this->raw == other.raw;
+        if ((this->raw & MASK) == (other.raw & MASK)) return true;
+        if (this->type == other.type) {
+            if (this->type == SpaceType::NULLABLE || this->type == SpaceType::ERROR) {
+                return true;
+            }
+            return false;
+        }
+        return this->group == other.group && this->slot == other.slot;
     }
     bool operator!=(const CapIdx &other) const noexcept {
         return !(*this == other);

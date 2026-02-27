@@ -102,4 +102,7 @@ struct PermissionBits {
     // 复制权限
     PermissionBits clone() const;
     static PermissionBits allperm(PayloadType type);
+protected:
+    struct AllPermTag {};
+    PermissionBits(AllPermTag, PayloadType type);
 };

@@ -938,7 +938,7 @@ namespace util {
             return &D_list.at(D_index);
         }
         // 迭代操作
-        constexpr ArrayListConstIterator& operator++() const noexcept {
+        constexpr ArrayListConstIterator& operator++() noexcept {
             ++D_index;
             return *this;
         }
@@ -1060,8 +1060,10 @@ namespace util {
         void U_resize(size_type new_capacity) {
             _Tp* new_data      = new _Tp[new_capacity];
             size_t cp_capacity = std::min(new_capacity, D_capacity);
-            memcpy(new_data, D_data, cp_capacity * sizeof(_Tp));
-            delete[] D_data;
+            if (D_data != nullptr) {
+                memcpy(new_data, D_data, cp_capacity * sizeof(_Tp));
+                delete[] D_data;
+            }
             D_data     = new_data;
             D_capacity = new_capacity;
         }
