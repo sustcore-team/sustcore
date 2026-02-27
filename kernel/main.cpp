@@ -173,7 +173,7 @@ extern "C" void post_init(void) {
     capability_test();
     // fs_test();
     // tree_test();
-    // tree_base_test();
+    tree_base_test();
 
     // for (size_t i = 0; i < 10; i++) {
     //     TCB *t = new TCB();
@@ -481,8 +481,8 @@ void tree_test(void) {
     print_lca(12, 12);
 }
 
-using TreeA = util::tree_base::TreeNode<class Data, class TreeATag>;
-using TreeB = util::tree_base::TreeLCANode<class Data, class TreeBTag>;
+using TreeA = util::tree_base::TreeBase<class Data, class TreeATag>;
+using TreeB = util::tree_base::LCATreeBase<class Data, class TreeBTag>;
 
 class Data : public TreeA, public TreeB {
 public:
@@ -494,15 +494,15 @@ void tree_base_test(void) {
         pool[i].data = i;
     }
     auto &rt = pool[0];
-    rt.TreeA::link_child(pool[1]);
-    pool[1].TreeA::link_child(pool[2]);
-    pool[1].TreeA::link_child(pool[3]);
-    pool[3].TreeA::link_child(pool[4]);
-    rt.TreeB::link_child(pool[5]);
-    pool[5].TreeB::link_child(pool[6]);
-    pool[6].TreeB::link_child(pool[7]);
-    pool[6].TreeB::link_child(pool[8]);
-    pool[5].TreeB::link_child(pool[9]);
+    rt.TreeA::link_child(&pool[1]);
+    pool[1].TreeA::link_child(&pool[2]);
+    pool[1].TreeA::link_child(&pool[3]);
+    pool[3].TreeA::link_child(&pool[4]);
+    rt.TreeB::link_child(&pool[5]);
+    pool[5].TreeB::link_child(&pool[6]);
+    pool[6].TreeB::link_child(&pool[7]);
+    pool[6].TreeB::link_child(&pool[8]);
+    pool[5].TreeB::link_child(&pool[9]);
     rt.TreeA::foreach_pre(
         [](const Data &p) { kprintf("TreeA node: %d\n", p.data); });
     rt.TreeB::foreach_pre(

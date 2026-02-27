@@ -46,9 +46,9 @@ public:
 };
 
 // 能力
-class Capability : public util::tree_base::Tree<Capability> {
+class Capability : public util::tree_base::TreeBase<Capability> {
 protected:
-    using TreeBase = util::tree_base::Tree<Capability>;
+    using TreeBase = util::tree_base::TreeBase<Capability>;
     // 根部Capability实际上持有这个Payload
     Payload *_payload;
     // 是否为根部Capability

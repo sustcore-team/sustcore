@@ -13,6 +13,7 @@
 
 #include <sus/list.h>
 #include <sus/logger.h>
+#include <cassert>
 
 #include <concepts>
 
@@ -156,42 +157,266 @@ namespace util::tree {
 }  // namespace util::tree
 
 namespace util::tree_base {
+    namespace traits {
+        template <typename Derived, typename Base>
+        struct EmptyTrait;
+
+        template <typename Derived, typename Base>
+        struct DepthTrait;
+    }  // namespace traits
+
+    template <typename Derived, typename CustomTag = void,
+              template <typename, typename> typename Trait = traits::EmptyTrait>
+    class TreeBase;
+
+    namespace traits {
+        template <typename Derived, typename Base>
+        struct EmptyTrait {
+            static void on_link(Base &parent, Base &child) {}
+            static void on_unlink(Base &parent, Base &child) {}
+        };
+
+        template <typename Derived, typename Base>
+        struct DepthTrait {
+            size_t depth = 0;
+
+            static void on_link(Base &parent, Base &child) {
+                auto *p_trait = as_trait(&parent);
+                auto *c_trait = as_trait(&child);
+
+                const size_t new_depth = p_trait->depth + 1;
+                const int delta        = new_depth - c_trait->depth;
+
+                c_trait->update_depth(delta);
+            }
+
+            static void on_unlink(Base &parent, Base &child) {
+                auto *c_trait = as_trait(&child);
+
+                c_trait->update_depth(-(int)c_trait->depth);
+            }
+
+            size_t get_depth(void) const {
+                return depth;
+            }
+
+        private:
+            static DepthTrait *as_trait(Base *d) {
+                return static_cast<DepthTrait *>(d);
+            }
+            static Base *as_base(DepthTrait *t) {
+                return static_cast<Base *>(t);
+            }
+            void update_depth(int delta) {
+                depth         += delta;
+                Base *derived  = as_base(this);
+                for (auto &c : derived->get_children()) {
+                    as_trait(c)->update_depth(delta);
+                }
+            }
+        };
+
+        template <typename Derived, typename Base>
+        struct LazyDepthTrait {
+            mutable size_t cached_depth     = 0;
+            mutable size_t my_version     = 1;
+            mutable size_t parent_version = 0;
+
+            static void on_link(Base &parent, Base &child) {
+                auto *c_trait = as_trait(&child);
+                c_trait->parent_version = 0;
+                c_trait->my_version++;
+            }
+
+            static void on_unlink(Base &parent, Base &child) {
+                auto *c_trait = as_trait(&child);
+                c_trait->parent_version = 0;
+                c_trait->my_version++;
+            }
+
+            size_t get_lazy_depth(void) const {
+                auto *par = as_base(this)->get_parent();
+                if (par == nullptr) {
+                    cached_depth = 0;
+                    return 0;
+                }
+
+                auto *p_trait = as_trait(par);
+                if (this->parent_version != p_trait->my_version) {
+                    this->cached_depth   = p_trait->get_lazy_depth(par) + 1;
+                    this->parent_version = p_trait->my_version;
+                }
+                return cached_depth;
+            }
+
+            size_t get_depth(void) const {
+                return get_lazy_depth();
+            }
+
+        private:
+            static Base *as_base(LazyDepthTrait *t) {
+                return static_cast<Base *>(t);
+            }
+            static const Base *as_base(const LazyDepthTrait *t) {
+                return static_cast<const Base *>(t);
+            }
+            static LazyDepthTrait *as_trait(Base *d) {
+                return static_cast<LazyDepthTrait *>(d);
+            }
+            static const LazyDepthTrait *as_trait(const Base *d) {
+                return static_cast<const LazyDepthTrait *>(d);
+            }
+        };
+
+        template <typename Trait>
+        concept IsDepthTrait = requires(Trait *t) {
+            { t->get_depth() } -> std::convertible_to<size_t>;
+        };
+    }  // namespace traits
+
     // 子类注入的实现
     // 在这里不是用CustomTag来条件编译，是用来让编译器区分不同的树结构，避免多树无法区分
 
-    template <typename node_t, typename CustomTag>
-    class TreeBase {
+    template <typename Derived, typename CustomTag,
+              template <typename, typename> typename Trait>
+    class TreeBase
+        : public Trait<Derived, TreeBase<Derived, CustomTag, Trait>> {
     protected:
-        node_t *parent;
-        util::ArrayList<node_t *> children;
+        Derived *parent = nullptr;
+        util::ArrayList<Derived *> children;
 
-        inline node_t *as() {
-            return static_cast<node_t *>(this);
+        using TreeType  = TreeBase<Derived, CustomTag, Trait>;
+        using TraitType = Trait<Derived, TreeType>;
+
+        constexpr Derived *as() {
+            return static_cast<Derived *>(this);
+        }
+        constexpr const Derived *as() const {
+            return static_cast<const Derived *>(this);
         }
 
-        inline const node_t *as() const {
-            return static_cast<const node_t *>(this);
+        constexpr static Derived *as_derived(TreeBase *base) {
+            return static_cast<Derived *>(base);
+        }
+        constexpr static const Derived *as_derived(const TreeBase *base) {
+            return static_cast<const Derived *>(base);
+        }
+
+        constexpr static TreeBase *as_base(Derived *derived) {
+            return static_cast<TreeBase *>(derived);
+        }
+        constexpr static const TreeBase *as_base(const Derived *derived) {
+            return static_cast<const TreeBase *>(derived);
+        }
+
+        constexpr static TraitType *as_trait(Derived *derived) {
+            return static_cast<TraitType *>(derived);
+        }
+        constexpr static const TraitType *as_trait(const Derived *derived) {
+            return static_cast<const TraitType *>(derived);
         }
 
     public:
-        constexpr TreeBase()
-            : parent(nullptr), children()
-        {
+        // getter & setter
+        const Derived *get_parent() const {
+            return parent;
+        }
+        Derived *get_parent() {
+            return parent;
+        }
+        void set_parent(Derived *par) {
+            this->parent = par;
         }
 
-        TreeBase(node_t *par)
-            : parent(par), children()
-        {
+        const util::ArrayList<Derived *> &get_children() const {
+            return children;
+        }
+        util::ArrayList<Derived *> &get_children() {
+            return children;
+        }
+        bool add_child(Derived *child) {
+            if (children.contains(child)) {
+                return false;
+            }
+            children.push_back(child);
+            return true;
+        }
+        bool remove_child(Derived *child) {
+            if (!children.contains(child)) {
+                return false;
+            }
+            children.remove(child);
+            return true;
         }
 
-        TreeBase(node_t *par, util::ArrayList<node_t *> &&children)
-            : parent(par), children(std::move(children))
-        {
+#ifndef NDEBUG
+        void check_loop(const Derived *new_parent) const {
+            const Derived *p = new_parent;
+            while (p != nullptr) {
+                if (p == as()) {
+                    assert(false && "树结构中出现了循环链接");
+                }
+                p = as_base(p)->parent;
+            }
+        }
+#endif
+
+        bool link_parent(Derived *par) {
+#ifndef NDEBUG
+            check_loop(par);
+#endif
+            if (par != nullptr) {
+                if (!as_base(par)->add_child(this->as())) {
+                    return false;
+                }
+                TraitType::on_link(*as_base(par), *this);
+            }
+            this->set_parent(par);
+            return true;
+        }
+        bool link_child(Derived *child) {
+            return as_base(child)->link_parent(this->as());
         }
 
-        TreeBase(node_t *par, const util::ArrayList<node_t *> &children)
-            : parent(par), children(children)
-        {
+        bool unlink_parent() {
+            if (parent != nullptr) {
+                if (!as_base(parent)->remove_child(this->as())) {
+                    return false;
+                }
+                TraitType::on_unlink(*as_base(parent), *this);
+            }
+            this->set_parent(nullptr);
+            return true;
+        }
+        bool unlink_child(Derived *child) {
+            return as_base(child)->unlink_parent();
+        }
+
+        TreeBase() : parent(nullptr), children() {}
+
+        TreeBase(Derived *par) : parent(par), children() {
+            if (par != nullptr)
+                link_parent(par);
+        }
+
+        TreeBase(Derived *par, util::ArrayList<Derived *> &&children)
+            : parent(par), children(std::move(children)) {
+            if (par != nullptr)
+                link_parent(par);
+            for (auto &c : this->children) {
+                as_base(c)->set_parent(this->as());
+                TraitType::on_link(*this, *as_base(c));
+            }
+        }
+
+        TreeBase(Derived *par, const util::ArrayList<Derived *> &children)
+            : parent(par), children(children) {
+            if (par != nullptr)
+                link_parent(par);
+            for (auto &c : this->children) {
+                as_base(c)->set_parent(this->as());
+                TraitType::on_link(*this, *as_base(c));
+            }
         }
 
         bool is_root() const {
@@ -201,15 +426,13 @@ namespace util::tree_base {
         void foreach_pre(auto func) {
             func(*as());
             for (auto p : children) {
-                static_cast<TreeBase<node_t, CustomTag> *>(p)->foreach_pre(
-                    func);
+                as_base(p)->foreach_pre(func);
             }
         }
 
         void foreach_post(auto func) {
             for (auto p : children) {
-                static_cast<TreeBase<node_t, CustomTag> *>(p)->foreach_post(
-                    func);
+                as_base(p)->foreach_post(func);
             }
             func(*as());
         }
@@ -218,155 +441,79 @@ namespace util::tree_base {
             for (auto p : children) func(*p);
         }
 
-        const node_t &get_parent() const {
-            return *parent;
-        }
-
-        node_t &get_parent() {
-            return *parent;
-        }
-
-        const util::ArrayList<node_t *> &get_children() const {
-            return children;
-        }
-
-        util::ArrayList<node_t *> &get_children() {
-            return children;
-        }
-
-        // 添加子节点
-        inline bool add_child(node_t *child) {
-            if (children.contains(child)) {
-                return false;
-            }
-            children.push_back(child);
-            return true;
-        }
-
-        // 移除子节点
-        inline bool remove_child(node_t *child) {
-            if (! children.contains(child)) {
-                return false;
-            }
-            children.remove(child);
-            return true;
-        }
-
         // 设置父节点
-        inline void set_parent(node_t *par) {
-            this->parent = par;
-        }
-
-        bool is_ancestor_of(const node_t &descendant) const {
-            const node_t *p = &descendant;
+        bool is_ancestor_of(const Derived &descendant) const {
+            const Derived *p = &descendant;
             while (p != nullptr) {
                 if (p == this) {
                     return true;
                 }
-                p = static_cast<TreeBase<node_t, CustomTag> *>(p)->parent;
+                p = as_base(p)->parent;
             }
             return false;
         }
-    };
 
-    template <typename node_t, typename CustomTag>
-    class TreeNode : public TreeBase<node_t, CustomTag> {
-    public:
-        using Base = TreeBase<node_t, CustomTag>;
-
-        constexpr TreeNode()
-            : Base()
+        constexpr size_t get_depth(void)
+            requires traits::IsDepthTrait<TraitType>
         {
+            return as_trait(as())->get_depth();
         }
 
-        inline TreeNode(node_t *par)
-            : Base(par)
+        static Derived *lca(Derived *a, Derived *b)
+            requires traits::IsDepthTrait<TraitType>
         {
-            if (par != nullptr)
-                par->add_child(this->as());
-        }
-
-        inline TreeNode(node_t *par, util::ArrayList<node_t *> &&children)
-            : Base(par, std::move(children))
-        {
-            if (par != nullptr)
-                par->add_child(this->as());
-            for (auto &nd : children) {
-                nd->set_parent(this->as());
-            }
-        }
-
-        inline TreeNode(node_t *par, const util::ArrayList<node_t *> &children)
-            : Base(par, children)
-        {
-            if (par != nullptr)
-                par->add_child(this->as());
-            for (auto &nd : children) {
-                nd->set_parent(this->as());
-            }
-        }
-
-        void link_child(node_t &son) {
-            TreeNode &son_node = static_cast<TreeNode &>(son);
-            assert(son_node.parent == nullptr);
-            this->children.push_back(&son);
-            son_node.parent = this->as();
-        }
-
-        // 设置父节点, 并将自己添加到父节点的子节点列表中
-        bool link_parent(node_t *par) {
-            if (! par->add_child(this->as()))
-                return false;
-            this->set_parent(par);
-            return true;
-        }
-
-        // 移除子节点
-        bool unlink_child(node_t *child) {
-            if (! this->remove_child(child)) {
-                return false;
-            }
-            child->parent = nullptr;
-            return true;
-        }
-    };
-
-    template <typename node_t, typename CustomTag>
-    class TreeLCANode : public TreeBase<node_t, CustomTag> {
-    private:
-        size_t depth;
-
-    public:
-        void link_child(node_t &son) {
-            TreeLCANode &son_node = static_cast<TreeLCANode &>(son);
-            assert(son_node.parent == nullptr);
-            this->children.push_back(&son);
-            son_node.parent = this->as();
-            son_node.depth  = this->depth + 1;
-            assert(son_node.children.size() == 0 && "只能插入叶子节点");
-        }
-
-        static node_t *lca(node_t *a, node_t *b) {
-            TreeLCANode *pa = static_cast<TreeLCANode *>(a);
-            TreeLCANode *pb = static_cast<TreeLCANode *>(b);
-            while (pa != pb) {
-                assert(pa != nullptr);
-                assert(pb != nullptr);
-                if (pa->depth > pb->depth) {
-                    pa = pa->parent;
+            while (a != b) {
+                assert(a != nullptr);
+                assert(b != nullptr);
+                if (as_base(a)->get_depth() > as_base(b)->get_depth()) {
+                    a = as_base(a)->parent;
                 } else {
-                    pb = pb->parent;
+                    b = as_base(b)->parent;
                 }
             }
-            return static_cast<node_t *>(pa);
+            return a;
         }
     };
 
-    template <typename node_t>
-    using Tree = TreeNode<node_t, class TreeTag>;
+    template <typename Derived, typename CustomTag = void>
+    using LCATreeBase = TreeBase<Derived, CustomTag, traits::DepthTrait>;
 
-    template <typename node_t>
-    using TreeLCA = TreeLCANode<node_t, class TreeLCATag>;
+    // template <typename node_t, typename CustomTag>
+    // class TreeLCANode : public TreeBase<node_t, CustomTag> {
+    // private:
+    //     size_t depth;
+
+    // public:
+    //     void link_child(node_t &son) {
+    //         TreeLCANode &son_node = static_cast<TreeLCANode &>(son);
+    //         assert(son_node.parent == nullptr);
+    //         this->children.push_back(&son);
+    //         son_node.parent = this->as();
+    //         son_node.depth  = this->depth + 1;
+    //         assert(son_node.children.size() == 0 && "只能插入叶子节点");
+    //     }
+
+    //     static node_t *lca(node_t *a, node_t *b) {
+    //         TreeLCANode *pa = static_cast<TreeLCANode *>(a);
+    //         TreeLCANode *pb = static_cast<TreeLCANode *>(b);
+    //         while (pa != pb) {
+    //             assert(pa != nullptr);
+    //             assert(pb != nullptr);
+    //             if (pa->depth > pb->depth) {
+    //                 pa = pa->parent;
+    //             } else {
+    //                 pb = pb->parent;
+    //             }
+    //         }
+    //         return static_cast<node_t *>(pa);
+    //     }
+    // };
+
+    // template <typename node_t>
+    // using Tree = TreeNode<node_t, class TreeTag>;
+
+    // template <typename node_t>
+    // using TreeLCA = TreeLCANode<node_t, class TreeLCATag>;
 
     /**
     Usage:
