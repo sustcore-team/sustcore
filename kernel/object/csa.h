@@ -11,7 +11,8 @@
 
 #pragma once
 
-#include <cap/capdef.h>
+#include <cap/capability.h>
+#include <cap/cspace.h>
 #include <perm/csa.h>
 #include <perm/perm.h>
 #include <perm/permission.h>
@@ -58,10 +59,15 @@ protected:
     }
 
     template <b64 perm>
-    bool slot_imply(CapIdx idx) const {
+    bool __slot_imply(size_t group_idx) const {
         using namespace perm::csa;
-        const size_t offset = bitmap_offset(idx.group);
+        const size_t offset = bitmap_offset(group_idx);
         return _cap->perm().implies<b64, SLOT_BITS>(perm, offset);
+    }
+
+    template <b64 perm>
+    bool slot_imply(CapIdx idx) const {
+        return __slot_imply<perm>(idx.group);
     }
 
 public:
@@ -90,4 +96,7 @@ public:
     CapErrCode clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
     CapErrCode migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
     CapErrCode remove(CapIdx idx);
+    CapOptional<CapIdx> alloc_slot(void);
+protected:
+    CapIdx __get_free_slot(void);
 };

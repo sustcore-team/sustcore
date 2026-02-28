@@ -37,16 +37,6 @@ constexpr const char *to_string(PayloadType type) {
     }
 }
 
-// 常量定义
-
-// CUniverse中的CSpace数量
-// 每个进程都拥有一个CUniverse, 其中包含一个或多个CSpace
-// 进程的所有线程都共享同一个CUniverse
-// 每个线程都可以指定自己使用的两个CSpace, 称为Major Space与Minor Space
-// 线程访问能力时, 需要说明是在Major Space还是Minor Space中寻找
-// 其通过CapIdx指明
-constexpr size_t CUNIVERSE_SIZE = 1024;
-
 // CSpace中的CGroup数量
 constexpr size_t CSPACE_SIZE = 1024;
 
@@ -63,7 +53,7 @@ constexpr size_t CSPACE_CAPACITY = CSPACE_SIZE * CGROUP_SLOTS;
 namespace SpaceType {
     constexpr b64 NULLABLE = 0;
     constexpr b64 MAJOR    = 1;
-    constexpr b64 MINOR    = 2;
+    constexpr b64 RECV     = 2;
     constexpr b64 ERROR    = 3;
 }  // namespace SpaceType
 
@@ -112,9 +102,8 @@ public:
             {
                 return true;
             }
-            return false;
         }
-        return this->group == other.group && this->slot == other.slot;
+        return false;
     }
     bool operator!=(const CapIdx &other) const noexcept {
         return !(*this == other);

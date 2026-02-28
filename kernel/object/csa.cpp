@@ -10,6 +10,7 @@
  */
 
 #include <object/csa.h>
+#include <perm/csa.h>
 #include <cassert>
 
 CapErrCode CSAOperation::clone(CapIdx dst_idx, CSpace *src_space,
@@ -96,4 +97,42 @@ CapErrCode CSAOperation::remove(CapIdx idx) {
     }
 
     return _space->remove(idx);
+}
+
+CapIdx CSAOperation::__get_free_slot(void) {
+    using namespace perm::csa;
+    // 这里我们简单地从0开始线性扫描, 寻找第一个空闲槽位
+    // 实际上, 可以使用更高效的数据结构来管理空闲槽位, 以避免线性扫描的性能问题
+    for (size_t groupidx = 0; groupidx < CSPACE_SIZE ; groupidx++) {
+        // 首先, CSA需要持有对该groupidx的INSERT权限
+        if (! __slot_imply<SLOT_INSERT>(groupidx)) {
+            continue;  // 没有权限访问该CGroup, 跳过
+        }
+        // 判断group是否为空
+        if (_space->_groups[groupidx] == nullptr) {
+            return CapIdx(groupidx, 0);  // 该groupidx下的第0个槽位即为一个空闲槽位
+        }
+        // 否则, 继续扫描该groupidx下的槽位
+        for (size_t slotidx = 0; slotidx < CGROUP_SLOTS; slotidx++) {
+            if (_space->_groups[groupidx]->_slot_used[slotidx]) {
+                continue;  // 该槽位已被使用, 继续扫描下一个槽
+            }
+            return CapIdx(groupidx, slotidx);
+        }
+    }
+    return CapIdxNull;  // 没有空闲槽位
+}
+
+CapOptional<CapIdx> CSAOperation::alloc_slot(void) {
+    using namespace perm::csa;
+    // 检查权限
+    if (!imply<ALLOC>()) {
+        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+    }
+
+    CapIdx free_slot = __get_free_slot();
+    if (free_slot.nullable()) {
+        return CapErrCode::SLOT_BUSY;  // 没有空闲槽位
+    }
+    return free_slot;
 }

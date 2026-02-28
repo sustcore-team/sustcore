@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <cap/capdef.h>
+#include <cap/capability.h>
 #include <kio.h>
 #include <perm/testobj.h>
 #include <sustcore/capability.h>

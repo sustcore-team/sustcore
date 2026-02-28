@@ -19,7 +19,7 @@ namespace util {
     public:
         static constexpr int INVALID = _Invalid;
         explicit IDManager(int A_def = _Invalid)
-            : D_cnt(A_def)
+            : D_cnt(A_def + 1)
         {
         }
         int get() {

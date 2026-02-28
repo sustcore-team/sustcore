@@ -76,7 +76,7 @@ struct PermissionBits {
     // 不允许跨越b64的边界, 也就是说, offset与offset+sz必须在同一个b64内
     template <ValidPB _PB, size_t bitcnt = sizeof(_PB) * 8>
     bool implies(_PB permbits, size_t offset) const noexcept {
-        assert(!is_inline(this->type) && "implies(offset)不适用于内联权限");
+        assert(!is_inline(this->type));
         static_assert(sizeof(_PB) * 8 >= bitcnt,
                       "bitcnt must not exceed the number of bits in _PB");
         static_assert(bitcnt > 0, "bitcnt must be greater than 0");
@@ -93,9 +93,8 @@ struct PermissionBits {
         }
 
         // offset 超过权限位图范围
-        assert(bitmap_idx < bitmap_size && "PermissionBits 位图访问越界");
-        assert(bitoff + bitcnt < 64 &&
-               "PermissionBits implies(offset) 不允许跨越b64边界");
+        assert(bitmap_idx < bitmap_size);
+        assert(bitoff + bitcnt <= 64);
         const b64 *bitmap = this->permission_bitmap;
         return BITS_IMPLIES(bitmap[bitmap_idx] >> bitoff, permbits);
     }

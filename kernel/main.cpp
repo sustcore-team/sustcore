@@ -12,6 +12,9 @@
 #include <arch/riscv64/description.h>
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
+#include <cap/capability.h>
+#include <cap/cholder.h>
+#include <cap/cspace.h>
 #include <device/block.h>
 #include <event/init_events.h>
 #include <event/registries.h>
@@ -22,12 +25,11 @@
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/slub.h>
-#include <cap/capdef.h>
 #include <object/csa.h>
 #include <object/testobj.h>
+#include <perm/csa.h>
 #include <perm/permission.h>
 #include <perm/testobj.h>
-#include <perm/csa.h>
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>
@@ -114,6 +116,24 @@ void run_defers(void *s_defer, void *e_defer) {
     for (size_t i = 0; i < defer_count; i++) {
         util::DeferEntry *entry =
             (util::DeferEntry *)((uintptr_t)s_defer + i * DEFER_ENTRY_SIZE);
+        bool duplicated = false;
+        for (size_t j = 0; j < i; j++) {
+            util::DeferEntry *prev =
+                (util::DeferEntry *)((uintptr_t)s_defer + j * DEFER_ENTRY_SIZE);
+            if (prev->_instance == entry->_instance &&
+                prev->_constructor == entry->_constructor)
+            {
+                duplicated = true;
+                LOGGER::WARN(
+                    "跳过重复defer注册: 当前第%d项与第%d项重复, "
+                    "defer实例地址为%p, 构造器为%p",
+                    i, j, entry->_instance, entry->_constructor);
+                break;
+            }
+        }
+        if (duplicated) {
+            continue;
+        }
         LOGGER::DEBUG("运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p",
                       i, entry->_instance, entry->_constructor);
         entry->_constructor(entry->_instance);
@@ -173,13 +193,15 @@ extern "C" void post_init(void) {
     capability_test();
     // fs_test();
     // tree_test();
-    tree_base_test();
+    // tree_base_test();
 
     // for (size_t i = 0; i < 10; i++) {
     //     TCB *t = new TCB();
     //     PCB *p = new PCB();
     //     kprintf("%p;%p\n", t, p);
     // }
+
+    LOGGER::INFO("Test complete. Entering idle loop.");
 
     while (true);
 }
@@ -549,285 +571,4 @@ void fs_test(void) {
         return;
     }
     delete[] source_code;
-}
-
-void capability_test(void) {
-    LOGGER::INFO("开始能力系统测试...");
-
-    // 1. 初始化 CUniverse 和 CSpace
-    CUniverse universe;
-    CSpace *space0 = universe.new_space();
-    CSpace *space1 = universe.new_space();
-    if (space0 == nullptr || space1 == nullptr) {
-        LOGGER::ERROR("测试失败: CSpace 创建失败");
-        return;
-    }
-
-    CapIdx idx0(0, 0); // 槽位 (0,0)
-    CapIdx idx1(0, 1); // 槽位 (0,1)
-    CapIdx idx2(0, 2); // 槽位 (0,2)
-    CapIdx idx3(0, 3); // 槽位 (0,3)
-
-    // 2. 手动构造第一个 CSA (space0 的访问器, 存放在 space0:idx0)
-    CapErrCode err = space0->create<CSpaceAccessor>(idx0, space0);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 手动创建首个 CSA 失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("手动创建首个 CSA (指向 space0) 成功");
-
-    // 获取该能力对象
-    auto cap0_opt = space0->get(idx0);
-    if (!cap0_opt.present()) {
-        LOGGER::ERROR("测试失败: 获取 CSA0 失败");
-        return;
-    }
-    Capability *cap_csaall = cap0_opt.value();
-    CSAOperation csa_all(cap_csaall);
-
-    // 3. 使用 CSA0 创建 TestObject (存放在 space0:idx1)
-    err = csa_all.create<TestObject>(idx1, 12345);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 通过 CSA0 创建 TestObject 失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("通过 CSA0 在 space0:idx1 创建 TestObject(12345) 成功");
-
-    // 验证 TestObject 的值
-    auto cap_obj1_opt = space0->get(idx1);
-    if (!cap_obj1_opt.present()) {
-        LOGGER::ERROR("测试失败: 获取 TestObject1 失败");
-        return;
-    }
-    TestObjectOperation op_obj1(cap_obj1_opt.value());
-    auto val_opt = op_obj1.read();
-    if (!val_opt.present()) {
-        LOGGER::ERROR("测试失败: 读取 TestObject1 值失败");
-        return;
-    }
-    LOGGER::INFO("读取 TestObject 值: %d", val_opt.value());
-    if (val_opt.value() != 12345) {
-        LOGGER::ERROR("测试失败: TestObject1 值验证失败, 期望 12345, 实际 %d", val_opt.value());
-        return;
-    }
-
-    // 4. 使用 CSA0 为 space1 创建 CSA (指向 space1, 存放在 space0:idx2)
-    err = csa_all.create<CSpaceAccessor>(idx2, space1);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 通过 CSA0 创建 CSA1 失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("通过 CSA0 在 space0:idx2 创建指向 space1 的 CSA 成功");
-
-    // 获取 CSA1 并进行操作
-    auto cap_csa1_opt = space0->get(idx2);
-    if (!cap_csa1_opt.present()) {
-        LOGGER::ERROR("测试失败: 获取 CSA1 失败");
-        return;
-    }
-    CSAOperation op_csa1(cap_csa1_opt.value());
-
-    // 5. 使用 CSA1 在 space1:idx0 创建 TestObject (值为 54321)
-    err = op_csa1.create<TestObject>(idx0, 54321);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 通过 CSA1 创建 TestObject 失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("通过 CSA1 在 space1:idx0 创建 TestObject(54321) 成功");
-
-    // 6. 使用 CSA0 将 space0:idx1 的 TestObject 克隆到 space0:idx3
-    err = csa_all.clone(idx3, space0, idx1);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 通过 CSA0 克隆对象失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("通过 CSA0 将 space0:idx1 克隆到 space0:idx3 成功");
-
-    // 验证克隆出来的对象
-    auto cap_obj3_opt = space0->get(idx3);
-    if (!cap_obj3_opt.present()) {
-        LOGGER::ERROR("测试失败: 获取克隆对象失败");
-        return;
-    }
-    TestObjectOperation op_obj3(cap_obj3_opt.value());
-    auto read_obj3_opt = op_obj3.read();
-    if (!read_obj3_opt.present()) {
-        LOGGER::ERROR("测试失败: 读取克隆对象值失败");
-        return;
-    }
-    if (read_obj3_opt.value() != 12345) {
-        LOGGER::ERROR("测试失败: 克隆对象值验证失败, 期望 12345, 实际 %d", read_obj3_opt.value());
-        return;
-    }
-    LOGGER::INFO("验证克隆对象值成功: %d", read_obj3_opt.value());
-
-    // 7. 使用 CSA1 将 space0:idx1 迁移到 space1:idx1
-    err = op_csa1.migrate(idx1, space0, idx1);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 通过 CSA1 迁移对象失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("通过 CSA1 将 space0:idx1 迁移到 space1:idx1 成功");
-
-    // 检查原位置是否为空
-    if (space0->get(idx1).present()) {
-        LOGGER::ERROR("测试失败: 验证原位置 (space0:idx1) 迁移后仍不为空");
-        return;
-    }
-    LOGGER::INFO("验证原位置 (space0:idx1) 已为空");
-
-    // 检查新位置
-    auto cap_migrated_opt = space1->get(idx1);
-    if (!cap_migrated_opt.present()) {
-        LOGGER::ERROR("测试失败: 获取迁移后对象失败");
-        return;
-    }
-    TestObjectOperation op_migrated(cap_migrated_opt.value());
-    auto read_migrated_opt = op_migrated.read();
-    if (!read_migrated_opt.present()) {
-        LOGGER::ERROR("测试失败: 读取迁移后对象值失败");
-        return;
-    }
-    if (read_migrated_opt.value() != 12345) {
-        LOGGER::ERROR("测试失败: 迁移后对象值验证失败, 期望 12345, 实际 %d", read_migrated_opt.value());
-        return;
-    }
-    LOGGER::INFO("验证迁移后对象 (space1:idx1) 值成功: %d", read_migrated_opt.value());
-
-    // 8. 测试权限降级 (选用 TestObject 进行测试)
-    PermissionBits low_perm(perm::testobj::READ, PayloadType::TEST_OBJECT);
-    err = cap_migrated_opt.value()->downgrade(low_perm);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 权限降级操作失败, 错误码: %s", to_string(err));
-        return;
-    }
-    LOGGER::INFO("对迁移后的 TestObject 进行权限降级 (仅保留 READ)");
-
-    // 尝试写操作, 应该失败 (其 logic 内部会报错)
-    op_migrated.increase();
-    auto read_after_inc_opt = op_migrated.read();
-    if (!read_after_inc_opt.present()) {
-        LOGGER::ERROR("测试失败: 降级后读取失败");
-        return;
-    }
-    if (read_after_inc_opt.value() != 12345) {
-        LOGGER::ERROR("测试失败: 无权限的 increase 操作生效了, 值变为: %d", read_after_inc_opt.value());
-        return;
-    }
-    LOGGER::INFO("验证无权限的 increase 操作未生效");
-
-    // 再次降级, 去掉 READ
-    PermissionBits none_perm(0, PayloadType::TEST_OBJECT);
-    err = cap_migrated_opt.value()->downgrade(none_perm);
-    if (err != CapErrCode::SUCCESS) {
-        LOGGER::ERROR("测试失败: 权限降级(none)操作失败, 错误码: %s", to_string(err));
-        return;
-    }
-    auto final_read_opt = op_migrated.read();
-    if (final_read_opt.present()) {
-        LOGGER::ERROR("测试失败: 验证无权限的 read 操作竟然成功了");
-        return;
-    }
-    if (final_read_opt.error() != CapErrCode::INSUFFICIENT_PERMISSIONS) {
-        LOGGER::ERROR("测试失败: 无权限的 read 操作返回了错误的错误码: %s", to_string(final_read_opt.error()));
-        return;
-    }
-    LOGGER::INFO("验证无权限的 read 操作失败, 并返回错误码: %s",
-                 to_string(final_read_opt.error()));
-
-    // 9. 复杂派生树与 Revoke 测试 (增加宽度与跨 Space 深度)
-    LOGGER::INFO("开始复杂派生树 (宽度 6->1, 跨 Space 深度 4) 与 Revoke 测试...");
-    CapIdx idx_root(0, 10);
-    err = csa_all.create<TestObject>(idx_root, 999);
-    if (err != CapErrCode::SUCCESS) return;
-    auto cap_root = space0->get(idx_root).value();
-
-    // 构建测试矩阵: L1 (6个) -> L2 (5个) -> L3 (4个) -> L4 (1个)
-    // 其中 L3 存放在 space1 中实现跨 Space 验证
-    
-    // L1: 6个子节点在 space0 (idx 11-16)
-    for (int i = 0; i < 6; ++i) {
-        err = csa_all.clone(CapIdx(0, 11 + i), space0, idx_root);
-        if (err != CapErrCode::SUCCESS) return;
-    }
-    auto cap_L1_base = space0->get(CapIdx(0, 11)).value(); // 我们将以第一个 L1 为父节点继续派生
-    LOGGER::INFO("L1 层构建成功: 6 个子节点 (space0:idx11-16)");
-
-    // L2: 从 space0:idx11 派生 5个子节点在 space0 (idx 17-21)
-    for (int i = 0; i < 5; ++i) {
-        err = csa_all.clone(CapIdx(0, 17 + i), space0, CapIdx(0, 11));
-        if (err != CapErrCode::SUCCESS) return;
-    }
-    auto cap_L2_base = space0->get(CapIdx(0, 17)).value();
-    LOGGER::INFO("L2 层构建成功: 5 个子节点 (space0:idx17-21, 父节点 idx11)");
-
-    // L3: 从 space0:idx17 跨 Space 派生 4个子节点到 space1 (idx 10-13)
-    for (int i = 0; i < 4; ++i) {
-        err = op_csa1.clone(CapIdx(0, 10 + i), space0, CapIdx(0, 17));
-        if (err != CapErrCode::SUCCESS) return;
-    }
-    auto cap_L3_base = space1->get(CapIdx(0, 10)).value();
-    LOGGER::INFO("L3 层构建成功: 4 个跨 Space 子节点 (space1:idx10-13, 父节点 space0:idx17)");
-
-    // L4: 从 space1:idx10 派生 1个子节点在 space1 (idx 14)
-    err = op_csa1.clone(CapIdx(0, 14), space1, CapIdx(0, 10));
-    if (err != CapErrCode::SUCCESS) return;
-    LOGGER::INFO("L4 层构建成功: 1 个最终节点 (space1:idx14)");
-
-    // 执行核心 Revoke 操作: 删除 L1 中的第一个节点 (idx 11)
-    // 预期: 它的所有后代 (L2中的5个, L3中的4个, L4中的1个) 必须被全部自动清理
-    LOGGER::INFO("执行 Revoke 操作: 删除 L1 根节点 (space0:idx11)...");
-    err = csa_all.remove(CapIdx(0, 11));
-    if (err != CapErrCode::SUCCESS) return;
-
-    // 验证联动删除
-    bool revoke_failed = false;
-    LOGGER::INFO("验证 Revoke 结果: idx11 及其所有后代应该都被删除...");
-    LOGGER::INFO("检查 L2, 如果成功应报错: 槽位索引未被占用");
-    // 检查 L2
-    for (int i = 0; i < 5; ++i) {
-        if (space0->get(CapIdx(0, 17 + i)).present()) revoke_failed = true;
-    }
-    if (revoke_failed) {
-        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
-        return;
-    }
-    LOGGER::INFO("检查 L3, 如果成功应报错: 槽位索引未被占用");
-    // 检查 L3 (跨 Space)
-    for (int i = 0; i < 4; ++i) {
-        if (space1->get(CapIdx(0, 10 + i)).present()) revoke_failed = true;
-    }
-    if (revoke_failed) {
-        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
-        return;
-    }
-    LOGGER::INFO("检查 L4, 如果成功应报错: 槽位索引未被占用");
-    // 检查 L4
-    if (space1->get(CapIdx(0, 14)).present()) revoke_failed = true;
-
-    if (revoke_failed) {
-        LOGGER::ERROR("Revoke 验证失败: 派生树中部分子节点未被正确清理");
-        return;
-    }
-
-    // 验证兄弟节点 (L1 的其它 5 个节点) 应该还活着
-    LOGGER::INFO("检查 L1 的其它5个节点是否依然存活");
-    for (int i = 1; i < 6; ++i) {
-        if (!space0->get(CapIdx(0, 11 + i)).present()) {
-            LOGGER::ERROR("Revoke 错误: 意外删除了兄弟节点 idx%d", 11 + i);
-            return;
-        }
-    }
-    LOGGER::INFO("验证兄弟节点存活成功");
-
-    LOGGER::INFO("检查根节点是否依然存活");
-    // 验证根节点
-    if (!space0->get(idx_root).present()) {
-        LOGGER::ERROR("Revoke 错误: 根节点被删除");
-        return;
-    }
-    LOGGER::INFO("验证根节点存活成功");
-
-    LOGGER::INFO("复杂宽度/深度派生树 Revoke 验证全部成功!");
-    LOGGER::INFO("所有能力系统测试已圆满完成!");
 }

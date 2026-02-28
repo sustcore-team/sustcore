@@ -1,148 +1,17 @@
 /**
- * @file capdef.cpp
+ * @file cspace.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief capability definition
+ * @brief Capability空间
  * @version alpha-1.0.0
- * @date 2026-02-25
- *
+ * @date 2026-02-28
+ * 
  * @copyright Copyright (c) 2026
- *
+ * 
  */
 
-#include <cap/capdef.h>
-#include <cassert>
-#include <kio.h>
-#include <perm/permission.h>
-#include <sus/list.h>
-#include <sus/queue.h>
+#include <cap/cspace.h>
+#include <cap/cholder.h>
 #include <sustcore/capability.h>
-
-// capability
-
-Capability::Capability(Payload *payload, PermissionBits &&perm, CSpace *space,
-                       CapIdx idx)
-    : TreeBase(),
-      _payload(payload),
-      _is_root(true),
-      _perm(std::move(perm)),
-      _space(space),
-      _idx(idx) {}
-
-Capability::Capability(Capability *parent, PermissionBits &&perm, CSpace *space,
-                       CapIdx idx)
-    : TreeBase(parent),
-      _payload(parent->_payload),
-      _is_root(false),
-      _perm(std::move(perm)),
-      _space(space),
-      _idx(idx) {}
-
-Capability::Capability(Capability *origin, CSpace *space, CapIdx idx)
-    : TreeBase(origin->parent, std::move(origin->children)),
-      _payload(origin->_payload),
-      _is_root(origin->_is_root),
-      // 注意: origin的权限位被移动到新Capability中, 因此origin的权限位已被清空
-      _perm(std::move(origin->_perm)),
-      _space(space),
-      _idx(idx) {
-    origin->_payload = nullptr;
-
-    // 让自身替换origin在继承树中的位置
-    // 此时已经通过移动语义将其内容搬走了
-    // 我们通过clear()使得origin->children可以被再次使用
-    origin->children.clear();
-    if (this->parent != nullptr) {
-        // 将origin从父节点的子节点列表中移除
-        this->parent->remove_child(origin);
-    }
-    // 遍历子节点并设置新父亲
-    for (auto &child : children) {
-        child->set_parent(this);
-    }
-}
-
-// NOTE: 当派生树深度过大时, 递归删除可能会导致栈溢出
-CapErrCode Capability::kill(Capability *cap) {
-    assert(cap != nullptr);
-    // 定位到cap所在的CSpace与Index
-    CSpace *sp = cap->_space;
-    assert(sp != nullptr);
-    CapIdx idx = cap->_idx;
-    assert(!idx.nullable());
-    cap->murder_flag = true;
-    return sp->remove(idx);
-}
-
-// 构造工作队列
-// 至多允许在队列中存储4096个准备删除的能力
-// TODO: 允许队列动态扩容, 或是限制能力能够派生的最大子能力数目
-// 实际上, 我们只需要追踪根能力的子能力数目就好了
-static constexpr size_t WORK_QUEUE_SIZE = 4096;
-static util::StaticArrayQueue<Capability *, WORK_QUEUE_SIZE> __working_queue;
-
-// 注: 删除能力应该是一个原子操作
-Capability::~Capability() {
-    if (murder_flag) {
-        return;
-    }
-
-    // 声明将亡
-    CAPABILITY::DEBUG("开始移除(%d, %d)@Space %d", this->_idx.group,
-                      this->_idx.slot, this->_space->sp_idx);
-    // 通知父节点移除自己
-    if (parent != nullptr) {
-        CAPABILITY::DEBUG("从(%d, %d)@Space %d中移除自身", parent->_idx.group,
-                          parent->_idx.slot, parent->_space->sp_idx);
-        parent->remove_child(this);
-    }
-
-    // 删除所有的子能力
-    __working_queue.clear();
-    for (auto &subcap : children) {
-        if (! __working_queue.push(subcap)) {
-            CAPABILITY::FATAL("工作队列已满!无法删除子能力!");
-            panic("能力删除时出现故障!");
-        }
-    }
-
-    // 通过广度优先搜索删除其子能力
-    while (! __working_queue.empty()) {
-        // 取出头部的能力
-        Capability *cur = __working_queue.front();
-        __working_queue.pop();
-
-        // 加入该能力的直接子能力
-        for (auto &subcap : cur->children) {
-            if (! __working_queue.push(subcap)) {
-                CAPABILITY::FATAL("工作队列已满!无法删除子能力!");
-                panic("能力删除时出现故障!");
-            }
-            CAPABILITY::DEBUG("加入工作队列: (%d, %d)@Space %d", subcap->_idx.group,
-                              subcap->_idx.slot, subcap->_space->sp_idx);
-        }
-
-        // 删除该能力
-        CAPABILITY::DEBUG("移除(%d, %d)@Space %d", cur->_idx.group, cur->_idx.slot,
-                          cur->_space->sp_idx);
-        kill(cur);
-    }
-
-    // 根部Capability持有这个Payload
-    // 因此需要删除这个Payload
-    if (_is_root && _payload != nullptr) {
-        CAPABILITY::DEBUG("Deleting payloads");
-        delete _payload;
-    }
-}
-
-CapErrCode Capability::revoke(Capability *subcap) {
-    if (subcap->parent != this) {
-        CAPABILITY::ERROR("无法撤销非直接子能力");
-        return CapErrCode::INVALID_CAPABILITY;
-    }
-    // 将subcap从子节点列表中移除
-    return kill(subcap);
-}
 
 // CGroup
 
@@ -265,8 +134,11 @@ int CGroup::lookup_free(int last) {
     return -1;
 }
 
+static util::Defer<util::IDManager<>> CSPACE_ID;
+AutoDeferPost(CSPACE_ID);
+
 // CSpace
-CSpace::CSpace(size_t sp_idx) : sp_idx(sp_idx) {
+CSpace::CSpace(CHolder *holder) :  _holder(holder), sp_idx(0) {
     memset(_groups, 0, sizeof(_groups));
 }
 
@@ -281,7 +153,7 @@ CSpace::~CSpace() {
 CapErrCode CSpace::clone(CapIdx idx, Capability *parent) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
-        CAPABILITY::ERROR("CGroup索引%u超出CSpace容量", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     CGroup *group = group_at(group_idx);
@@ -291,7 +163,7 @@ CapErrCode CSpace::clone(CapIdx idx, Capability *parent) {
 CapErrCode CSpace::migrate(CapIdx idx, Capability *origin) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
-        CAPABILITY::ERROR("CGroup索引%u超出CSpace容量", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     CGroup *group = group_at(group_idx);
@@ -301,11 +173,11 @@ CapErrCode CSpace::migrate(CapIdx idx, Capability *origin) {
 CapErrCode CSpace::remove(CapIdx idx) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
-        CAPABILITY::ERROR("CGroup索引%u超出CSpace容量", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     if (!_groups[group_idx]) {
-        CAPABILITY::ERROR("CGroup索引%u未被创建", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u在CSpace %d中未被创建", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     return _groups[group_idx]->remove(idx);
@@ -325,11 +197,11 @@ CapOptional<CGroup *> CSpace::group(CapIdx idx) {
 CapOptional<Capability *> CSpace::get(CapIdx idx) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
-        CAPABILITY::ERROR("CGroup索引%u超出CSpace容量", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     if (!_groups[group_idx]) {
-        CAPABILITY::ERROR("CGroup索引%u未被创建", group_idx);
+        CAPABILITY::ERROR("CGroup索引%u在CSpace %d中未被创建", group_idx, sp_idx);
         return CapErrCode::INVALID_INDEX;
     }
     return _groups[group_idx]->get(idx);
@@ -344,27 +216,17 @@ void CSpace::tidyup(void) {
     }
 }
 
-// CUniverse
-CUniverse::CUniverse() {
-    memset(_spaces, 0, sizeof(_spaces));
+// RecvSpace
+RecvSpace::RecvSpace(CHolder *holder) : CSpace(holder) {
+    memset(_groups, 0, sizeof(_groups));
 }
 
-CUniverse::~CUniverse() {
-    for (size_t i = 0; i < CUNIVERSE_SIZE; i++) {
-        if (_spaces[i]) {
-            delete _spaces[i];
-        }
+CapErrCode RecvSpace::migrate(CapIdx idx, Capability *origin) {
+    // 进行一个检验
+    if (origin->holder()->cholder_id != _recv_src[idx.group]) {
+        CAPABILITY::ERROR("无法接收从CHolder %d迁移过来的能力: 接收空间的recv_src不匹配",
+                          _recv_src[idx.group]);
+        return CapErrCode::INVALID_INDEX;
     }
-}
-
-void CUniverse::tidyup(void) {
-    for (size_t i = 0; i < CUNIVERSE_SIZE; i++) {
-        if (_spaces[i]) {
-            _spaces[i]->tidyup();
-            if (_spaces[i]->empty()) {
-                delete _spaces[i];
-                _spaces[i] = nullptr;
-            }
-        }
-    }
+    return CSpace::migrate(idx, origin);
 }
