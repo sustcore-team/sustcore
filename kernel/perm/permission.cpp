@@ -19,24 +19,27 @@ PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, PayloadType type)
     : basic_permissions(basic),
       permission_bitmap(nullptr),
       type(type) {
-    const size_t bitmap_size = to_bitmap_size(type);
-    if (bitmap_size > 0) {
-        permission_bitmap = new b64[bitmap_size];
+    if (is_inline(type)) {
         if (bitmap != nullptr) {
-            memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
-        } else {
-            memset(permission_bitmap, 0, bitmap_size * sizeof(b64));
+            CAPABILITY::WARN(
+                "具有类型%s的权限对象不应提供权限位图, 但实际提供了非空指针, "
+                "已忽略该指针",
+                to_string(type));
         }
-    } else if (bitmap != nullptr) {
-        CAPABILITY::WARN(
-            "具有类型%s的权限对象不应提供权限位图, 但实际提供了非空指针, "
-            "已忽略该指针",
-            to_string(type));
+        return;
+    }
+    const size_t bitmap_size = to_bitmap_size(type);
+    assert (bitmap_size > 0);
+    permission_bitmap = new b64[bitmap_size];
+    if (bitmap != nullptr) {
+        memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
+    } else {
+        memset(permission_bitmap, 0, bitmap_size * sizeof(b64));
     }
 }
 PermissionBits::PermissionBits(b64 basic, PayloadType type)
     : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
-    assert(to_bitmap_size(type) == 0);
+    assert(is_inline(type));
 }
 PermissionBits::~PermissionBits() {
     if (permission_bitmap != nullptr) {
@@ -56,15 +59,23 @@ bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     if (this->type != other.type) {
         return false;
     }
-    // 首先比较 basic_permissions
+
+    if (is_inline(this->type)) {
+        // 如果是内联权限, 则直接比较 basic_permissions
+        return basic_imply(other.basic_permissions);
+    }
+
+    return complete_imply(other);
+}
+
+bool PermissionBits::complete_imply(const PermissionBits &other) const noexcept {
     if (!BITS_IMPLIES(this->basic_permissions, other.basic_permissions)) {
         return false;
     }
+
     // 之后再比较 permission_bitmap
-    size_t bitmap_size = to_bitmap_size(this->type);
-    if (bitmap_size == 0) {
-        return true;
-    }
+    const size_t bitmap_size = to_bitmap_size(this->type);
+    assert (bitmap_size > 0);
     if (this->permission_bitmap == nullptr || other.permission_bitmap == nullptr) {
         // 如果类型需要权限位图, 但其中一个权限对象的位图为nullptr,
         // 则视为不满足权限要求
@@ -92,14 +103,15 @@ CapErrCode PermissionBits::downgrade(const PermissionBits &new_perm) {
     }
 
     this->basic_permissions = new_perm.basic_permissions;
-    const size_t bitmap_size = to_bitmap_size(this->type);
-    if (bitmap_size == 0) {
+    if (is_inline(this->type)) {
         return CapErrCode::SUCCESS;
     }
-    // imply方法会帮我们保证this->permission_bitmap与new_perm.permission_bitmap非空
-    // however, 我们依然在这个地方放个断言
+
+    const size_t bitmap_size = to_bitmap_size(this->type);
+    assert (bitmap_size > 0);
     assert(this->permission_bitmap != nullptr);
     assert(new_perm.permission_bitmap != nullptr);
+    // 复制权限位图
     memcpy(this->permission_bitmap, new_perm.permission_bitmap,
            to_bitmap_size(this->type) * sizeof(b64));
     return CapErrCode::SUCCESS;
@@ -118,11 +130,11 @@ PermissionBits::PermissionBits(AllPermTag, PayloadType type)
     : basic_permissions(~0ULL),
       permission_bitmap(nullptr),
       type(type) {
-    size_t bitmap_size = to_bitmap_size(type);
-    if (bitmap_size > 0) {
-        permission_bitmap = new b64[bitmap_size];
-        memset(permission_bitmap, 0xFF, bitmap_size * sizeof(b64));
-    } else {
-        assert(permission_bitmap == nullptr);
+    if (is_inline(type)) {
+        return;
     }
+    size_t bitmap_size = to_bitmap_size(type);
+    assert (bitmap_size > 0);
+    permission_bitmap = new b64[bitmap_size];
+    memset(permission_bitmap, 0xFF, bitmap_size * sizeof(b64));
 }

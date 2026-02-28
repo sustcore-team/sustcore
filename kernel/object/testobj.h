@@ -60,7 +60,7 @@ protected:
 
     template <b64 perm>
     bool imply(void) const {
-        return _cap->perm().imply(perm);
+        return _cap->perm().basic_imply(perm);
     }
 public:
     constexpr TestObjectOperation(Capability *cap) : _cap(cap), _obj(cap->payload<TestObject>()) {}

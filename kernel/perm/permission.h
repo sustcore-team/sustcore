@@ -35,12 +35,16 @@ struct PermissionBits {
 
     const PayloadType type;
 
+    constexpr static bool is_inline(PayloadType type) noexcept {
+        return ! (type & PayloadType::NOINLINE_MASK);
+    }
+
     constexpr static size_t to_bitmap_size(PayloadType type) noexcept {
+        if (is_inline(type))
+            return 0;
         switch (type) {
-            case PayloadType::NONE:     return 0;
-            case PayloadType::TEST_OBJECT: return 0;
             case PayloadType::CSPACE_ACCESSOR: return perm::csa::BITMAP_SIZE;
-            default:             return 0;
+            default:                           return 0;
         }
     }
 
@@ -62,46 +66,55 @@ struct PermissionBits {
 
     bool imply(const PermissionBits &other) const noexcept;
 
-    inline bool imply(b64 basic_permission) const noexcept {
+    bool complete_imply(const PermissionBits &other) const noexcept;
+
+    inline bool basic_imply(b64 basic_permission) const noexcept {
         return BITS_IMPLIES(this->basic_permissions, basic_permission);
     }
 
     // 从第offset个位出发, 检查至多sz个位的权限是否被包含
-    // 注: 当 offset + sz 超过权限位图范围时, 只检查至多权限位图范围的部分
+    // 不允许跨越b64的边界, 也就是说, offset与offset+sz必须在同一个b64内
     template <ValidPB _PB, size_t bitcnt = sizeof(_PB) * 8>
     bool implies(_PB permbits, size_t offset) const noexcept {
+        assert(!is_inline(this->type) && "implies(offset)不适用于内联权限");
         static_assert(sizeof(_PB) * 8 >= bitcnt,
                       "bitcnt must not exceed the number of bits in _PB");
+        static_assert(bitcnt > 0, "bitcnt must be greater than 0");
+        static_assert(bitcnt < 64, "bitcnt must not exceed 64");
         const size_t bitpos      = offset;
         const size_t bitmap_idx  = bitpos / 64;
         const size_t bitoff      = bitpos % 64;
         const size_t bitmap_size = to_bitmap_size(this->type);
 
-        if (bitmap_size == 0 || this->permission_bitmap == nullptr) {
+        assert(bitmap_size > 0);
+
+        if (this->permission_bitmap == nullptr) {
             return false;
         }
 
         // offset 超过权限位图范围
-        if (bitmap_idx >= bitmap_size) {
-            return permbits == 0;
-        }
-
+        assert(bitmap_idx < bitmap_size && "PermissionBits 位图访问越界");
+        assert(bitoff + bitcnt < 64 &&
+               "PermissionBits implies(offset) 不允许跨越b64边界");
         const b64 *bitmap = this->permission_bitmap;
-        _PB relbits       = bitmap[bitmap_idx] >> bitoff;
+        return BITS_IMPLIES(bitmap[bitmap_idx] >> bitoff, permbits);
+    }
 
-        // 如果 permbits 跨越了两个b64
-        if ((64 - bitoff < bitcnt) && (bitmap_idx + 1 < bitmap_size)) {
-            size_t rem_bitcnt  = bitcnt - bitoff;
-            const b64 rembits  = bitmap[bitmap_idx + 1] << rem_bitcnt;
-            relbits           |= rembits;
+    template<PayloadType T>
+    bool quick_imply(const PermissionBits &other) const noexcept {
+        assert(T == this->type);
+        if (T != other.type) return false;
+        if constexpr (is_inline(T)) {
+            return basic_imply(other.basic_permissions);
+        } else {
+            return this->complete_imply(other);
         }
-
-        return BITS_IMPLIES(relbits, permbits);
     }
 
     // 复制权限
     PermissionBits clone() const;
     static PermissionBits allperm(PayloadType type);
+
 protected:
     struct AllPermTag {};
     PermissionBits(AllPermTag, PayloadType type);

@@ -54,7 +54,7 @@ protected:
 
     template <b64 perm>
     bool imply(void) const {
-        return _cap->perm().imply(perm);
+        return _cap->perm().basic_imply(perm);
     }
 
     template <b64 perm>

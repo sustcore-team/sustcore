@@ -28,7 +28,7 @@ CapErrCode CSAOperation::clone(CapIdx dst_idx, CSpace *src_space,
     }
 
     Capability *src_cap = cap_opt.value();
-    if (!src_cap->perm().imply(basic::CLONE)) {
+    if (!src_cap->perm().basic_imply(basic::CLONE)) {
         return CapErrCode::INSUFFICIENT_PERMISSIONS;
     }
 
@@ -55,7 +55,7 @@ CapErrCode CSAOperation::migrate(CapIdx dst_idx, CSpace *src_space,
     }
 
     Capability *src_cap = cap_opt.value();
-    if (!src_cap->perm().imply(basic::MIGRATE)) {
+    if (!src_cap->perm().basic_imply(basic::MIGRATE)) {
         return CapErrCode::INSUFFICIENT_PERMISSIONS;
     }
 

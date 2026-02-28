@@ -15,7 +15,18 @@
 #include <sus/types.h>
 
 // 载荷类型
-enum class PayloadType { NONE = 0, CSPACE_ACCESSOR = 1, TEST_OBJECT = 2 };
+enum class PayloadType : b64 {
+    NONE            = 0,
+    INLINE_PERM     = 0x0000,
+    BITMAP_PERM     = 0x1000,
+    NOINLINE_MASK   = 0x1000,
+    CSPACE_ACCESSOR = BITMAP_PERM | 0x001,
+    TEST_OBJECT     = INLINE_PERM | 0x002,
+};
+
+inline bool operator&(PayloadType a, PayloadType b) {
+    return (static_cast<b64>(a) & static_cast<b64>(b)) != 0;
+}
 
 constexpr const char *to_string(PayloadType type) {
     switch (type) {
@@ -51,10 +62,10 @@ constexpr size_t CSPACE_CAPACITY = CSPACE_SIZE * CGROUP_SLOTS;
 // 只有在未指明CSpace的情况下, 才会使用SpaceType来指明寻找能力的空间
 namespace SpaceType {
     constexpr b64 NULLABLE = 0;
-    constexpr b64 MAJOR = 1;
-    constexpr b64 MINOR = 2;
-    constexpr b64 ERROR = 3;
-}
+    constexpr b64 MAJOR    = 1;
+    constexpr b64 MINOR    = 2;
+    constexpr b64 ERROR    = 3;
+}  // namespace SpaceType
 
 union CapIdx {
     // Note: 我们不考虑大端序机器
@@ -76,7 +87,8 @@ union CapIdx {
     constexpr CapIdx(b16 type, b16 group, b16 slot)
         : slot(slot), group(group), type(type){};
     // 默认major
-    constexpr CapIdx(b16 group, b16 slot) : CapIdx(SpaceType::MAJOR, group, slot){};
+    constexpr CapIdx(b16 group, b16 slot)
+        : CapIdx(SpaceType::MAJOR, group, slot){};
 
     constexpr bool nullable(void) const noexcept {
         return type == SpaceType::NULLABLE;
@@ -92,9 +104,12 @@ protected:
 
 public:
     bool operator==(const CapIdx &other) const noexcept {
-        if ((this->raw & MASK) == (other.raw & MASK)) return true;
+        if ((this->raw & MASK) == (other.raw & MASK))
+            return true;
         if (this->type == other.type) {
-            if (this->type == SpaceType::NULLABLE || this->type == SpaceType::ERROR) {
+            if (this->type == SpaceType::NULLABLE ||
+                this->type == SpaceType::ERROR)
+            {
                 return true;
             }
             return false;
@@ -108,7 +123,7 @@ public:
 
 static_assert(sizeof(CapIdx) == sizeof(b64), "CapIdx must be 64 bits in size");
 
-inline static CapIdx CapIdxNull       = CapIdx(SpaceType::NULLABLE, 0, 0);
+inline static CapIdx CapIdxNull = CapIdx(SpaceType::NULLABLE, 0, 0);
 
 enum class CapErrCode {
     SUCCESS                  = 0,
@@ -124,15 +139,16 @@ enum class CapErrCode {
 
 constexpr const char *to_string(CapErrCode err) {
     switch (err) {
-        case CapErrCode::SUCCESS:                  return "SUCCESS";
-        case CapErrCode::INVALID_CAPABILITY:       return "INVALID_CAPABILITY";
-        case CapErrCode::INVALID_INDEX:            return "INVALID_INDEX";
-        case CapErrCode::INSUFFICIENT_PERMISSIONS: return "INSUFFICIENT_PERMISSIONS";
-        case CapErrCode::TYPE_NOT_MATCHED:         return "TYPE_NOT_MATCHED";
-        case CapErrCode::PAYLOAD_ERROR:            return "PAYLOAD_ERROR";
-        case CapErrCode::CREATION_FAILED:          return "CREATION_FAILED";
-        case CapErrCode::SLOT_BUSY:                return "SLOT_BUSY";
-        default:                                   return "UNKNOWN_ERROR";
+        case CapErrCode::SUCCESS:            return "SUCCESS";
+        case CapErrCode::INVALID_CAPABILITY: return "INVALID_CAPABILITY";
+        case CapErrCode::INVALID_INDEX:      return "INVALID_INDEX";
+        case CapErrCode::INSUFFICIENT_PERMISSIONS:
+            return "INSUFFICIENT_PERMISSIONS";
+        case CapErrCode::TYPE_NOT_MATCHED: return "TYPE_NOT_MATCHED";
+        case CapErrCode::PAYLOAD_ERROR:    return "PAYLOAD_ERROR";
+        case CapErrCode::CREATION_FAILED:  return "CREATION_FAILED";
+        case CapErrCode::SLOT_BUSY:        return "SLOT_BUSY";
+        default:                           return "UNKNOWN_ERROR";
     }
 }
 
