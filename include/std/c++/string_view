@@ -221,7 +221,7 @@ namespace std {
         }
         [[nodiscard]]
         constexpr int compare(basic_string_view other) const noexcept {
-            size_t min_size = (M_size < other.M_size) ? M_size : other.M_size;
+            const size_t min_size = (M_size < other.M_size) ? M_size : other.M_size;
             int cmp = traits_type::compare(M_data, other.M_data, min_size);
             if (cmp != 0) {
                 return cmp;
@@ -527,23 +527,26 @@ namespace std {
             return compare(other) == 0;
         }
 
+        constexpr bool operator==(const CharT *other) const noexcept {
+            return *this == basic_string_view(other);
+        }
+
         constexpr comparison_category operator<=>(
             basic_string_view other) const noexcept {
-            if (M_size != other.M_size) {
-                return (M_size < other.M_size) ? std::strong_ordering::less
-                                               : std::strong_ordering::greater;
+            switch (compare(other)) {
+                case -1:
+                    return comparison_category::less;
+                case 0:
+                    return comparison_category::equivalent;
+                case 1:
+                    return comparison_category::greater;
             }
-            if (M_data == other.M_data) {
-                return std::strong_ordering::equal;
-            }
-            int cmp = compare(other);
-            if (cmp < 0) {
-                return std::strong_ordering::less;
-            } else if (cmp > 0) {
-                return std::strong_ordering::greater;
-            } else {
-                return std::strong_ordering::equal;
-            }
+            assert(compare(other) == -1 || compare(other) == 0 || compare(other) == 1);
+            return comparison_category::equivalent;
+        }
+
+        constexpr comparison_category operator<=>(const CharT *other) const noexcept {
+            return *this <=> basic_string_view(other);
         }
     };
 

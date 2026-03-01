@@ -105,6 +105,8 @@ void test_string_view() {
         assert("a"sv < "ab"sv);
         assert("abc"sv == "abc"sv);
         assert("abc"sv != "abd"sv);
+        assert("abc"sv == "abc");
+        assert("abc"sv != "abd");
         assert(std::string_view("abc", 2) == "ab"sv);
     }
 
