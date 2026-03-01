@@ -50,6 +50,7 @@
 void buddy_test_complex(void);
 void slub_test_basic(void);
 void capability_test(void);
+void test_string_view(void);
 void tree_test(void);
 void tree_base_test(void);
 void fs_test(void);
@@ -191,6 +192,7 @@ extern "C" void post_init(void) {
     // buddy_test_complex();
     // slub_test_basic();
     capability_test();
+    test_string_view();
     // fs_test();
     // tree_test();
     // tree_base_test();

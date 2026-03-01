@@ -1,0 +1,25 @@
+/**
+ * @file iosfwd
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief iosfwd
+ * @version alpha-1.0.0
+ * @date 2026-03-01
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cwchar>
+
+namespace std {
+    template <class State>
+    class fpos;
+
+    using streampos    = fpos<std::mbstate_t>;
+    using wstreampos   = fpos<std::mbstate_t>;
+    using u8streampos  = fpos<std::mbstate_t>;
+    using u16streampos = fpos<std::mbstate_t>;
+    using u32streampos = fpos<std::mbstate_t>;
+}  // namespace std

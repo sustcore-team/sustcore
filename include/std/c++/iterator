@@ -41,4 +41,30 @@ namespace std {
         using pointer           = _Tp *;
         using reference         = _Tp &;
     };
+
+    template <typename _InputIterator>
+    constexpr typename iterator_traits<_InputIterator>::difference_type
+    __distance(_InputIterator __first, _InputIterator __last, input_iterator_tag) {
+        typename iterator_traits<_InputIterator>::difference_type __result = 0;
+        while (__first != __last) {
+            ++__first;
+            ++__result;
+        }
+        return __result;
+    }
+
+    template <typename _RandomIterator>
+    constexpr typename iterator_traits<_RandomIterator>::difference_type
+    __distance(_RandomIterator __first, _RandomIterator __last, random_access_iterator_tag) {
+        typename iterator_traits<_RandomIterator>::difference_type __result = 0;
+        return __last - __first;
+    }
+
+    template <typename _InputIterator>
+    constexpr typename iterator_traits<_InputIterator>::difference_type
+    distance(_InputIterator __first, _InputIterator __last) {
+        // concept requirements -- taken care of in __distance
+        return std::__distance(__first, __last,
+                               typename iterator_traits<_InputIterator>::iterator_category{});
+    }
 }  // namespace std

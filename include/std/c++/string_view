@@ -1,0 +1,134 @@
+/**
+ * @file string_view
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief string_view
+ * @version alpha-1.0.0
+ * @date 2026-03-01
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <iterator>
+#include <string>
+
+namespace std {
+    template <class CharT, class traits = std::char_traits<CharT>>
+    class basic_string_view {
+    public:
+        using traits_type     = traits;
+        using value_type      = CharT;
+        using pointer         = CharT *;
+        using reference       = CharT &;
+        using const_pointer   = const CharT *;
+        using const_reference = const CharT &;
+        struct __const_iterator;
+        using const_iterator = __const_iterator;
+        using iterator       = const_iterator;
+        // using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+        // using reverse_iterator = const_reverse_iterator;
+        using size_type      = std::size_t;
+        using differnce_type = std::ptrdiff_t;
+
+        static constexpr size_type npos = size_type(-1);
+
+    protected:
+        const CharT *M_data;
+        const size_t M_size;
+
+    public:
+        // 构造函数
+        constexpr basic_string_view() noexcept : M_data(nullptr), M_size(0) {}
+
+        constexpr basic_string_view(const basic_string_view &other)
+            : M_data(other.M_data), M_size(other.M_size) {}
+
+        constexpr basic_string_view(const CharT *str)
+            : M_data(str), M_size(traits::length(str)) {}
+
+        constexpr basic_string_view(const CharT *str, size_t len)
+            : M_data(str), M_size(len) {}
+        constexpr basic_string_view(const CharT *str, int len)
+            : basic_string_view(str, (size_t)len) {}
+
+        template <class It, class End>
+        constexpr basic_string_view(It first, End last)
+            : M_data(&*first), M_size(std::distance(first, last)) {}
+
+        // 成员函数
+        constexpr const CharT *data() const noexcept {
+            return M_data;
+        }
+        constexpr size_t size() const noexcept {
+            return M_size;
+        }
+        constexpr bool empty() const noexcept {
+            return M_size == 0;
+        }
+        constexpr CharT at(size_t pos) const {
+            if (pos >= M_size) {
+                // in fact, we should throw an exception here, but since we
+                // don't have exception support, just return a default value
+                return CharT();
+            }
+            return M_data[pos];
+        }
+        constexpr CharT operator[](size_t pos) const {
+            return M_data[pos];
+        }
+        constexpr CharT front() const {
+            return M_data[0];
+        }
+        constexpr CharT back() const {
+            return M_data[M_size - 1];
+        }
+        constexpr basic_string_view substr(size_t pos,
+                                           size_t count = npos) const {
+            if (pos > M_size) {
+                // in fact, we should throw an exception here, but since we
+                // don't have exception support, just return an empty
+                // string_view
+                return basic_string_view();
+            }
+            size_t rcount =
+                (count == npos || pos + count > M_size) ? M_size - pos : count;
+            return basic_string_view(M_data + pos, rcount);
+        }
+        constexpr int compare(basic_string_view other) const noexcept {
+            size_t min_size = (M_size < other.M_size) ? M_size : other.M_size;
+            int cmp         = traits::compare(M_data, other.M_data, min_size);
+            if (cmp != 0) {
+                return cmp;
+            }
+            if (M_size < other.M_size) {
+                return -1;
+            } else if (M_size > other.M_size) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+        constexpr size_t find(basic_string_view str,
+                              size_t pos = 0) const noexcept {
+            if (pos > M_size) {
+                // in fact, we should throw an exception here, but since we
+                // don't have exception support, just return npos
+                return npos;
+            }
+            for (size_t i = pos; i <= M_size - str.M_size; ++i) {
+                if (traits::compare(M_data + i, str.M_data, str.M_size) == 0) {
+                    return i;
+                }
+            }
+            return npos;
+        }
+    };
+
+    // 类型别名
+    using string_view    = basic_string_view<char>;
+    using wstring_view   = basic_string_view<wchar_t>;
+    using u16string_view = basic_string_view<char16_t>;
+    using u32string_view = basic_string_view<char32_t>;
+}  // namespace std
