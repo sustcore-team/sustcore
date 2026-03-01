@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <iterator>
+#include <string_view>
 #include <utility>
 
 namespace util {
@@ -28,12 +29,13 @@ namespace util {
         Path() : path_("") {}
         Path(const char *path) : path_(path) {}
         Path(util::string path) : path_(std::move(path)) {}
+        Path(const std::string_view &path) : path_(path.data(), path.size()) {}
 
         // 路径拼接
         Path operator/(const Path &other) const;
         Path concat(const Path &other) const;
 
-        const char *c_str() const {
+        constexpr const char *c_str() const {
             return path_.c_str();
         }
 
@@ -60,6 +62,7 @@ namespace util {
             const Path *owner_{};
             size_t begin_{npos};
             size_t end_{};
+            std::string_view current_entry_{};
 
             static constexpr size_t npos = static_cast<size_t>(-1);
 
@@ -72,14 +75,15 @@ namespace util {
 
         public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type        = Path;
+            using value_type        = std::string_view;
             using difference_type   = void;
             using pointer           = const value_type *;
             using reference         = const value_type &;
 
             const_iterator() = default;
 
-            value_type operator*() const;
+            reference operator*() const;
+            pointer operator->() const;
 
             const_iterator &operator++();
             const_iterator operator++(int);

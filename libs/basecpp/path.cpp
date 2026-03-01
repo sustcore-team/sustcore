@@ -132,8 +132,8 @@ namespace util {
         }
 
         util::string_builder path_builder;
-        for (auto it : st) {
-            path_builder.append(*it);
+        for (const auto &it : st) {
+            path_builder.append(it->data(), it->size());
             if (*it == "/")
                 continue;
             path_builder.append('/');
@@ -192,16 +192,21 @@ namespace util {
         }
         end_ = i;
         // 如果 begin_ == end_ == len，说明已经遍历完了
+
+        // 更新 current_entry_
+        assert(begin_ != npos && "没有 locate 到合法元素");
+        if (begin_ != end_)
+            current_entry_ = {owner_->c_str() + begin_, end_ - begin_};
+        else
+            current_entry_ = {};
     }
 
-    Path Path::const_iterator::operator*() const {
-        assert(owner_ != nullptr);
-        if (owner_->is_absolute() && begin_ == npos) {
-            // 特殊的，对于绝对路径的第一个元素，返回 "/"
-            return "/";
-        }
-        assert(begin_ != npos && "没有 locate 到合法元素");
-        return owner_->path_.substr(begin_, end_ - begin_);
+    Path::const_iterator::reference Path::const_iterator::operator*() const {
+        return current_entry_;
+    }
+
+    Path::const_iterator::pointer Path::const_iterator::operator->() const {
+        return &current_entry_;
     }
 
     Path::const_iterator &Path::const_iterator::operator++() {
@@ -225,15 +230,17 @@ namespace util {
     }
 
     Path::const_iterator Path::begin() const {
-        const_iterator it(this, const_iterator::npos, 0);
+        const_iterator it{this, const_iterator::npos, 0};
         if (is_relative())
             it.locate_next();
+        else
+            it.current_entry_ = {path_.c_str(), 1};
         return it;
     }
 
     Path::const_iterator Path::end() const {
         const size_t len = path_.length();
-        return const_iterator(this, len, len);
+        return const_iterator{this, len, len};
     }
 
 }  // namespace util
