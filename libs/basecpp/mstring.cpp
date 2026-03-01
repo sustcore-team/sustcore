@@ -12,7 +12,7 @@
 #include <sus/mstring.h>
 
 namespace util {
-    string::string(const char *begin, const char *end)
+    string::string(const char* begin, const char* end)
         : D_length(end - begin), D_data(new char[D_length + 1]) {
         strcpy_s(D_data, D_length, begin);
         D_data[D_length] = '\0';
@@ -30,7 +30,7 @@ namespace util {
         : D_length(str.D_length), D_data(new char[str.D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str.D_data);
     }
-    string string::operator=(const string& str) {
+    string& string::operator=(const string& str) {
         if (this != &str) {
             clear_data();
             D_length = str.D_length;
@@ -45,7 +45,7 @@ namespace util {
         str.D_length = 0;
     }
 
-    string string::operator=(string&& str) {
+    string& string::operator=(string&& str) {
         if (this != &str) {
             clear_data();
             D_length     = str.D_length;
@@ -76,7 +76,9 @@ namespace util {
     }
 
     string_builder::~string_builder() {
-        delete[] D_buf;
+        if (D_buf != nullptr) {
+            delete[] D_buf;
+        }
     }
 
     void string_builder::append(const char* str) {
@@ -104,8 +106,8 @@ namespace util {
             // 超出缓冲区大小
             return;
         }
-        D_buf[D_length]     = ch;
+        D_buf[D_length] = ch;
         D_length++;
-        D_buf[D_length]     = '\0';
+        D_buf[D_length] = '\0';
     }
 }  // namespace util
