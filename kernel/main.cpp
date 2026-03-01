@@ -596,7 +596,8 @@ void path_test(util::Path path) {
     kprintf("walk: ");
     auto it = path.begin();
     for (; it != path.end(); ++it) {
-        kprintf("%s ", (*it).c_str());
+        util::string s((*it).data(), (*it).size());
+        kprintf("%s ", s.c_str());
     }
     kprintf("\n");
 
