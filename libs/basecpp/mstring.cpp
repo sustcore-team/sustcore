@@ -1,7 +1,7 @@
 /**
  * @file mstring.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief string
+ * @brief string 和 string_builder，不依赖 STL
  * @version alpha-1.0.0
  * @date 2026-02-04
  *
@@ -14,6 +14,11 @@
 #include <cassert>
 
 namespace util {
+    string::string() : string("") {}
+    string::string(const char *str, size_t length)
+        : D_length(length), D_data(new char[length + 1]) {
+        strcpy_s(D_data, length + 1, str);
+    }
     string::string(const char *begin, const char *end)
         : D_length(end - begin), D_data(new char[D_length + 1]) {
         strcpy_s(D_data, D_length + 1, begin);
@@ -22,7 +27,6 @@ namespace util {
         : D_length(strlen(str)), D_data(new char[D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str);
     }
-    string::string() : string("") {}
     string::~string() {
         clear_data();
     }
@@ -40,7 +44,7 @@ namespace util {
         : D_length(str.D_length), D_data(new char[str.D_length + 1]) {
         strcpy_s(D_data, D_length + 1, str.D_data);
     }
-    string string::operator=(const string &str) {
+    string &string::operator=(const string &str) {
         if (this != &str) {
             clear_data();
             D_length = str.D_length;
@@ -55,7 +59,7 @@ namespace util {
         str.D_length = 0;
     }
 
-    string string::operator=(string &&str) {
+    string &string::operator=(string &&str) {
         if (this != &str) {
             clear_data();
             D_length     = str.D_length;
@@ -80,7 +84,7 @@ namespace util {
         : string_builder(strlen(str) + 1) {
         append(str);
     }
-    string_builder::string_builder(string str)
+    string_builder::string_builder(const string &str)
         : string_builder(str.size() + 1) {
         append(str.c_str());
     }
@@ -106,16 +110,18 @@ namespace util {
 
     void string_builder::append(const char *str) {
         size_t str_len = strlen(str);
+        append(str, str_len);
+    }
+
+    void string_builder::append(const char *str, size_t str_len) {
         ensure_bufsz(D_length + str_len + 1);
         strcpy_s(D_buf + D_length, D_bufsz - D_length, str);
         D_length += str_len;
     }
 
-    void string_builder::append(string str) {
+    void string_builder::append(const string &str) {
         size_t str_len = str.length();
-        ensure_bufsz(D_length + str_len + 1);
-        strcpy_s(D_buf + D_length, D_bufsz - D_length, str.c_str());
-        D_length += str_len;
+        append(str.c_str(), str_len);
     }
 
     void string_builder::append(char ch) {

@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include <string.h>
-
 #include <cstddef>
 #include <cstring>
 
@@ -31,8 +29,9 @@ namespace util {
         }
 
     public:
-        string(const char *str);
         string();
+        string(const char *str);
+        string(const char *str, size_t length);
         string(const char *begin, const char *end);
         ~string();
 
@@ -48,14 +47,14 @@ namespace util {
         constexpr size_t capacity() const noexcept {
             return D_length;
         }
-        
+
         string substr(size_t pos, size_t count) const;
         string substr(size_t pos) const;
 
         string(const string &str);
-        string operator=(const string &str);
+        string &operator=(const string &str);
         string(string &&str);
-        string operator=(string &&str);
+        string &operator=(string &&str);
 
         bool operator==(const string &str) const;
         constexpr bool operator!=(const string &str) const {
@@ -67,7 +66,7 @@ namespace util {
         }
     };
 
-    // 字符串构建器
+    // 字符串构建器，只允许局部使用
     class string_builder {
     private:
         size_t D_bufsz;
@@ -80,8 +79,10 @@ namespace util {
         string_builder(size_t bufsz = 32);
         string_builder(const string_builder &)            = delete;
         string_builder &operator=(const string_builder &) = delete;
+        string_builder(string_builder &&)                 = delete;
+        string_builder &operator=(string_builder &&)      = delete;
         string_builder(const char *str);
-        string_builder(string str);
+        string_builder(const string &str);
 
         ~string_builder();
 
@@ -102,7 +103,8 @@ namespace util {
         void reserve(size_t new_bufsz);
 
         void append(const char *str);
-        void append(string str);
+        void append(const char *str, size_t str_len);
+        void append(const string &str);
         void append(char ch);
 
         inline void revert(size_t count) {
