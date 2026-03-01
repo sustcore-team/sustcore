@@ -1,0 +1,16 @@
+# .clang-tidy
+---
+Checks: >
+  -*,
+  cppcoreguidelines-*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-c-arrays,
+  -bugprone-reserved-identifier,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays
+
+HeaderFilterRegex: '.*'

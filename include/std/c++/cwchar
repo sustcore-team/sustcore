@@ -23,7 +23,12 @@ extern "C" {
 #undef restrict
 #endif
 
+#include <functional>
+
 namespace std {
     using ::wint_t;
     using ::mbstate_t;
+
+    template <>
+    struct hash<wchar_t> : public __trival_hash<wchar_t> {};
 }

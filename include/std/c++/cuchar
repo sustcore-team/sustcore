@@ -23,6 +23,15 @@ extern "C" {
 #undef restrict
 #endif
 
+#include <functional>
+
 namespace std {
     using ::mbstate_t;
+
+    template <>
+    struct hash<char8_t> : public __trival_hash<char8_t> {};
+    template <>
+    struct hash<char16_t> : public __trival_hash<char16_t> {};
+    template <>
+    struct hash<char32_t> : public __trival_hash<char32_t> {};
 }

@@ -43,4 +43,50 @@ namespace std {
             return strcmp(a, b) == 0;
         }
     };
+
+    template <typename T>
+    struct hash;
+
+    /**
+     * 在此处添加了一个hash salt
+     * 虽然大概率是用不到的, 但添加一个防止以后需要
+     * 0是默认的盐值, 在编译时添加__HASH_SALT就可以改变hash的结果
+     * 之所以设为0是因为编译器很可能在salt = 0时将额外的一次加法优化掉
+     * (虽然这样的优化也节省不了多少时间XD)
+     */
+#ifndef __HASH_SALT
+#define __HASH_SALT 0
+#endif
+    constexpr size_t __hash_salt = __HASH_SALT;
+
+    // trival hashes for integral types
+    template <typename T>
+    struct __trival_hash {
+        constexpr size_t operator()(T value) const noexcept {
+            return static_cast<size_t>(value) + __hash_salt;
+        }
+    };
+
+    template <>
+    struct hash<int> : public __trival_hash<int> {};
+    template <>
+    struct hash<unsigned int> : public __trival_hash<unsigned int> {};
+    template <>
+    struct hash<long> : public __trival_hash<long> {};
+    template <>
+    struct hash<unsigned long> : public __trival_hash<unsigned long> {};
+    template <>
+    struct hash<long long> : public __trival_hash<long long> {};
+    template <>
+    struct hash<unsigned long long> : public __trival_hash<unsigned long long> {};
+    template <>
+    struct hash<char> : public __trival_hash<char> {};
+    template <>
+    struct hash<unsigned char> : public __trival_hash<unsigned char> {};
+    template <>
+    struct hash<short> : public __trival_hash<short> {};
+    template <>
+    struct hash<unsigned short> : public __trival_hash<unsigned short> {};
+    template <>
+    struct hash<bool> : public __trival_hash<bool> {};
 }  // namespace std

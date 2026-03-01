@@ -90,7 +90,9 @@ namespace util {
     }
 
     string_builder::~string_builder() {
-        delete[] D_buf;
+        if (D_buf != nullptr) {
+            delete[] D_buf;
+        }
     }
 
     void string_builder::ensure_bufsz(size_t target_bufsz) {

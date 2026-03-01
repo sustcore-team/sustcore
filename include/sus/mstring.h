@@ -35,15 +35,19 @@ namespace util {
         string(const char *begin, const char *end);
         ~string();
 
-        constexpr char *c_str() const noexcept {
+        [[nodiscard]]
+        constexpr const char* c_str() const noexcept {
             return D_data;
         }
+        [[nodiscard]]
         constexpr size_t size() const noexcept {
             return D_length;
         }
+        [[nodiscard]]
         constexpr size_t length() const noexcept {
             return D_length;
         }
+        [[nodiscard]]
         constexpr size_t capacity() const noexcept {
             return D_length;
         }
@@ -61,6 +65,7 @@ namespace util {
             return !(*this == str);
         }
 
+        [[nodiscard]]
         char operator[](size_t index) const {
             return D_data[index];
         }
@@ -86,16 +91,20 @@ namespace util {
 
         ~string_builder();
 
+        [[nodiscard]]
         inline string build() const {
-            return string(D_buf);
+            return {D_buf};
         }
 
+        [[nodiscard]]
         size_t size() const noexcept {
             return D_length;
         }
+        [[nodiscard]]
         size_t length() const noexcept {
             return D_length;
         }
+        [[nodiscard]]
         size_t capacity() const noexcept {
             return D_bufsz;
         }
