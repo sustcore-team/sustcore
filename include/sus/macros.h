@@ -31,6 +31,10 @@
                           _12, _13, _14, _15, TARGET, ...)                     \
     TARGET
 
+#define SCMACRO_ARGNUMBER(...)                                               \
+    _SCMACRO_ARGCHECK(N, ##__VA_ARGS__, _16, _15, _14, _13, _12, _11, _10, _9, _8, \
+                      _7, _6, _5, _4, _3, _2, _1, _0)
+
 // 多重展开宏, 确保所有参数都被完全展开
 #define SCEXP(x)    _SCEXP_1(_SCEXP_1(_SCEXP_1(_SCEXP_1(x))))
 #define _SCEXP_1(x) _SCEXP_2(_SCEXP_2(_SCEXP_2(_SCEXP_2(x))))

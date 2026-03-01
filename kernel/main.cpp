@@ -41,6 +41,7 @@
 #include <task/task.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+#include <test/framework.h>
 
 #include <cstdarg>
 #include <cstddef>
@@ -51,7 +52,6 @@
 void buddy_test_complex(void);
 void slub_test_basic(void);
 void capability_test(void);
-void test_string_view(void);
 void tree_test(void);
 void tree_base_test(void);
 void fs_test(void);
@@ -91,6 +91,15 @@ int kprintf(const char *fmt, ...) {
     int len = vbprintf<KernelIO>(fmt, args);
     va_end(args);
     return len;
+}
+
+int kprintfln(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int len = vbprintf<KernelIO>(fmt, args);
+    va_end(args);
+    kputchar('\n');
+    return len + 1;
 }
 
 RamDiskDevice *make_initrd(void) {
@@ -191,10 +200,12 @@ extern "C" void post_init(void) {
 
     TCBManager::init();
 
+    TestFramework framework;
+    collect_tests(framework);
+    framework.run_all();
+
     // buddy_test_complex();
     // slub_test_basic();
-    capability_test();
-    test_string_view();
     path_test();
     // fs_test();
     // tree_test();

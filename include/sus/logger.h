@@ -17,7 +17,7 @@
 
 #include <cstdio>
 
-enum class LogLevel { DEBUG = 0, INFO, WARN, ERROR, FATAL };
+enum class LogLevel { DEBUG = 0, INFO, WARN, ERROR, FATAL, DISABLE };
 
 static constexpr LogLevel GLOBAL_LOG_LEVEL = LogLevel::DEBUG;
 

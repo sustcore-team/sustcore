@@ -32,10 +32,11 @@ include-c := -I$(path-include) -I$(path-include)/std $(include-third_party-c) -I
 defs-c := -DASSERT_IMPLEMENTED=1
 
 # CPP
-flags-cpp := -std=gnu++26 -nostdlib -ffreestanding -nostdinc \
-		   -Wall -Wno-sign-compare -fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
- 		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions -Wno-literal-suffix \
-		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medany
+flags-cpp := -std=gnu++26 -mcmodel=medany \
+			-nostdlib -ffreestanding -nostdinc -fno-rtti -fno-exceptions \
+		   	-Wall -Wno-sign-compare  -Wno-literal-suffix -Wno-int-to-pointer-cast \
+		   	-fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
+ 		   	-fno-stack-protector -fno-toplevel-reorder -fno-tree-scev-cprop
 
 include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
 						   -I$(path-third_party)/include/std
