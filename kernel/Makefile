@@ -34,7 +34,7 @@ defs-c := -DASSERT_IMPLEMENTED=1
 # CPP
 flags-cpp := -std=gnu++26 -nostdlib -ffreestanding -nostdinc \
 		   -Wall -Wno-sign-compare -fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
- 		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions \
+ 		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions -Wno-literal-suffix \
 		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medany
 
 include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
