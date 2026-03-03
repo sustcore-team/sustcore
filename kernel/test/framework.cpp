@@ -38,7 +38,7 @@ void TestFramework::run_all() const {
     struct FailedReason {
         const TestCategory* category          = nullptr;
         const TestCase* test_case             = nullptr;
-        util::ArrayList<util::string> reasons = {0};
+        util::ArrayList<std::string> reasons = {0};
 
         FailedReason()                                     = default;
         ~FailedReason()                                    = default;

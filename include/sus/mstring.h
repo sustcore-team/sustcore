@@ -18,7 +18,7 @@
 
 namespace util {
     // 字符串类
-    class string {
+    class [[deprecated("Use std::string")]] string {
     private:
         size_t D_length;
         char *D_data;

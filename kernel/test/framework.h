@@ -22,7 +22,7 @@ private:
     const char* _name;
 
     mutable bool passflag = false;
-    mutable util::ArrayList<util::string> fail_reasons;
+    mutable util::ArrayList<std::string> fail_reasons;
 
 public:
     TestCase(const char* name) : _name(name) {}
@@ -36,7 +36,7 @@ public:
     virtual void _run() const noexcept = 0;
 
 protected:
-    bool test(bool condition, util::string&& reason) const {
+    bool test(bool condition, std::string&& reason) const {
         if (!condition) {
             kprintfln(ANSI_GRAPHIC(ANSI_FG_RED) "      - 检查失败:" ANSI_GRAPHIC(
                 ANSI_GM_RESET)" %s" , reason.c_str());
@@ -73,13 +73,13 @@ protected:
         kprintfln("    - [执行动作] %s", reason);
     }
 
-    void expect(const util::string& reason) const {
+    void expect(const std::string& reason) const {
         expect(reason.c_str());
     }
-    void check(const util::string& reason) const {
+    void check(const std::string& reason) const {
         check(reason.c_str());
     }
-    void action(const util::string& reason) const {
+    void action(const std::string& reason) const {
         action(reason.c_str());
     }
 
@@ -93,7 +93,7 @@ public:
     }
 
     [[nodiscard]]
-    const util::ArrayList<util::string>& fail_reasons_list() const {
+    const util::ArrayList<std::string>& fail_reasons_list() const {
         return fail_reasons;
     }
 };

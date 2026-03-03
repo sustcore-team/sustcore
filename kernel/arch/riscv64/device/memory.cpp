@@ -126,7 +126,7 @@ int Riscv64MemoryLayout::detect_memory_layout(MemRegion *regions, int max_cnt) {
     int idx = 0;
 
     // 将内核划入保留区域
-    size_t kernel_sz           = (size_t)(&skernel - &ekernel);
+    size_t kernel_sz           = (size_t)(&ekernel - &skernel);
     reserved_buf[num_reserved] = {
         .ptr  = &skernel,
         .size = kernel_sz,

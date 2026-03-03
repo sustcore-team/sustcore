@@ -33,32 +33,6 @@ inline void __sus_throw(std::exception &&e) {
     __sus_cxa_throw(e);
 }
 
-template <typename E>
-    requires std::is_pod_v<E>
-class __sus_nonclass_data_exception : public std::exception {
-public:
-    E data;
-    util::string _msg;
-    constexpr __sus_nonclass_data_exception(E e) noexcept : data(e), _msg(util::to_mstring(e)) {}
-    [[nodiscard]]
-    const char *what() const noexcept override {
-        return _msg.c_str();
-    }
-#ifdef __SUS_NO_RTTI__
-    [[nodiscard]]
-    virtual const char* type() const {
-        return "__sus_nonclass_data_exception";
-    }
-#endif
-};
-
-template <typename E>
-    requires std::is_pod_v<E>
-[[noreturn]]
-inline void __sus_throw(E e) {
-    __sus_cxa_throw(__sus_nonclass_data_exception(e));
-}
-
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define _THROW(exception) __sus_throw(exception)
 #define _TRY
