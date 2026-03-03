@@ -12,7 +12,6 @@
 #pragma once
 
 #include <sus/list.h>
-#include <sus/mstring.h>
 
 #include <cstddef>
 #include <iterator>
@@ -22,25 +21,25 @@
 namespace util {
     class Path {
     private:
-        util::string path_;
+        std::string path_;
 
     public:
         // 构造函数
         Path() : path_("") {}
-        Path(const char *path) : path_(path) {}
-        Path(util::string path) : path_(std::move(path)) {}
+        // 希望没有 bug
+        template <typename T>
+        Path(T &&path) : path_(std::forward<T>(path)) {}
         Path(const std::string_view &path) : path_(path.data(), path.size()) {}
 
-        // 路径拼接
-        Path operator/(const Path &other) const;
-        Path concat(const Path &other) const;
+        // 直接拼接。注意，这个不会加斜杠
+        Path &concat(const Path &other);
 
         constexpr const char *c_str() const {
             return path_.c_str();
         }
 
-        // 允许转换为 util::string，但有可能会发生拷贝
-        operator util::string() const {
+        // 允许转换为 std::string，但有可能会发生拷贝
+        operator std::string() const {
             return path_;
         }
 
@@ -98,5 +97,8 @@ namespace util {
 
         Path normalize() const;
         Path relative_to(const Path &base) const;
+
+        friend Path operator/(const Path &lhs, const Path &rhs);
+        friend Path operator/(Path &&lhs, const Path &rhs);
     };
 }  // namespace util

@@ -16,32 +16,18 @@
 #pragma once
 
 #include <device/block.h>
-#include <stdio.h>
-#include <string.h>
 #include <sus/list.h>
-#include <sus/mstring.h>
+#include <sus/path.h>
 #include <vfs/ops.h>
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace tarfs {
     static constexpr size_t BLOCK_SIZE = 512;
-
-    /**
-     * @brief 判断pfx是否是str的前缀
-     */
-    inline bool prefix(const char *str, const char *pfx) {
-        while (*pfx != 0) {
-            if (*str != *pfx) {
-                return false;
-            }
-            str++;
-            pfx++;
-        }
-        return true;
-    }
 
     template <typename T>
     inline size_t parse_octal(const T &field) {
@@ -61,6 +47,7 @@ namespace tarfs {
         return result;
     }
 
+    // NOLINTBEGIN
     union TarBlock {
         struct ustar_header {
             char name[100];
@@ -115,32 +102,14 @@ namespace tarfs {
             return sum;
         }
 
-        inline util::string get_short_name() const {
-            // 约定 short name 是 header.name 的最后一个路径
+        inline util::Path get_entry_name() const {
             // header.name == "foo/bar/baz.txt" -> "baz.txt"
-            // 但文件夹会以 '/' 结尾
             // header.name == "foo/bar/" -> "bar"
-            assert(is_header() && header.name[0] != '/');
-            const char *start      = header.name;
-            const char *last_slash = start - 1;
-            for (const char *p = start; *p != '\0'; p++) {
-                if (*p == '/') {
-                    start      = last_slash + 1;
-                    last_slash = p;
-                }
-            }
-            if (last_slash < header.name) {
-                return util::string(header.name);
-            } else {
-                if (*(last_slash + 1) == '\0') {
-                    // 以 '/' 结尾，说明是文件夹
-                    return util::string(start, last_slash);
-                } else {
-                    return util::string(last_slash + 1);
-                }
-            }
+            assert(is_header());
+            return util::Path{header.name}.normalize().filename();
         }
     };
+    // NOLINTEND
 
     class TarNode;
 
@@ -198,7 +167,7 @@ namespace tarfs {
         // 这样可以简化生命期管理，增加缓存命中
         // 否则就得上引用计数了
         bool is_dir_;
-        util::string name_;  // short name, 约定为 header.name 的最后一个路径
+        util::Path entry_;  // entry name, not full path
         const TarBlock *header_;
 
         union {
@@ -208,17 +177,21 @@ namespace tarfs {
         util::ArrayList<TarNode *> children_{};
 
     public:
-        TarNode(const uint8_t *header) {
-            header_ = reinterpret_cast<const TarBlock *>(header);
+        TarNode(const uint8_t *header)
+            : header_(reinterpret_cast<const TarBlock *>(header)) {
             is_dir_ = header_->header.typeflag[0] == '5';
-            name_   = header_->get_short_name();
+            entry_  = header_->get_entry_name();
         }
 
-        TarNode(const TarBlock *header) {
-            header_ = header;
+        TarNode(const TarBlock *header) : header_(header) {
             is_dir_ = header_->header.typeflag[0] == '5';
-            name_   = header_->get_short_name();
+            entry_  = header_->get_entry_name();
         }
+
+        TarNode(const TarNode &)            = delete;
+        TarNode &operator=(const TarNode &) = delete;
+        TarNode(TarNode &&)                 = delete;
+        TarNode &operator=(TarNode &&)      = delete;
 
         ~TarNode() noexcept {
             if (is_dir_)
@@ -258,7 +231,7 @@ namespace tarfs {
         // IDentry
 
         FSOptional<const char *> name(void) override {
-            return name_.c_str();
+            return entry_.c_str();
         }
 
         FSErrCode remove(void) override {
@@ -315,6 +288,11 @@ namespace tarfs {
         TarSuperblock(const uint8_t *data, size_t size, TarFSDriver *fs,
                       IBlockDevice *device)
             : data_(data), size_(size), fs_(fs), device_(device) {}
+
+        TarSuperblock(const TarSuperblock &)            = delete;
+        TarSuperblock &operator=(const TarSuperblock &) = delete;
+        TarSuperblock(TarSuperblock &&)                 = delete;
+        TarSuperblock &operator=(TarSuperblock &&)      = delete;
 
         ~TarSuperblock() override {
             if (!device_->is<RamDiskDevice>())

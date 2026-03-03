@@ -14,13 +14,14 @@
 #include <mem/alloc.h>
 #include <sus/defer.h>
 #include <sus/mstring.h>
+#include <sus/path.h>
 
 #include <cstddef>
 
 namespace tarfs {
-    TarFile::TarFile(TarNode *node) {
-        node_ = node;
-        data_ = reinterpret_cast<const uint8_t *>(node->header_) + BLOCK_SIZE;
+    TarFile::TarFile(TarNode *node)
+        : node_(node),
+          data_(reinterpret_cast<const uint8_t *>(node->header_) + BLOCK_SIZE) {
         size_t size = parse_octal(node->header_->header.size);
         end_        = data_ + size;
         ptr_        = data_;
@@ -76,35 +77,23 @@ namespace tarfs {
             return node_;  // 约定空字符串表示目录自身
 
         for (auto p : node_->children_) {
-            if (p->name_ == name) {
+            if (p->entry_ == name) {
                 return p;
             }
         }
 
         // 缓存中没有，则遍历寻找
         IDentry *ret = nullptr;
-        util::string_builder sb(sizeof(TarBlock::header.name));
-        sb.append(node_->header_->header.name);
-        sb.append(name);
-        util::string path = sb.build();
+        util::Path path{node_->header_->header.name};
+        path = (path / name).normalize();
 
         for (auto p = node_->header_ + 1;;) {
             if (!p->is_header())
                 break;
 
-            // 末尾相差一个 '/' 也算匹配，只有 b 可能以 '/' 结尾，也比 a 长
-            auto is_same = [](const char *a, const char *b) {
-                while (*a != '\0') {
-                    if (*a != *b) {
-                        return false;
-                    }
-                    a++;
-                    b++;
-                }
-                return *b == '/' || *b == '\0';
-            };
+            util::Path p_path = util::Path{p->header.name}.normalize();
 
-            if (is_same(path.c_str(), p->header.name)) {
+            if (path == p_path) {
                 ret = new TarNode(p);
                 node_->children_.push_back(static_cast<TarNode *>(ret));
                 break;

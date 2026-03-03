@@ -15,24 +15,31 @@
 
 namespace util {
 
-    // 路径拼接
-    Path Path::operator/(const Path &other) const {
-        util::string_builder path{path_.length() + other.path_.length() + 2};
+    Path operator/(const Path &lhs, const Path &rhs) {
+        std::string path;
+        path.reserve(lhs.path_.length() + rhs.path_.length() + 2);
         // 额外空间用于斜杠和结尾的空字符
-        if (path_.length()) {
-            path.append(path_);
-            path.append('/');
+        if (lhs.path_.length()) {
+            path.append(lhs.path_);
+            path.push_back('/');
         }
-        path.append(other.path_);
-        return Path{path.build()};
+        path.append(rhs.path_);
+        return Path{path};
     }
 
-    Path Path::concat(const Path &other) const {
-        util::string_builder path{path_.length() + other.path_.length() + 1};
-        // 额外空间用于结尾的空字符
-        path.append(path_);
-        path.append(other.path_);
-        return Path{path.build()};
+    Path operator/(Path &&lhs, const Path &rhs) {
+        if (!lhs.path_.empty()) {
+            // 空的不能拼完变成绝对路径了，语义不对
+            lhs.path_.push_back('/');
+        }
+        lhs.path_.append(rhs.path_);
+        return lhs;
+        // RVO 会优化掉这个返回值的拷贝
+    }
+
+    Path &Path::concat(const Path &other) {
+        path_.append(other.path_);
+        return *this;
     }
 
     // 其他可能的成员函数，如获取文件名、扩展名等
@@ -131,21 +138,21 @@ namespace util {
             }
         }
 
-        util::string_builder path_builder;
+        std::string path_builder;
         for (const auto &it : st) {
             path_builder.append(it->data(), it->size());
             if (*it == "/")
                 continue;
-            path_builder.append('/');
+            path_builder.push_back('/');
         }
         if (path_builder.length() == 0) {
             // 说明路径被规范化成了当前目录
             return ".";
         } else if (path_builder.length() > 1) {
             // 去掉末尾的斜杠，除非路径是根目录 "/"
-            path_builder.revert(1);
+            path_builder.pop_back();
         }
-        return path_builder.build();
+        return path_builder;
     }
 
     Path Path::relative_to(const Path &base) const {
@@ -164,7 +171,7 @@ namespace util {
             ++it2;
         }
 
-        util::string_builder relative_path;
+        std::string relative_path;
         // 从不匹配的位置开始构建相对路径
         while (it2 != norm_base.end()) {
             // 对于 base 中剩余的每个元素，添加一个 ".."
@@ -172,7 +179,7 @@ namespace util {
             ++it2;
         }
         relative_path.append(norm.path_.c_str() + it1.begin_);
-        return relative_path.build();
+        return relative_path.empty() ? "." : relative_path;
     }
 
     // 不允许迭代器修改 Path 的 entry
