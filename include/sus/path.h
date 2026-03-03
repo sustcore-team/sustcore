@@ -26,8 +26,9 @@ namespace util {
     public:
         // 构造函数
         Path() : path_("") {}
-        Path(const char *path) : path_(path) {}
-        Path(std::string path) : path_(std::move(path)) {}
+        // 希望没有 bug
+        template <typename T>
+        Path(T &&path) : path_(std::forward<T>(path)) {}
         Path(const std::string_view &path) : path_(path.data(), path.size()) {}
 
         // 直接拼接。注意，这个不会加斜杠
