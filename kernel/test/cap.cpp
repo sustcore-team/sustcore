@@ -24,7 +24,7 @@ namespace test::cap {
     class CaseInitCHolder : public TestCase {
     public:
         CaseInitCHolder() : TestCase("初始化 CHolder 与 CSA") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("创建两个 CHolder, 分别作为源/目标 CSpace");
             CHolder holder0;
             CHolder holder1;
@@ -39,7 +39,7 @@ namespace test::cap {
     class CaseCreateObject : public TestCase {
     public:
         CaseCreateObject() : TestCase("创建对象能力并验证初始读值") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0;
             auto cap_csa0_opt = holder0.csa();
             tassert(cap_csa0_opt.present());
@@ -66,7 +66,7 @@ namespace test::cap {
     class CaseClone : public TestCase {
     public:
         CaseClone() : TestCase("Clone 测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0;
             CSAOperation op0(holder0.csa().value());
             auto idx_obj0 = op0.alloc_slot().value();
@@ -91,7 +91,7 @@ namespace test::cap {
     class CaseMigrate : public TestCase {
     public:
         CaseMigrate() : TestCase("Migrate 跨 CSpace 测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0, holder1;
             CSAOperation op0(holder0.csa().value());
             CSAOperation op1(holder1.csa().value());
@@ -117,7 +117,7 @@ namespace test::cap {
     class CaseDowngrade : public TestCase {
     public:
         CaseDowngrade() : TestCase("降权测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0;
             CSAOperation op0(holder0.csa().value());
             auto idx = op0.alloc_slot().value();
@@ -143,7 +143,7 @@ namespace test::cap {
     class CaseRecvSpace : public TestCase {
     public:
         CaseRecvSpace() : TestCase("RecvSpace 接收测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0, holder1;
             CSAOperation op0(holder0.csa().value());
             auto idx_src = op0.alloc_slot().value();
@@ -174,7 +174,7 @@ namespace test::cap {
     class CaseRevoke : public TestCase {
     public:
         CaseRevoke() : TestCase("Revoke 子树清理测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             CHolder holder0, holder1;
             CSAOperation op0(holder0.csa().value());
             CSAOperation op1(holder1.csa().value());

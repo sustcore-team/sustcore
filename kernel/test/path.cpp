@@ -17,7 +17,7 @@ namespace test::path {
     class CasePathCombine : public TestCase {
     public:
         CasePathCombine() : TestCase("Path 连接与构建") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("使用 / 运算符连接路径组件");
             util::Path p = util::Path("home") / "user" / "docs" / "report.txt";
             ttest(p == "home/user/docs/report.txt");
@@ -31,7 +31,7 @@ namespace test::path {
     class CasePathComponents : public TestCase {
     public:
         CasePathComponents() : TestCase("Path 组件提取 (Filename, Extension, etc.)") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             util::Path p("/home/flysong/Sustcore/report.tar.gz");
 
             check("提取文件名");
@@ -51,7 +51,7 @@ namespace test::path {
     class CasePathNormalize : public TestCase {
     public:
         CasePathNormalize() : TestCase("Path 规范化测试 (Normalization)") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("处理冗余斜杠");
             ttest(util::Path("///usr//local/../bin").normalize() == "/usr/bin");
 
@@ -66,7 +66,7 @@ namespace test::path {
     class CasePathIteration : public TestCase {
     public:
         CasePathIteration() : TestCase("Path 迭代器测试 (Walking)") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             util::Path p("/home/user/docs");
             const char* expected[] = {"/", "home", "user", "docs"};
             int i = 0;
@@ -86,7 +86,7 @@ namespace test::path {
     class CasePathRelative : public TestCase {
     public:
         CasePathRelative() : TestCase("Path 相对路径计算 (relative_to)") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             util::Path target("/home/user/docs/report.txt");
             util::Path base("/home/user");
 

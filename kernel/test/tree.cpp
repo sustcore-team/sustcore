@@ -23,7 +23,7 @@ namespace test::tree {
     class CaseTreeStructure : public TestCase {
     public:
         CaseTreeStructure() : TestCase("Tree 基本结构与遍历") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             constexpr size_t N = 10;
             TestTree _nodes[N];
             std::span<TestTree, N> nodes(_nodes, N);
@@ -64,7 +64,7 @@ namespace test::tree {
     class CaseTreeLCA : public TestCase {
     public:
         CaseTreeLCA() : TestCase("Tree 最近公共祖先 (LCA) 测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             constexpr size_t N = 16;
             TestTree _nodes[N];
             std::span<TestTree, N> nodes(_nodes, N);
@@ -107,7 +107,7 @@ namespace test::tree {
     class CaseTreeBaseMulti : public TestCase {
     public:
         CaseTreeBaseMulti() : TestCase("TreeBase 多态与多树共存测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             constexpr size_t N = 10;
             Data _nodes[N];
             std::span<Data, N> pool(_nodes, N);

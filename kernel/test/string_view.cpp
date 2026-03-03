@@ -22,7 +22,7 @@ namespace test::string_view {
     class CaseNullObjectCorner : public TestCase {
     public:
         CaseNullObjectCorner() : TestCase("边界条件-空对象") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string_view empty_sv;
             ttest(empty_sv.empty());
             ttest(empty_sv.size() == 0);
@@ -36,7 +36,7 @@ namespace test::string_view {
     class CaseConstructor : public TestCase {
     public:
         CaseConstructor() : TestCase("构造器") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             const char* s = "abc";
             // NOLINTNEXTLINE(bugprone-string-constructor)
             std::string_view sv(s, 0);
@@ -53,7 +53,7 @@ namespace test::string_view {
     class CaseModifier : public TestCase {
     public:
         CaseModifier() : TestCase("修改器") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string_view sv = "Hello"sv;
             sv.remove_prefix(5);
             ttest(sv.empty());
@@ -76,7 +76,7 @@ namespace test::string_view {
     class CaseSubstr : public TestCase {
     public:
         CaseSubstr() : TestCase("substr") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string_view sv = "Sustcore"sv;
             ttest(sv.substr(0, 0).empty());
             ttest(sv.substr(8, 0).empty());
@@ -88,7 +88,7 @@ namespace test::string_view {
     class CaseFind : public TestCase {
     public:
         CaseFind() : TestCase("查找类方法") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string_view sv = "banana"sv;
 
             // Single char
@@ -121,7 +121,7 @@ namespace test::string_view {
     class CaseCompare : public TestCase {
     public:
         CaseCompare() : TestCase("比较逻辑") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ttest("a"sv < "b"sv);
             ttest("a"sv < "ab"sv);
             ttest("abc"sv == "abc"sv);
@@ -143,7 +143,7 @@ namespace test::string_view {
     class CaseIterator : public TestCase {
     public:
         CaseIterator() : TestCase("迭代器") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string_view sv = "ABC"sv;
             auto it             = sv.begin();
             ttest(*it == 'A');

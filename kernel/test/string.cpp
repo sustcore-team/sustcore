@@ -21,7 +21,7 @@ namespace test::string {
     class CaseSSO : public TestCase {
     public:
         CaseSSO() : TestCase("String SSO 基础功能测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("构造短字符串 (SSO 模式)");
             std::string s1 = "Hello";
             ttest(s1.size() == 5);
@@ -54,7 +54,7 @@ namespace test::string {
     class CaseLongString : public TestCase {
     public:
         CaseLongString() : TestCase("String 动态分配 (Long) 模式测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("构造超过 SSO 阈值的长字符串");
             const char* long_str = "This is a very long string that should definitely exceed the SSO capacity of our implementation.";
             size_t len = 0;
@@ -85,7 +85,7 @@ namespace test::string {
     class CaseGrowth : public TestCase {
     public:
         CaseGrowth() : TestCase("String 扩容与 SSO 转换测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("从小字符串逐渐增加到长字符串");
             std::string s = "Start";
             size_t initial_cap = s.capacity();
@@ -117,7 +117,7 @@ namespace test::string {
     class CaseComparison : public TestCase {
     public:
         CaseComparison() : TestCase("String 比较操作测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string a = "apple";
             std::string b = "banana";
             std::string a2 = "apple";
@@ -139,7 +139,7 @@ namespace test::string {
     class CaseBoundary : public TestCase {
     public:
         CaseBoundary() : TestCase("String 空字串与边界稳定性测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("默认构造的空字符串状态");
             std::string s1;
             ttest(s1.empty());
@@ -165,7 +165,7 @@ namespace test::string {
     class CaseSelfAssignment : public TestCase {
     public:
         CaseSelfAssignment() : TestCase("String 自赋值安全性测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             action("SSO 模式下的自赋值");
             std::string s1 = "small";
             s1 = s1;
@@ -187,7 +187,7 @@ namespace test::string {
     class CaseSSOThreshold : public TestCase {
     public:
         CaseSSOThreshold() : TestCase("String SSO 临界容量测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             // 在 64 位环境下，SSO 容量通常是 23
             std::string s;
             size_t sso_cap = s.capacity();
@@ -210,7 +210,7 @@ namespace test::string {
     class CaseStress : public TestCase {
     public:
         CaseStress() : TestCase("String 频繁分配与大规模追加压力测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string s;
             action("执行 1000 次追加操作");
             for (int i = 0; i < 1000; ++i) {

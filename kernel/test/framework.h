@@ -33,7 +33,7 @@ public:
         return _name;
     }
 
-    virtual void _run() const noexcept = 0;
+    virtual void _run(void* env) const noexcept = 0;
 
 protected:
     bool test(bool condition, std::string&& reason) const {
@@ -85,10 +85,10 @@ protected:
 
 public:
     [[nodiscard]]
-    bool run() const noexcept {
+    bool run(void* env = nullptr) const noexcept {
         passflag = true;  // reset flag before running
         fail_reasons.clear();
-        _run();
+        _run(env);
         return passflag;
     }
 
@@ -123,10 +123,15 @@ class TestCategory {
 private:
     const char* _name;
     util::ArrayList<TestCase*> _cases;
+    void* _environment = nullptr;
+
+    void* (*_setup)()      = nullptr;
+    void (*_teardown)(void*) = nullptr;
 
 public:
-    TestCategory(const char* name, util::ArrayList<TestCase*> cases)
-        : _name(name), _cases(std::move(cases)) {}
+    TestCategory(const char* name, util::ArrayList<TestCase*> cases,
+                 void* (*setup)() = nullptr, void (*teardown)(void*) = nullptr)
+        : _name(name), _cases(std::move(cases)), _setup(setup), _teardown(teardown) {}
     ~TestCategory() {
         for (auto* testCase : _cases) {
             delete testCase;
@@ -146,6 +151,25 @@ public:
     [[nodiscard]]
     const util::ArrayList<TestCase*>& cases() const {
         return _cases;
+    }
+
+    void* setup() {
+        if (_setup) {
+            _environment = _setup();
+        }
+        return _environment;
+    }
+
+    void teardown() {
+        if (_teardown) {
+            _teardown(_environment);
+            _environment = nullptr;
+        }
+    }
+
+    [[nodiscard]]
+    void* environment() const {
+        return _environment;
     }
 };
 

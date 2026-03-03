@@ -67,11 +67,12 @@ void TestFramework::run_all() const {
             : category(cat), test_case(tc), reasons(tc->fail_reasons_list()) {}
     };
     util::ArrayList<FailedReason> failed_cases;
-    for (const auto* category : _categories) {
+    for (auto* category : _categories) {
         kprintfln("运行测试范畴: %s", category->name());
+        void* env = category->setup();
         for (const auto* test_case : category->cases()) {
             kprintfln("  运行测试案例: %s... ", test_case->name());
-            bool result = test_case->run();
+            bool result = test_case->run(env);
             if (result) {
                 kprintfln(ANSI_GRAPHIC(ANSI_FG_GREEN) "  测试通过" ANSI_GRAPHIC(
                     ANSI_GM_RESET));
@@ -81,6 +82,7 @@ void TestFramework::run_all() const {
                 failed_cases.emplace_back(category, test_case);
             }
         }
+        category->teardown();
         kprintfln("");
     }
 

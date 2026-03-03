@@ -27,18 +27,17 @@ namespace test::fs {
     class CaseTarfsMount : public TestCase {
     public:
         CaseTarfsMount() : TestCase("TarFS 挂载与卸载测试") {}
-        void _run() const noexcept override {
-            VFS vfs;
-            vfs.register_fs(new tarfs::TarFSDriver());
+        void _run(void* env) const noexcept override {
+            VFS* vfs = static_cast<VFS*>(env);
 
             RamDiskDevice* initrd = __make_initrd();
             
             expect("将 tarfs 挂载到 /initrd");
-            FSErrCode code = vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
+            FSErrCode code = vfs->mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
             tassert(code == FSErrCode::SUCCESS, "vfs.mount() 成功");
 
             action("卸载 /initrd");
-            code = vfs.umount("/initrd");
+            code = vfs->umount("/initrd");
             test(code == FSErrCode::SUCCESS, "vfs.umount() 成功");
         }
     };
@@ -46,21 +45,20 @@ namespace test::fs {
     class CaseVFSReadOnly : public TestCase {
     public:
         CaseVFSReadOnly() : TestCase("VFS 只读操作测试 (TarFS)") {}
-        void _run() const noexcept override {
-            VFS vfs;
-            vfs.register_fs(new tarfs::TarFSDriver());
+        void _run(void* env) const noexcept override {
+            VFS* vfs = static_cast<VFS*>(env);
             RamDiskDevice* initrd = __make_initrd();
-            vfs.mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
+            vfs->mount("tarfs", initrd, "/initrd", MountFlags::NONE, "");
 
             expect("打开存在的内核源文件: /initrd/src/kernel/main.cpp");
-            auto file_opt = vfs._open("/initrd/src/kernel/main.cpp", 0);
+            auto file_opt = vfs->_open("/initrd/src/kernel/main.cpp", 0);
             tassert(file_opt.present(), "文件打开成功");
             
             VFile* file = file_opt.value();
             char* buffer = new char[128];
             
             action("读取文件内容 (前 127 字节)");
-            FSOptional<size_t> read_bytes_opt = vfs._read(file, buffer, 127);
+            FSOptional<size_t> read_bytes_opt = vfs->_read(file, buffer, 127);
             if (test(read_bytes_opt.present(), "读取操作成功")) {
                 size_t read_bytes = read_bytes_opt.value();
                 test(read_bytes > 0, "读取字节数大于 0");
@@ -69,17 +67,27 @@ namespace test::fs {
             }
 
             action("关闭并清理");
-            vfs._close(file);
+            vfs->_close(file);
             delete[] buffer;
-            vfs.umount("/initrd");
+            vfs->umount("/initrd");
         }
     };
+
+    static void* setup_vfs() {
+        VFS* vfs = new VFS();
+        vfs->register_fs(new tarfs::TarFSDriver());
+        return vfs;
+    }
+
+    static void teardown_vfs(void* env) {
+        delete static_cast<VFS*>(env);
+    }
 
     void collect_tests(TestFramework& framework) {
         auto cases = util::ArrayList<TestCase*>();
         cases.push_back(new CaseTarfsMount());
         cases.push_back(new CaseVFSReadOnly());
 
-        framework.add_category(new TestCategory("filesystem", std::move(cases)));
+        framework.add_category(new TestCategory("filesystem", std::move(cases), setup_vfs, teardown_vfs));
     }
 }  // namespace test::fs

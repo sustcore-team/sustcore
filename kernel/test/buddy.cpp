@@ -18,7 +18,7 @@ namespace test::buddy {
     class CaseFragmentation : public TestCase {
     public:
         CaseFragmentation() : TestCase("Buddy 混合大小分配与碎片化") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("分配 1, 2, 4, 3 页物理内存");
             PhyAddr p1 = GFP::get_free_page(1);
             PhyAddr p2 = GFP::get_free_page(2);
@@ -45,7 +45,7 @@ namespace test::buddy {
     class CaseExhaustion : public TestCase {
     public:
         CaseExhaustion() : TestCase("Buddy Order 0 耗尽与反向合并") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("尝试连续分配 32 个单页 (Order 0)");
             constexpr int MAX_singles = 32;
             PhyAddr singles[MAX_singles];
@@ -71,7 +71,7 @@ namespace test::buddy {
     class CaseMerge : public TestCase {
     public:
         CaseMerge() : TestCase("Buddy 大块分割与合并验证") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("分配一个 64 页的大块");
             PhyAddr huge = GFP::get_free_page(64);
             tassert(huge.nonnull(), "初始分配 64 页成功");
@@ -91,7 +91,7 @@ namespace test::buddy {
     class CaseInvalidArgs : public TestCase {
     public:
         CaseInvalidArgs() : TestCase("Buddy 参数合法性与界限测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("尝试请求 0 页内存 (应返回空地址)");
             PhyAddr p0 = GFP::get_free_page(0);
             ttest(!p0.nonnull());
@@ -109,7 +109,7 @@ namespace test::buddy {
     class CaseAlignment : public TestCase {
     public:
         CaseAlignment() : TestCase("Buddy 分配对齐特征测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("分配不同 order 的块, 验证其对齐性 (Addr % (PageSize * Count) == 0)");
             for (int order_shift = 0; order_shift <= 6; order_shift++) {
                 size_t count = 1ULL << order_shift;
@@ -127,7 +127,7 @@ namespace test::buddy {
     class CaseStressSmall : public TestCase {
     public:
         CaseStressSmall() : TestCase("Buddy 小规模压力测试 (分配与随机释放)") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             constexpr int ITERATIONS = 64;
             PhyAddr pages[ITERATIONS];
             int count = 0;

@@ -28,7 +28,7 @@ namespace test::slub {
     class CaseSmallObjAlloc : public TestCase {
     public:
         CaseSmallObjAlloc() : TestCase("SLUB 小对象分配与释放") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ::slub::SlubAllocator<SlubSmallObj> alloc;
             constexpr int kSmallCount             = 16;
             SlubSmallObj* small_objs[kSmallCount] = {nullptr};
@@ -58,7 +58,7 @@ namespace test::slub {
     class CaseObjectReuse : public TestCase {
     public:
         CaseObjectReuse() : TestCase("SLUB 对象重用趋势测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ::slub::SlubAllocator<SlubSmallObj> alloc;
             
             expect("分配并立即释放一个对象");
@@ -77,7 +77,7 @@ namespace test::slub {
     class CaseHugeObjPath : public TestCase {
     public:
         CaseHugeObjPath() : TestCase("SLUB 大对象路径 (Huge Page) 测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ::slub::SlubAllocator<SlubHugeObj> huge_alloc;
             
             expect("分配两个跨页的大对象");
@@ -100,7 +100,7 @@ namespace test::slub {
     class CaseMultiSlab : public TestCase {
     public:
         CaseMultiSlab() : TestCase("SLUB 多 Slab 页面扩张测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ::slub::SlubAllocator<SlubSmallObj> alloc;
             
             // 假设一个小对象 40 字节，4KB 页面大约容纳 100 个
@@ -131,7 +131,7 @@ namespace test::slub {
     class CaseStressFreelist : public TestCase {
     public:
         CaseStressFreelist() : TestCase("SLUB 空闲列表一致性压力测试") {}
-        void _run() const noexcept override {
+        void _run(void* env [[maybe_unused]]) const noexcept override {
             ::slub::SlubAllocator<SlubSmallObj> alloc;
             constexpr int kIter = 100;
             SlubSmallObj* pool[kIter] = {nullptr};
