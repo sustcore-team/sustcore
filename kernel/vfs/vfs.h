@@ -12,7 +12,7 @@
 #pragma once
 
 #include <device/block.h>
-#include <sus/gsl/owner.h>
+#include <sus/owner.h>
 #include <sus/map.h>
 #include <sus/mstring.h>
 #include <vfs/ops.h>
@@ -22,8 +22,8 @@ enum class MountFlags { NONE = 0 };
 
 class VFS {
 private:
-    util::LinkedMap<std::string, gsl::owner<IFsDriver>> fs_table;
-    util::LinkedMap<std::string, gsl::owner<ISuperblock>> mount_table;
+    util::LinkedMap<std::string, util::owner<IFsDriver *>> fs_table;
+    util::LinkedMap<std::string, util::owner<ISuperblock *>> mount_table;
 public:
     VFS() = default;
     ~VFS() = default;
@@ -34,7 +34,7 @@ public:
     VFS& operator=(VFS&&)      = delete;
 
     // 注册文件系统
-    FSErrCode register_fs(IFsDriver *driver);
+    FSErrCode register_fs(util::owner<IFsDriver *> &&driver);
     FSErrCode unregister_fs(const char *fs_name);
     // 挂载文件系统
     FSErrCode mount(const char *fs_name, IBlockDevice *device,

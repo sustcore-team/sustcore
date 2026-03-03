@@ -16,7 +16,7 @@
 
 #include <cstring>
 
-FSErrCode VFS::register_fs(IFsDriver *driver) {
+FSErrCode VFS::register_fs(util::owner<IFsDriver *> &&driver) {
     const char *fs_name = driver->name();
     if (fs_table.contains(fs_name)) {
         return FSErrCode::INVALID_PARAM;
@@ -36,7 +36,7 @@ FSErrCode VFS::unregister_fs(const char *fs_name) {
             return FSErrCode::BUSY;  // 该文件系统仍被挂载
         }
     }
-    fs_table.get(fs_name).if_present([](gsl::owner<IFsDriver> driver) { delete driver; });
+    fs_table.get(fs_name).if_present([](util::owner<IFsDriver *> driver) { delete driver; });
     fs_table.remove(fs_name);
     return FSErrCode::SUCCESS;
 }
@@ -70,7 +70,7 @@ FSErrCode VFS::mount(const char *fs_name, IBlockDevice *device,
     // std::string mntpt = path_util::refine_path(mountpoint);
     std::string mntpt = mountpoint;
     // 添加挂载点记录
-    mount_table.put(mountpoint, sb);
+    mount_table.put(mountpoint, util::owner(sb));
     return FSErrCode::SUCCESS;
 }
 
