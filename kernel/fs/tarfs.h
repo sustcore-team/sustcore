@@ -154,9 +154,16 @@ namespace tarfs {
     public:
         TarFile(TarNode *node);
         FSOptional<size_t> read(void *buf, size_t len) override;
+        FSOptional<size_t> read(off_t offset, void *buf, size_t len) override;
         FSOptional<off_t> seek(off_t offset, SeekWhence whence) override;
         FSOptional<size_t> write(const void *buf, size_t len) override {
             return FSErrCode::NOT_SUPPORTED;
+        }
+        FSOptional<size_t> write(off_t offset, const void *buf, size_t len) override {
+            return FSErrCode::NOT_SUPPORTED;
+        }
+        FSOptional<size_t> size() override {
+            return end_ - data_;
         }
         FSErrCode sync(void) override {
             return FSErrCode::NOT_SUPPORTED;

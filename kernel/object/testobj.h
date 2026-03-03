@@ -4,9 +4,9 @@
  * @brief 测试对象, 用于测试能力系统
  * @version alpha-1.0.0
  * @date 2026-02-25
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -21,9 +21,12 @@ class TestObjectOperation;
 class TestObject : public _PayloadHelper<TestObject> {
 public:
     static constexpr PayloadType IDENTIFIER = PayloadType::TEST_OBJECT;
+    friend class TestObjectOperation;
     using Operation = TestObjectOperation;
-protected:
+
+private:
     int value;
+
 public:
     constexpr TestObject(int v) : value(v) {}
     ~TestObject() = default;
@@ -37,7 +40,6 @@ public:
         KOP<TestObject>::instance().free(static_cast<TestObject *>(ptr));
     }
 
-    friend class TestObjectOperation;
 protected:
     int _read(void) const {
         return value;
@@ -46,10 +48,10 @@ protected:
         value = v;
     }
     void _increase(void) {
-        value ++;
+        value++;
     }
     void _decrease(void) {
-        value --;
+        value--;
     }
 };
 
@@ -62,8 +64,10 @@ protected:
     bool imply(void) const {
         return _cap->perm().basic_imply(perm);
     }
+
 public:
-    constexpr TestObjectOperation(Capability *cap) : _cap(cap), _obj(cap->payload<TestObject>()) {}
+    constexpr TestObjectOperation(Capability *cap)
+        : _cap(cap), _obj(cap->payload<TestObject>()) {}
     ~TestObjectOperation() = default;
 
     void *operator new(size_t size) = delete;

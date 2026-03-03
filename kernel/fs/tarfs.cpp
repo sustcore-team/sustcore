@@ -35,6 +35,16 @@ namespace tarfs {
         ptr_ += to_read;
         return to_read;
     }
+    
+    FSOptional<size_t> TarFile::read(off_t offset, void *buf, size_t len) {
+        const auto _ptr = data_ + offset;
+        if (_ptr < data_ || _ptr > end_) {
+            return FSErrCode::INVALID_PARAM;
+        }
+        size_t to_read = std::min(len, static_cast<size_t>(end_ - _ptr));
+        memcpy(buf, _ptr, to_read);
+        return to_read;
+    }
 
     FSOptional<off_t> TarFile::seek(off_t offset, SeekWhence whence) {
         // off_t 是有符号的

@@ -35,12 +35,16 @@ class IFsDriver;
 
 template <typename T>
 concept ISyncable = requires(T a) {
-    { a.sync() } -> std::same_as<FSErrCode>;
+    {
+        a.sync()
+    } -> std::same_as<FSErrCode>;
 };
 
 template <typename T>
 concept IMetadataProvider = requires(T a) {
-    { a.metadata() } -> std::same_as<FSOptional<IMetadata *>>;
+    {
+        a.metadata()
+    } -> std::same_as<FSOptional<IMetadata *>>;
 };
 
 /**
@@ -58,7 +62,19 @@ public:
      * @param len 读取数据的长度
      * @return FSOptional<size_t> 实际读取的数据长度
      */
-    virtual FSOptional<size_t> read(void *buf, size_t len)          = 0;
+    [[deprecated("使用三个参数的read(offset, void *buf, size_t len)版本")]]
+    virtual FSOptional<size_t> read(void *buf, size_t len) = 0;
+
+    /**
+     * @brief 从文件的offset位置开始读取长度为len的数据
+     *
+     * @param offset 读取的起始位置
+     * @param buf 读取数据的缓冲区
+     * @param len 读取数据的长度
+     * @return FSOptional<size_t> 实际读取的数据长度
+     */
+    virtual FSOptional<size_t> read(off_t offset, void *buf, size_t len) = 0;
+
     /**
      * @brief 向文件中写入长度为len的数据
      *
@@ -66,7 +82,20 @@ public:
      * @param len 写入数据的长度
      * @return FSOptional<size_t> 实际写入的数据长度
      */
-    virtual FSOptional<size_t> write(const void *buf, size_t len)   = 0;
+    [[deprecated("使用三个参数的write(offset, void *buf, size_t len)版本")]]
+    virtual FSOptional<size_t> write(const void *buf, size_t len) = 0;
+
+    /**
+     * @brief 向文件的offset位置开始写入长度为len的数据
+     *
+     * @param offset 写入的起始位置
+     * @param buf 写入数据的缓冲区
+     * @param len 写入数据的长度
+     * @return FSOptional<size_t> 实际写入的数据长度
+     */
+    virtual FSOptional<size_t> write(off_t offset, const void *buf,
+                                     size_t len) = 0;
+
     /**
      * @brief 在文件中移动文件指针
      *
@@ -74,13 +103,22 @@ public:
      * @param whence 偏移方式
      * @return FSOptional<size_t> 移动后的文件指针位置
      */
+    [[deprecated("seek()应当是VFS的职责")]]
     virtual FSOptional<off_t> seek(off_t offset, SeekWhence whence) = 0;
+
+    /**
+     * @brief 获取文件大小
+     *
+     * @return FSOptional<size_t> 文件大小
+     */
+    virtual FSOptional<size_t> size() = 0;
+
     /**
      * @brief 同步文件数据到存储设备
      *
      * @return FSErrCode 错误码
      */
-    virtual FSErrCode sync(void)                                    = 0;
+    virtual FSErrCode sync(void) = 0;
 };
 
 /**
@@ -110,7 +148,7 @@ public:
      *
      * @return FSErrCode 错误码
      */
-    virtual FSErrCode sync(void)                                        = 0;
+    virtual FSErrCode sync()                                        = 0;
 };
 
 /**
