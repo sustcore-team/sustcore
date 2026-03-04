@@ -24,14 +24,14 @@
 #include <test/tree.h>
 
 void collect_tests(TestFramework& framework) {
-    // test::buddy::collect_tests(framework);
-    // test::cap::collect_tests(framework);
-    // test::fs::collect_tests(framework);
-    // test::path::collect_tests(framework);
-    // test::slub::collect_tests(framework);
+    test::buddy::collect_tests(framework);
+    test::cap::collect_tests(framework);
+    test::fs::collect_tests(framework);
+    test::path::collect_tests(framework);
+    test::slub::collect_tests(framework);
     test::string::collect_tests(framework);
-    // test::string_view::collect_tests(framework);
-    // test::tree::collect_tests(framework);
+    test::string_view::collect_tests(framework);
+    test::tree::collect_tests(framework);
 }
 
 void TestFramework::run_all() const {

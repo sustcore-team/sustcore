@@ -14,6 +14,7 @@
 #include <cassert>
 #include <compare>
 #include <cstddef>
+#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <stdexcept>
@@ -166,7 +167,8 @@ namespace std {
         // modifiers
         constexpr void remove_prefix(size_t n) {
             if (n > M_size) {
-                _THROW(out_of_range("basic_string_view::remove_prefix: pos out of range"));
+                _THROW(out_of_range(
+                    "basic_string_view::remove_prefix: pos out of range"));
             } else {
                 M_data += n;
                 M_size -= n;
@@ -174,7 +176,8 @@ namespace std {
         }
         constexpr void remove_suffix(size_t n) {
             if (n > M_size) {
-                _THROW(out_of_range("basic_string_view::remove_suffix: pos out of range"));
+                _THROW(out_of_range(
+                    "basic_string_view::remove_suffix: pos out of range"));
             } else {
                 M_size -= n;
             }
@@ -187,7 +190,8 @@ namespace std {
         // operations
         size_type copy(CharT *dest, size_t count, size_t pos = 0) const {
             if (pos > M_size) {
-                _THROW(out_of_range("basic_string_view::copy: pos out of range"));
+                _THROW(
+                    out_of_range("basic_string_view::copy: pos out of range"));
             }
             size_t rcount =
                 (count == npos || pos + count > M_size) ? M_size - pos : count;
@@ -198,7 +202,8 @@ namespace std {
         constexpr basic_string_view substr(size_t pos,
                                            size_t count = npos) const {
             if (pos > M_size) {
-                _THROW(out_of_range("basic_string_view::substr: pos out of range"));
+                _THROW(out_of_range(
+                    "basic_string_view::substr: pos out of range"));
             }
             size_t rcount =
                 (count == npos || pos + count > M_size) ? M_size - pos : count;
@@ -267,11 +272,6 @@ namespace std {
             return contains(basic_string_view(s));
         }
 
-        [[nodiscard]]
-        constexpr size_t rfind(CharT ch, size_t pos = npos) const noexcept {
-            return __rfind(ch, pos);
-        }
-
     private:
         [[nodiscard]]
         constexpr size_t __rspos(size_t sz, size_t pos) const noexcept {
@@ -283,106 +283,91 @@ namespace std {
 
     public:
         [[nodiscard]]
-        constexpr size_t __find(CharT ch, size_t pos) const noexcept {
-            if (pos >= M_size) {
-                return npos;
-            }
-            const CharT *res =
-                traits_type::find(M_data + pos, M_size - pos, ch);
-            return res ? static_cast<size_t>(res - M_data) : npos;
-        }
-        [[nodiscard]]
-        constexpr size_t __rfind(CharT ch, size_t pos) const noexcept {
-            size_t startpos = pos < M_size ? pos : M_size - 1;
-            for (size_t i = startpos + 1; i > 0; --i) {
-                if (traits_type::eq(M_data[i - 1], ch)) {
-                    return i - 1;
-                }
-            }
-            return npos;
-        }
-
-        [[nodiscard]]
         constexpr size_t find(CharT ch, size_t pos = 0) const noexcept {
-            if (pos >= M_size) {
-                return npos;
-            }
-            const CharT *res =
-                traits_type::find(M_data + pos, M_size - pos, ch);
-            return res ? static_cast<size_t>(res - M_data) : npos;
+            return find(&ch, pos, 1);
         }
         [[nodiscard]]
         constexpr size_t find(basic_string_view str,
                               size_t pos = 0) const noexcept {
-            if (str.M_size == 0) {
+            return find(str.data(), pos, str.size());
+        }
+        [[nodiscard]]
+        constexpr size_t find(const CharT *str, size_t pos = 0) const noexcept {
+            return find(str, pos, traits_type::length(str));
+        }
+        [[nodiscard]]
+        constexpr size_t find(const CharT *str, size_t pos,
+                              size_type count) const noexcept {
+            if (count == 0) {
                 return pos <= M_size ? pos : npos;
             }
-            if (pos + str.M_size > M_size) {
+            if (pos + count > M_size) {
                 return npos;
             }
-            for (size_t i = pos; i <= M_size - str.M_size; i++) {
-                if (traits_type::compare(M_data + i, str.M_data, str.M_size) ==
-                    0)
-                {
+            for (size_t i = pos; i <= M_size - count; i++) {
+                if (traits_type::compare(M_data + i, str, count) == 0) {
                     return i;
                 }
             }
             return npos;
         }
-        [[nodiscard]]
-        constexpr size_t find(const CharT *str, size_t pos = 0) const noexcept {
-            return find(basic_string_view(str), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t find(const CharT *str, size_t pos,
-                              size_type count) const noexcept {
-            return find(basic_string_view(str, count), pos);
-        }
 
         [[nodiscard]]
         constexpr size_t rfind(basic_string_view str,
                                size_t pos = npos) const noexcept {
-            if (str.M_size == 0) {
+            return str.find(str.data(), pos, str.size());
+        }
+        [[nodiscard]]
+        constexpr size_t rfind(const CharT *str,
+                               size_t pos = npos) const noexcept {
+            return rfind(str, pos, traits_type::length(str));
+        }
+        [[nodiscard]]
+        constexpr size_t rfind(const CharT *str, size_t pos,
+                               size_type count) const noexcept {
+            if (count == 0) {
                 return pos < M_size ? pos : M_size;
             }
-            if (str.M_size > M_size) {
+            if (count > M_size) {
                 return npos;
             }
-
-            const size_t startpos = __rspos(str.M_size, pos);
+            const size_t startpos = std::min(pos, M_size - count);
             for (size_t i = startpos + 1; i > 0; i--) {
-                if (traits_type::compare(M_data + i - 1, str.M_data,
-                                         str.M_size) == 0)
-                {
+                if (traits_type::compare(M_data + i - 1, str, count) == 0) {
                     return i - 1;
                 }
             }
             return npos;
         }
+
         [[nodiscard]]
-        constexpr size_t rfind(const CharT *str,
-                               size_t pos = npos) const noexcept {
-            return rfind(basic_string_view(str), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t rfind(const CharT *str, size_t pos,
-                               size_type count) const noexcept {
-            return rfind(basic_string_view(str, count), pos);
+        constexpr size_t rfind(CharT ch, size_t pos = npos) const noexcept {
+            return rfind(&ch, pos, 1);
         }
 
         [[nodiscard]]
         constexpr size_t find_first_of(CharT ch,
                                        size_t pos = 0) const noexcept {
-            return __find(ch, pos);
+            return find_first_of(&ch, pos, 1);
         }
         [[nodiscard]]
         constexpr size_t find_first_of(basic_string_view chars,
                                        size_t pos = 0) const noexcept {
+            return find_first_of(chars.data(), pos, chars.size());
+        }
+        [[nodiscard]]
+        constexpr size_t find_first_of(const CharT *chars,
+                                       size_t pos = 0) const noexcept {
+            return find_first_of(chars, pos, traits_type::length(chars));
+        }
+        [[nodiscard]]
+        constexpr size_t find_first_of(const CharT *chars, size_t pos,
+                                       size_type count) const noexcept {
             if (pos > M_size) {
                 return npos;
             }
             for (size_t i = pos; i < M_size; i++) {
-                if (traits_type::find(chars.M_data, chars.M_size, M_data[i]) !=
+                if (traits_type::find(chars, count, M_data[i]) !=
                     nullptr)
                 {
                     return i;
@@ -390,33 +375,33 @@ namespace std {
             }
             return npos;
         }
-        [[nodiscard]]
-        constexpr size_t find_first_of(const CharT *chars,
-                                       size_t pos = 0) const noexcept {
-            return find_first_of(basic_string_view(chars), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t find_first_of(const CharT *chars, size_t pos,
-                                       size_type count) const noexcept {
-            return find_first_of(basic_string_view(chars, count), pos);
-        }
 
         [[nodiscard]]
         constexpr size_t find_last_of(CharT ch, size_t pos = npos) const {
-            return __rfind(ch, pos);
+            return find_last_of(&ch, pos, 1);
         }
         [[nodiscard]]
         constexpr size_t find_last_of(basic_string_view chars,
                                       size_t pos = npos) const noexcept {
-            if (chars.M_size == 0) {
+            return find_last_of(chars.M_data, pos, chars.M_size);
+        }
+        [[nodiscard]]
+        constexpr size_t find_last_of(const CharT *chars,
+                                      size_t pos = npos) const noexcept {
+            return find_last_of(chars, pos, traits_type::length(chars));
+        }
+        [[nodiscard]]
+        constexpr size_t find_last_of(const CharT *chars, size_t pos,
+                                      size_type count) const noexcept {
+            if (count == 0) {
                 return pos < M_size ? pos : M_size;
             }
             if (M_size == 0) {
                 return npos;
             }
-            const size_t startpos = __rspos(1, pos);
+            const size_t startpos = std::min(pos, M_size - count);
             for (size_t i = startpos + 1; i > 0; i--) {
-                if (traits_type::find(chars.M_data, chars.M_size,
+                if (traits_type::find(chars, count,
                                       M_data[i - 1]) != nullptr)
                 {
                     return i - 1;
@@ -424,46 +409,36 @@ namespace std {
             }
             return npos;
         }
-        [[nodiscard]]
-        constexpr size_t find_last_of(const CharT *chars,
-                                      size_t pos = npos) const noexcept {
-            return find_last_of(basic_string_view(chars), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t find_last_of(const CharT *chars, size_t pos,
-                                      size_type count) const noexcept {
-            return find_last_of(basic_string_view(chars, count), pos);
-        }
 
         [[nodiscard]]
         constexpr size_t find_first_not_of(CharT ch,
                                            size_t pos = 0) const noexcept {
-            return find_first_not_of(basic_string_view(&ch, 1), pos);
+            return find_first_not_of(&ch, pos, 1);
         }
         [[nodiscard]]
         constexpr size_t find_first_not_of(basic_string_view chars,
                                            size_t pos = 0) const noexcept {
+            return find_first_not_of(chars.data(), pos, chars.size());
+        }
+        [[nodiscard]]
+        constexpr size_t find_first_not_of(const CharT *chars,
+                                           size_t pos = 0) const noexcept {
+            return find_first_not_of(chars, pos, traits_type::length(chars));
+        }
+        [[nodiscard]]
+        constexpr size_t find_first_not_of(const CharT *chars, size_t pos,
+                                           size_type count) const noexcept {
             if (pos > M_size) {
                 return npos;
             }
             for (size_t i = pos; i < M_size; i++) {
-                if (traits_type::find(chars.M_data, chars.M_size, M_data[i]) ==
+                if (traits_type::find(chars, count, M_data[i]) ==
                     nullptr)
                 {
                     return i;
                 }
             }
             return npos;
-        }
-        [[nodiscard]]
-        constexpr size_t find_first_not_of(const CharT *chars,
-                                           size_t pos = 0) const noexcept {
-            return find_first_not_of(basic_string_view(chars), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t find_first_not_of(const CharT *chars, size_t pos,
-                                           size_type count) const noexcept {
-            return find_first_not_of(basic_string_view(chars, count), pos);
         }
 
         [[nodiscard]]
@@ -474,31 +449,31 @@ namespace std {
         [[nodiscard]]
         constexpr size_t find_last_not_of(basic_string_view chars,
                                           size_t pos = npos) const noexcept {
-            if (chars.M_size == 0) {
+            return find_last_not_of(chars.data(), pos, chars.size());
+        }
+        [[nodiscard]]
+        constexpr size_t find_last_not_of(const CharT *chars,
+                                          size_t pos = npos) const noexcept {
+            return find_last_not_of(chars, pos, traits_type::length(chars));
+        }
+        [[nodiscard]]
+        constexpr size_t find_last_not_of(const CharT *chars, size_t pos,
+                                          size_type count) const noexcept {
+            if (count == 0) {
                 return pos < M_size ? pos : M_size;
             }
             if (M_size == 0) {
                 return npos;
             }
-            const size_t startpos = __rspos(1, pos);
+            const size_t startpos = std::min(pos, M_size - count);
             for (size_t i = startpos + 1; i > 0; i--) {
-                if (traits_type::find(chars.M_data, chars.M_size,
+                if (traits_type::find(chars, count,
                                       M_data[i - 1]) == nullptr)
                 {
                     return i - 1;
                 }
             }
             return npos;
-        }
-        [[nodiscard]]
-        constexpr size_t find_last_not_of(const CharT *chars,
-                                          size_t pos = npos) const noexcept {
-            return find_last_not_of(basic_string_view(chars), pos);
-        }
-        [[nodiscard]]
-        constexpr size_t find_last_not_of(const CharT *chars, size_t pos,
-                                          size_type count) const noexcept {
-            return find_last_not_of(basic_string_view(chars, count), pos);
         }
 
         // operators

@@ -72,6 +72,9 @@ protected:
     void action(const char* reason) const {
         kprintfln("    - [执行动作] %s", reason);
     }
+    void comment(const char* reason) const {
+        kprintfln("    - [注] %s", reason);
+    }
 
     void expect(const std::string& reason) const {
         expect(reason.c_str());

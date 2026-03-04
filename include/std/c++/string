@@ -205,6 +205,11 @@ namespace std {
 
     private:
         using _sv_type = basic_string_view<CharT, Traits>;
+
+        inline constexpr _sv_type U_sv() const noexcept {
+            return _sv_type(data(), size());
+        }
+
         template <class StringViewLike>
         inline static constexpr bool __StringViewLike =
             std::is_convertible_v<const StringViewLike &, _sv_type> &&
@@ -669,7 +674,7 @@ namespace std {
         }
 
         constexpr operator _sv_type() const noexcept {
-            return _sv_type(data(), size());
+            return U_sv();
         }
 
         // 迭代器
@@ -843,9 +848,7 @@ namespace std {
             if (count == 0) {
                 return *this;
             }
-            if (index + count > size()) {
-                count = size() - index;
-            }
+            count = std::min(count, size() - index);
             // 将 [index + count, size()) 的内容向前移动 count 个位置
             Traits::move(data() + index, data() + index + count,
                          size() - index - count + 1);
@@ -1094,9 +1097,7 @@ namespace std {
         }
 
         void resize(size_type count, value_type ch) {
-            if (count > capacity()) {
-                reserve(new_size(count));
-            }
+            U_prepare_capacity(count);
             if (count > size()) {
                 for (size_type i = size(); i < count; ++i) {
                     U_assign(i, ch);
@@ -1137,18 +1138,160 @@ namespace std {
         // 搜索
         size_type find(const basic_string &str,
                        size_type pos = 0) const noexcept {
-            if (pos > size()) {
-                return npos;
-            }
-            if (str.empty()) {
-                return pos;
-            }
-            for (size_type i = pos; i <= size() - str.size(); ++i) {
-                if (Traits::compare(data() + i, str.data(), str.size()) == 0) {
-                    return i;
-                }
-            }
-            return npos;
+            return U_sv().find(str.U_sv(), pos);
+        }
+
+        size_type find(const_pointer s, size_type pos,
+                       size_type count) const noexcept {
+            return U_sv().find(s, pos, count);
+        }
+
+        size_type find(value_type ch, size_type pos = 0) const noexcept {
+            return U_sv().find(ch, pos);
+        }
+
+        size_type find(const_pointer s, size_type pos = 0) const noexcept {
+            return U_sv().find(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type find(const StringViewLike &svl,
+                       size_type pos = 0) const noexcept {
+            return U_sv().find(_sv_type(svl), pos);
+        }
+
+        size_type rfind(const basic_string &str,
+                        size_type pos = npos) const noexcept {
+            return U_sv().rfind(str.U_sv(), pos);
+        }
+
+        size_type rfind(const_pointer s, size_type pos,
+                        size_type count) const noexcept {
+            return U_sv().rfind(s, pos, count);
+        }
+
+        size_type rfind(value_type ch, size_type pos = npos) const noexcept {
+            return U_sv().rfind(ch, pos);
+        }
+
+        size_type rfind(const_pointer s, size_type pos = npos) const noexcept {
+            return U_sv().rfind(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type rfind(const StringViewLike &svl,
+                        size_type pos = npos) const noexcept {
+            return U_sv().rfind(_sv_type(svl), pos);
+        }
+
+        size_type find_first_of(const basic_string &str,
+                                size_type pos = 0) const noexcept {
+            return U_sv().find_first_of(str.U_sv(), pos);
+        }
+
+        size_type find_first_of(const_pointer s, size_type pos,
+                                size_type count) const noexcept {
+            return U_sv().find_first_of(s, pos, count);
+        }
+
+        size_type find_first_of(value_type ch,
+                                size_type pos = 0) const noexcept {
+            return U_sv().find_first_of(ch, pos);
+        }
+
+        size_type find_first_of(const_pointer s,
+                                size_type pos = 0) const noexcept {
+            return U_sv().find_first_of(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type find_first_of(const StringViewLike &svl,
+                                size_type pos = 0) const noexcept {
+            return U_sv().find_first_of(_sv_type(svl), pos);
+        }
+
+        size_type find_last_of(const basic_string &str,
+                               size_type pos = npos) const noexcept {
+            return U_sv().find_last_of(str.U_sv(), pos);
+        }
+
+        size_type find_last_of(const_pointer s, size_type pos,
+                               size_type count) const noexcept {
+            return U_sv().find_last_of(s, pos, count);
+        }
+
+        size_type find_last_of(value_type ch,
+                               size_type pos = npos) const noexcept {
+            return U_sv().find_last_of(ch, pos);
+        }
+
+        size_type find_last_of(const_pointer s,
+                               size_type pos = npos) const noexcept {
+            return U_sv().find_last_of(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type find_last_of(const StringViewLike &svl,
+                               size_type pos = npos) const noexcept {
+            return U_sv().find_last_of(_sv_type(svl), pos);
+        }
+
+        size_type find_first_not_of(const basic_string &str,
+                                    size_type pos = 0) const noexcept {
+            return U_sv().find_first_not_of(str.U_sv(), pos);
+        }
+
+        size_type find_first_not_of(const_pointer s, size_type pos,
+                                    size_type count) const noexcept {
+            return U_sv().find_first_not_of(s, pos, count);
+        }
+
+        size_type find_first_not_of(value_type ch,
+                                    size_type pos = 0) const noexcept {
+            return U_sv().find_first_not_of(ch, pos);
+        }
+
+        size_type find_first_not_of(const_pointer s,
+                                    size_type pos = 0) const noexcept {
+            return U_sv().find_first_not_of(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type find_first_not_of(const StringViewLike &svl,
+                                    size_type pos = 0) const noexcept {
+            return U_sv().find_first_not_of(_sv_type(svl), pos);
+        }
+
+        size_type find_last_not_of(const basic_string &str,
+                                   size_type pos = npos) const noexcept {
+            return U_sv().find_last_not_of(str.U_sv(), pos);
+        }
+
+        size_type find_last_not_of(const_pointer s, size_type pos,
+                                   size_type count) const noexcept {
+            return U_sv().find_last_not_of(s, pos, count);
+        }
+
+        size_type find_last_not_of(value_type ch,
+                                   size_type pos = npos) const noexcept {
+            return U_sv().find_last_not_of(ch, pos);
+        }
+
+        size_type find_last_not_of(const_pointer s,
+                                   size_type pos = npos) const noexcept {
+            return U_sv().find_last_not_of(s, pos);
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        size_type find_last_not_of(const StringViewLike &svl,
+                                   size_type pos = npos) const noexcept {
+            return U_sv().find_last_not_of(_sv_type(svl), pos);
         }
 
         // 操作
@@ -1169,39 +1312,39 @@ namespace std {
 
         // starts_with & ends_with & contains
         constexpr bool starts_with(_sv_type sv) const noexcept {
-            return _sv_type(data(), size()).starts_with(sv);
+            return U_sv().starts_with(sv);
         }
 
         constexpr bool starts_with(value_type ch) const noexcept {
-            return _sv_type(data(), size()).starts_with(ch);
+            return U_sv().starts_with(ch);
         }
 
         constexpr bool starts_with(const_pointer s) const {
-            return _sv_type(data(), size()).starts_with(s);
+            return U_sv().starts_with(s);
         }
 
         constexpr bool ends_with(const value_type ch) const noexcept {
-            return _sv_type(data(), size()).ends_with(ch);
+            return U_sv().ends_with(ch);
         }
 
         constexpr bool ends_with(_sv_type sv) const noexcept {
-            return _sv_type(data(), size()).ends_with(sv);
+            return U_sv().ends_with(sv);
         }
 
         constexpr bool ends_with(const_pointer s) const {
-            return _sv_type(data(), size()).ends_with(s);
+            return U_sv().ends_with(s);
         }
 
         constexpr bool contains(_sv_type sv) const noexcept {
-            return _sv_type(data(), size()).contains(sv);
+            return U_sv().contains(sv);
         }
 
         constexpr bool contains(value_type ch) const noexcept {
-            return _sv_type(data(), size()).contains(ch);
+            return U_sv().contains(ch);
         }
 
         constexpr bool contains(const_pointer s) const {
-            return _sv_type(data(), size()).contains(s);
+            return U_sv().contains(s);
         }
 
         // substr
@@ -1367,7 +1510,8 @@ namespace std {
     };
 
     template <class Allocator>
-    struct hash<std::basic_string<char16_t, std::char_traits<char>, Allocator>> {
+    struct hash<
+        std::basic_string<char16_t, std::char_traits<char>, Allocator>> {
         size_t operator()(
             const std::basic_string<char16_t, std::char_traits<char>, Allocator>
                 &str) const noexcept {
@@ -1376,7 +1520,8 @@ namespace std {
     };
 
     template <class Allocator>
-    struct hash<std::basic_string<char32_t, std::char_traits<char>, Allocator>> {
+    struct hash<
+        std::basic_string<char32_t, std::char_traits<char>, Allocator>> {
         size_t operator()(
             const std::basic_string<char32_t, std::char_traits<char>, Allocator>
                 &str) const noexcept {
