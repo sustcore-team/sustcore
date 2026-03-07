@@ -4,9 +4,9 @@
  * @brief features
  * @version alpha-1.0.0
  * @date 2026-03-02
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -22,3 +22,5 @@
 #else
 #include <features/std/exception.h>
 #endif
+
+#include <features/diagnostic.h>

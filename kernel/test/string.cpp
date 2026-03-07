@@ -27,7 +27,8 @@ namespace test::string {
             ttest(s1.size() == 5);
             ttest(s1.capacity() >= 5);
             ttest(!s1.empty());
-            ttest(std::string::traits_type::compare(s1.c_str(), "Hello", 5) == 0);
+            ttest(std::string::traits_type::compare(s1.c_str(), "Hello", 5) ==
+                  0);
 
             action("测试 SSO 拷贝构造");
             std::string s2 = s1;
@@ -56,7 +57,9 @@ namespace test::string {
         CaseLongString() : TestCase("String 动态分配 (Long) 模式测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("构造超过 SSO 阈值的长字符串");
-            const char* long_str = "This is a very long string that should definitely exceed the SSO capacity of our implementation.";
+            const char* long_str =
+                "This is a very long string that should definitely exceed the "
+                "SSO capacity of our implementation.";
             size_t len = 0;
             while (long_str[len]) len++;
 
@@ -67,13 +70,13 @@ namespace test::string {
             action("测试长字符串拷贝");
             std::string s2 = s1;
             ttest(s2 == s1);
-            ttest(s2.data() != s1.data()); // 应该是不同的内存地址
+            ttest(s2.data() != s1.data());  // 应该是不同的内存地址
 
             action("测试长字符串移动");
             const char* old_ptr = s1.data();
-            std::string s3 = std::move(s1);
+            std::string s3      = std::move(s1);
             ttest(s3 == long_str);
-            ttest(s3.data() == old_ptr); // 移动应该偷走指针
+            ttest(s3.data() == old_ptr);  // 移动应该偷走指针
             ttest(s1.empty());
 
             action("测试长字符串追加");
@@ -87,7 +90,7 @@ namespace test::string {
         CaseGrowth() : TestCase("String 扩容与 SSO 转换测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("从小字符串逐渐增加到长字符串");
-            std::string s = "Start";
+            std::string s      = "Start";
             size_t initial_cap = s.capacity();
 
             action("连续 push_back 触发转换");
@@ -100,8 +103,12 @@ namespace test::string {
 
             action("验证内容正确性");
             bool match = true;
-            for (int i = 0; i < 5; ++i) if (s[i] != "Start"[i]) match = false;
-            for (int i = 5; i < 105; ++i) if (s[i] != 'a') match = false;
+            for (int i = 0; i < 5; ++i)
+                if (s[i] != "Start"[i])
+                    match = false;
+            for (int i = 5; i < 105; ++i)
+                if (s[i] != 'a')
+                    match = false;
             test(match, "字符串内容不正确");
 
             action("测试 reserve 提前扩容");
@@ -109,7 +116,7 @@ namespace test::string {
             s2.reserve(200);
             ttest(s2.capacity() >= 200);
             s2 = "Short";
-            ttest(s2.capacity() >= 200); // 赋值后不应缩小容量
+            ttest(s2.capacity() >= 200);  // 赋值后不应缩小容量
             ttest(s2 == "Short");
         }
     };
@@ -118,8 +125,8 @@ namespace test::string {
     public:
         CaseComparison() : TestCase("String 比较操作测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            std::string a = "apple";
-            std::string b = "banana";
+            std::string a  = "apple";
+            std::string b  = "banana";
             std::string a2 = "apple";
 
             ttest(a == a2);
@@ -129,7 +136,8 @@ namespace test::string {
             ttest(a.compare(a2) == 0);
 
             action("不同模式下的比较 (SSO vs Long)");
-            std::string long_a = "apple and more more more more more more more more";
+            std::string long_a =
+                "apple and more more more more more more more more";
             std::string long_a2 = long_a;
             ttest(long_a == long_a2);
             ttest(long_a != a);
@@ -144,16 +152,18 @@ namespace test::string {
             std::string s1;
             ttest(s1.empty());
             ttest(s1.size() == 0);
-            ttest(s1.c_str() != nullptr); // 应指向一个有效地址（哪怕是内部缓冲区）
+            ttest(s1.c_str() !=
+                  nullptr);  // 应指向一个有效地址（哪怕是内部缓冲区）
             ttest(s1.c_str()[0] == '\0');
 
             action("清空长字符串并验证状态");
-            std::string s2 = "This is a long string that is definitely in dynamic mode.";
+            std::string s2 =
+                "This is a long string that is definitely in dynamic mode.";
             s2.clear();
             ttest(s2.empty());
             ttest(s2.size() == 0);
             ttest(s2.c_str()[0] == '\0');
-            ttest(s2.capacity() > 0); // 应该保留原有的缓冲区以备复用
+            ttest(s2.capacity() > 0);  // 应该保留原有的缓冲区以备复用
 
             action("测试仅包含空字符的字符串构造");
             std::string s3("", 0);
@@ -168,19 +178,31 @@ namespace test::string {
         void _run(void* env [[maybe_unused]]) const noexcept override {
             action("SSO 模式下的自赋值");
             std::string s1 = "small";
+            SUPPRESS_WARNING_BEGIN
+            SUPPRESS_SELF_ASSIGN
             s1 = s1;
+            SUPPRESS_WARNING_END
             ttest(s1 == "small");
 
             action("Long 模式下的自赋值");
-            std::string s2 = "This is a very long string used for testing self-assignment safety in dynamic allocation mode.";
+            std::string s2 =
+                "This is a very long string used for testing self-assignment "
+                "safety in dynamic allocation mode.";
             const char* old_ptr = s2.data();
+            SUPPRESS_WARNING_BEGIN
+            SUPPRESS_SELF_ASSIGN
             s2 = s2;
+            SUPPRESS_WARNING_END
             ttest(s2.size() > 0);
-            ttest(s2.data() == old_ptr); // 优秀的实现应当检测出自赋值并不进行重分配
+            ttest(s2.data() ==
+                  old_ptr);  // 优秀的实现应当检测出自赋值并不进行重分配
 
             action("移动自赋值");
+            SUPPRESS_WARNING_BEGIN
+            SUPPRESS_SELF_MOVE
             s2 = std::move(s2);
-            ttest(s2.size() > 0); // 移动自赋值后对象应当依然处于合法状态
+            SUPPRESS_WARNING_END
+            ttest(s2.size() > 0);  // 移动自赋值后对象应当依然处于合法状态
         }
     };
 
@@ -191,7 +213,7 @@ namespace test::string {
             // 在 64 位环境下，SSO 容量通常是 23
             std::string s;
             size_t sso_cap = s.capacity();
-            
+
             expect("填充到 SSO 最大容量");
             for (size_t i = 0; i < sso_cap; ++i) {
                 s.push_back('x');
@@ -202,7 +224,7 @@ namespace test::string {
             action("再追加一个字符触发临界转换");
             s.push_back('y');
             ttest(s.size() == sso_cap + 1);
-            ttest(s.data() != sso_ptr); // 指针应当发生变化，转换到了长模式
+            ttest(s.data() != sso_ptr);  // 指针应当发生变化，转换到了长模式
             ttest(s[sso_cap] == 'y');
         }
     };
@@ -217,7 +239,7 @@ namespace test::string {
                 s += "word ";
             }
             ttest(s.size() == 5000);
-            
+
             action("验证末尾内容");
             ttest(s[4999] == ' ');
             ttest(s[4995] == 'w');
@@ -235,7 +257,7 @@ namespace test::string {
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("在 SSO 字符串中间插入");
             std::string s = "abc";
-            s.insert(1, "XYZ"); 
+            s.insert(1, "XYZ");
             ttest(s == "aXYZbc");
             ttest(s.size() == 6);
 
@@ -253,12 +275,12 @@ namespace test::string {
 
             action("删除操作测试");
             std::string s2 = "0123456789";
-            s2.erase(3, 4); // 删除 "3456"
+            s2.erase(3, 4);  // 删除 "3456"
             ttest(s2 == "012789");
             ttest(s2.size() == 6);
 
             action("删除到末尾");
-            s2.erase(4); // 删除 "89"
+            s2.erase(4);  // 删除 "89"
             ttest(s2 == "0127");
 
             action("清空式删除");
@@ -271,11 +293,12 @@ namespace test::string {
     public:
         CaseReplace() : TestCase("String 替换功能测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            // 注意: basic_string::replace 的实现目前在代码中似乎是不完整的 (private __replace)
-            // 但我们可以测试 operator= 或其他已公开的修改接口
+            // 注意: basic_string::replace 的实现目前在代码中似乎是不完整的
+            // (private __replace) 但我们可以测试 operator=
+            // 或其他已公开的修改接口
             expect("通过赋值和追加进行替换模拟");
             std::string s = "hello world";
-            s = "new string";
+            s             = "new string";
             ttest(s == "new string");
 
             action("使用 assign 覆盖");
@@ -286,13 +309,15 @@ namespace test::string {
 
     class CaseSearch : public TestCase {
     public:
-        CaseSearch() : TestCase("String 搜索功能测试 (starts_with/ends_with/contains)") {}
+        CaseSearch()
+            : TestCase("String 搜索功能测试 (starts_with/ends_with/contains)") {
+        }
         void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string s = "The quick brown fox jumps over the lazy dog";
-            
+
             ttest(s.starts_with("The"));
             ttest(s.starts_with('T'));
-            ttest(!s.starts_with("the")); // 大小写敏感
+            ttest(!s.starts_with("the"));  // 大小写敏感
 
             ttest(s.ends_with("dog"));
             ttest(s.ends_with('g'));
@@ -309,7 +334,7 @@ namespace test::string {
         CaseSubstr() : TestCase("String 子串提取测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             std::string s = "0123456789";
-            
+
             action("提取中间子串");
             std::string sub1 = s.substr(3, 4);
             ttest(sub1 == "3456");
@@ -330,14 +355,14 @@ namespace test::string {
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("append 自身的一部分");
             std::string s = "abc";
-            s.append(s.c_str()); 
+            s.append(s.c_str());
             ttest(s == "abcabc");
 
             action("insert 自身的一部分");
             std::string s2 = "123";
             // insert自身
             comment("该行为实际上是一个UB, 因此如果测试失败也无需担心");
-            s2.insert(1, s2.c_str()); 
+            s2.insert(1, s2.c_str());
             ttest(s2 == "112323");
         }
     };

@@ -114,8 +114,8 @@ int kprintfln(const char *fmt, ...) {
 [[noreturn]]
 void __sus_cxa_throw(const std::exception &e) {
     kprintfln(
-        ANSI_GRAPHIC(ANSI_FG_RED) "There is an exception of type %s: %s" ANSI_GRAPHIC(
-            ANSI_GM_RESET),
+        ANSI_GRAPHIC(
+            ANSI_FG_RED) "There is an exception of type %s: %s" ANSI_GRAPHIC(ANSI_GM_RESET),
         e.type(), e.what());
     while (true);
 }
@@ -171,6 +171,7 @@ void run_defers(void *s_defer, void *e_defer) {
 }
 
 void kernel_paging_setup(void) {
+    [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     // 创建内核页表管理器
     kernel_root                 = EarlyPageMan::make_root();
@@ -230,6 +231,7 @@ extern "C" void post_init(void) {
 extern "C" void redive(void);
 
 void pre_init(void) {
+    [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     Initialization::pre_init();
 

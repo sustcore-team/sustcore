@@ -1467,6 +1467,8 @@ namespace std {
     }
 
     inline namespace literals {
+        SUPPRESS_WARNING_BEGIN
+        SUPPRESS_USER_DEFINED_LITERAL_SUFFIX
         inline namespace string_literals {
             __attribute((__abi_tag__("cxx11"))) constexpr string operator""s(
                 const char *__str, size_t __len) {
@@ -1489,6 +1491,7 @@ namespace std {
                 return wstring{__str, __len};
             }
         }  // namespace string_literals
+        SUPPRESS_WARNING_END
     }  // namespace literals
 
     template <class Allocator>

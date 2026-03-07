@@ -11,10 +11,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <compare>
 #include <cstddef>
-#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <stdexcept>
@@ -367,9 +367,7 @@ namespace std {
                 return npos;
             }
             for (size_t i = pos; i < M_size; i++) {
-                if (traits_type::find(chars, count, M_data[i]) !=
-                    nullptr)
-                {
+                if (traits_type::find(chars, count, M_data[i]) != nullptr) {
                     return i;
                 }
             }
@@ -401,9 +399,7 @@ namespace std {
             }
             const size_t startpos = std::min(pos, M_size - count);
             for (size_t i = startpos + 1; i > 0; i--) {
-                if (traits_type::find(chars, count,
-                                      M_data[i - 1]) != nullptr)
-                {
+                if (traits_type::find(chars, count, M_data[i - 1]) != nullptr) {
                     return i - 1;
                 }
             }
@@ -432,9 +428,7 @@ namespace std {
                 return npos;
             }
             for (size_t i = pos; i < M_size; i++) {
-                if (traits_type::find(chars, count, M_data[i]) ==
-                    nullptr)
-                {
+                if (traits_type::find(chars, count, M_data[i]) == nullptr) {
                     return i;
                 }
             }
@@ -467,9 +461,7 @@ namespace std {
             }
             const size_t startpos = std::min(pos, M_size - count);
             for (size_t i = startpos + 1; i > 0; i--) {
-                if (traits_type::find(chars, count,
-                                      M_data[i - 1]) == nullptr)
-                {
+                if (traits_type::find(chars, count, M_data[i - 1]) == nullptr) {
                     return i - 1;
                 }
             }
@@ -507,6 +499,8 @@ namespace std {
     };
 
     inline namespace literals {
+        SUPPRESS_WARNING_BEGIN
+        SUPPRESS_USER_DEFINED_LITERAL_SUFFIX
         inline namespace string_view_literals {
             // suffix for basic_string_view literals
             constexpr string_view operator""sv(const char *str,
@@ -530,6 +524,7 @@ namespace std {
                 return {str, len};
             }
         }  // namespace string_view_literals
+        SUPPRESS_WARNING_END
     }  // namespace literals
 
     // hashes
