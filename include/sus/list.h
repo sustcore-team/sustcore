@@ -1257,6 +1257,16 @@ namespace util {
             D_size = 0;
         }
 
+        iterator find(const _Tp& value) noexcept {
+            for (auto it = begin(); it != end(); ++it) {
+                if (*it == value) {
+                    return it;
+                }
+            }
+            return end();
+        }
+
+        // contains
         bool contains(const _Tp& value) const noexcept {
             for (auto it = begin(); it != end(); ++it) {
                 if (*it == value) {

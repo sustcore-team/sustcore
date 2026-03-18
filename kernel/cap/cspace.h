@@ -89,7 +89,7 @@ public:
         return ! flag;
     }
 
-    friend class CSAOperation;
+    friend class CSAOp;
 };
 
 // CSpace
@@ -147,7 +147,7 @@ public:
     // 腾出CSpace中所有为空的CGroup
     void tidyup(void);
 
-    friend class CSAOperation;
+    friend class CSAOp;
 };
 
 class RecvSpace : protected CSpace {
@@ -170,5 +170,5 @@ public:
         _recv_src[group_idx] = src_cholder_id;
     }
 
-    friend class CSAOperation;
+    friend class CSAOp;
 };

@@ -22,8 +22,8 @@ enum class PayloadType : b64 {
     BITMAP_PERM     = 0x1000,
     NOINLINE_MASK   = 0x1000,
     CSPACE_ACCESSOR = BITMAP_PERM | 0x001,
-    TEST_OBJECT     = INLINE_PERM | 0x002,
-    VFILE           = INLINE_PERM | 0x003,
+    INTOBJ          = INLINE_PERM | 0x002,
+    SINTOBJ         = INLINE_PERM | 0x003
 };
 
 inline bool operator&(PayloadType a, PayloadType b) {
@@ -34,7 +34,7 @@ constexpr const char *to_string(PayloadType type) {
     switch (type) {
         case PayloadType::NONE:            return "NONE";
         case PayloadType::CSPACE_ACCESSOR: return "CSPACE_ACCESSOR";
-        case PayloadType::TEST_OBJECT:     return "TEST_OBJECT";
+        case PayloadType::INTOBJ:          return "INTOBJ";
         default:                           return "UNKNOWN";
     }
 }
@@ -118,4 +118,4 @@ inline static CapIdx CapIdxNull = CapIdx(SpaceType::NULLABLE, 0, 0);
 
 template <typename T>
 using CapOptional = ErrOptional<T>;
-using CapErrCode = ErrCode;
+using CapErrCode  = ErrCode;

@@ -63,6 +63,9 @@ namespace util {
         operator T&() {
             return get();
         }
+        constexpr bool is_initialized() const {
+            return initialized;
+        }
 
         consteval DeferEntry make_defer(void) {
             return __make_defer_entry((void *)this, &Defer<T>::static_construct);

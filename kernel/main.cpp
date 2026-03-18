@@ -26,10 +26,8 @@
 #include <mem/kaddr.h>
 #include <mem/slub.h>
 #include <object/csa.h>
-#include <object/testobj.h>
 #include <perm/csa.h>
 #include <perm/permission.h>
-#include <perm/testobj.h>
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>

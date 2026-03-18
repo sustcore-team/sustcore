@@ -209,6 +209,8 @@ namespace slub {
     public:
         inline static SlubAllocator<ObjType> &instance() {
             (void)_SLUB_REGISTER;  // Ensure the defer entry is linked in
+            if (! _INSTANCE.is_initialized())
+                _INSTANCE.construct();
             return _INSTANCE.get();
         }
     };

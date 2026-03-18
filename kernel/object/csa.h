@@ -44,10 +44,10 @@ public:
             static_cast<CSpaceAccessor *>(ptr));
     }
 
-    friend class CSAOperation;
+    friend class CSAOp;
 };
 
-class CSAOperation {
+class CSAOp {
 protected:
     Capability *_cap;
     CSpaceAccessor *_obj;
@@ -71,13 +71,13 @@ protected:
     }
 
 public:
-    constexpr CSAOperation(Capability *cap)
+    constexpr CSAOp(Capability *cap)
         : _cap(cap),
           _obj(cap->payload<CSpaceAccessor>()),
           _space(_obj->_space) {
         assert(_space != nullptr);
     }
-    ~CSAOperation() = default;
+    ~CSAOp() = default;
 
     void *operator new(size_t size) = delete;
     void operator delete(void *ptr) = delete;
@@ -96,7 +96,19 @@ public:
     CapErrCode clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
     CapErrCode migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
     CapErrCode remove(CapIdx idx);
-    CapOptional<CapIdx> alloc_slot(void);
+    CapOptional<Capability *> lookup(CapIdx idx) const {
+        using namespace perm::csa;
+        if (! slot_imply<SLOT_READ>(idx)) {
+            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        }
+        auto cap_opt = _space->get(idx);
+        if (!cap_opt.present()) {
+            return CapErrCode::INVALID_INDEX;
+        }
+        return cap_opt.value();
+    }
+    CapOptional<CapIdx> get_free_slot(void);
+
 protected:
     CapIdx __get_free_slot(void);
 };
