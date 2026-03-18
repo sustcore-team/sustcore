@@ -16,6 +16,10 @@
 #include <sus/units.h>
 #include <schd/metadata.h>
 
+struct TimerTickEvent {
+    units::tick gap_ticks;
+};
+
 namespace schd {
     namespace hooks {
         template <typename TCBType>
@@ -26,4 +30,6 @@ namespace schd {
             }
         }
     }
+
+    void on_tick(TimerTickEvent &event);
 }

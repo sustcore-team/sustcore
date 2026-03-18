@@ -10,12 +10,11 @@
  */
 
 #include <schd/hooks.h>
-#include <schd/listeners.h>
 #include <schd/schedule.h>
 #include <task/task_struct.h>
 
 namespace schd {
-    void SchedulerListener::handle(TimerTickEvent &event) {
+    void on_tick(TimerTickEvent &event) {
         Scheduler *scheduler = Scheduler::get_instance();
         if (scheduler == nullptr) {
             return;

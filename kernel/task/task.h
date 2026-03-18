@@ -15,7 +15,6 @@
 #include <sus/id.h>
 #include <sus/list.h>
 #include <task/task_struct.h>
-#include <task/listener.h>
 
 extern util::Defer<util::IDManager<>> TID;
 

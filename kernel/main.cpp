@@ -16,8 +16,6 @@
 #include <cap/cholder.h>
 #include <cap/cspace.h>
 #include <device/block.h>
-#include <event/init_events.h>
-#include <event/registries.h>
 #include <fs/tarfs.h>
 #include <kio.h>
 #include <mem/addr.h>
@@ -198,11 +196,8 @@ extern "C" void post_init(void) {
     // 初始化默认 Allocator 子系统
     Allocator::init();
 
-    // 发布PostGlobalObjectInitEvent
     // 收集全局对象Defer并执行构造
-    PostGlobalObjectInitEvent pre_init_event;
-    EventDispatcher<PostGlobalObjectInitEvent>::dispatch(pre_init_event);
-    run_defers(&s_defer_post, &e_defer_post);
+    run_defers(&s_defer, &e_defer);
 
     // 初始化中断
     Interrupt::init();
@@ -246,11 +241,6 @@ void pre_init(void) {
             upper_bound = end;
         }
     }
-
-    // 发布PreGlobalObjectInitEvent
-    PreGlobalObjectInitEvent pre_init_event;
-    EventDispatcher<PreGlobalObjectInitEvent>::dispatch(pre_init_event);
-    run_defers(&s_defer_pre, &e_defer_pre);
 
     LOGGER::INFO("初始化GFP");
     GFP::pre_init(regions, region_cnt);

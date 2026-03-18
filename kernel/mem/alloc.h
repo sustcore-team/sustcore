@@ -13,6 +13,7 @@
 
 #include <mem/alloc_def.h>
 #include <mem/slub.h>
+#include <sus/defer.h>
 
 using Allocator = slub::MixedSizeAllocator;
 static_assert(AllocatorTrait<Allocator>, "Allocator 不满足 AllocatorTrait");

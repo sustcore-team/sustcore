@@ -70,16 +70,9 @@ public:
     // 若没有, 返回-1
     int lookup_free(int last = -1);
 
-    // 通过KOP分配CGroup实例
-    inline void *operator new(size_t size) {
-        assert(size == sizeof(CGroup));
-        return KOP<CGroup>::instance().alloc();
-    }
-
-    // 通过KOP删除CGroup实例
-    inline void operator delete(void *ptr) {
-        KOP<CGroup>::instance().free(static_cast<CGroup *>(ptr));
-    }
+    // 通过KOP分配回收CGroup
+    void *operator new(size_t size);
+    void operator delete(void *ptr);
 
     constexpr bool empty(void) const {
         bool flag = false;

@@ -13,6 +13,13 @@
 #include <cap/cholder.h>
 #include <sustcore/capability.h>
 
+// 内存池
+
+namespace kop {
+    util::Defer<KOP<CGroup>> CGroup;
+    AutoDefer(CGroup);
+}
+
 // CGroup
 
 CGroup::CGroup() {
@@ -134,8 +141,19 @@ int CGroup::lookup_free(int last) {
     return -1;
 }
 
+// 通过KOP分配CGroup实例
+void *CGroup::operator new(size_t size) {
+    assert(size == sizeof(CGroup));
+    return kop::CGroup->alloc();
+}
+
+// 通过KOP删除CGroup实例
+void CGroup::operator delete(void *ptr) {
+    kop::CGroup->free(static_cast<CGroup *>(ptr));
+}
+
 static util::Defer<util::IDManager<>> CSPACE_ID;
-AutoDeferPost(CSPACE_ID);
+AutoDefer(CSPACE_ID);
 
 // CSpace
 CSpace::CSpace(CHolder *holder) :  _holder(holder), sp_idx(0) {

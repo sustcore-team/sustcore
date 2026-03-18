@@ -37,14 +37,9 @@ SECTIONS
         e_initrd = .;
 
         . = ALIGN(4K);
-        s_defer_pre = .;
-        *(.defer.pre)
-        e_defer_pre = .;
-
-        . = ALIGN(4K);
-        s_defer_post = .;
-        *(.defer.post)
-        e_defer_post = .;
+        s_defer = .;
+        *(.defer)
+        e_defer = .;
 
         . = ALIGN(4K);
         e_rodata = .;

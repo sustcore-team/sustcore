@@ -17,7 +17,12 @@
 #include <task/task.h>
 #include <task/task_struct.h>
 
-// task_struct.h
+namespace kop {
+    util::Defer<KOP<PCB>> PCB;
+    AutoDefer(PCB);
+    util::Defer<KOP<TCB>> TCB;
+    AutoDefer(TCB);
+}
 
 TCB::TCB(tid_t tid, PCB *pcb, SetupInfo *setup)
     : tid(tid), _pcb(pcb), _setup(setup) {}
@@ -27,11 +32,11 @@ TCB::TCB() : tid(0), _pcb(nullptr), _setup({}) {}
 
 void *TCB::operator new(size_t size) {
     assert(size == sizeof(TCB));
-    return KOP<TCB>::instance().alloc();
+    return kop::TCB->alloc();
 }
 
 void TCB::operator delete(void *ptr) {
-    KOP<TCB>::instance().free(static_cast<TCB *>(ptr));
+    kop::TCB->free(static_cast<TCB *>(ptr));
 }
 
 PCB::PCB(pid_t pid, TCB *main_thread)
@@ -44,29 +49,17 @@ PCB::PCB() : pid(0), threads(), main_thread(nullptr) {}
 
 void *PCB::operator new(size_t size) {
     assert(size == sizeof(PCB));
-    return KOP<PCB>::instance().alloc();
+    return kop::PCB->alloc();
 }
 
 void PCB::operator delete(void *ptr) {
-    KOP<PCB>::instance().free(static_cast<PCB *>(ptr));
+    kop::PCB->free(static_cast<PCB *>(ptr));
 }
 
 // task.h
 
 util::Defer<util::IDManager<>> TID;
-AutoDeferPost(TID);
-
-struct TEST {
-    TEST() {
-        LOGGER::DEBUG("TEST constructor called");
-    }
-};
-util::Defer<TEST> test_defer;
-AutoDeferPost(test_defer);
-
-void TaskListener::handle(PostGlobalObjectInitEvent &event)
-{
-}
+AutoDefer(TID);
 
 void TCBManager::init() {
 }

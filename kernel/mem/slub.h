@@ -115,9 +115,6 @@ namespace slub {
         static_assert(is_pow2(obj_align_), "obj_align_ must be power-of-two");
 
     public:
-        inline static SlubAllocator &instance() {
-            return SlubCollection<ObjType>::instance();
-        }
         SlubAllocator();
         ObjType *alloc();
         void free(ObjType *ptr);
@@ -167,9 +164,6 @@ namespace slub {
             page_align_up(sizeof(ObjType)) / PAGESIZE;
 
     public:
-        inline static SlubAllocator &instance() {
-            return SlubCollection<ObjType>::instance();
-        }
         SlubAllocator() : inuse_objects_(0) {}
         ObjType *alloc() {
             PhyAddr p = GFP::get_free_page(obj_pages);
@@ -199,28 +193,6 @@ namespace slub {
     private:
         size_t inuse_objects_;
     };
-
-    template <typename ObjType>
-    class SlubCollection {
-    protected:
-        static util::Defer<SlubAllocator<ObjType>> _INSTANCE;
-        static util::DeferEntry _SLUB_REGISTER;
-
-    public:
-        inline static SlubAllocator<ObjType> &instance() {
-            (void)_SLUB_REGISTER;  // Ensure the defer entry is linked in
-            if (! _INSTANCE.is_initialized())
-                _INSTANCE.construct();
-            return _INSTANCE.get();
-        }
-    };
-
-    template <typename ObjType>
-    util::Defer<SlubAllocator<ObjType>> SlubCollection<ObjType>::_INSTANCE;
-
-    template <typename ObjType>
-    POST_DEFER util::DeferEntry SlubCollection<ObjType>::_SLUB_REGISTER =
-        SlubCollection<ObjType>::_INSTANCE.make_defer();
 
     template <typename ObjType>
     SlabHeader *SlubAllocator<ObjType>::slab_of(void *p) {

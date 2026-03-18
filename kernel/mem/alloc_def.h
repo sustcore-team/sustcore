@@ -37,9 +37,6 @@ concept KOPTrait = requires(T *kop, ObjType *obj) {
     {
         kop->free(obj)
     } -> std::same_as<void>;
-    {
-        T::instance()
-    } -> std::same_as<T &>;
 };
 
 class LinearGrowAllocator {
@@ -75,15 +72,9 @@ static_assert(AllocatorTrait<LinearGrowAllocator>,
 template <typename T, AllocatorTrait Allocator>
 
 class SimpleKOP {
-protected:
-    static SimpleKOP _INSTANCE;
-
 public:
     SimpleKOP()  = default;
     ~SimpleKOP() = default;
-    static SimpleKOP &instance() {
-        return _INSTANCE;
-    }
     T *alloc() {
         return (T *)Allocator::malloc(sizeof(T));
     }
@@ -91,9 +82,6 @@ public:
         Allocator::free((void *)obj);
     }
 };
-
-template <typename T, AllocatorTrait Allocator>
-SimpleKOP<T, Allocator> SimpleKOP<T, Allocator>::_INSTANCE;
 
 static_assert(KOPTrait<SimpleKOP<int, LinearGrowAllocator>, int>,
               "SimpleKOP 不满足 KOPTrait");

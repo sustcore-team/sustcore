@@ -9,9 +9,11 @@
  *
  */
 
+#include <cap/capability.h>
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/alloc_def.h>
+#include <mem/alloc.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <sus/logger.h>

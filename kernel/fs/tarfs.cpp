@@ -18,6 +18,17 @@
 #include <cstddef>
 
 namespace tarfs {
+    namespace kop {
+        util::Defer<KOP<TarNode>> TarNode;
+        AutoDefer(TarNode);
+
+        util::Defer<KOP<TarDirectory>> TarDirectory;
+        AutoDefer(TarDirectory);
+
+        util::Defer<KOP<TarFile>> TarFile;
+        AutoDefer(TarFile);
+    }
+
     TarFile::TarFile(TarNode *node)
         : node_(node),
           data_(reinterpret_cast<const uint8_t *>(node->header_) + BLOCK_SIZE) {
@@ -64,11 +75,11 @@ namespace tarfs {
 
     void *TarFile::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarFile));
-        return KOP<TarFile>::instance().alloc();
+        return kop::TarFile->alloc();
     }
 
     void TarFile::operator delete(void *ptr) noexcept {
-        KOP<TarFile>::instance().free(static_cast<TarFile *>(ptr));
+        kop::TarFile->free(static_cast<TarFile *>(ptr));
     }
 
     FSOptional<IDentry *> TarDirectory::lookup(const char *name) {
@@ -113,20 +124,20 @@ namespace tarfs {
 
     void *TarDirectory::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarDirectory));
-        return KOP<TarDirectory>::instance().alloc();
+        return kop::TarDirectory->alloc();
     }
 
     void TarDirectory::operator delete(void *ptr) noexcept {
-        KOP<TarDirectory>::instance().free(static_cast<TarDirectory *>(ptr));
+        kop::TarDirectory->free(static_cast<TarDirectory *>(ptr));
     }
 
     void *TarNode::operator new(size_t sz) noexcept {
         assert(sz == sizeof(TarNode));
-        return KOP<TarNode>::instance().alloc();
+        return kop::TarNode->alloc();
     }
 
     void TarNode::operator delete(void *ptr) noexcept {
-        KOP<TarNode>::instance().free(static_cast<TarNode *>(ptr));
+        kop::TarNode->free(static_cast<TarNode *>(ptr));
     }
 
     bool TarFSDriver::is_valid(size_t size_, const uint8_t *data_) {

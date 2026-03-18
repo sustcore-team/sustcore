@@ -15,7 +15,7 @@
 #include <sustcore/capability.h>
 
 static util::Defer<util::IDManager<>> CHOLDER_ID;
-AutoDeferPost(CHOLDER_ID);
+AutoDefer(CHOLDER_ID);
 
 CHolder::CHolder(void)
     : _space(this),

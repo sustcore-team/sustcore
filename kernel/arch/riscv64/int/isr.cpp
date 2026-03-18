@@ -11,7 +11,6 @@
 
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
-#include <event/registries.h>
 #include <kio.h>
 #include <sbi/sbi.h>
 #include <schd/hooks.h>
@@ -175,8 +174,8 @@ namespace Handlers {
         units::tick gap_ticks     = current_ticks - timer_info.last_ticks;
 
         // 发布TimerTickEvent
-        TimerTickEvent tick_event(gap_ticks);
-        EventDispatcher<TimerTickEvent>::dispatch(tick_event);
+        TimerTickEvent tick_event = {.gap_ticks = gap_ticks};
+        schd::on_tick(tick_event);
 
         timer_info.last_ticks = current_ticks;
 

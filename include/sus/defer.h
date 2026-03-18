@@ -41,9 +41,10 @@ namespace util {
             Defer<T> *_defer = static_cast<Defer<T> *>(defer);
             _defer->construct();
         }
-        inline T*_get(void) {
+        inline T *_get(void) {
             return std::launder(reinterpret_cast<T *>(storage));
         }
+
     public:
         inline void construct() {
             assert(!initialized);
@@ -60,7 +61,7 @@ namespace util {
         inline T &operator*() {
             return get();
         }
-        operator T&() {
+        operator T &() {
             return get();
         }
         constexpr bool is_initialized() const {
@@ -68,16 +69,12 @@ namespace util {
         }
 
         consteval DeferEntry make_defer(void) {
-            return __make_defer_entry((void *)this, &Defer<T>::static_construct);
+            return __make_defer_entry((void *)this,
+                                      &Defer<T>::static_construct);
         }
     };
 
-#define DEFER_SECTION(phase) __attribute__((section(".defer."#phase), used))
-#define PRE_DEFER DEFER_SECTION(pre)
-#define POST_DEFER DEFER_SECTION(post)
-#define AutoDefer(x, phase)                                                \
-    inline __attribute__((section(".defer."#phase), used)) util::DeferEntry \
-        __auto_defer_##x = x.make_defer()
-#define AutoDeferPre(x)  AutoDefer(x, pre)
-#define AutoDeferPost(x) AutoDefer(x, post)
+#define DEFERSEC __attribute__((section(".defer"), used))
+#define AutoDefer(x) \
+    inline DEFERSEC util::DeferEntry __auto_defer_##x = x.make_defer()
 }  // namespace util

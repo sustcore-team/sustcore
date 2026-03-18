@@ -33,17 +33,6 @@ protected:
 public:
     CSpaceAccessor(CSpace *space) : _space(space) {}
     ~CSpaceAccessor() = default;
-
-    inline void *operator new(size_t size) noexcept {
-        assert(size == sizeof(CSpaceAccessor));
-        return KOP<CSpaceAccessor>::instance().alloc();
-    }
-
-    inline void operator delete(void *ptr) noexcept {
-        KOP<CSpaceAccessor>::instance().free(
-            static_cast<CSpaceAccessor *>(ptr));
-    }
-
     friend class CSAOp;
 };
 
@@ -98,7 +87,7 @@ public:
     CapErrCode remove(CapIdx idx);
     CapOptional<Capability *> lookup(CapIdx idx) const {
         using namespace perm::csa;
-        if (! slot_imply<SLOT_READ>(idx)) {
+        if (!slot_imply<SLOT_READ>(idx)) {
             return CapErrCode::INSUFFICIENT_PERMISSIONS;
         }
         auto cap_opt = _space->get(idx);

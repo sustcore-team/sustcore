@@ -12,7 +12,6 @@
 #pragma once
 
 #include <arch/trait.h>
-#include <event/event.h>
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/gfp_def.h>

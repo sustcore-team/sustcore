@@ -13,7 +13,6 @@
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/buddy.h>
-#include <mem/listeners.h>
 #include <sus/list.h>
 #include <sus/logger.h>
 #include <sus/types.h>
@@ -24,15 +23,12 @@
 util::Defer<BuddyAllocator::BlockList>
     BuddyAllocator::free_area[BuddyAllocator::MAX_BUDDY_ORDER + 1];
 
-// 这种数组式的不适用于AutoDefer
-void BuddyListener::handle(PreGlobalObjectInitEvent &event) {
-    BUDDY::DEBUG("BuddyListener handling PreGlobalObjectInitEvent");
+void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
+    // 初始化空闲块链表
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
         BuddyAllocator::free_area[i].construct();
     }
-}
 
-void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
     for (size_t i = 0; i < region_count; ++i) {
         MemRegion &region = regions[i];
         if (region.status == MemRegion::MemoryStatus::FREE) {

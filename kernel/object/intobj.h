@@ -13,6 +13,7 @@
 
 #include <cap/capability.h>
 #include <kio.h>
+#include <mem/alloc.h>
 #include <mem/slub.h>
 #include <object/shared.h>
 #include <perm/intobj.h>
@@ -33,16 +34,6 @@ private:
 public:
     constexpr IntObj(int v) : value(v) {}
     ~IntObj() = default;
-
-    inline void *operator new(size_t size) noexcept {
-        assert(size == sizeof(IntObj));
-        return KOP<IntObj>::instance().alloc();
-    }
-
-    inline void operator delete(void *ptr) noexcept {
-        KOP<IntObj>::instance().free(static_cast<IntObj *>(ptr));
-    }
-
 protected:
     int _read(void) const {
         return value;
@@ -74,15 +65,6 @@ private:
 public:
     constexpr SIntObj(int v) : value(v) {}
     virtual ~SIntObj() = default;
-
-    inline void *operator new(size_t size) noexcept {
-        assert(size == sizeof(SIntObj));
-        return KOP<SIntObj>::instance().alloc();
-    }
-
-    inline void operator delete(void *ptr) noexcept {
-        KOP<SIntObj>::instance().free(static_cast<SIntObj *>(ptr));
-    }
 
     virtual void on_zeroref(void) {
         discarded = true;
