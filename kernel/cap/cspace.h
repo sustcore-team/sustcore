@@ -4,9 +4,9 @@
  * @brief Capability空间
  * @version alpha-1.0.0
  * @date 2026-02-28
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -28,10 +28,8 @@ public:
     bool _slot_used[CGROUP_SLOTS];
 
     // 构造/删除Capability
-    void _emplace_create(CSpace *space, CapIdx idx,
-                         Payload *payload);
-    void _emplace_clone(CSpace *space, CapIdx idx,
-                         Capability *parent);
+    void _emplace_create(CSpace *space, CapIdx idx, Payload *payload);
+    void _emplace_clone(CSpace *space, CapIdx idx, Capability *parent);
     void _emplace_migrate(CSpace *space, CapIdx idx, Capability *origin);
     void _remove(size_t slot_idx);
 
@@ -43,8 +41,7 @@ public:
     // 因此, Payload产生时, Capability也随之产生; Payload销毁时,
     // Capability也随之销毁
     template <typename PayloadType, typename... Args>
-    CapErrCode create(CSpace *space, CapIdx idx,
-                      Args &&...args) {
+    CapErrCode create(CSpace *space, CapIdx idx, Args &&...args) {
         const size_t slot_idx = idx.slot;
         if (slot_idx >= CGROUP_SLOTS) {
             CAPABILITY::ERROR("槽位索引%u超出CGroup容量", slot_idx);
@@ -60,8 +57,7 @@ public:
         return CapErrCode::SUCCESS;
     }
 
-    CapErrCode clone(CSpace *space, CapIdx idx,
-                      Capability *parent);
+    CapErrCode clone(CSpace *space, CapIdx idx, Capability *parent);
     CapErrCode migrate(CSpace *space, CapIdx idx, Capability *origin);
     CapErrCode remove(CapIdx idx);
 
@@ -79,7 +75,7 @@ public:
         for (size_t i = 0; i < CGROUP_SLOTS; i++) {
             flag |= _slot_used[i];
         }
-        return ! flag;
+        return !flag;
     }
 
     friend class CSAOp;
@@ -102,6 +98,7 @@ protected:
 
         return _groups[group_idx];
     }
+
 public:
     const int sp_idx;
     CSpace(CHolder *holder);
@@ -115,7 +112,8 @@ public:
     CapErrCode create(CapIdx idx, Args &&...args) {
         const size_t group_idx = idx.group;
         if (group_idx >= CSPACE_SIZE) {
-            CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, this->sp_idx);
+            CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx,
+                              this->sp_idx);
             return CapErrCode::INVALID_INDEX;
         }
         CGroup *group = group_at(group_idx);
@@ -146,15 +144,17 @@ public:
 class RecvSpace : protected CSpace {
 protected:
     // 记录每个group的能力来源, 以便在接收迁移过来的能力时进行权限检查
-    // 只有当recv_src[group_idx] == src_cholder_id时, 才允许接收从src_cholder迁移过来的能力
+    // 只有当recv_src[group_idx] == src_cholder_id时,
+    // 才允许接收从src_cholder迁移过来的能力
     size_t _recv_src[CSPACE_SIZE];
+
 public:
     RecvSpace(CHolder *holder);
 
-    using CSpace::remove;
+    using CSpace::empty;
     using CSpace::get;
     using CSpace::group;
-    using CSpace::empty;
+    using CSpace::remove;
     using CSpace::tidyup;
 
     CapErrCode migrate(CapIdx idx, Capability *origin);

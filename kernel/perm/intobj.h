@@ -30,5 +30,4 @@ namespace perm::sintobj {
     constexpr b64 WRITE    = 0x2'0000;
     constexpr b64 INCREASE = 0x4'0000;
     constexpr b64 DECREASE = 0x8'0000;
-    constexpr b64 SPLIT    = 0x0'8000;  // 分裂权限, 用于将一个SIntObj分裂为两个
 }  // namespace perm::sintobj

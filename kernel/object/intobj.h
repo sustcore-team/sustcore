@@ -173,6 +173,4 @@ public:
     void write(int v);
     void increase(void);
     void decrease(void);
-
-    CapErrCode split(Capability *dst_csa, CapIdx idx);
 };

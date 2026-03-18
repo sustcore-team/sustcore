@@ -85,25 +85,3 @@ void SIntOp::decrease(void) {
     }
     _obj->_decrease();
 }
-
-CapErrCode SIntOp::split(Capability *dst_csa, CapIdx idx) {
-    using namespace perm::sintobj;
-    if (!imply<SPLIT>()) {
-        CAPABILITY::ERROR("权限不足");
-        return ErrCode::INSUFFICIENT_PERMISSIONS;
-    }
-
-    CSAOp op(dst_csa);
-    CapErrCode err = op.create<SIntAcc>(idx, _obj);
-    if (err != CapErrCode::SUCCESS) {
-        return err;
-    }
-    auto cap_opt = op.lookup(idx);
-    cap_opt.if_present(
-        [this](Capability *cap)
-        {
-            cap->downgrade(_cap->perm());
-        }
-    );
-    return cap_opt.error();
-}

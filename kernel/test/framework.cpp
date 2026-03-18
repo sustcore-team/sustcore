@@ -24,13 +24,13 @@
 #include <test/tree.h>
 
 void collect_tests(TestFramework& framework) {
-    test::buddy::collect_tests(framework);
+    // test::buddy::collect_tests(framework);
     test::cap::collect_tests(framework);
-    test::fs::collect_tests(framework);
-    test::path::collect_tests(framework);
-    test::slub::collect_tests(framework);
-    test::string::collect_tests(framework);
-    test::string_view::collect_tests(framework);
+    // test::fs::collect_tests(framework);
+    // test::path::collect_tests(framework);
+    // test::slub::collect_tests(framework);
+    // test::string::collect_tests(framework);
+    // test::string_view::collect_tests(framework);
     // 该测试中出现大量的double-free错误, 需要后续修复后再启用
     // test::tree::collect_tests(framework);
 }

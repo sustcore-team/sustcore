@@ -61,6 +61,7 @@ template <typename SharedObj>
     requires std::derived_from<SharedObj, SharedObject<SharedObj>>
 class SharedObjectAccessor : public Payload {
 public:
+    using Payload = SharedObj;
     static constexpr PayloadType IDENTIFIER = PayloadType::SINTOBJ;
     virtual PayloadType type_id(void) const override {
         return SharedObj::IDENTIFIER;

@@ -93,28 +93,28 @@ namespace test::cap {
             tassert(root_read0.present() && root_read0.value() == 31415,
                     "共享对象初始读值校验");
 
-            expect("使用 split 创建两个新根能力, 三个根能力应同时持有同一 SIntObj");
+            expect(
+                "使用 split 创建两个新根能力, 三个根能力应同时持有同一 "
+                "SIntObj");
 
             auto idx_root1_opt = op0.get_free_slot();
+            tassert(idx_root1_opt.present(), "分配槽位 idx_sint_root1");
             CapIdx idx_root1 = idx_root1_opt.value();
-            tassert(idx_root1_opt.present(),
-                "分配槽位 idx_sint_root1");
-            tassert(root_op.split(cap_csa0_opt.value(), idx_root1) ==
-                CapErrCode::SUCCESS,
-                "split 创建根能力 #1");
+            tassert(op0.split<SIntAcc>(idx_root1, &holder0.space(), idx_root) ==
+                        CapErrCode::SUCCESS,
+                    "split 创建根能力 #1");
 
             auto idx_root2_opt = op0.get_free_slot();
+            tassert(idx_root2_opt.present(), "分配槽位 idx_sint_root2");
             CapIdx idx_root2 = idx_root2_opt.value();
-            tassert(idx_root2_opt.present(),
-                "分配槽位 idx_sint_root2");
-            tassert(root_op.split(cap_csa0_opt.value(), idx_root2) ==
-                CapErrCode::SUCCESS,
-                "split 创建根能力 #2");
+            tassert(op0.split<SIntAcc>(idx_root2, &holder0.space(), idx_root) ==
+                        CapErrCode::SUCCESS,
+                    "split 创建根能力 #2");
 
             auto cap_root1_opt = holder0.space().get(idx_root1);
             auto cap_root2_opt = holder0.space().get(idx_root2);
             tassert(cap_root1_opt.present() && cap_root2_opt.present(),
-                "获取 split 后根能力");
+                    "获取 split 后根能力");
             SIntOp root1_op(cap_root1_opt.value());
             SIntOp root2_op(cap_root2_opt.value());
 
@@ -124,15 +124,15 @@ namespace test::cap {
             auto read1 = root1_op.read();
             auto read2 = root2_op.read();
             tassert(read0.present() && read0.value() == 31416,
-                "根能力 #0 读值校验");
+                    "根能力 #0 读值校验");
             tassert(read1.present() && read1.value() == 31416,
-                "根能力 #1 读值校验");
+                    "根能力 #1 读值校验");
             tassert(read2.present() && read2.value() == 31416,
-                "根能力 #2 读值校验");
+                    "根能力 #2 读值校验");
 
             action("删除根能力 #1, 其余根能力不应受影响");
             tassert(op0.remove(idx_root1) == CapErrCode::SUCCESS,
-                "删除根能力 #1");
+                    "删除根能力 #1");
             ttest(!holder0.space().get(idx_root1).present());
             ttest(holder0.space().get(idx_root).present());
             ttest(holder0.space().get(idx_root2).present());
@@ -143,17 +143,158 @@ namespace test::cap {
 
             action("删除根能力 #2, 根能力 #0 仍应可读");
             tassert(op0.remove(idx_root2) == CapErrCode::SUCCESS,
-                "删除根能力 #2");
+                    "删除根能力 #2");
             ttest(!holder0.space().get(idx_root2).present());
             auto read_after_remove = root_op.read();
             tassert(read_after_remove.present() &&
-                read_after_remove.value() == 31416,
-                "根能力 #0 在其他根释放后仍可访问");
+                        read_after_remove.value() == 31416,
+                    "根能力 #0 在其他根释放后仍可访问");
 
             action("最后删除根能力 #0, 再执行 GC 应回收对象");
             tassert(op0.remove(idx_root) == CapErrCode::SUCCESS,
-                "删除根能力 #0");
+                    "删除根能力 #0");
             ttest(!holder0.space().get(idx_root).present());
+            manager.GC();
+            ttest(manager.object_count() == 0);
+        }
+    };
+
+    class CaseSplitPermission : public TestCase {
+    public:
+        CaseSplitPermission() : TestCase("SIntObj split 权限边界测试") {}
+        void _run(void* env [[maybe_unused]]) const noexcept override {
+            CHolder holder0;
+            auto cap_csa0_opt = holder0.csa();
+            tassert(cap_csa0_opt.present());
+            CSAOp op0(cap_csa0_opt.value());
+            SIntManager manager;
+
+            auto idx_no_split_src_opt = op0.get_free_slot();
+            tassert(idx_no_split_src_opt.present(),
+                    "分配槽位 idx_no_split_src");
+            CapIdx idx_no_split_src = idx_no_split_src_opt.value();
+            tassert(
+                op0.create<SIntAcc>(idx_no_split_src, manager.create(27182)) ==
+                    CapErrCode::SUCCESS,
+                "创建无 SPLIT 负向场景源能力");
+
+            auto cap_no_split_opt = holder0.space().get(idx_no_split_src);
+            tassert(cap_no_split_opt.present(), "获取负向场景源能力");
+            PermissionBits no_split_perm(perm::sintobj::READ,
+                                         PayloadType::SINTOBJ);
+            tassert(cap_no_split_opt.value()->downgrade(no_split_perm) ==
+                        CapErrCode::SUCCESS,
+                    "降权为无 SPLIT 权限");
+
+            auto idx_no_split_dst_opt = op0.get_free_slot();
+            tassert(idx_no_split_dst_opt.present(),
+                    "分配槽位 idx_no_split_dst");
+            CapIdx idx_no_split_dst = idx_no_split_dst_opt.value();
+
+            expect("去除 SPLIT 权限后执行 split 应失败");
+            tassert(op0.split<SIntAcc>(idx_no_split_dst, &holder0.space(),
+                                       idx_no_split_src) ==
+                        CapErrCode::INSUFFICIENT_PERMISSIONS,
+                    "验证无 SPLIT 权限时 split 失败");
+            ttest(!holder0.space().get(idx_no_split_dst).present());
+
+            auto idx_split_only_src_opt = op0.get_free_slot();
+            tassert(idx_split_only_src_opt.present(),
+                    "分配槽位 idx_split_only_src");
+            CapIdx idx_split_only_src = idx_split_only_src_opt.value();
+            tassert(op0.create<SIntAcc>(idx_split_only_src,
+                                        manager.create(16180)) ==
+                        CapErrCode::SUCCESS,
+                    "创建 SPLIT-only 场景源能力");
+
+            auto cap_split_only_opt = holder0.space().get(idx_split_only_src);
+            tassert(cap_split_only_opt.present(), "获取 SPLIT-only 场景源能力");
+
+                auto idx_split_observer_opt = op0.get_free_slot();
+                tassert(idx_split_observer_opt.present(),
+                    "分配槽位 idx_split_observer");
+                CapIdx idx_split_observer = idx_split_observer_opt.value();
+                tassert(op0.split<SIntAcc>(idx_split_observer, &holder0.space(),
+                               idx_split_only_src) ==
+                    CapErrCode::SUCCESS,
+                    "创建观测能力(完整权限)");
+
+                auto cap_split_observer_opt = holder0.space().get(idx_split_observer);
+                tassert(cap_split_observer_opt.present(), "获取观测能力");
+                SIntOp split_observer_op(cap_split_observer_opt.value());
+                auto observer_read0 = split_observer_op.read();
+                tassert(observer_read0.present() && observer_read0.value() == 16180,
+                    "观测能力初始读值校验");
+
+            PermissionBits split_only_perm(perm::basic::SPLIT,
+                                           PayloadType::SINTOBJ);
+            tassert(cap_split_only_opt.value()->downgrade(split_only_perm) ==
+                        CapErrCode::SUCCESS,
+                    "仅保留 SPLIT 权限");
+
+            SIntOp split_only_src_op(cap_split_only_opt.value());
+            auto src_read = split_only_src_op.read();
+            tassert(
+                !src_read.present() &&
+                    src_read.error() == CapErrCode::INSUFFICIENT_PERMISSIONS,
+                "SPLIT-only 源能力读操作应被拒绝");
+
+            action("SPLIT-only 下 write/increase/decrease 操作应被拒绝");
+            split_only_src_op.write(42424);
+            split_only_src_op.increase();
+            split_only_src_op.decrease();
+            auto observer_read1 = split_observer_op.read();
+            tassert(observer_read1.present() && observer_read1.value() == 16180,
+                    "SPLIT-only 下写操作未生效");
+
+            auto idx_split_chain_l1_opt = op0.get_free_slot();
+            tassert(idx_split_chain_l1_opt.present(),
+                    "分配槽位 idx_split_chain_l1");
+            CapIdx idx_split_chain_l1 = idx_split_chain_l1_opt.value();
+
+            expect("保留 SPLIT 且移除其它权限后, split 仍应成功");
+            tassert(
+                op0.split<SIntAcc>(idx_split_chain_l1, &holder0.space(),
+                                   idx_split_only_src) == CapErrCode::SUCCESS,
+                "验证 SPLIT-only 权限下 split 成功");
+
+            auto idx_split_chain_l2_opt = op0.get_free_slot();
+            tassert(idx_split_chain_l2_opt.present(),
+                    "分配槽位 idx_split_chain_l2");
+            CapIdx idx_split_chain_l2 = idx_split_chain_l2_opt.value();
+            tassert(op0.split<SIntAcc>(idx_split_chain_l2, &holder0.space(),
+                                       idx_split_chain_l1) ==
+                        CapErrCode::SUCCESS,
+                    "验证链式 split 成功(l1 -> l2)");
+
+            auto cap_split_chain_l1_opt = holder0.space().get(idx_split_chain_l1);
+            auto cap_split_chain_l2_opt = holder0.space().get(idx_split_chain_l2);
+            tassert(cap_split_chain_l1_opt.present() && cap_split_chain_l2_opt.present(),
+                    "获取链式 split 结果能力");
+            SIntOp split_chain_l1_op(cap_split_chain_l1_opt.value());
+            SIntOp split_chain_l2_op(cap_split_chain_l2_opt.value());
+            auto l1_read = split_chain_l1_op.read();
+            auto l2_read = split_chain_l2_op.read();
+            tassert(
+                !l1_read.present() &&
+                    l1_read.error() == CapErrCode::INSUFFICIENT_PERMISSIONS,
+                "链式 split l1 能力应继承 SPLIT-only 权限");
+            tassert(
+                !l2_read.present() &&
+                    l2_read.error() == CapErrCode::INSUFFICIENT_PERMISSIONS,
+                "链式 split l2 能力应继承 SPLIT-only 权限");
+
+            action("清理能力并执行 GC");
+            tassert(op0.remove(idx_no_split_src) == CapErrCode::SUCCESS,
+                    "清理负向场景源能力");
+            tassert(op0.remove(idx_split_only_src) == CapErrCode::SUCCESS,
+                    "清理 SPLIT-only 场景源能力");
+            tassert(op0.remove(idx_split_observer) == CapErrCode::SUCCESS,
+                    "清理观测能力");
+            tassert(op0.remove(idx_split_chain_l1) == CapErrCode::SUCCESS,
+                    "清理链式 split l1 能力");
+            tassert(op0.remove(idx_split_chain_l2) == CapErrCode::SUCCESS,
+                    "清理链式 split l2 能力");
             manager.GC();
             ttest(manager.object_count() == 0);
         }
@@ -318,6 +459,7 @@ namespace test::cap {
         cases.push_back(new CaseInitCHolder());
         cases.push_back(new CaseCreateObject());
         cases.push_back(new CaseSharedObject());
+        cases.push_back(new CaseSplitPermission());
         cases.push_back(new CaseClone());
         cases.push_back(new CaseMigrate());
         cases.push_back(new CaseDowngrade());

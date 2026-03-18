@@ -18,4 +18,5 @@ namespace perm::basic {
     constexpr b64 UNWRAP  = 0x0001;
     constexpr b64 CLONE   = 0x0002;
     constexpr b64 MIGRATE = 0x0004;
+    constexpr b64 SPLIT   = 0x0008;
 }  // namespace perm::csa
