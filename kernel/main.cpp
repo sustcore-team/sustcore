@@ -47,6 +47,8 @@
 #include <exception>
 #include <string_view>
 
+#include <unordered_map>
+
 int kputs(const char *str) {
     size_t len        = strlen(str);
     PhyAddr str_paddr = convert_pointer(str);
