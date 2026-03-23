@@ -13,6 +13,7 @@
 
 #include <exception>
 #include <bits/cow_string.h>
+#include <cstring>
 
 namespace std {
     class logic_error : public exception {

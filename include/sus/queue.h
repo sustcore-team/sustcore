@@ -14,6 +14,8 @@
 #include <cstddef>
 #include <utility>
 #include <stdexcept>
+#include <expected>
+#include <nt/errors.h>
 
 namespace util {
     template <typename _Tp, size_t D_capacity>
@@ -112,9 +114,9 @@ namespace util {
 
         // emplace
         template <typename... Args>
-        void emplace(Args&&... args) noexcept {
+        std::result_nt<void> emplace(Args&&... args) noexcept {
             if (full()) {
-                _THROW(std::overflow_error("StaticArrayQueue::emplace: queue is full"));
+                return {std::unexpect, std::error_type::OVERFLOW_ERROR};
             }
 
             const IndexType last_idx = D_tail;
@@ -122,25 +124,28 @@ namespace util {
 
             // 原地构造
             D_data[last_idx] = _Tp(std::forward<Args>(args)...);
+            return {};
         }
 
         // pop/push_front/back
-        void push(const _Tp& value) noexcept {
+        std::result_nt<void> push(const _Tp& value) noexcept {
             if (full()) {
-                _THROW(std::overflow_error("StaticArrayQueue::push: queue is full"));
+                return {std::unexpect, std::error_type::OVERFLOW_ERROR};
             }
 
             const IndexType last_idx = D_tail;
             D_tail = U_next(D_tail);
 
             D_data[last_idx] = value;
+            return {};
         }
 
-        void pop() noexcept {
+        std::result_nt<void> pop() noexcept {
             if (empty()) {
-                _THROW(std::underflow_error("StaticArrayQueue::pop: queue is empty"));
+                return {std::unexpect, std::error_type::UNDERFLOW_ERROR};
             }
             D_head = U_next(D_head);
+            return {};
         }
 
         _Tp & front() noexcept {

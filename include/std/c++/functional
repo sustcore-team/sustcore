@@ -17,6 +17,62 @@
 namespace std {
 
     template <typename T>
+    class reference_wrapper {
+      public:
+        using type = T;
+
+        constexpr reference_wrapper(T& ref) noexcept : __ptr(&ref) {}
+        constexpr reference_wrapper(T&&) = delete;
+
+        constexpr reference_wrapper(const reference_wrapper&) noexcept = default;
+        constexpr reference_wrapper& operator=(const reference_wrapper&)
+            noexcept = default;
+
+        constexpr operator T&() const noexcept {
+            return *__ptr;
+        }
+
+        constexpr T& get() const noexcept {
+            return *__ptr;
+        }
+
+        template <typename... Args>
+        constexpr auto operator()(Args&&... args) const
+            -> invoke_result_t<T&, Args...> {
+            return (*__ptr)(std::forward<Args>(args)...);
+        }
+
+      private:
+        T* __ptr;
+    };
+
+    template <typename T>
+    constexpr reference_wrapper<T> ref(T& t) noexcept {
+        return reference_wrapper<T>(t);
+    }
+
+    template <typename T>
+    constexpr reference_wrapper<T> ref(reference_wrapper<T> t) noexcept {
+        return t;
+    }
+
+    template <typename T>
+    void ref(const T&&) = delete;
+
+    template <typename T>
+    constexpr reference_wrapper<const T> cref(const T& t) noexcept {
+        return reference_wrapper<const T>(t);
+    }
+
+    template <typename T>
+    constexpr reference_wrapper<const T> cref(reference_wrapper<T> t) noexcept {
+        return reference_wrapper<const T>(t.get());
+    }
+
+    template <typename T>
+    void cref(const T&&) = delete;
+
+    template <typename T>
     struct less {
         constexpr bool operator()(const T &a, const T &b) const noexcept {
             return a < b;

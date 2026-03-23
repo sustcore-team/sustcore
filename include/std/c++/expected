@@ -164,7 +164,7 @@ namespace std {
         bool D_has_value;
 
         // 摧毁value或error, 取决于当前状态
-        void U_destroy_active() {
+        constexpr void U_destroy_active() {
             if (D_has_value) {
                 D_storage.D_value.~T();
             } else {
@@ -232,7 +232,7 @@ namespace std {
             }
         }
 
-        ~expected() {
+        constexpr ~expected() {
             U_destroy_active();
         }
 
@@ -688,8 +688,7 @@ namespace std {
             E D_error;
 
             constexpr __storage() : D_dummy() {}
-
-            ~__storage() {}
+            ~__storage() = default;
         } D_storage;
 
         bool D_has_value;
@@ -740,7 +739,7 @@ namespace std {
             }
         }
 
-        ~expected() {
+        constexpr ~expected() {
             if (!D_has_value) {
                 D_storage.D_error.~E();
             }

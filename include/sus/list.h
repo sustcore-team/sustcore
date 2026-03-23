@@ -11,10 +11,13 @@
 
 #pragma once
 
+#include <nt/errors.h>
+
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstring>
+#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -870,10 +873,10 @@ namespace util {
 
         // 解引用
         constexpr reference operator*() noexcept {
-            return D_list.at(D_index);
+            return D_list.at(D_index).value().get();
         }
         constexpr pointer operator->() noexcept {
-            return &D_list.at(D_index);
+            return &D_list.at(D_index).value().get();
         }
         // 迭代操作
         constexpr ArrayListIterator& operator++() noexcept {
@@ -933,10 +936,10 @@ namespace util {
 
         // 解引用
         constexpr reference operator*() const noexcept {
-            return D_list.at(D_index);
+            return D_list.at(D_index).value().get();
         }
         constexpr pointer operator->() const noexcept {
-            return &D_list.at(D_index);
+            return &D_list.at(D_index).value().get();
         }
         // 迭代操作
         constexpr ArrayListConstIterator& operator++() noexcept {
@@ -1109,29 +1112,30 @@ namespace util {
         constexpr const _Tp& operator[](IndexType index) const noexcept {
             return D_data[index];
         }
-        constexpr _Tp& at(IndexType index) {
+        constexpr std::result_nt<_Tp&> at(IndexType index) noexcept {
             if (index >= D_size) {
-                _THROW(std::out_of_range("ArrayList::at(): index out of range"));
+                return {std::unexpect, std::error_type::OUT_OF_RANGE};
             }
-            return D_data[index];
+            return std::ref(D_data[index]);
         }
-        constexpr const _Tp& at(IndexType index) const {
+        constexpr std::result_nt<const _Tp&> at(
+            IndexType index) const noexcept {
             if (index >= D_size) {
-                _THROW(std::out_of_range("ArrayList::at(): index out of range"));
+                return {std::unexpect, std::error_type::OUT_OF_RANGE};
             }
-            return D_data[index];
+            return std::cref(D_data[index]);
         }
-        constexpr _Tp& front() {
-            return at(0);
+        constexpr _Tp& front() noexcept {
+            return D_data[0];
         }
-        constexpr const _Tp& front() const {
-            return at(0);
+        constexpr const _Tp& front() const noexcept {
+            return D_data[0];
         }
-        constexpr _Tp& back() {
-            return at(D_size - 1);
+        constexpr _Tp& back() noexcept {
+            return D_data[D_size - 1];
         }
-        constexpr const _Tp& back() const {
-            return at(D_size - 1);
+        constexpr const _Tp& back() const noexcept {
+            return D_data[D_size - 1];
         }
 
         // insert & erase
