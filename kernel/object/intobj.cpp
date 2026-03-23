@@ -14,74 +14,80 @@
 #include <object/intobj.h>
 #include <sustcore/errcode.h>
 
-CapOptional<int> IntOp::read(void) const {
+Result<int> IntOp::read() const {
     using namespace perm::intobj;
     if (!imply<READ>()) {
         CAPABILITY::ERROR("权限不足");
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     return _obj->_read();
 }
 
-void IntOp::write(int v) {
+Result<void> IntOp::write(int v) {
     using namespace perm::intobj;
     if (!imply<WRITE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_write(v);
+    return {};
 }
 
-void IntOp::increase(void) {
+Result<void> IntOp::increase() {
     using namespace perm::intobj;
     if (!imply<INCREASE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_increase();
+    return {};
 }
 
-void IntOp::decrease(void) {
+Result<void> IntOp::decrease() {
     using namespace perm::intobj;
     if (!imply<DECREASE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_decrease();
+    return {};
 }
 
-CapOptional<int> SIntOp::read(void) const {
+Result<int> SIntOp::read() const {
     using namespace perm::sintobj;
     if (!imply<READ>()) {
         CAPABILITY::ERROR("权限不足");
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     return _obj->_read();
 }
 
-void SIntOp::write(int v) {
+Result<void> SIntOp::write(int v) {
     using namespace perm::sintobj;
     if (!imply<WRITE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_write(v);
+    return {};
 }
 
-void SIntOp::increase(void) {
+Result<void> SIntOp::increase() {
     using namespace perm::sintobj;
     if (!imply<INCREASE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_increase();
+    return {};
 }
 
-void SIntOp::decrease(void) {
+Result<void> SIntOp::decrease() {
     using namespace perm::sintobj;
     if (!imply<DECREASE>()) {
         CAPABILITY::ERROR("权限不足");
-        return;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     _obj->_decrease();
+    return {};
 }

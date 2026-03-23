@@ -42,9 +42,9 @@ public:
         return _recv_space;
     }
 
-    CapOptional<Capability *> access(CapIdx idx);
+    Result<Capability *> access(CapIdx idx);
 
-    inline CapOptional<Capability *> csa(void) {
+    inline Result<Capability *> csa(void) {
         return access(_csa_idx);
     };
 

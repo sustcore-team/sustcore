@@ -22,13 +22,13 @@ CHolder::CHolder(void)
       _recv_space(this),
       _csa_idx(0, 0),
       cholder_id(CHOLDER_ID->get()) {
-    CapErrCode err = _space.create<CSpaceAccessor>(_csa_idx, &_space);
-    assert(err == CapErrCode::SUCCESS);
+    auto ret= _space.create<CSpaceAccessor>(_csa_idx, &_space);
+    assert(ret.has_value());
 }
 
 CHolder::~CHolder() {}
 
-CapOptional<Capability *> CHolder::access(CapIdx idx) {
+Result<Capability *> CHolder::access(CapIdx idx) {
     if (idx.type == SpaceType::MAJOR) {
         return _space.get(idx);
     }
@@ -37,5 +37,5 @@ CapOptional<Capability *> CHolder::access(CapIdx idx) {
         return _recv_space.get(idx);
     }
 
-    return CapErrCode::TYPE_NOT_MATCHED;
+    return {unexpect, ErrCode::TYPE_NOT_MATCHED};
 }

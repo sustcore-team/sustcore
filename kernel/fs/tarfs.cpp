@@ -37,7 +37,7 @@ namespace tarfs {
         ptr_        = data_;
     }
 
-    FSOptional<size_t> TarFile::read(void *buf, size_t len) {
+    Result<size_t> TarFile::read(void *buf, size_t len) {
         if (ptr_ == end_) {
             return 0;  // 已经读到文件末尾了，读取长度为0
         }
@@ -47,27 +47,27 @@ namespace tarfs {
         return to_read;
     }
     
-    FSOptional<size_t> TarFile::read(off_t offset, void *buf, size_t len) {
+    Result<size_t> TarFile::read(off_t offset, void *buf, size_t len) {
         const auto _ptr = data_ + offset;
         if (_ptr < data_ || _ptr > end_) {
-            return FSErrCode::INVALID_PARAM;
+            return {unexpect, ErrCode::INVALID_PARAM};
         }
         size_t to_read = std::min(len, static_cast<size_t>(end_ - _ptr));
         memcpy(buf, _ptr, to_read);
         return to_read;
     }
 
-    FSOptional<off_t> TarFile::seek(off_t offset, SeekWhence whence) {
+    Result<off_t> TarFile::seek(off_t offset, SeekWhence whence) {
         // off_t 是有符号的
         auto new_ptr = ptr_;
         switch (whence) {
             case SeekWhence::SET: new_ptr = data_ + offset; break;
             case SeekWhence::CUR: new_ptr = ptr_ + offset; break;
             case SeekWhence::END: new_ptr = end_ + offset; break;
-            default:              return FSErrCode::INVALID_PARAM;
+            default:              return {unexpect, ErrCode::INVALID_PARAM};
         }
         if (new_ptr < data_ || new_ptr > end_) {
-            return FSErrCode::INVALID_PARAM;
+            return {unexpect, ErrCode::INVALID_PARAM};
         }
         ptr_ = new_ptr;
         return static_cast<off_t>(new_ptr - data_);
@@ -82,7 +82,7 @@ namespace tarfs {
         kop::TarFile->free(static_cast<TarFile *>(ptr));
     }
 
-    FSOptional<IDentry *> TarDirectory::lookup(const char *name) {
+    Result<IDentry *> TarDirectory::lookup(const char *name) {
         if (*name == '\0')
             return node_;  // 约定空字符串表示目录自身
 
@@ -115,11 +115,11 @@ namespace tarfs {
         }
 
         if (ret == nullptr)
-            return FSErrCode::INVALID_PARAM;  // 没有找到对应目录项
+            return {unexpect, ErrCode::INVALID_PARAM};  // 没有找到对应目录项
         else
             return ret;
 
-        return FSErrCode::ENTRY_NOT_FOUND;
+        return {unexpect, ErrCode::ENTRY_NOT_FOUND};
     }
 
     void *TarDirectory::operator new(size_t sz) noexcept {
@@ -167,26 +167,26 @@ namespace tarfs {
         return true;
     }
 
-    FSErrCode TarFSDriver::probe(IBlockDevice *device, const char *options) {
+    Result<void> TarFSDriver::probe(IBlockDevice *device, const char *options) {
         size_t size        = device->block_sz() * device->block_cnt();
         uint8_t *data      = new uint8_t[size];
         size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
         if (read_blocks != device->block_cnt()) {
             delete[] data;
-            return FSErrCode::IO_ERROR;
+            return {unexpect, ErrCode::IO_ERROR};
         }
         if (is_valid(size, data)) {
             delete[] data;
-            return FSErrCode::SUCCESS;
+            return {};
         } else {
             delete[] data;
-            return FSErrCode::INVALID_PARAM;
+            return {unexpect, ErrCode::INVALID_PARAM};
         }
     }
 
     // 注意，没有做检验。需要确保 probe 过是 Tarfs
-    FSOptional<ISuperblock *> TarFSDriver::mount(IBlockDevice *device,
-                                                 const char *options) {
+    Result<ISuperblock *> TarFSDriver::mount(IBlockDevice *device,
+                                             const char *options) {
         size_t size   = device->block_sz() * device->block_cnt();
         uint8_t *data = nullptr;
         if (device->is<RamDiskDevice>()) {
@@ -197,7 +197,7 @@ namespace tarfs {
             size_t blocks = device->read_blocks(0, data, device->block_cnt());
             if (blocks != device->block_cnt()) {
                 delete[] data;
-                return FSErrCode::IO_ERROR;
+                return {unexpect, ErrCode::IO_ERROR};
             }
         }
         return new TarSuperblock(data, size, this, device);

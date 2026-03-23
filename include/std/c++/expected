@@ -1,0 +1,1077 @@
+/**
+ * @file expected
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief expected 类型
+ * @version alpha-1.0.0
+ * @date 2026-03-20
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <exception>
+#include <type_traits>
+#include <utility>
+
+namespace std {
+    // 标识对象
+    struct unexpect_t {
+        explicit constexpr unexpect_t() = default;
+    };
+    inline constexpr unexpect_t unexpect{};
+
+    // 包装错误类型
+    template <typename E>
+    class unexpected {
+    private:
+        E D_error;
+
+    public:
+        using error_type = E;
+
+        constexpr unexpected(const unexpected &)            = default;
+        constexpr unexpected(unexpected &&)                 = default;
+        constexpr unexpected &operator=(const unexpected &) = default;
+        constexpr unexpected &operator=(unexpected &&)      = default;
+        constexpr ~unexpected()                             = default;
+
+        constexpr explicit unexpected(const E &error) : D_error(error) {}
+        constexpr explicit unexpected(E &&error) : D_error(std::move(error)) {}
+
+        template <typename... Args>
+        constexpr explicit unexpected(unexpect_t, Args &&...args)
+            : D_error(std::forward<Args>(args)...) {}
+
+        constexpr const E &error() const & noexcept {
+            return D_error;
+        }
+
+        constexpr E &error() & noexcept {
+            return D_error;
+        }
+
+        constexpr const E &&error() const && noexcept {
+            return std::move(D_error);
+        }
+
+        constexpr E &&error() && noexcept {
+            return std::move(D_error);
+        }
+
+        constexpr void swap(unexpected &other) {
+            std::swap(D_error, other.D_error);
+        }
+    };
+
+    // 类型推导, 以避免显式指定模板参数
+    template <typename E>
+    unexpected(E) -> unexpected<E>;
+
+    template <typename E>
+    constexpr unexpected<decay_t<E>> make_unexpected(E &&error) {
+        return unexpected<decay_t<E>>(std::forward<E>(error));
+    }
+
+    // bad_expected_access 异常
+    // 在这里加入异常是为了遵循标准库的设计
+    // 但是, 既然用了expected, 就应当避免使用异常
+    template <typename E>
+    class bad_expected_access;
+    template <>
+    class bad_expected_access<void> : public exception {
+    public:
+        constexpr bad_expected_access() noexcept                   = default;
+        constexpr bad_expected_access(const bad_expected_access &) = default;
+        constexpr bad_expected_access(bad_expected_access &&)      = default;
+        constexpr bad_expected_access &operator=(const bad_expected_access &) =
+            default;
+        constexpr bad_expected_access &operator=(bad_expected_access &&) =
+            default;
+        virtual ~bad_expected_access() override = default;
+
+        [[nodiscard]]
+        const char *what() const noexcept override {
+            return "bad expected access";
+        }
+#ifdef __SUS_NO_RTTI__
+        [[nodiscard]]
+        const char *type() const override {
+            return "std::bad_expected_access<void>";
+        }
+#endif
+    };
+    template <typename E>
+    class bad_expected_access : public bad_expected_access<void> {
+    private:
+        E D_error;
+
+    public:
+        explicit bad_expected_access(E error)
+            : bad_expected_access<void>(), D_error(std::move(error)) {}
+
+        [[nodiscard]]
+        const E &error() const & noexcept {
+            return D_error;
+        }
+
+        [[nodiscard]]
+        E &error() & noexcept {
+            return D_error;
+        }
+
+        [[nodiscard]]
+        const E &&error() const && noexcept {
+            return std::move(D_error);
+        }
+
+        [[nodiscard]]
+        E &&error() && noexcept {
+            return std::move(D_error);
+        }
+#ifdef __SUS_NO_RTTI__
+        [[nodiscard]]
+        const char *type() const override {
+            return "std::bad_expected_access";
+        }
+#endif
+    };
+
+    // expected
+    template <typename T, typename E>
+    class expected {
+    private:
+        static_assert(
+            !is_void_v<T>,
+            "expected<T, E>: T 为空时, 应当是特化版本 expected<void, E>");
+        static_assert(!is_void_v<E>, "expected<T, E>: E 不应为空");
+        static_assert(!__is_reference(T), "expected<T, E>: T 不应为引用");
+        static_assert(!__is_reference(E), "expected<T, E>: E 不应为引用");
+
+        // 使用union存储value和error
+        // dummy变量用于初始化union, 避免调用非trivial类型的默认构造函数
+        union __storage {
+            char D_dummy;
+            T D_value;
+            E D_error;
+
+            constexpr __storage() : D_dummy() {}
+
+            ~__storage() {}
+        } D_storage;
+
+        bool D_has_value;
+
+        // 摧毁value或error, 取决于当前状态
+        void U_destroy_active() {
+            if (D_has_value) {
+                D_storage.D_value.~T();
+            } else {
+                D_storage.D_error.~E();
+            }
+        }
+
+    public:
+        using value_type = T;
+        using error_type = E;
+
+        constexpr expected() : D_storage(), D_has_value(true) {
+            new (&D_storage.D_value) T();
+        }
+
+        constexpr expected(const T &value) : D_storage(), D_has_value(true) {
+            new (&D_storage.D_value) T(value);
+        }
+
+        constexpr expected(T &&value) : D_storage(), D_has_value(true) {
+            new (&D_storage.D_value) T(std::move(value));
+        }
+
+        constexpr expected(const unexpected<E> &error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(error.error());
+        }
+
+        constexpr expected(unexpected<E> &&error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::move(error.error()));
+        }
+
+        constexpr expected(unexpect_t, const E &error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(error);
+        }
+
+        constexpr expected(unexpect_t, E &&error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::move(error));
+        }
+
+        template <typename... Args>
+        constexpr expected(unexpect_t, Args &&...args)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::forward<Args>(args)...);
+        }
+
+        constexpr expected(const expected &other)
+            : D_storage(), D_has_value(other.D_has_value) {
+            if (D_has_value) {
+                new (&D_storage.D_value) T(other.D_storage.D_value);
+            } else {
+                new (&D_storage.D_error) E(other.D_storage.D_error);
+            }
+        }
+
+        constexpr expected(expected &&other)
+            : D_storage(), D_has_value(other.D_has_value) {
+            if (D_has_value) {
+                new (&D_storage.D_value) T(std::move(other.D_storage.D_value));
+            } else {
+                new (&D_storage.D_error) E(std::move(other.D_storage.D_error));
+            }
+        }
+
+        ~expected() {
+            U_destroy_active();
+        }
+
+        constexpr expected &operator=(const expected &other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            if (D_has_value && other.D_has_value) {
+                D_storage.D_value = other.D_storage.D_value;
+                return *this;
+            }
+
+            if (!D_has_value && !other.D_has_value) {
+                D_storage.D_error = other.D_storage.D_error;
+                return *this;
+            }
+
+            if (D_has_value) {
+                D_storage.D_value.~T();
+                new (&D_storage.D_error) E(other.D_storage.D_error);
+                D_has_value = false;
+            } else {
+                D_storage.D_error.~E();
+                new (&D_storage.D_value) T(other.D_storage.D_value);
+                D_has_value = true;
+            }
+
+            return *this;
+        }
+
+        constexpr expected &operator=(expected &&other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            if (D_has_value && other.D_has_value) {
+                D_storage.D_value = std::move(other.D_storage.D_value);
+                return *this;
+            }
+
+            if (!D_has_value && !other.D_has_value) {
+                D_storage.D_error = std::move(other.D_storage.D_error);
+                return *this;
+            }
+
+            if (D_has_value) {
+                D_storage.D_value.~T();
+                new (&D_storage.D_error) E(std::move(other.D_storage.D_error));
+                D_has_value = false;
+            } else {
+                D_storage.D_error.~E();
+                new (&D_storage.D_value) T(std::move(other.D_storage.D_value));
+                D_has_value = true;
+            }
+
+            return *this;
+        }
+
+        constexpr expected &operator=(const T &value) {
+            if (D_has_value) {
+                D_storage.D_value = value;
+            } else {
+                D_storage.D_error.~E();
+                new (&D_storage.D_value) T(value);
+                D_has_value = true;
+            }
+            return *this;
+        }
+
+        constexpr expected &operator=(T &&value) {
+            if (D_has_value) {
+                D_storage.D_value = std::move(value);
+            } else {
+                D_storage.D_error.~E();
+                new (&D_storage.D_value) T(std::move(value));
+                D_has_value = true;
+            }
+            return *this;
+        }
+
+        constexpr expected &operator=(const unexpected<E> &error) {
+            if (D_has_value) {
+                D_storage.D_value.~T();
+                new (&D_storage.D_error) E(error.error());
+                D_has_value = false;
+            } else {
+                D_storage.D_error = error.error();
+            }
+            return *this;
+        }
+
+        constexpr expected &operator=(unexpected<E> &&error) {
+            if (D_has_value) {
+                D_storage.D_value.~T();
+                new (&D_storage.D_error) E(std::move(error.error()));
+                D_has_value = false;
+            } else {
+                D_storage.D_error = std::move(error.error());
+            }
+            return *this;
+        }
+
+        [[nodiscard]]
+        constexpr bool has_value() const noexcept {
+            return D_has_value;
+        }
+
+        constexpr explicit operator bool() const noexcept {
+            return D_has_value;
+        }
+
+        constexpr T *operator->() noexcept {
+            return &D_storage.D_value;
+        }
+
+        constexpr const T *operator->() const noexcept {
+            return &D_storage.D_value;
+        }
+
+        constexpr T &operator*() & noexcept {
+            return D_storage.D_value;
+        }
+
+        constexpr const T &operator*() const & noexcept {
+            return D_storage.D_value;
+        }
+
+        constexpr T &&operator*() && noexcept {
+            return std::move(D_storage.D_value);
+        }
+
+        constexpr const T &&operator*() const && noexcept {
+            return std::move(D_storage.D_value);
+        }
+
+        constexpr T &value() & {
+            if (!D_has_value) {
+                _THROW(bad_expected_access<E>(D_storage.D_error));
+            }
+            return D_storage.D_value;
+        }
+
+        constexpr const T &value() const & {
+            if (!D_has_value) {
+                _THROW(bad_expected_access<E>(D_storage.D_error));
+            }
+            return D_storage.D_value;
+        }
+
+        constexpr T &&value() && {
+            if (!D_has_value) {
+                _THROW(bad_expected_access<E>(std::move(D_storage.D_error)));
+            }
+            return std::move(D_storage.D_value);
+        }
+
+        constexpr const T &&value() const && {
+            if (!D_has_value) {
+                _THROW(bad_expected_access<E>(D_storage.D_error));
+            }
+            return std::move(D_storage.D_value);
+        }
+
+        constexpr E &error() & noexcept {
+            return D_storage.D_error;
+        }
+
+        constexpr const E &error() const & noexcept {
+            return D_storage.D_error;
+        }
+
+        constexpr E &&error() && noexcept {
+            return std::move(D_storage.D_error);
+        }
+
+        constexpr const E &&error() const && noexcept {
+            return std::move(D_storage.D_error);
+        }
+
+        template <typename U>
+        constexpr T value_or(U &&default_value) const & {
+            if (D_has_value) {
+                return D_storage.D_value;
+            }
+            return static_cast<T>(std::forward<U>(default_value));
+        }
+
+        template <typename U>
+        constexpr T value_or(U &&default_value) && {
+            if (D_has_value) {
+                return std::move(D_storage.D_value);
+            }
+            return static_cast<T>(std::forward<U>(default_value));
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_value))>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(
+                    std::forward<F>(func)(D_storage.D_value));
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) const & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_value))>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(
+                    std::forward<F>(func)(D_storage.D_value));
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_value)))>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(
+                    std::forward<F>(func)(std::move(D_storage.D_value)));
+            }
+            return __ret_t(unexpect, std::move(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) const && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_value)))>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(
+                    std::forward<F>(func)(std::move(D_storage.D_value)));
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) & {
+            using __u_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_value))>;
+            if (D_has_value) {
+                return expected<__u_t, E>(
+                    std::forward<F>(func)(D_storage.D_value));
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) const & {
+            using __u_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_value))>;
+            if (D_has_value) {
+                return expected<__u_t, E>(
+                    std::forward<F>(func)(D_storage.D_value));
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) && {
+            using __u_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_value)))>;
+            if (D_has_value) {
+                return expected<__u_t, E>(
+                    std::forward<F>(func)(std::move(D_storage.D_value)));
+            }
+            return expected<__u_t, E>(unexpect, std::move(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) const && {
+            using __u_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_value)))>;
+            if (D_has_value) {
+                return expected<__u_t, E>(
+                    std::forward<F>(func)(std::move(D_storage.D_value)));
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, T>,
+                "expected<T, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t(D_storage.D_value);
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) const & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, T>,
+                "expected<T, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t(D_storage.D_value);
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, T>,
+                "expected<T, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t(std::move(D_storage.D_value));
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(std::move(D_storage.D_error)));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) const && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, T>,
+                "expected<T, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<T, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t(std::move(D_storage.D_value));
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) & {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            if (D_has_value) {
+                return expected<T, __g_t>(D_storage.D_value);
+            }
+            return expected<T, __g_t>(unexpect,
+                                      std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) const & {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            if (D_has_value) {
+                return expected<T, __g_t>(D_storage.D_value);
+            }
+            return expected<T, __g_t>(unexpect,
+                                      std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) && {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            if (D_has_value) {
+                return expected<T, __g_t>(std::move(D_storage.D_value));
+            }
+            return expected<T, __g_t>(
+                unexpect, std::forward<F>(func)(std::move(D_storage.D_error)));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) const && {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            if (D_has_value) {
+                return expected<T, __g_t>(std::move(D_storage.D_value));
+            }
+            return expected<T, __g_t>(unexpect,
+                                      std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename... Args>
+        constexpr T &emplace(Args &&...args) {
+            if (D_has_value) {
+                D_storage.D_value.~T();
+            } else {
+                D_storage.D_error.~E();
+            }
+            new (&D_storage.D_value) T(std::forward<Args>(args)...);
+            D_has_value = true;
+            return D_storage.D_value;
+        }
+
+        constexpr void swap(expected &other) {
+            expected tmp(std::move(other));
+            other = std::move(*this);
+            *this = std::move(tmp);
+        }
+    };
+
+    template <typename E>
+    class expected<void, E> {
+    private:
+        static_assert(!is_void_v<E>, "expected<void, E>: E should not be void");
+        static_assert(!__is_reference(E),
+                      "expected<void, E>: E should not be a reference");
+
+        union __storage {
+            char D_dummy;
+            E D_error;
+
+            constexpr __storage() : D_dummy() {}
+
+            ~__storage() {}
+        } D_storage;
+
+        bool D_has_value;
+
+    public:
+        using value_type = void;
+        using error_type = E;
+
+        constexpr expected() noexcept : D_storage(), D_has_value(true) {}
+
+        constexpr expected(const unexpected<E> &error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(error.error());
+        }
+
+        constexpr expected(unexpected<E> &&error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::move(error.error()));
+        }
+
+        constexpr expected(unexpect_t, const E &error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(error);
+        }
+
+        constexpr expected(unexpect_t, E &&error)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::move(error));
+        }
+
+        template <typename... Args>
+        constexpr expected(unexpect_t, Args &&...args)
+            : D_storage(), D_has_value(false) {
+            new (&D_storage.D_error) E(std::forward<Args>(args)...);
+        }
+
+        constexpr expected(const expected &other)
+            : D_storage(), D_has_value(other.D_has_value) {
+            if (!D_has_value) {
+                new (&D_storage.D_error) E(other.D_storage.D_error);
+            }
+        }
+
+        constexpr expected(expected &&other)
+            : D_storage(), D_has_value(other.D_has_value) {
+            if (!D_has_value) {
+                new (&D_storage.D_error) E(std::move(other.D_storage.D_error));
+            }
+        }
+
+        ~expected() {
+            if (!D_has_value) {
+                D_storage.D_error.~E();
+            }
+        }
+
+        constexpr expected &operator=(const expected &other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            if (!D_has_value && !other.D_has_value) {
+                D_storage.D_error = other.D_storage.D_error;
+                return *this;
+            }
+
+            if (D_has_value && !other.D_has_value) {
+                new (&D_storage.D_error) E(other.D_storage.D_error);
+                D_has_value = false;
+                return *this;
+            }
+
+            if (!D_has_value && other.D_has_value) {
+                D_storage.D_error.~E();
+                D_has_value = true;
+            }
+
+            return *this;
+        }
+
+        constexpr expected &operator=(expected &&other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            if (!D_has_value && !other.D_has_value) {
+                D_storage.D_error = std::move(other.D_storage.D_error);
+                return *this;
+            }
+
+            if (D_has_value && !other.D_has_value) {
+                new (&D_storage.D_error) E(std::move(other.D_storage.D_error));
+                D_has_value = false;
+                return *this;
+            }
+
+            if (!D_has_value && other.D_has_value) {
+                D_storage.D_error.~E();
+                D_has_value = true;
+            }
+
+            return *this;
+        }
+
+        constexpr expected &operator=(const unexpected<E> &error) {
+            if (D_has_value) {
+                new (&D_storage.D_error) E(error.error());
+                D_has_value = false;
+            } else {
+                D_storage.D_error = error.error();
+            }
+            return *this;
+        }
+
+        constexpr expected &operator=(unexpected<E> &&error) {
+            if (D_has_value) {
+                new (&D_storage.D_error) E(std::move(error.error()));
+                D_has_value = false;
+            } else {
+                D_storage.D_error = std::move(error.error());
+            }
+            return *this;
+        }
+
+        [[nodiscard]]
+        constexpr bool has_value() const noexcept {
+            return D_has_value;
+        }
+
+        constexpr explicit operator bool() const noexcept {
+            return D_has_value;
+        }
+
+        constexpr void value() const {
+            if (!D_has_value) {
+                _THROW(bad_expected_access<E>(D_storage.D_error));
+            }
+        }
+
+        constexpr void operator*() const {
+            value();
+        }
+
+        constexpr E &error() & noexcept {
+            return D_storage.D_error;
+        }
+
+        constexpr const E &error() const & noexcept {
+            return D_storage.D_error;
+        }
+
+        constexpr E &&error() && noexcept {
+            return std::move(D_storage.D_error);
+        }
+
+        constexpr const E &&error() const && noexcept {
+            return std::move(D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) & {
+            using __ret_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(std::forward<F>(func)());
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) const & {
+            using __ret_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(std::forward<F>(func)());
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) && {
+            using __ret_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(std::forward<F>(func)());
+            }
+            return __ret_t(unexpect, std::move(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto and_then(F &&func) const && {
+            using __ret_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::and_then: return type error_type mismatch");
+            if (D_has_value) {
+                return static_cast<__ret_t>(std::forward<F>(func)());
+            }
+            return __ret_t(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) & {
+            using __u_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            if (D_has_value) {
+                return expected<__u_t, E>(std::forward<F>(func)());
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) const & {
+            using __u_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            if (D_has_value) {
+                return expected<__u_t, E>(std::forward<F>(func)());
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) && {
+            using __u_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            if (D_has_value) {
+                return expected<__u_t, E>(std::forward<F>(func)());
+            }
+            return expected<__u_t, E>(unexpect, std::move(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform(F &&func) const && {
+            using __u_t = remove_cv_t<
+                remove_reference_t<decltype(std::forward<F>(func)())>>;
+            if (D_has_value) {
+                return expected<__u_t, E>(std::forward<F>(func)());
+            }
+            return expected<__u_t, E>(unexpect, D_storage.D_error);
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, void>,
+                "expected<void, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t();
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) const & {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, void>,
+                "expected<void, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t();
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, void>,
+                "expected<void, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t();
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(std::move(D_storage.D_error)));
+        }
+
+        template <typename F>
+        constexpr auto or_else(F &&func) const && {
+            using __ret_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            static_assert(
+                is_same_v<typename __ret_t::value_type, void>,
+                "expected<void, E>::or_else: return type value_type mismatch");
+            static_assert(
+                is_same_v<typename __ret_t::error_type, E>,
+                "expected<void, E>::or_else: return type error_type mismatch");
+            if (D_has_value) {
+                return __ret_t();
+            }
+            return static_cast<__ret_t>(
+                std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) & {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            if (D_has_value) {
+                return expected<void, __g_t>();
+            }
+            return expected<void, __g_t>(
+                unexpect, std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) const & {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    D_storage.D_error))>;
+            if (D_has_value) {
+                return expected<void, __g_t>();
+            }
+            return expected<void, __g_t>(
+                unexpect, std::forward<F>(func)(D_storage.D_error));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) && {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            if (D_has_value) {
+                return expected<void, __g_t>();
+            }
+            return expected<void, __g_t>(
+                unexpect, std::forward<F>(func)(std::move(D_storage.D_error)));
+        }
+
+        template <typename F>
+        constexpr auto transform_error(F &&func) const && {
+            using __g_t =
+                decay_t<decltype(std::forward<F>(func)(
+                    std::move(D_storage.D_error)))>;
+            if (D_has_value) {
+                return expected<void, __g_t>();
+            }
+            return expected<void, __g_t>(
+                unexpect, std::forward<F>(func)(D_storage.D_error));
+        }
+
+        constexpr void emplace() {
+            if (!D_has_value) {
+                D_storage.D_error.~E();
+                D_has_value = true;
+            }
+        }
+
+        constexpr void swap(expected &other) {
+            expected tmp(std::move(other));
+            other = std::move(*this);
+            *this = std::move(tmp);
+        }
+    };
+}  // namespace std

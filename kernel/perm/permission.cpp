@@ -94,17 +94,17 @@ bool PermissionBits::complete_imply(const PermissionBits &other) const noexcept 
     return permission_implied;
 }
 
-CapErrCode PermissionBits::downgrade(const PermissionBits &new_perm) {
+Result<void> PermissionBits::downgrade(const PermissionBits &new_perm) {
     if (this->type != new_perm.type) {
-        return CapErrCode::TYPE_NOT_MATCHED;
+        return {unexpect, ErrCode::TYPE_NOT_MATCHED};
     }
     if (!imply(new_perm)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     this->basic_permissions = new_perm.basic_permissions;
     if (is_inline(this->type)) {
-        return CapErrCode::SUCCESS;
+        return {};
     }
 
     const size_t bitmap_size = to_bitmap_size(this->type);
@@ -114,7 +114,7 @@ CapErrCode PermissionBits::downgrade(const PermissionBits &new_perm) {
     // 复制权限位图
     memcpy(this->permission_bitmap, new_perm.permission_bitmap,
            to_bitmap_size(this->type) * sizeof(b64));
-    return CapErrCode::SUCCESS;
+    return {};
 }
 
 PermissionBits PermissionBits::clone() const {

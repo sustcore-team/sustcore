@@ -122,20 +122,20 @@ namespace tarfs {
 
     public:
         TarFile(TarNode *node);
-        FSOptional<size_t> read(void *buf, size_t len) override;
-        FSOptional<size_t> read(off_t offset, void *buf, size_t len) override;
-        FSOptional<off_t> seek(off_t offset, SeekWhence whence) override;
-        FSOptional<size_t> write(const void *buf, size_t len) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<size_t> read(void *buf, size_t len) override;
+        Result<size_t> read(off_t offset, void *buf, size_t len) override;
+        Result<off_t> seek(off_t offset, SeekWhence whence) override;
+        Result<size_t> write(const void *buf, size_t len) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
-        FSOptional<size_t> write(off_t offset, const void *buf, size_t len) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<size_t> write(off_t offset, const void *buf, size_t len) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
-        FSOptional<size_t> size() override {
+        Result<size_t> size() override {
             return end_ - data_;
         }
-        FSErrCode sync(void) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<void> sync(void) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
         void *operator new(size_t sz) noexcept;
@@ -148,12 +148,12 @@ namespace tarfs {
 
     public:
         TarDirectory(TarNode *node) : node_(node) {}
-        FSOptional<IDentry *> lookup(const char *name) override;
-        FSOptional<IDentry *> create(const char *name, bool is_dir) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<IDentry *> lookup(const char *name) override;
+        Result<IDentry *> create(const char *name, bool is_dir) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
-        FSErrCode sync(void) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<void> sync(void) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
         void *operator new(size_t sz) noexcept;
@@ -206,43 +206,43 @@ namespace tarfs {
 
         // IINode
 
-        FSOptional<IDirectory *> as_directory(void) override {
+        Result<IDirectory *> as_directory(void) override {
             if (!is_dir_)
-                return FSErrCode::INVALID_PARAM;
+                return {unexpect, ErrCode::INVALID_PARAM};
             if (!view_.dir) {
                 view_.dir = new TarDirectory{this};
             }
             return view_.dir;
         }
 
-        FSOptional<IFile *> as_file(void) override {
+        Result<IFile *> as_file(void) override {
             if (is_dir_)
-                return FSErrCode::INVALID_PARAM;
+                return {unexpect, ErrCode::INVALID_PARAM};
             if (!view_.file) {
                 view_.file = new TarFile{this};
             }
             return view_.file;
         }
 
-        FSOptional<IMetadata *> metadata(void) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<IMetadata *> metadata(void) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
         // IDentry
 
-        FSOptional<const char *> name(void) override {
+        Result<const char *> name(void) override {
             return entry_.c_str();
         }
 
-        FSErrCode remove(void) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<void> remove(void) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
-        FSErrCode rename(const char *new_name) override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<void> rename(const char *new_name) override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
-        FSOptional<IINode *> inode(void) override {
+        Result<IINode *> inode(void) override {
             return static_cast<IINode *>(this);
         }
 
@@ -264,15 +264,15 @@ namespace tarfs {
             return "tarfs";
         };
 
-        FSErrCode probe(IBlockDevice *device, const char *options) override;
+        Result<void> probe(IBlockDevice *device, const char *options) override;
 
-        FSOptional<ISuperblock *> mount(IBlockDevice *device,
-                                        const char *options) override;
+        Result<ISuperblock *> mount(IBlockDevice *device,
+                                    const char *options) override;
 
-        FSErrCode unmount(ISuperblock *&sb) override {
+        Result<void> unmount(ISuperblock *&sb) override {
             delete sb;
             sb = nullptr;
-            return FSErrCode::SUCCESS;
+            return {};
         }
     };
 
@@ -305,14 +305,14 @@ namespace tarfs {
             return static_cast<IFsDriver *>(fs_);
         }
 
-        FSErrCode sync() override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<void> sync() override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
 
         // tarfs 的根目录就是 tar 包中的第一个 header
         // ! unsafe 不能从外部 delete root_
         // 否则除了数据指针，tarfs 对象的所有指针都会失效
-        FSOptional<IINode *> root() override {
+        Result<IINode *> root() override {
             // 返回根目录 inode
             if (!root_) {
                 root_ = new TarNode(data_);
@@ -320,8 +320,8 @@ namespace tarfs {
             return root_;
         }
 
-        FSOptional<IMetadata *> metadata() override {
-            return FSErrCode::NOT_SUPPORTED;
+        Result<IMetadata *> metadata() override {
+            return {unexpect, ErrCode::NOT_SUPPORTED};
         }
     };
 

@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <sus/optional.h>
+#include <expected>
 
 enum class ErrCode : int {
     // successs
@@ -65,4 +65,5 @@ constexpr const char *to_string(ErrCode err) {
 }
 
 template <typename T>
-using ErrOptional = util::Optional<T, ErrCode>;
+using Result = std::expected<T, ErrCode>;
+using std::unexpect;

@@ -34,11 +34,11 @@ public:
     VFS& operator=(VFS&&)      = delete;
 
     // 注册文件系统
-    FSErrCode register_fs(util::owner<IFsDriver *> &&driver);
-    FSErrCode unregister_fs(const char *fs_name);
+    Result<void> register_fs(util::owner<IFsDriver *> &&driver);
+    Result<void> unregister_fs(const char *fs_name);
     // 挂载文件系统
-    FSErrCode mount(const char *fs_name, IBlockDevice *device,
-                    const char *mountpoint, MountFlags flags,
-                    const char *options);
-    FSErrCode umount(const char *mountpoint);
+    Result<void> mount(const char *fs_name, IBlockDevice *device,
+                       const char *mountpoint, MountFlags flags,
+                       const char *options);
+    Result<void> umount(const char *mountpoint);
 };

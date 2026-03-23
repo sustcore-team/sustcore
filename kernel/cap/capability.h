@@ -80,7 +80,7 @@ protected:
     // origin的permission bits与payload将被转移到新Capability中
     Capability(Capability *origin, CSpace *space, CapIdx idx);
 
-    static CapErrCode kill(Capability *cap);
+    static Result<void> kill(Capability *cap);
     // 如果 murder_flag 被标记,
     // 说明该能力是通过 kill 函数被删除的
     bool murder_flag = false;
@@ -121,7 +121,7 @@ protected:
         return new (ptr) Capability(origin, space, idx);
     }
 
-    CapErrCode revoke(Capability *subcap);
+    Result<void> revoke(Capability *subcap);
 
 public:
     // 获取载荷
@@ -139,7 +139,7 @@ public:
         return _perm;
     }
 
-    CapErrCode downgrade(const PermissionBits &new_perm) {
+    Result<void> downgrade(const PermissionBits &new_perm) {
         assert(_perm.type == new_perm.type);
         return _perm.downgrade(new_perm);
     }

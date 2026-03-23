@@ -65,7 +65,7 @@ Capability::Capability(Capability *origin, CSpace *space, CapIdx idx)
 }
 
 // NOTE: 当派生树深度过大时, 递归删除可能会导致栈溢出
-CapErrCode Capability::kill(Capability *cap) {
+Result<void> Capability::kill(Capability *cap) {
     assert(cap != nullptr);
     // 定位到cap所在的CSpace与Index
     CSpace *sp = cap->_space;
@@ -132,10 +132,10 @@ Capability::~Capability() {
     }
 }
 
-CapErrCode Capability::revoke(Capability *subcap) {
+Result<void> Capability::revoke(Capability *subcap) {
     if (subcap->parent != this) {
         CAPABILITY::ERROR("无法撤销非直接子能力");
-        return CapErrCode::INVALID_CAPABILITY;
+        return {unexpect, ErrCode::INVALID_CAPABILITY};
     }
     // 将subcap从子节点列表中移除
     return kill(subcap);

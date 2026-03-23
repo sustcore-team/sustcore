@@ -62,7 +62,7 @@ struct PermissionBits {
 
     // 但是我们提供一个downgrade方法, 允许在不改变权限类型的前提下,
     // 将权限位进行降级
-    CapErrCode downgrade(const PermissionBits &new_perm);
+    Result<void> downgrade(const PermissionBits &new_perm);
 
     bool imply(const PermissionBits &other) const noexcept;
 

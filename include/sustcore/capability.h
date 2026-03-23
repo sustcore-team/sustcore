@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <sus/optional.h>
+#include <expected>
 #include <sus/types.h>
 #include <sustcore/errcode.h>
 
@@ -115,7 +115,3 @@ public:
 static_assert(sizeof(CapIdx) == sizeof(b64), "CapIdx must be 64 bits in size");
 
 inline static CapIdx CapIdxNull = CapIdx(SpaceType::NULLABLE, 0, 0);
-
-template <typename T>
-using CapOptional = ErrOptional<T>;
-using CapErrCode  = ErrCode;

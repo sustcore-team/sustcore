@@ -145,10 +145,10 @@ public:
     void *operator new(size_t size) = delete;
     void operator delete(void *ptr) = delete;
 
-    CapOptional<int> read(void) const;
-    void write(int v);
-    void increase(void);
-    void decrease(void);
+    Result<int> read(void) const;
+    Result<void> write(int v);
+    Result<void> increase(void);
+    Result<void> decrease(void);
 };
 
 class SIntOp {
@@ -169,8 +169,8 @@ public:
     void *operator new(size_t size) = delete;
     void operator delete(void *ptr) = delete;
 
-    CapOptional<int> read(void) const;
-    void write(int v);
-    void increase(void);
-    void decrease(void);
+    Result<int> read(void) const;
+    Result<void> write(int v);
+    Result<void> increase(void);
+    Result<void> decrease(void);
 };

@@ -15,23 +15,23 @@
 
 #include <cassert>
 
-CapErrCode CSAOp::clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
+Result<void> CSAOp::clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
     using namespace perm;
     using namespace csa;
 
     // 检查权限
     if (!slot_imply<SLOT_INSERT>(dst_idx)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     auto cap_opt = src_space->get(src_idx);
-    if (!cap_opt.present()) {
-        return CapErrCode::INVALID_INDEX;
+    if (!cap_opt.has_value()) {
+        return {unexpect, ErrCode::INVALID_INDEX};
     }
 
     Capability *src_cap = cap_opt.value();
     if (!src_cap->perm().basic_imply(basic::CLONE)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     assert(src_cap != nullptr);
@@ -41,59 +41,59 @@ CapErrCode CSAOp::clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
     return _space->clone(dst_idx, cap_opt.value());
 }
 
-CapErrCode CSAOp::migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
+Result<void> CSAOp::migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
     using namespace perm;
     using namespace csa;
 
     // 检查权限
     if (!slot_imply<SLOT_INSERT>(dst_idx)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     auto cap_opt = src_space->get(src_idx);
-    if (!cap_opt.present()) {
-        return CapErrCode::INVALID_INDEX;
+    if (!cap_opt.has_value()) {
+        return {unexpect, ErrCode::INVALID_INDEX};
     }
 
     Capability *src_cap = cap_opt.value();
     if (!src_cap->perm().basic_imply(basic::MIGRATE)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     assert(src_cap != nullptr);
     assert(src_cap->space() == src_space);
     assert(src_cap->idx() == src_idx);
 
-    CapErrCode err = _space->migrate(dst_idx, cap_opt.value());
+    Result<void> err = _space->migrate(dst_idx, cap_opt.value());
 
-    if (err != CapErrCode::SUCCESS) {
+    if (!err.has_value()) {
         return err;
     }
 
     // 接下来, 我们需要从src_space中移除该能力
     err = src_space->remove(src_idx);
-    if (err != CapErrCode::SUCCESS) {
+    if (!err.has_value()) {
         // 如果移除失败, 我们需要撤销在dst_space中的迁移操作
-        CapErrCode err2 = _space->remove(dst_idx);
-        if (err2 != CapErrCode::SUCCESS) {
+        Result<void> err2 = _space->remove(dst_idx);
+        if (!err2.has_value()) {
             // 刚刚migrate成功, 但是却无法remove
             // 现在, 能力空间中既有原来的能力, 又有迁移后的能力
             // 这是一个严重的问题, 需要在此处崩溃
             CAPABILITY::FATAL("迁移失败后撤销迁移操作时发生错误: %d",
-                              static_cast<int>(err2));
+                              static_cast<int>(err2.error()));
             panic("无法撤销迁移操作, 能力空间已处于不一致状态!");
         }
         return err;
     }
 
-    return CapErrCode::SUCCESS;
+    return {};
 }
 
-CapErrCode CSAOp::remove(CapIdx idx) {
+Result<void> CSAOp::remove(CapIdx idx) {
     using namespace perm::csa;
     // 检查权限
     if (!slot_imply<SLOT_REMOVE>(idx)) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     return _space->remove(idx);
@@ -125,16 +125,16 @@ CapIdx CSAOp::__get_free_slot(void) {
     return CapIdxNull;  // 没有空闲槽位
 }
 
-CapOptional<CapIdx> CSAOp::get_free_slot(void) {
+Result<CapIdx> CSAOp::get_free_slot(void) {
     using namespace perm::csa;
     // 检查权限
     if (!imply<ALLOC>()) {
-        return CapErrCode::INSUFFICIENT_PERMISSIONS;
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
 
     CapIdx free_slot = __get_free_slot();
     if (free_slot.nullable()) {
-        return CapErrCode::SLOT_BUSY;  // 没有空闲槽位
+        return {unexpect, ErrCode::SLOT_BUSY};  // 没有空闲槽位
     }
     return free_slot;
 }

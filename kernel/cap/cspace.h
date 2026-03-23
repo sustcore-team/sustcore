@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cap/capability.h>
+#include <expected>
 
 // CGroup
 // CGroup是CSpace中的一个容器, 用于存放Capability
@@ -41,27 +42,27 @@ public:
     // 因此, Payload产生时, Capability也随之产生; Payload销毁时,
     // Capability也随之销毁
     template <typename PayloadType, typename... Args>
-    CapErrCode create(CSpace *space, CapIdx idx, Args &&...args) {
+    Result<void> create(CSpace *space, CapIdx idx, Args &&...args) {
         const size_t slot_idx = idx.slot;
         if (slot_idx >= CGROUP_SLOTS) {
             CAPABILITY::ERROR("槽位索引%u超出CGroup容量", slot_idx);
-            return CapErrCode::INVALID_INDEX;
+            return {unexpect, ErrCode::INVALID_INDEX};
         }
         if (_slot_used[slot_idx]) {
             CAPABILITY::ERROR("槽位索引%u已被占用", slot_idx);
-            return CapErrCode::SLOT_BUSY;
+            return {unexpect, ErrCode::SLOT_BUSY};
         }
         // 直接构造Payload
         Payload *payload = new PayloadType(std::forward<Args>(args)...);
         _emplace_create(space, idx, payload);
-        return CapErrCode::SUCCESS;
+        return {};
     }
 
-    CapErrCode clone(CSpace *space, CapIdx idx, Capability *parent);
-    CapErrCode migrate(CSpace *space, CapIdx idx, Capability *origin);
-    CapErrCode remove(CapIdx idx);
+    Result<void> clone(CSpace *space, CapIdx idx, Capability *parent);
+    Result<void> migrate(CSpace *space, CapIdx idx, Capability *origin);
+    Result<void> remove(CapIdx idx);
 
-    CapOptional<Capability *> get(CapIdx idx);
+    Result<Capability *> get(CapIdx idx);
     // 寻找自last开始的下一个空闲的槽位
     // 若没有, 返回-1
     int lookup_free(int last = -1);
@@ -109,24 +110,24 @@ public:
     }
 
     template <typename PayloadType, typename... Args>
-    CapErrCode create(CapIdx idx, Args &&...args) {
+    Result<void> create(CapIdx idx, Args &&...args) {
         const size_t group_idx = idx.group;
         if (group_idx >= CSPACE_SIZE) {
             CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx,
                               this->sp_idx);
-            return CapErrCode::INVALID_INDEX;
+            return {unexpect, ErrCode::INVALID_INDEX};
         }
         CGroup *group = group_at(group_idx);
         return group->create<PayloadType>(this, idx,
                                           std::forward<Args>(args)...);
     }
-    CapErrCode clone(CapIdx idx, Capability *parent);
-    CapErrCode migrate(CapIdx idx, Capability *origin);
-    CapErrCode remove(CapIdx idx);
+    Result<void> clone(CapIdx idx, Capability *parent);
+    Result<void> migrate(CapIdx idx, Capability *origin);
+    Result<void> remove(CapIdx idx);
 
     // get group
-    CapOptional<CGroup *> group(CapIdx idx);
-    CapOptional<Capability *> get(CapIdx idx);
+    Result<CGroup *> group(CapIdx idx);
+    Result<Capability *> get(CapIdx idx);
 
     constexpr bool empty(void) const {
         bool flag = false;
@@ -157,7 +158,7 @@ public:
     using CSpace::remove;
     using CSpace::tidyup;
 
-    CapErrCode migrate(CapIdx idx, Capability *origin);
+    Result<void> migrate(CapIdx idx, Capability *origin);
     inline void set_sender(size_t group_idx, size_t src_cholder_id) {
         assert(group_idx < CSPACE_SIZE);
         _recv_src[group_idx] = src_cholder_id;

@@ -73,36 +73,36 @@ public:
     void operator delete(void *ptr) = delete;
 
     template <typename PayloadType, typename... Args>
-    CapErrCode create(CapIdx idx, Args &&...args) {
+    Result<void> create(CapIdx idx, Args &&...args) {
         using namespace perm::csa;
         // 检查权限
         if (!slot_imply<SLOT_INSERT>(idx)) {
-            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+            return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
         }
 
         return _space->create<PayloadType>(idx, std::forward<Args>(args)...);
     }
 
-    CapErrCode clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
+    Result<void> clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
 
     template <typename AccessorType>
-    CapErrCode split(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
+    Result<void> split(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
         using namespace perm;
         using namespace csa;
 
         // 检查权限
         if (!slot_imply<SLOT_INSERT>(dst_idx)) {
-            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+            return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
         }
 
         auto cap_opt = src_space->get(src_idx);
-        if (!cap_opt.present()) {
-            return CapErrCode::INVALID_INDEX;
+        if (!cap_opt.has_value()) {
+            return {unexpect, ErrCode::INVALID_INDEX};
         }
 
         Capability *src_cap = cap_opt.value();
         if (!src_cap->perm().basic_imply(basic::SPLIT)) {
-            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+            return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
         }
 
         assert(src_cap != nullptr);
@@ -114,37 +114,37 @@ public:
         // 首先, 从original_cap中获取原始的Accessor对象
         AccessorType *original_acc = src_cap->payload<AccessorType>();
         if (original_acc == nullptr) {
-            return CapErrCode::INVALID_INDEX;
+            return {unexpect, ErrCode::INVALID_INDEX};
         }
         auto original_obj = original_acc->obj();
         // 通过create接口在dst_idx上创建一个新的Accessor对象, 该对象持有与original_obj相同的SharedObject
-        CapErrCode err = _space->create<AccessorType>(dst_idx, original_obj);
-        if (err != CapErrCode::SUCCESS) {
+        Result<void> err = _space->create<AccessorType>(dst_idx, original_obj);
+        if (!err.has_value()) {
             return err;
         }
         // 然后进行权限降级, 将目标Capability的权限降级为原来权限的子集
         auto dst_cap_opt = _space->get(dst_idx);
-        assert(dst_cap_opt.present());
+        assert(dst_cap_opt.has_value());
         Capability *dst_cap = dst_cap_opt.value();
         err = dst_cap->downgrade(src_cap->perm());
-        assert (err == CapErrCode::SUCCESS);
-        return CapErrCode::SUCCESS;
+        assert(err.has_value());
+        return err;
     }
 
-    CapErrCode migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
-    CapErrCode remove(CapIdx idx);
-    CapOptional<Capability *> lookup(CapIdx idx) const {
+    Result<void> migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
+    Result<void> remove(CapIdx idx);
+    Result<Capability *> lookup(CapIdx idx) const {
         using namespace perm::csa;
         if (!slot_imply<SLOT_READ>(idx)) {
-            return CapErrCode::INSUFFICIENT_PERMISSIONS;
+            return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
         }
         auto cap_opt = _space->get(idx);
-        if (!cap_opt.present()) {
-            return CapErrCode::INVALID_INDEX;
+        if (!cap_opt.has_value()) {
+            return {unexpect, ErrCode::INVALID_INDEX};
         }
         return cap_opt.value();
     }
-    CapOptional<CapIdx> get_free_slot(void);
+    Result<CapIdx> get_free_slot(void);
 
 protected:
     CapIdx __get_free_slot(void);

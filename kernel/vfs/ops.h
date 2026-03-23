@@ -12,16 +12,11 @@
 #pragma once
 
 #include <device/block.h>
-#include <sus/optional.h>
 #include <sus/types.h>
 #include <sustcore/errcode.h>
 
 #include <concepts>
 #include <cstddef>
-
-template <typename T>
-using FSOptional = ErrOptional<T>;
-using FSErrCode  = ErrCode;
 
 enum class SeekWhence { SET = 0, CUR = 1, END = 2 };
 
@@ -37,14 +32,14 @@ template <typename T>
 concept ISyncable = requires(T a) {
     {
         a.sync()
-    } -> std::same_as<FSErrCode>;
+    } -> std::same_as<Result<void>>;
 };
 
 template <typename T>
 concept IMetadataProvider = requires(T a) {
     {
         a.metadata()
-    } -> std::same_as<FSOptional<IMetadata *>>;
+    } -> std::same_as<Result<IMetadata *>>;
 };
 
 /**
@@ -60,10 +55,10 @@ public:
      *
      * @param buf 读取数据的缓冲区
      * @param len 读取数据的长度
-     * @return FSOptional<size_t> 实际读取的数据长度
+     * @return Result<size_t> 实际读取的数据长度
      */
     [[deprecated("使用三个参数的read(offset, void *buf, size_t len)版本")]]
-    virtual FSOptional<size_t> read(void *buf, size_t len) = 0;
+    virtual Result<size_t> read(void *buf, size_t len) = 0;
 
     /**
      * @brief 从文件的offset位置开始读取长度为len的数据
@@ -71,19 +66,19 @@ public:
      * @param offset 读取的起始位置
      * @param buf 读取数据的缓冲区
      * @param len 读取数据的长度
-     * @return FSOptional<size_t> 实际读取的数据长度
+     * @return Result<size_t> 实际读取的数据长度
      */
-    virtual FSOptional<size_t> read(off_t offset, void *buf, size_t len) = 0;
+    virtual Result<size_t> read(off_t offset, void *buf, size_t len) = 0;
 
     /**
      * @brief 向文件中写入长度为len的数据
      *
      * @param buf 写入数据的缓冲区
      * @param len 写入数据的长度
-     * @return FSOptional<size_t> 实际写入的数据长度
+     * @return Result<size_t> 实际写入的数据长度
      */
     [[deprecated("使用三个参数的write(offset, void *buf, size_t len)版本")]]
-    virtual FSOptional<size_t> write(const void *buf, size_t len) = 0;
+    virtual Result<size_t> write(const void *buf, size_t len) = 0;
 
     /**
      * @brief 向文件的offset位置开始写入长度为len的数据
@@ -91,9 +86,9 @@ public:
      * @param offset 写入的起始位置
      * @param buf 写入数据的缓冲区
      * @param len 写入数据的长度
-     * @return FSOptional<size_t> 实际写入的数据长度
+     * @return Result<size_t> 实际写入的数据长度
      */
-    virtual FSOptional<size_t> write(off_t offset, const void *buf,
+    virtual Result<size_t> write(off_t offset, const void *buf,
                                      size_t len) = 0;
 
     /**
@@ -101,24 +96,23 @@ public:
      *
      * @param offset 偏移量
      * @param whence 偏移方式
-     * @return FSOptional<size_t> 移动后的文件指针位置
+     * @return Result<size_t> 移动后的文件指针位置
      */
     [[deprecated("seek()应当是VFS的职责")]]
-    virtual FSOptional<off_t> seek(off_t offset, SeekWhence whence) = 0;
+    virtual Result<off_t> seek(off_t offset, SeekWhence whence) = 0;
 
     /**
      * @brief 获取文件大小
      *
-     * @return FSOptional<size_t> 文件大小
+     * @return Result<size_t> 文件大小
      */
-    virtual FSOptional<size_t> size() = 0;
+    virtual Result<size_t> size() = 0;
 
     /**
      * @brief 同步文件数据到存储设备
      *
-     * @return FSErrCode 错误码
      */
-    virtual FSErrCode sync(void) = 0;
+    virtual Result<void> sync(void) = 0;
 };
 
 /**
@@ -132,23 +126,23 @@ public:
      * @brief 在目录中查找指定名称的目录项
      *
      * @param name 目录项名称
-     * @return FSOptional<IDentry *> 查询到的目录项
+     * @return Result<IDentry *> 查询到的目录项
      */
-    virtual FSOptional<IDentry *> lookup(const char *name) = 0;
+    virtual Result<IDentry *> lookup(const char *name) = 0;
     /**
      * @brief 在目录中创建一个新的目录项
      *
      * @param name 目录项名称
      * @param is_dir 是否为目录
-     * @return FSOptional<IDentry *> 创建的目录项
+     * @return Result<IDentry *> 创建的目录项
      */
-    virtual FSOptional<IDentry *> create(const char *name, bool is_dir) = 0;
+    virtual Result<IDentry *> create(const char *name, bool is_dir) = 0;
     /**
      * @brief 同步目录数据到存储设备
      *
-     * @return FSErrCode 错误码
+     * @return Result<void> 错误码
      */
-    virtual FSErrCode sync()                                        = 0;
+    virtual Result<void> sync()                                        = 0;
 };
 
 /**
@@ -170,21 +164,21 @@ public:
     /**
      * @brief 将该目录项作为目录打开
      *
-     * @return FSOptional<IDirectory *> 目录对象
+     * @return Result<IDirectory *> 目录对象
      */
-    virtual FSOptional<IDirectory *> as_directory(void) = 0;
+    virtual Result<IDirectory *> as_directory(void) = 0;
     /**
      * @brief 将该目录项作为文件打开
      *
-     * @return FSOptional<IFile *> 文件对象
+     * @return Result<IFile *> 文件对象
      */
-    virtual FSOptional<IFile *> as_file(void)           = 0;
+    virtual Result<IFile *> as_file(void)           = 0;
     /**
      * @brief 获得元数据
      *
-     * @return FSOptional<IMetadata *> 元数据对象
+     * @return Result<IMetadata *> 元数据对象
      */
-    virtual FSOptional<IMetadata *> metadata(void)      = 0;
+    virtual Result<IMetadata *> metadata(void)      = 0;
 };
 
 /**
@@ -197,28 +191,27 @@ public:
     /**
      * @brief 获得目录项名称
      *
-     * @return FSOptional<const char *> 目录项名称
+     * @return Result<const char *> 目录项名称
      */
-    virtual FSOptional<const char *> name(void)    = 0;
+    virtual Result<const char *> name(void)    = 0;
     /**
      * @brief 移除该目录项
      *
-     * @return FSErrCode 错误码
+     * @return Result<void> 错误码
      */
-    virtual FSErrCode remove(void)                 = 0;
+    virtual Result<void> remove(void)                 = 0;
     /**
      * @brief 重命名该目录项
      *
      * @param new_name 新名称
-     * @return FSErrCode 错误码
      */
-    virtual FSErrCode rename(const char *new_name) = 0;
+    virtual Result<void> rename(const char *new_name) = 0;
     /**
      * @brief 获得该目录项对应的inode
      *
      * @return IINode* 目录项对应的inode
      */
-    virtual FSOptional<IINode *> inode(void)       = 0;
+    virtual Result<IINode *> inode(void)       = 0;
 };
 
 /**
@@ -237,21 +230,21 @@ public:
     /**
      * @brief 同步超级块数据到存储设备
      *
-     * @return FSErrCode
+     * @return Result<void>
      */
-    virtual FSErrCode sync(void)                   = 0;
+    virtual Result<void> sync(void)                   = 0;
     /**
      * @brief 获得根目录项
      *
-     * @return FSOptional<IINode *> 根目录项对象
+     * @return Result<IINode *> 根目录项对象
      */
-    virtual FSOptional<IINode *> root(void)        = 0;
+    virtual Result<IINode *> root(void)        = 0;
     /**
      * @brief 获得元数据
      *
-     * @return FSOptional<IMetadata *> 元数据对象
+     * @return Result<IMetadata *> 元数据对象
      */
-    virtual FSOptional<IMetadata *> metadata(void) = 0;
+    virtual Result<IMetadata *> metadata(void) = 0;
 };
 
 class IFsDriver {
@@ -268,25 +261,23 @@ public:
      *
      * @param device 设备
      * @param options 选项
-     * @return FSErrCode 错误码. 当为SUCCESS时, 说明该文件系统符合要求.
      */
-    virtual FSErrCode probe(IBlockDevice *device, const char *options) = 0;
+    virtual Result<void> probe(IBlockDevice *device, const char *options) = 0;
     /**
      * @brief 挂载文件系统
      *
      * @param device 设备
      * @param options 选项
-     * @return FSOptional<ISuperblock *> 文件系统超级块
+     * @return Result<ISuperblock *> 文件系统超级块
      */
-    virtual FSOptional<ISuperblock *> mount(IBlockDevice *device,
+    virtual Result<ISuperblock *> mount(IBlockDevice *device,
                                             const char *options)       = 0;
     /**
      * @brief 解挂文件系统
      *
      * @param sb 超级块
-     * @return FSErrCode 错误码
      */
-    virtual FSErrCode unmount(ISuperblock *&sb)                        = 0;
+    virtual Result<void> unmount(ISuperblock *&sb)                        = 0;
 };
 
 static_assert(ISyncable<IFile>);

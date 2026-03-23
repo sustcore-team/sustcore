@@ -12,18 +12,23 @@
 #pragma once
 
 #include <sus/list.h>
-#include <sus/optional.h>
 #include <sus/pair.h>
 
 #include <concepts>
+#include <expected>
 #include <functional>
 
 namespace util {
+    enum class MapError {
+        KEY_NOT_FOUND,
+        KEY_ALREADY_EXISTS,
+    };
+
     template <typename Map, typename _K, typename _V>
     concept MapType = requires(Map m, _K k, _V v) {
         {
             m.get(k)
-        } -> std::same_as<Optional<_V>>;
+        } -> std::same_as<std::expected<_V, MapError>>;
         {
             m.put(k, v)
         } -> std::same_as<void>;
@@ -47,20 +52,23 @@ namespace util {
     template <typename _K, typename _V>
     class LinkedMapIterator {
     public:
-        using Entry = typename LinkedMap<_K, _V>::Entry;
-        using Pair = util::Pair<_K, _V>;
+        using Entry    = typename LinkedMap<_K, _V>::Entry;
+        using Pair     = util::Pair<_K, _V>;
         using ListType = typename LinkedMap<_K, _V>::ListType;
+
     private:
         typename ListType::iterator D_it;
+
     public:
         // iterator traits
         using iterator_category = std::bidirectional_iterator_tag;
         using value_type        = Pair;
         using difference_type   = std::ptrdiff_t;
-        using pointer           = Pair*;
-        using reference         = Pair&;
+        using pointer           = Pair *;
+        using reference         = Pair &;
 
-        constexpr explicit LinkedMapIterator(typename ListType::iterator it) noexcept
+        constexpr explicit LinkedMapIterator(
+            typename ListType::iterator it) noexcept
             : D_it(it) {}
 
         // 解引用
@@ -73,7 +81,7 @@ namespace util {
         }
 
         // 迭代操作
-        constexpr LinkedMapIterator& operator++() noexcept {
+        constexpr LinkedMapIterator &operator++() noexcept {
             ++D_it;
             return *this;
         }
@@ -84,7 +92,7 @@ namespace util {
             return temp;
         }
 
-        constexpr LinkedMapIterator& operator--() noexcept {
+        constexpr LinkedMapIterator &operator--() noexcept {
             --D_it;
             return *this;
         }
@@ -96,11 +104,13 @@ namespace util {
         }
 
         // 比较
-        constexpr bool operator==(const LinkedMapIterator& other) const noexcept {
+        constexpr bool operator==(
+            const LinkedMapIterator &other) const noexcept {
             return D_it == other.D_it;
         }
 
-        constexpr bool operator!=(const LinkedMapIterator& other) const noexcept {
+        constexpr bool operator!=(
+            const LinkedMapIterator &other) const noexcept {
             return !(*this == other);
         }
 
@@ -110,22 +120,26 @@ namespace util {
     template <typename _K, typename _V>
     class LinkedMapConstIterator {
     public:
-        using Entry = typename LinkedMap<_K, _V>::Entry;
-        using Pair = util::Pair<_K, _V>;
+        using Entry    = typename LinkedMap<_K, _V>::Entry;
+        using Pair     = util::Pair<_K, _V>;
         using ListType = typename LinkedMap<_K, _V>::ListType;
+
     private:
         const typename ListType::iterator D_it;
+
     public:
         // iterator traits
         using iterator_category = std::bidirectional_iterator_tag;
         using value_type        = Pair;
         using difference_type   = std::ptrdiff_t;
-        using pointer           = const Pair*;
-        using reference         = const Pair&;
+        using pointer           = const Pair *;
+        using reference         = const Pair &;
 
-        constexpr explicit LinkedMapConstIterator(const typename ListType::iterator it) noexcept
+        constexpr explicit LinkedMapConstIterator(
+            const typename ListType::iterator it) noexcept
             : D_it(it) {}
-        constexpr LinkedMapConstIterator(const LinkedMapIterator<_K, _V>& it) noexcept
+        constexpr LinkedMapConstIterator(
+            const LinkedMapIterator<_K, _V> &it) noexcept
             : D_it(it.operator->()) {}
 
         // 解引用
@@ -138,7 +152,7 @@ namespace util {
         }
 
         // 迭代操作
-        constexpr LinkedMapConstIterator& operator++() noexcept {
+        constexpr LinkedMapConstIterator &operator++() noexcept {
             ++D_it;
             return *this;
         }
@@ -149,7 +163,7 @@ namespace util {
             return temp;
         }
 
-        constexpr LinkedMapConstIterator& operator--() noexcept {
+        constexpr LinkedMapConstIterator &operator--() noexcept {
             --D_it;
             return *this;
         }
@@ -161,11 +175,13 @@ namespace util {
         }
 
         // 比较
-        constexpr bool operator==(const LinkedMapConstIterator& other) const noexcept {
+        constexpr bool operator==(
+            const LinkedMapConstIterator &other) const noexcept {
             return D_it == other.D_it;
         }
 
-        constexpr bool operator!=(const LinkedMapConstIterator& other) const noexcept {
+        constexpr bool operator!=(
+            const LinkedMapConstIterator &other) const noexcept {
             return !(*this == other);
         }
 
@@ -190,27 +206,27 @@ namespace util {
         ListType entries;
 
     public:
-        LinkedMap() : entries() {};
+        LinkedMap() : entries(){};
         ~LinkedMap() {
             for (auto &e : entries) {
                 delete &e;
             }
         }
-        Optional<_V> get(const _K &key) {
+        std::expected<_V, MapError> get(const _K &key) {
             for (auto &e : entries) {
                 if (Equality()(e.pair.first, key)) {
-                    return Optional<_V>(e.pair.second);
+                    return e.pair.second;
                 }
             }
-            return Optional<_V>();
+            return {std::unexpect, MapError::KEY_NOT_FOUND};
         }
-        Optional<Pair<_K,  _V>> get_entry(const _K &key) {
+        std::expected<Pair<_K, _V>, MapError> get_entry(const _K &key) {
             for (auto &e : entries) {
                 if (Equality()(e.pair.first, key)) {
-                    return Optional<Pair<_K,  _V>>(e.pair);
+                    return e.pair;
                 }
             }
-            return Optional<Pair<_K,  _V>>();
+            return {std::unexpect, MapError::KEY_NOT_FOUND};
         }
         void put(const _K &key, const _V &value) {
             for (auto &e : entries) {
