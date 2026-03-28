@@ -13,194 +13,236 @@
 #include <fs/tarfs.h>
 #include <mem/alloc.h>
 #include <sus/defer.h>
-#include <sus/path.h>
 
+#include <algorithm>
 #include <cstddef>
 
-// namespace tarfs {
-//     namespace kop {
-//         util::Defer<KOP<TarNode>> TarNode;
-//         AutoDefer(TarNode);
+// TarFile / TarDirectory 使用 KOP 内存池
+namespace kop {
+	util::Defer<KOP<tarfs::TarFile>> TarFile;
+	AutoDefer(TarFile);
+	util::Defer<KOP<tarfs::TarDirectory>> TarDirectory;
+	AutoDefer(TarDirectory);
+}
 
-//         util::Defer<KOP<TarDirectory>> TarDirectory;
-//         AutoDefer(TarDirectory);
+namespace tarfs {
+    // 用offset / BLOCK_SIZE作为inode号, 以保证每个文件/目录的inode号唯一且稳定
+    // 且可以方便地从inode号计算出对应的TarBlock地址
+    constexpr inode_t to_inode_id(size_t offset) {
+        return inode_t(offset / BLOCK_SIZE);
+    }
 
-//         util::Defer<KOP<TarFile>> TarFile;
-//         AutoDefer(TarFile);
-//     }
+    constexpr size_t to_offset(inode_t id) {
+        return id * BLOCK_SIZE;
+    }
 
-//     TarFile::TarFile(TarNode *node)
-//         : node_(node),
-//           data_(reinterpret_cast<const uint8_t *>(node->header_) + BLOCK_SIZE) {
-//         size_t size = parse_octal(node->header_->header.size);
-//         end_        = data_ + size;
-//         ptr_        = data_;
-//     }
+	// TarFile
 
-//     Result<size_t> TarFile::read(void *buf, size_t len) {
-//         if (ptr_ == end_) {
-//             return 0;  // 已经读到文件末尾了，读取长度为0
-//         }
-//         size_t to_read = std::min(len, static_cast<size_t>(end_ - ptr_));
-//         memcpy(buf, ptr_, to_read);
-//         ptr_ += to_read;
-//         return to_read;
-//     }
-    
-//     Result<size_t> TarFile::read(off_t offset, void *buf, size_t len) {
-//         const auto _ptr = data_ + offset;
-//         if (_ptr < data_ || _ptr > end_) {
-//             return {unexpect, ErrCode::INVALID_PARAM};
-//         }
-//         size_t to_read = std::min(len, static_cast<size_t>(end_ - _ptr));
-//         memcpy(buf, _ptr, to_read);
-//         return to_read;
-//     }
+    void *TarFile::operator new(size_t size) {
+		assert(size == sizeof(TarFile));
+		return kop::TarFile->alloc();
+	}
 
-//     Result<off_t> TarFile::seek(off_t offset, SeekWhence whence) {
-//         // off_t 是有符号的
-//         auto new_ptr = ptr_;
-//         switch (whence) {
-//             case SeekWhence::SET: new_ptr = data_ + offset; break;
-//             case SeekWhence::CUR: new_ptr = ptr_ + offset; break;
-//             case SeekWhence::END: new_ptr = end_ + offset; break;
-//             default:              return {unexpect, ErrCode::INVALID_PARAM};
-//         }
-//         if (new_ptr < data_ || new_ptr > end_) {
-//             return {unexpect, ErrCode::INVALID_PARAM};
-//         }
-//         ptr_ = new_ptr;
-//         return static_cast<off_t>(new_ptr - data_);
-//     }
+	void TarFile::operator delete(void *ptr) {
+		kop::TarFile->free(static_cast<TarFile *>(ptr));
+	}
 
-//     void *TarFile::operator new(size_t sz) noexcept {
-//         assert(sz == sizeof(TarFile));
-//         return kop::TarFile->alloc();
-//     }
+	TarFile::TarFile(TarSuperblock *sb, const TarBlock *header, inode_t id)
+		: sb_(sb), header_(header), inode_id_(id) {
+		(void)sb_;
+		const uint8_t *raw = reinterpret_cast<const uint8_t *>(header_);
+		data_              = raw + BLOCK_SIZE;
+		size_t fsize       = parse_octal(header_->header.size);
+		end_               = data_ + fsize;
+	}
 
-//     void TarFile::operator delete(void *ptr) noexcept {
-//         kop::TarFile->free(static_cast<TarFile *>(ptr));
-//     }
+	Result<size_t> TarFile::read(off_t offset, void *buf, size_t len) {
+		if (offset < 0) {
+			unexpect_return(ErrCode::INVALID_PARAM);
+		}
+		const uint8_t *ptr = data_ + static_cast<size_t>(offset);
+		if (ptr < data_ || ptr > end_) {
+			unexpect_return(ErrCode::INVALID_PARAM);
+		}
+		size_t to_read = std::min(len, static_cast<size_t>(end_ - ptr));
+		memcpy(buf, ptr, to_read);
+		return to_read;
+	}
 
-//     Result<IDentry *> TarDirectory::lookup(const char *name) {
-//         if (*name == '\0')
-//             return node_;  // 约定空字符串表示目录自身
+	// TarDirectory
 
-//         for (auto p : node_->children_) {
-//             if (p->entry_ == name) {
-//                 return p;
-//             }
-//         }
+	void *TarDirectory::operator new(size_t size) {
+		assert(size == sizeof(TarDirectory));
+		return kop::TarDirectory->alloc();
+	}
 
-//         // 缓存中没有，则遍历寻找
-//         IDentry *ret = nullptr;
-//         util::Path path{node_->header_->header.name};
-//         path = (path / name).normalize();
+	void TarDirectory::operator delete(void *ptr) {
+		kop::TarDirectory->free(static_cast<TarDirectory *>(ptr));
+	}
 
-//         for (auto p = node_->header_ + 1;;) {
-//             if (!p->is_header())
-//                 break;
+	Result<inode_t> TarDirectory::lookup(std::string_view name) {
+		if (name.empty()) {
+			return inode_id_;
+		}
 
-//             util::Path p_path = util::Path{p->header.name}.normalize();
+		// 目标路径: 当前目录 header.name 与 name 拼接后规范化
+		util::Path path{header_->header.name};
+		path = (path / name).normalize();
 
-//             if (path == p_path) {
-//                 ret = new TarNode(p);
-//                 node_->children_.push_back(static_cast<TarNode *>(ret));
-//                 break;
-//             }
+		const uint8_t *base = sb_->data_;
+		const uint8_t *end  = base + sb_->size_;
 
-//             size_t file_size   = parse_octal(p->header.size);
-//             size_t file_block  = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-//             p                 += file_block + 1;
-//         }
+		for (const TarBlock *p = header_ + 1;
+			 reinterpret_cast<const uint8_t *>(p) + BLOCK_SIZE <= end;) {
+			if (!p->is_header()) {
+				break;
+			}
 
-//         if (ret == nullptr)
-//             return {unexpect, ErrCode::INVALID_PARAM};  // 没有找到对应目录项
-//         else
-//             return ret;
+			util::Path p_path{p->header.name};
+			p_path = p_path.normalize();
 
-//         return {unexpect, ErrCode::ENTRY_NOT_FOUND};
-//     }
+			if (path == p_path) {
+				size_t offset = reinterpret_cast<const uint8_t *>(p) - base;
+				return to_inode_id(offset);
+			}
 
-//     void *TarDirectory::operator new(size_t sz) noexcept {
-//         assert(sz == sizeof(TarDirectory));
-//         return kop::TarDirectory->alloc();
-//     }
+			size_t file_size  = parse_octal(p->header.size);
+			size_t file_block = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+			p += file_block + 1;
+		}
 
-//     void TarDirectory::operator delete(void *ptr) noexcept {
-//         kop::TarDirectory->free(static_cast<TarDirectory *>(ptr));
-//     }
+		unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+	}
 
-//     void *TarNode::operator new(size_t sz) noexcept {
-//         assert(sz == sizeof(TarNode));
-//         return kop::TarNode->alloc();
-//     }
+	// TarFSDriver
 
-//     void TarNode::operator delete(void *ptr) noexcept {
-//         kop::TarNode->free(static_cast<TarNode *>(ptr));
-//     }
+	bool TarFSDriver::is_valid(size_t size_, const uint8_t *data_) {
+		// 检查文件大小是否为 BLOCK_SIZE 的整数倍
+		if (size_ % BLOCK_SIZE != 0)
+			return false;
 
-//     bool TarFSDriver::is_valid(size_t size_, const uint8_t *data_) {
-//         // 检查文件大小是否为 BLOCK_SIZE 的整数倍
-//         if (size_ % BLOCK_SIZE != 0)
-//             return false;
+		// 检查 checksum
+		for (size_t offset = 0; offset < size_;) {
+			const TarBlock *block =
+				reinterpret_cast<const TarBlock *>(data_ + offset);
+			auto stored = parse_octal(block->header.checksum);
+			if (stored == block->calc_checksum()) {
+				size_t file_size  = parse_octal(block->header.size);
+				size_t file_block =
+					(file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+				offset += BLOCK_SIZE * (file_block + 1);
+				// offset 跳到下一个 header 块
+			} else {
+				if (block->is_empty()) {
+					offset += BLOCK_SIZE;
+					// 允许有空块
+				} else {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 
-//         // 检查 checksum
-//         for (size_t offset = 0; offset < size_;) {
-//             const TarBlock *block =
-//                 reinterpret_cast<const TarBlock *>(data_ + offset);
-//             auto stored = parse_octal(block->header.checksum);
-//             if (stored == block->calc_checksum()) {
-//                 size_t file_size   = parse_octal(block->header.size);
-//                 size_t file_block  = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-//                 offset            += BLOCK_SIZE * (file_block + 1);
-//                 // offset 跳到下一个 header 块
-//             } else {
-//                 if (block->is_empty()) {
-//                     offset += BLOCK_SIZE;
-//                     // 允许有空块
-//                 } else {
-//                     return false;
-//                 }
-//             }
-//         }
-//         return true;
-//     }
+	Result<void> TarFSDriver::probe(IBlockDevice *device,
+									const char *options) {
+		(void)options;
+		size_t size   = device->block_sz() * device->block_cnt();
+		uint8_t *data = new uint8_t[size];
+		if (!data) {
+			unexpect_return(ErrCode::OUT_OF_MEMORY);
+		}
+		size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
+		if (read_blocks != device->block_cnt()) {
+			delete[] data;
+			unexpect_return(ErrCode::IO_ERROR);
+		}
+		bool ok = is_valid(size, data);
+		delete[] data;
+		if (!ok) {
+			unexpect_return(ErrCode::INVALID_PARAM);
+		}
+		void_return();
+	}
 
-//     Result<void> TarFSDriver::probe(IBlockDevice *device, const char *options) {
-//         size_t size        = device->block_sz() * device->block_cnt();
-//         uint8_t *data      = new uint8_t[size];
-//         size_t read_blocks = device->read_blocks(0, data, device->block_cnt());
-//         if (read_blocks != device->block_cnt()) {
-//             delete[] data;
-//             return {unexpect, ErrCode::IO_ERROR};
-//         }
-//         if (is_valid(size, data)) {
-//             delete[] data;
-//             return {};
-//         } else {
-//             delete[] data;
-//             return {unexpect, ErrCode::INVALID_PARAM};
-//         }
-//     }
+	static size_t g_next_sb_id = 1;
 
-//     // 注意，没有做检验。需要确保 probe 过是 Tarfs
-//     Result<ISuperblock *> TarFSDriver::mount(IBlockDevice *device,
-//                                              const char *options) {
-//         size_t size   = device->block_sz() * device->block_cnt();
-//         uint8_t *data = nullptr;
-//         if (device->is<RamDiskDevice>()) {
-//             // 直接使用其内存作为数据源，减少复制
-//             data = static_cast<uint8_t *>(device->as<RamDiskDevice>()->base());
-//         } else {
-//             data          = new uint8_t[size];
-//             size_t blocks = device->read_blocks(0, data, device->block_cnt());
-//             if (blocks != device->block_cnt()) {
-//                 delete[] data;
-//                 return {unexpect, ErrCode::IO_ERROR};
-//             }
-//         }
-//         return new TarSuperblock(data, size, this, device);
-//     }
+	Result<util::owner<ISuperblock *>> TarFSDriver::mount(
+		IBlockDevice *device, const char *options) {
+		(void)options;
+		size_t size   = device->block_sz() * device->block_cnt();
+		uint8_t *data = nullptr;
+		if (device->is<RamDiskDevice>()) {
+			// 直接使用其内存作为数据源，减少复制
+			data = static_cast<uint8_t *>(device->as<RamDiskDevice>()->base());
+		} else {
+			data = new uint8_t[size];
+			if (!data) {
+				unexpect_return(ErrCode::OUT_OF_MEMORY);
+			}
+			size_t blocks = device->read_blocks(0, data, device->block_cnt());
+			if (blocks != device->block_cnt()) {
+				delete[] data;
+				unexpect_return(ErrCode::IO_ERROR);
+			}
+		}
 
-// };  // namespace tarfs
+		size_t sbid = g_next_sb_id++;
+		TarSuperblock *sb_impl =
+			new TarSuperblock(data, size, this, device, sbid);
+		if (!sb_impl) {
+			if (!device->is<RamDiskDevice>()) {
+				delete[] data;
+			}
+			unexpect_return(ErrCode::OUT_OF_MEMORY);
+		}
+		return util::owner<ISuperblock *>(sb_impl);
+	}
+
+	Result<void> TarFSDriver::unmount(ISuperblock *sb) {
+		void_return();
+	}
+
+	// TarSuperblock
+
+	TarSuperblock::~TarSuperblock() {
+		if (!device_->is<RamDiskDevice>()) {
+			delete[] data_;
+		}
+	}
+
+	const TarBlock *TarSuperblock::get_block(inode_t id) const {
+		size_t offset = to_offset(id);
+		if (offset + BLOCK_SIZE > size_) {
+			return nullptr;
+		}
+		auto *blk =
+			reinterpret_cast<const TarBlock *>(data_ + offset);
+		if (!blk->is_header()) {
+			return nullptr;
+		}
+		return blk;
+	}
+
+	Result<util::owner<IINode *>> TarSuperblock::get_inode(inode_t inode_id) {
+		const TarBlock *blk = get_block(inode_id);
+		if (!blk) {
+			unexpect_return(ErrCode::INVALID_PARAM);
+		}
+		bool is_dir = blk->header.typeflag[0] == '5';
+		if (is_dir) {
+			TarDirectory *dir = new TarDirectory(this, blk, inode_id);
+			if (!dir) {
+				unexpect_return(ErrCode::OUT_OF_MEMORY);
+			}
+			return util::owner<IINode *>(static_cast<IINode *>(dir));
+		} else {
+			TarFile *file = new TarFile(this, blk, inode_id);
+			if (!file) {
+				unexpect_return(ErrCode::OUT_OF_MEMORY);
+			}
+			return util::owner<IINode *>(static_cast<IINode *>(file));
+		}
+	}
+
+}  // namespace tarfs

@@ -29,7 +29,7 @@ void collect_tests(TestFramework& framework) {
     // test::buddy::collect_tests(framework);
     // test::cap::collect_tests(framework);
     // test::expected::collect_tests(framework);
-    // test::fs::collect_tests(framework);
+    test::fs::collect_tests(framework);
     test::functional::collect_tests(framework);
     // test::path::collect_tests(framework);
     // test::slub::collect_tests(framework);

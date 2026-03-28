@@ -71,6 +71,10 @@ public:
     constexpr VFsDriver &vfsd() const {
         return *_fsd;
     }
+    // 是否仍有该超级块上的 inode 处于活动状态
+    constexpr bool busy() const {
+        return !inode_cache.empty();
+    }
     // 更新inode_cache, 使其包含指定inode号的inode
     Result<VINode *> update_inode(inode_t inode_id);
     // 整理inode_cache

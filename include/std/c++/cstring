@@ -20,5 +20,25 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
+namespace std {
+    using ::memset;
+    using ::memcpy;
+    using ::strcmp;
+    using ::strlen;
+    using ::strchr;
+    using ::strncmp;
+    using ::strncpy;
+    using ::strrchr;
+    using ::strspn;
+    using ::strcspn;
+    using ::strpbrk;
+    using ::strcat;
+    using ::strncat;
+    using ::memmove;
+    using ::memcmp;
+    using ::memchr;
+}  // namespace std
+
 #undef restrict
 #endif

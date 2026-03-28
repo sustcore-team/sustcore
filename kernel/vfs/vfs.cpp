@@ -113,6 +113,11 @@ Result<void> VFS::umount(const char *mountpoint) {
         return res;
     }
 
+    // 若仍有该超级块上的 inode 存在, 视为 busy, 禁止卸载
+    if (vsb->busy()) {
+        unexpect_return(ErrCode::BUSY);
+    }
+
     // 移除挂载
     this->mount_table.remove(mnt_path);
     Result<void> ret = vsb->vfsd().fsd()->unmount(vsb->sb());
@@ -246,7 +251,12 @@ Result<DEntry *> VFS::locate(const util::Path &path) {
     // 沿着path向上寻找, 直到找到一个在dentry_cache中的路径
     // 然后沿着这个路径向下更新dentry_cache, 直到path被包含在内
     util::Path cur_path = path;
-    while (cur_path != "/") {
+    bool rooted = false;
+    while (! rooted) {
+        if (cur_path == "/") {
+            rooted = true;
+        }
+
         // 找到一个起点
         if (dentry_cache.contains(cur_path)) {
             break;
@@ -287,7 +297,7 @@ Result<void> VFS::update_dentry(const util::Path &path) {
     // 沿着root向下走
     VINode *curnd       = root;
     DEntry *parde       = base_dentry;
-    util::Path walkpath = relpath;
+    util::Path walkpath = base_dentry->path();
     for (const auto &entry : relpath) {
         auto lookup_res = curnd->inode()->as_directory().and_then(
             [entry](IDirectory *dir) { return dir->lookup(entry); });
@@ -301,6 +311,7 @@ Result<void> VFS::update_dentry(const util::Path &path) {
         // iterate to next node
         curnd    = upd_res.value();
         walkpath = walkpath / entry;
+        walkpath = walkpath.normalize();
         util::owner<DEntry *> nxtde =
             util::owner(new DEntry(walkpath, curnd, parde));
         parde = nxtde.get();
