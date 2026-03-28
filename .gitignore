@@ -18,3 +18,4 @@ gdb-setup.sh
 documents/
 .cache/
 compile_commands.json
+.zed/
