@@ -36,3 +36,6 @@ deps += test/schd/fcfs.d
 
 objects += test/schd/rr.o
 deps += test/schd/rr.d
+
+objects += test/unordered_map.o
+deps += test/unordered_map.d

@@ -57,4 +57,107 @@ namespace std {
     struct make_index_sequence<0, Ints...> {
         using type = index_sequence<Ints...>;
     };
+
+    template <class _T1, class _T2>
+    struct pair {
+        typedef _T1 first_type;
+        typedef _T2 second_type;
+
+        _T1 first;
+        _T2 second;
+
+        pair() : first(), second() {}
+
+        pair(const _T1& __a, const _T2& __b) : first(__a), second(__b) {}
+
+        template <class _U1, class _U2>
+        pair(_U1&& __x, _U2&& __y)
+            : first(std::forward<_U1>(__x)), second(std::forward<_U2>(__y)) {}
+
+        pair(pair&& __p)
+            : first(std::move(__p.first)), second(std::move(__p.second)) {}
+
+        pair& operator=(pair&& __p) {
+            first  = std::move(__p.first);
+            second = std::move(__p.second);
+            return *this;
+        }
+
+        template <class _U1, class _U2>
+        pair& operator=(pair<_U1, _U2>&& __p) {
+            first  = std::move(__p.first);
+            second = std::move(__p.second);
+            return *this;
+        }
+
+        void swap(pair&& __p) {
+            using std::swap;
+            swap(first, __p.first);
+            swap(second, __p.second);
+        }
+    };
+
+    /// Two pairs of the same type are equal iff their members are equal.
+    template <class _T1, class _T2>
+    inline bool operator==(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return __x.first == __y.first && __x.second == __y.second;
+    }
+
+    /// <http://gcc.gnu.org/onlinedocs/libstdc++/20_util/howto.html#pairlt>
+    template <class _T1, class _T2>
+    inline bool operator<(const pair<_T1, _T2>& __x,
+                          const pair<_T1, _T2>& __y) {
+        return __x.first < __y.first ||
+               (!(__y.first < __x.first) && __x.second < __y.second);
+    }
+
+    /// Uses @c operator== to find the result.
+    template <class _T1, class _T2>
+    inline bool operator!=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__x == __y);
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator>(const pair<_T1, _T2>& __x,
+                          const pair<_T1, _T2>& __y) {
+        return __y < __x;
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator<=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__y < __x);
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator>=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__x < __y);
+    }
+
+    /// See std::pair::swap().
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>& __x, pair<_T1, _T2>& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>&& __x, pair<_T1, _T2>& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>& __x, pair<_T1, _T2>&& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline pair<_T1, _T2> make_pair(_T1 __x, _T2 __y) {
+        return pair<_T1, _T2>(__x, __y);
+    };
 }  // namespace std
