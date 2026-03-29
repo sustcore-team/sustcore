@@ -30,3 +30,5 @@ deps += test/tree.d
 
 objects += test/functional.o
 deps += test/functional.d
+objects += test/unordered_map.o
+deps += test/unordered_map.d
