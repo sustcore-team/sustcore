@@ -146,19 +146,15 @@ namespace std {
     public:
         using allocator_type = Alloc;
         using value_type     = allocator_type::value_type;
-        using pointer =
-            __detected_or_t<value_type*, __op::ptr, allocator_type>;
+        using pointer = __detected_or_t<value_type*, __op::ptr, allocator_type>;
         using const_pointer =
-            __detected_or_t<const value_type*, __op::c_ptr,
-                            allocator_type>;
+            __detected_or_t<const value_type*, __op::c_ptr, allocator_type>;
         using void_pointer =
             __detected_or_t<void*, __op::v_ptr, allocator_type>;
         using const_void_pointer =
-            __detected_or_t<const void*, __op::cv_ptr,
-                            allocator_type>;
+            __detected_or_t<const void*, __op::cv_ptr, allocator_type>;
         using difference_type =
-            __detected_or_t<std::ptrdiff_t, __op::diff_t,
-                            allocator_type>;
+            __detected_or_t<std::ptrdiff_t, __op::diff_t, allocator_type>;
         using size_type = __detected_or_t<std::make_unsigned_t<difference_type>,
                                           __op::size_type, allocator_type>;
         using propagate_on_container_copy_assignment =
@@ -185,6 +181,15 @@ namespace std {
         static void deallocate(allocator_type& a, pointer p, size_type n) {
             a.deallocate(p, n);
         }
+
+        template <typename... Args>
+        static void construct(allocator_type& a, pointer p, Args&&... args) {
+            a.construct(p, forward<Args>(args)...);
+        }
+
+        void destroy(allocator_type& a, pointer p) noexcept {
+            a.destroy(p);
+        }
     };
-    
+
 }  // namespace std

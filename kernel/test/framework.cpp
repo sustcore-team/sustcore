@@ -22,6 +22,7 @@
 #include <test/string.h>
 #include <test/string_view.h>
 #include <test/tree.h>
+#include <test/unordered_map.h>
 
 void collect_tests(TestFramework& framework) {
     test::buddy::collect_tests(framework);
@@ -32,6 +33,7 @@ void collect_tests(TestFramework& framework) {
     test::string::collect_tests(framework);
     test::string_view::collect_tests(framework);
     test::tree::collect_tests(framework);
+    test::unordered_map::collect_tests(framework);
 }
 
 void TestFramework::run_all() const {

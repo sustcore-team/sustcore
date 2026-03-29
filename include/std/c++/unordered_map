@@ -38,10 +38,13 @@ namespace std {
         using node_type      = HashNode<value_type>;
         using node_allocator = typename std::allocator_traits<
             Allocator>::template rebind_alloc<node_type>;
-        using node_alloc = std::allocator<HashNode<value_type>>;
+        // using node_alloc = std::allocator<HashNode<value_type>>;
+        using bucket_allocator = typename std::allocator_traits<
+            Allocator>::template rebind_alloc<node_type *>;
 
         node_allocator alloc_;
-        node_alloc _alloc;
+        bucket_allocator bucket_alloc_;
+        // node_alloc _alloc;
         Hash hash_;
         KeyEqual equal_;
         node_type **buckets_;
@@ -185,6 +188,7 @@ namespace std {
 
         unordered_map() noexcept
             : alloc_(),
+              bucket_alloc_(),
               hash_(),
               equal_(),
               bucket_count_(1),
@@ -199,6 +203,7 @@ namespace std {
                                const KeyEqual &keyequal = KeyEqual(),
                                const Allocator &alloc   = Allocator())
             : alloc_(alloc),
+              bucket_alloc_(alloc),
               hash_(hash),
               buckets_(nullptr),
               bucket_count_(bucket_count),
@@ -215,6 +220,7 @@ namespace std {
 
         unordered_map(const unordered_map &other)
             : alloc_(other.alloc_),
+              bucket_alloc_(other.alloc_),
               hash_(other.hash_),
               equal_(other.equal_),
               buckets_(nullptr),
@@ -222,12 +228,18 @@ namespace std {
               size_(0),
               max_load_factor_(other.max_load_factor_) {
             buckets_ = alloc_buckets(bucket_count_);
-            for (const auto &kv : other) {
+            for (size_type i = 0; i < other.bucket_count_; ++i) {
+                node_type *node = other.buckets_[i];
+                while (node) {
+                    insert(node->value);
+                    node = node->next;
+                }
             }
         }
 
         unordered_map(unordered_map &&other) noexcept
             : alloc_(std::move(other.alloc_)),
+              bucket_alloc_(std::move(other.bucket_alloc_)),
               hash_(std::move(other.hash_)),
               equal_(std::move(other.equal_)),
               bucket_count_(other.bucket_count_),
@@ -252,7 +264,7 @@ namespace std {
          */
 
         allocator_type get_allocator() const noexcept {
-            return allocator_type(alloc_);
+            return alloc_;
         }
 
         iterator begin() noexcept {
@@ -269,19 +281,21 @@ namespace std {
         }
 
         const_iterator cend() const noexcept {
-            return cend();
+            return const_iterator(const_cast<unordered_map *>(this),
+                                  bucket_count_, nullptr);
         }
 
         const_iterator cbegin() const noexcept {
             for (size_type i = 0; i < bucket_count_; ++i) {
                 if (buckets_[i]) {
-                    return const_iterator(this, i, buckets_[i]);
+                    return const_iterator(const_cast<unordered_map *>(this), i,
+                                          buckets_[i]);
                 }
             }
             return cend();
         }
 
-        iterator cend() noexcept {
+        const_iterator cend() noexcept {
             return const_iterator(this, bucket_count_, nullptr);
         }
 
@@ -303,8 +317,9 @@ namespace std {
                 while (node) {
                     node_type *next = node->next;
 
-                    node->value.~value_type();
-                    delete node;
+                    alloc_.destroy(node);
+                    std::allocator_traits<node_allocator>::deallocate(alloc_,
+                                                                      node, 1);
 
                     node = next;
                 }
@@ -319,7 +334,9 @@ namespace std {
 
     private:
         node_type **alloc_buckets(size_type count = 1) {
-            node_type **buckets = new node_type *[count];
+            node_type **buckets =
+                std::allocator_traits<bucket_allocator>::allocate(
+                    bucket_alloc_, count);
             for (size_type i = 0; i < count; ++i) {
                 buckets[i] = nullptr;
             }
@@ -327,7 +344,8 @@ namespace std {
         }
 
         void dealloc_buckets(node_type **buckets, size_type count) {
-            delete [] buckets;
+            std::allocator_traits<bucket_allocator>::deallocate(bucket_alloc_,
+                                                                buckets, count);
         }
 
         size_type bucket_index(const key_type &key) const {
@@ -362,10 +380,10 @@ namespace std {
                 index = bucket_index(key);
             }
 
-            // 假设构造成功
-            // node_type *new_node =
-            //     std::allocator_traits<node_allocator>::allocate(alloc_, 1);
-            node_type *new_node = new node_type(
+            node_type *new_node =
+                std::allocator_traits<node_allocator>::allocate(alloc_, 1);
+            std::allocator_traits<node_allocator>::construct(
+                alloc_, new_node,
                 std::make_pair(std::forward<K>(key), std::forward<M>(value)));
 
             new_node->next  = buckets_[index];
@@ -396,11 +414,12 @@ namespace std {
                 buckets_[index] = node->next;
             }
 
-            node->value.~value_type();
-            delete node;
+            node_type *next = node->next;
+            alloc_.destroy(node);
+            std::allocator_traits<node_allocator>::deallocate(alloc_, node, 1);
 
-            if (node->next) {
-                return iterator(this, index, node->next);
+            if (next) {
+                return iterator(this, index, next);
             }
 
             for (size_type i = index + 1; i < bucket_count_; i++) {
@@ -411,7 +430,41 @@ namespace std {
             return end();
         }
 
-        void rehash(size_type new_bucket_count) {}
+        void rehash(size_type new_bucket_count) {
+            if (new_bucket_count < bucket_count_) {
+                return;
+            }
+
+            if (new_bucket_count == 0) {
+                new_bucket_count = 1;
+            }
+
+            node_type **new_buckets = alloc_buckets(new_bucket_count);
+            for (size_type i = 0; i < bucket_count_; i++) {
+                node_type *origin_node = buckets_[i];
+                while (origin_node) {
+                    // 头插法
+                    node_type *next = origin_node->next;
+                    size_type new_index =
+                        bucket_index_for_size(origin_node->value.first,
+                                              new_bucket_count);
+                    origin_node->next      = new_buckets[new_index];
+                    new_buckets[new_index] = origin_node;
+                    origin_node            = next;
+                }
+            }
+            dealloc_buckets(buckets_, bucket_count_);
+            buckets_      = new_buckets;
+            bucket_count_ = new_bucket_count;
+        }
+
+        void reserve(size_type n) {
+            // 计算需要的最小桶数量：n / max_load_factor_
+            // 向上取整以确保空间足够
+            size_type new_bucket_count =
+                static_cast<size_type>(n / max_load_factor_) + 1;
+            rehash(new_bucket_count);
+        }
     };
 
 }  // namespace std
