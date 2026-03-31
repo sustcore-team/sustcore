@@ -772,6 +772,13 @@ namespace std {
 
         constexpr basic_string &insert(size_type index, const_pointer s,
                                        size_type count) {
+            const_pointer current_data = data();
+            const bool aliases_this =
+                s >= current_data && s < current_data + size();
+            if (aliases_this) {
+                basic_string temp(s, count, get_allocator());
+                return insert(index, temp.data(), temp.size());
+            }
             if (!U_prepare_insert(index, count))
                 return *this;
             // 将 [index, index + count) 的内容设置为 s 的前 count 个字符

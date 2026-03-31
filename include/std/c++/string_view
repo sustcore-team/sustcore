@@ -341,7 +341,7 @@ namespace std {
         [[nodiscard]]
         constexpr size_t rfind(basic_string_view str,
                                size_t pos = npos) const noexcept {
-            return str.find(str.data(), pos, str.size());
+            return rfind(str.data(), pos, str.size());
         }
         [[nodiscard]]
         constexpr size_t rfind(const CharT *str,
@@ -417,13 +417,13 @@ namespace std {
         [[nodiscard]]
         constexpr size_t find_last_of(const CharT *chars, size_t pos,
                                       size_type count) const noexcept {
-            if (count == 0) {
-                return pos < M_size ? pos : M_size;
-            }
             if (M_size == 0) {
                 return npos;
             }
-            const size_t startpos = std::min(pos, M_size - count);
+            if (count == 0) {
+                return npos;
+            }
+            const size_t startpos = std::min(pos, M_size - 1);
             for (size_t i = startpos + 1; i > 0; i--) {
                 if (traits_type::find(chars, count, M_data[i - 1]) != nullptr) {
                     return i - 1;
@@ -479,13 +479,13 @@ namespace std {
         [[nodiscard]]
         constexpr size_t find_last_not_of(const CharT *chars, size_t pos,
                                           size_type count) const noexcept {
-            if (count == 0) {
-                return pos < M_size ? pos : M_size;
-            }
             if (M_size == 0) {
                 return npos;
             }
-            const size_t startpos = std::min(pos, M_size - count);
+            const size_t startpos = std::min(pos, M_size - 1);
+            if (count == 0) {
+                return startpos;
+            }
             for (size_t i = startpos + 1; i > 0; i--) {
                 if (traits_type::find(chars, count, M_data[i - 1]) == nullptr) {
                     return i - 1;
