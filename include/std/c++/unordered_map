@@ -189,8 +189,8 @@ namespace std {
               bucket_alloc_(),
               hash_(),
               equal_(),
-              bucket_count_(1),
               buckets_(nullptr),
+              bucket_count_(1),
               size_(0),
               max_load_factor_(1.0f) {
             buckets_ = alloc_buckets();
@@ -241,8 +241,8 @@ namespace std {
               bucket_alloc_(std::move(other.bucket_alloc_)),
               hash_(std::move(other.hash_)),
               equal_(std::move(other.equal_)),
-              bucket_count_(other.bucket_count_),
               buckets_(other.buckets_),
+              bucket_count_(other.bucket_count_),
               size_(other.size_),
               max_load_factor_(other.max_load_factor_) {
             other.bucket_count_ = 0;
@@ -427,8 +427,9 @@ namespace std {
         }
 
         void dealloc_buckets(node_type **buckets, size_type count) {
-            std::allocator_traits<bucket_allocator>::deallocate(bucket_alloc_,
-                                                                buckets, count);
+            if (buckets != nullptr)
+                std::allocator_traits<bucket_allocator>::deallocate(
+                    bucket_alloc_, buckets, count);
         }
 
         size_type bucket_index(const key_type &key) const {
