@@ -1,14 +1,13 @@
 /**
- * @file schd_rr.h
- * @brief RR 调度器测试头文件
+ * @file rr.h
+ * @author
+ * @brief RR 调度器测试
  */
 
 #pragma once
 
 #include <test/framework.h>
 
-namespace test::schd::rr {
-
+namespace test::schd_test::rr {
     void collect_tests(TestFramework& framework);
-
-}  // namespace test::schd::rr
+}

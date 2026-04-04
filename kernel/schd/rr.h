@@ -17,142 +17,111 @@
 #include <sustcore/errcode.h>
 
 namespace schd::rr {
-    class Metadata {
+    class Entity {
     public:
-        ThreadState state                   = ThreadState::EMPTY;
-        int slice_cnt                       = 0;
-        util::ListHead<Metadata> _schd_head = {};
+        ThreadState state                = ThreadState::EMPTY;
+        int slice_cnt                    = 0;
+        util::ListHead<Entity> list_head = {};
 
-        Metadata()  = default;
-        ~Metadata() = default;
+        constexpr Entity()  = default;
+        constexpr ~Entity() = default;
     };
 
     class tags : public schd::tags::on_tick {};
 
     template <typename SU>
-    class RR : public SchdBase<SU, Metadata, tags> {
+    class RR : public SchdBase<SU, tags> {
     public:
-        using SUType       = SU;
-        using MetadataType = Metadata;
-        using Tags         = tags;
-        using Base         = SchdBase<SUType, MetadataType, Tags>;
-        using Base::downcast;
-        using Base::upcast;
+        using SUType                     = SU;
+        using EntityType                 = Entity;
+        using Tags                       = tags;
+        using Base                       = SchdBase<SUType, Tags>;
         constexpr static int TIME_SLICES = 5;
+        static_assert(
+            requires(SUType su) { su.rr_entity; },
+            "SUType须具有类型为schd::rr::Entity的成员rr_entity");
+        constexpr static size_t ENTITY_OFFSET = offsetof(SUType, rr_entity);
+
+        constexpr static EntityType *get_entity(SUType *su) {
+            return &su->rr_entity;
+        }
+        constexpr static const EntityType *get_entity(const SUType *su) {
+            return &su->rr_entity;
+        }
+        constexpr static SUType *get_su(EntityType *entity) {
+            return reinterpret_cast<SUType *>(reinterpret_cast<char *>(entity) -
+                                              ENTITY_OFFSET);
+        }
 
     private:
-        util::IntrusiveList<MetadataType, &MetadataType::_schd_head>
-            _ready_queue    = {};
-        SUType *_current_su = nullptr;
-
-        constexpr static bool P_ready(const MetadataType &meta) {
-            return meta.state == ThreadState::READY;
-        }
-
-        constexpr static bool P_runnable(const MetadataType &meta) {
-            return meta.state == ThreadState::READY ||
-                   meta.state == ThreadState::RUNNING;
-        }
-
-        constexpr static bool P_rescheduable(const MetadataType &meta) {
-            return meta.state == ThreadState::READY ||
-                   meta.state == ThreadState::YIELD ||
-                   meta.state == ThreadState::RUNNING;
-        }
+        util::IntrusiveList<EntityType> ready_queue;
 
     public:
         constexpr RR()  = default;
         constexpr ~RR() = default;
 
-        virtual Result<void> insert(SUType *su) override {
-            if (su == nullptr) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            auto meta       = downcast(su);
-            meta->state     = ThreadState::READY;
-            meta->slice_cnt = 0;
-            _ready_queue.push_back(*meta);
+        virtual Result<void> put(util::nonnull<SUType *> su) override {
+            auto e       = get_entity(su);
+            e->state     = ThreadState::READY;
+            e->slice_cnt = 0;
+            ready_queue.push_back(*e);
             void_return();
         }
 
-        virtual Result<void> remove(SUType *su) override {
-            if (su == nullptr) {
+        virtual Result<void> insert(util::nonnull<SUType *> su) override {
+            return put(su);
+        }
+
+        virtual Result<void> fetch(util::nonnull<SUType *> su) override {
+            auto e = get_entity(su);
+            if (!ready_queue.contains(*e)) {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
-            auto meta = downcast(su);
-            if (!_ready_queue.contains(*meta)) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            _ready_queue.remove(*meta);
-            meta->state = ThreadState::EMPTY;
+            ready_queue.remove(*e);
+            e->state = ThreadState::EMPTY;
             void_return();
         }
 
-        virtual SUType *current() override {
-            return _current_su;
+        virtual Result<void> remove(util::nonnull<SUType *> su) override {
+            return fetch(su);
         }
 
-        virtual SUType *peer() override {
-            if (_ready_queue.empty()) {
-                return _current_su;
+        virtual Result<util::nonnull<SUType *>> pick() override {
+            if (ready_queue.empty()) {
+                unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
             }
-            auto meta = &_ready_queue.front();
-            return upcast(meta);
+            auto e = &ready_queue.front();
+            auto su = get_su(e);
+            return util::nonnull<SUType *>::from(su).transform_error(always(ErrCode::NULLPTR));
         }
 
-        virtual SUType *pick() override {
-            if (_ready_queue.empty()) {
-                return _current_su;
-            }
-            auto next_meta = &_ready_queue.front();
-            _ready_queue.pop_front();
-            if (_current_su) {
-                auto current_meta = downcast(_current_su);
-                if (P_rescheduable(*current_meta)) {
-                    current_meta->state = ThreadState::READY;
-                    _ready_queue.push_back(*current_meta);
-                }
-            }
-            _current_su          = upcast(next_meta);
-            next_meta->state     = ThreadState::RUNNING;
-            next_meta->slice_cnt = 0;
-            return _current_su;
+        virtual Result<void> set_run(util::nonnull<SUType *> su) override {
+            auto e = get_entity(su);
+            e->state = ThreadState::RUNNING;
+            e->slice_cnt = 0;
+            void_return();
         }
 
-        virtual bool should_switch() override {
-            if (_ready_queue.empty()) {
+        virtual Result<bool> runout(util::nonnull<const SUType *> su) override
+        {
+            if (ready_queue.empty()) {
                 return false;
             }
 
-            if (_current_su == nullptr) {
+            auto e = get_entity(su.get());
+
+            if (e->slice_cnt >= TIME_SLICES) {
                 return true;
             }
 
-            auto current_meta = downcast(_current_su);
-            // 当前线程不可继续运行, 或者时间片已用尽, 都需要切换
-            return !P_runnable(*current_meta) ||
-                   current_meta->slice_cnt >= TIME_SLICES;
+            // 仅在当前仍处于 RUNNING 且时间片未用尽时继续运行
+            return e->state != ThreadState::RUNNING;
         }
 
-        virtual void yield() override {
-            if (_current_su) {
-                auto current_meta   = downcast(_current_su);
-                current_meta->state = ThreadState::YIELD;
-            }
-        }
-
-        virtual void suspend() override {
-            if (_current_su) {
-                auto current_meta   = downcast(_current_su);
-                current_meta->state = ThreadState::EMPTY;
-                _current_su         = nullptr;
-            }
-        }
-
-        virtual void on_tick(units::tick /*gap_ticks*/) {
-            if (_current_su) {
-                auto current_meta = downcast(_current_su);
-                current_meta->slice_cnt += 1;
+        virtual void on_tick(util::nonnull<SUType *> su, units::tick /*gap_ticks*/) {
+            auto e = get_entity(su);
+            if (e->state == ThreadState::RUNNING) {
+                e->slice_cnt++;
             }
         }
     };

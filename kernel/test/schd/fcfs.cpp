@@ -1,229 +1,152 @@
 /**
- * @file schd_fcfs.cpp
- * @brief FCFS 调度器单元测试
+ * @file fcfs.cpp
+ * @brief FCFS 调度器 1000 时间片调度模拟测试
  */
 
 #include <schd/fcfs.h>
 #include <test/schd/fcfs.h>
 
-namespace test::schd::fcfs {
-    struct TestSU : public ::schd::fcfs::Metadata {
-        int id = 0;
+namespace test::schd_test::fcfs {
+
+    struct SimThread {
+        int id            = 0;
+        int total_ticks   = 0;
+        int executed      = 0;
+        bool finished     = false;
+
+        schd::fcfs::Entity fcfs_entity;
     };
 
-    using Scheduler = ::schd::fcfs::FCFS<TestSU>;
-
-    class CaseBasicInsertPick : public TestCase {
+    class CaseFCFS1000Ticks : public TestCase {
     public:
-        CaseBasicInsertPick() : TestCase("FCFS 基本插入与选择顺序") {}
-
-        void _run(void* env [[maybe_unused]]) const noexcept override {
-            Scheduler schd;
-            TestSU a;
-            TestSU b;
-            TestSU c;
-            a.id = 1;
-            b.id = 2;
-            c.id = 3;
-
-            auto r1 = schd.insert(&a);
-            tassert(r1.has_value(), "插入 a 应成功");
-            tassert(a.state == ThreadState::READY, "a 状态应为 READY");
-
-            auto r2 = schd.insert(&b);
-            tassert(r2.has_value(), "插入 b 应成功");
-            tassert(b.state == ThreadState::READY, "b 状态应为 READY");
-
-            auto r3 = schd.insert(&c);
-            tassert(r3.has_value(), "插入 c 应成功");
-            tassert(c.state == ThreadState::READY, "c 状态应为 READY");
-
-            tassert(schd.current() == nullptr, "初始 current 应为空");
-
-            auto peer1 = schd.peer();
-            tassert(peer1 == &a, "peer 应返回最早插入的 a");
-
-            auto p1 = schd.pick();
-            tassert(p1 == &a, "第一次 pick 应选择 a");
-            tassert(a.state == ThreadState::RUNNING, "a 状态应为 RUNNING");
-            tassert(b.state == ThreadState::READY, "b 仍为 READY");
-            tassert(c.state == ThreadState::READY, "c 仍为 READY");
-
-            auto peer2 = schd.peer();
-            tassert(peer2 == &b, "此时 peer 应返回 b");
-
-            auto p2 = schd.pick();
-            tassert(p2 == &b, "第二次 pick 应选择 b");
-            tassert(a.state == ThreadState::READY,
-                    "a 应被重新放回就绪队列并为 READY");
-            tassert(b.state == ThreadState::RUNNING, "b 状态应为 RUNNING");
-
-            auto p3 = schd.pick();
-            tassert(p3 == &c, "第三次 pick 应选择 c");
-            tassert(c.state == ThreadState::RUNNING, "c 状态应为 RUNNING");
-            tassert(a.state == ThreadState::READY, "a 仍为 READY");
-            tassert(b.state == ThreadState::READY, "b 应被重新放回就绪队列");
+        CaseFCFS1000Ticks() : TestCase("FCFS 1000 时间片调度模拟") {
+            // 调度模拟中检查次数很多, 关闭成功检查输出以减少日志
+            set_verbose_pass(false);
         }
-    };
-
-    class CaseYieldAndSwitch : public TestCase {
-    public:
-        CaseYieldAndSwitch() : TestCase("FCFS yield/should_switch 行为") {}
 
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            Scheduler schd;
-            TestSU a;
-            TestSU b;
-            a.id = 1;
-            b.id = 2;
+            constexpr int THREAD_COUNT = 4;
+            constexpr int TOTAL_TICKS  = 1000;
+            const int workloads[THREAD_COUNT] = {100, 200, 300, 400};
 
-            tassert(schd.insert(&a).has_value(), "插入 a 成功");
-            tassert(schd.insert(&b).has_value(), "插入 b 成功");
+            schd::fcfs::FCFS<SimThread> scheduler;
 
-            auto p1 = schd.pick();
-            tassert(p1 == &a, "第一次 pick 选择 a");
-            tassert(!schd.should_switch(), "当前为 RUNNING 时不应切换");
+            SimThread threads[THREAD_COUNT];
+            for (int i = 0; i < THREAD_COUNT; ++i) {
+                threads[i].id          = i;
+                threads[i].total_ticks = workloads[i];
+                threads[i].executed    = 0;
+                threads[i].finished    = false;
+                threads[i].fcfs_entity.state = ThreadState::EMPTY;
+                threads[i].fcfs_entity.list_head.clear();
+            }
 
-            schd.yield();
-            tassert(a.state == ThreadState::YIELD, "yield 后 a 状态应为 YIELD");
-            tassert(schd.should_switch(), "yield 后应需要切换");
+            expect("将所有线程按到达顺序插入 FCFS 调度器");
+            for (int i = 0; i < THREAD_COUNT; ++i) {
+                auto ret = scheduler.insert(util::nonnull_from(threads[i]));
+                tassert(ret.has_value(), "insert 返回成功");
+            }
 
-            auto p2 = schd.pick();
-            tassert(p2 == &b, "第二次 pick 应切到 b");
-            tassert(b.state == ThreadState::RUNNING, "b 为 RUNNING");
-            tassert(a.state == ThreadState::READY,
-                    "被重新放回队列的 a 应为 READY");
-        }
-    };
+            int schedule[TOTAL_TICKS];
+            SimThread* current      = nullptr;
+            int total_executed      = 0;
 
-    class CaseSuspend : public TestCase {
-    public:
-        CaseSuspend() : TestCase("FCFS suspend 将当前 SU 移出调度器") {}
+            for (int tick = 0; tick < TOTAL_TICKS; ++tick) {
+                if (current == nullptr) {
+                    auto pick_res = scheduler.pick();
+                    tassert(pick_res.has_value(), "pick 在存在可运行线程时成功");
+                    auto su_nonnull = pick_res.value();
+                    SimThread* su   = su_nonnull.get();
 
-        void _run(void* env [[maybe_unused]]) const noexcept override {
-            Scheduler schd;
-            TestSU a;
-            TestSU b;
-            a.id = 1;
-            b.id = 2;
+                    auto fetch_res = scheduler.fetch(util::nonnull_from(*su));
+                    tassert(fetch_res.has_value(), "fetch 成功");
 
-            tassert(schd.insert(&a).has_value(), "插入 a 成功");
-            tassert(schd.insert(&b).has_value(), "插入 b 成功");
+                    auto set_res = scheduler.set_run(util::nonnull_from(*su));
+                    tassert(set_res.has_value(), "set_run 成功");
 
-            auto p1 = schd.pick();
-            tassert(p1 == &a, "第一次 pick 选择 a");
-
-            schd.suspend();
-            tassert(schd.current() == nullptr, "suspend 后 current 应为空");
-            tassert(a.state == ThreadState::EMPTY,
-                    "被 suspend 的 a 状态应为 EMPTY");
-
-            auto p2 = schd.pick();
-            tassert(p2 == &b, "之后 pick 应选中 b");
-            tassert(b.state == ThreadState::RUNNING, "b 状态应为 RUNNING");
-        }
-    };
-
-    class CaseInvalidParams : public TestCase {
-    public:
-        CaseInvalidParams() : TestCase("FCFS 参数校验") {}
-
-        void _run(void* env [[maybe_unused]]) const noexcept override {
-            Scheduler schd;
-            TestSU a;
-
-            auto rnull = schd.insert(nullptr);
-            tassert(!rnull.has_value() && rnull.error() == ErrCode::INVALID_PARAM,
-                    "插入空指针应返回 INVALID_PARAM");
-
-            auto r1 = schd.insert(&a);
-            tassert(r1.has_value(), "插入 a 成功");
-
-            TestSU b;
-            auto rrm = schd.remove(&b);
-            tassert(!rrm.has_value() && rrm.error() == ErrCode::INVALID_PARAM,
-                    "移除未在队列中的 SU 应返回 INVALID_PARAM");
-        }
-    };
-
-    // 一个简单的“真实调度”模拟: 两个任务分别运行 2 和 3 个 time slice
-    class CaseSimpleSimulation : public TestCase {
-    public:
-        CaseSimpleSimulation() : TestCase("FCFS 简单调度模拟") {}
-
-        void _run(void* env [[maybe_unused]]) const noexcept override {
-            Scheduler schd;
-            TestSU a;
-            TestSU b;
-            a.id = 1;
-            b.id = 2;
-
-            // 任务 A 需要运行 2 次, B 需要运行 3 次
-            int remain_a = 2;
-            int remain_b = 3;
-
-            tassert(schd.insert(&a).has_value(), "插入 a 成功");
-            tassert(schd.insert(&b).has_value(), "插入 b 成功");
-
-            int trace[8] = {0};
-            int idx      = 0;
-
-            auto has_work = [&]() {
-                return remain_a > 0 || remain_b > 0;
-            };
-
-            while (has_work()) {
-                if (schd.current() == nullptr || schd.should_switch()) {
-                    auto* next = schd.pick();
-                    tassert(next != nullptr, "有剩余任务时 pick 不应返回空");
-                }
-                auto* cur = schd.current();
-                tassert(cur != nullptr, "当前应有正在运行的任务");
-
-                if (idx < static_cast<int>(sizeof(trace) / sizeof(trace[0]))) {
-                    trace[idx++] = cur->id;
+                    current = su;
                 }
 
-                // 执行一个 time slice
-                if (cur->id == 1) {
-                    --remain_a;
-                    if (remain_a == 0) {
-                        schd.suspend();
-                    } else {
-                        schd.yield();
+                int remaining_threads = 0;
+                for (int i = 0; i < THREAD_COUNT; ++i) {
+                    if (!threads[i].finished && &threads[i] != current) {
+                        remaining_threads++;
                     }
-                } else if (cur->id == 2) {
-                    --remain_b;
-                    if (remain_b == 0) {
-                        schd.suspend();
-                    } else {
-                        schd.yield();
+                }
+
+                if (!current->finished) {
+                    auto runout_res = scheduler.runout(
+                        util::nonnull_from(static_cast<const SimThread&>(*current)));
+                    tassert(runout_res.has_value(), "runout 调用成功");
+
+                    if (remaining_threads > 0) {
+                        // FCFS: 只要当前仍处于 RUNNING, 且有其他 READY 线程, 就不应主动切换
+                        ttest(!runout_res.value());
                     }
+                }
+
+                // 执行一个时间片
+                schedule[tick] = current->id;
+                current->executed++;
+                total_executed++;
+
+                if (current->executed >= current->total_ticks) {
+                    current->finished = true;
+
+                    // 对于非最后一个线程, ready_queue 仍非空, 将状态置为 YIELD 后应触发 runout
+                    int unfinished_others = 0;
+                    for (int i = 0; i < THREAD_COUNT; ++i) {
+                        if (!threads[i].finished && &threads[i] != current) {
+                            unfinished_others++;
+                        }
+                    }
+
+                    if (unfinished_others > 0) {
+                        auto* e = schd::fcfs::FCFS<SimThread>::get_entity(current);
+                        e->state = ThreadState::YIELD;
+
+                        auto runout2 = scheduler.runout(
+                            util::nonnull_from(static_cast<const SimThread&>(*current)));
+                        tassert(runout2.has_value(), "runout (YIELD) 调用成功");
+                        ttest(runout2.value());
+                    }
+
+                    current = nullptr;
                 }
             }
 
-            tassert(a.state == ThreadState::EMPTY &&
-                        b.state == ThreadState::EMPTY,
-                    "所有任务完成后应为 EMPTY 状态");
+            check("所有线程都在 1000 时间片内正好完成");
+            ttest(total_executed == TOTAL_TICKS);
+            for (int i = 0; i < THREAD_COUNT; ++i) {
+                ttest(threads[i].finished);
+                ttest(threads[i].executed == threads[i].total_ticks);
+            }
 
-            // 期望的调度顺序: A, B, A, B, B
-            int expect_trace[] = {1, 2, 1, 2, 2};
-            for (int i = 0; i < 5; ++i) {
-                tassert(trace[i] == expect_trace[i], "FCFS 调度顺序应符合预期");
+            expect("调度顺序应严格符合 FCFS 先来先服务");
+            for (int t = 0; t < TOTAL_TICKS; ++t) {
+                int expected_id;
+                if (t < 100) {
+                    expected_id = 0;
+                } else if (t < 300) {
+                    expected_id = 1;
+                } else if (t < 600) {
+                    expected_id = 2;
+                } else {
+                    expected_id = 3;
+                }
+
+                if (!ttest(schedule[t] == expected_id)) {
+                    break;
+                }
             }
         }
     };
 
     void collect_tests(TestFramework& framework) {
         auto cases = util::ArrayList<TestCase*>();
-        cases.push_back(new CaseBasicInsertPick());
-        cases.push_back(new CaseYieldAndSwitch());
-        cases.push_back(new CaseSuspend());
-        cases.push_back(new CaseInvalidParams());
-        cases.push_back(new CaseSimpleSimulation());
+        cases.push_back(new CaseFCFS1000Ticks());
 
-        framework.add_category(
-            new TestCategory("schd_fcfs", std::move(cases)));
+        framework.add_category(new TestCategory("schd.fcfs", std::move(cases)));
     }
 
-}  // namespace test::schd_fcfs
+}  // namespace test::schd_test::fcfs

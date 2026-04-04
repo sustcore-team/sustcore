@@ -22,17 +22,11 @@ namespace schd {
         struct on_tick : public tag {};
     }  // namespace tags
 
-    template <typename SchdPolicy>
     class SchdHooks {
     public:
-        using SchdPolicyType = SchdPolicy;
-        using SchdPolicyTags = typename SchdPolicyType::Tags;
-
     protected:
-        static void on_tick(SchdPolicy &pol, units::tick gap_ticks) {
-            if constexpr (std::derived_from<SchdPolicyTags, tags::on_tick>) {
-                pol.on_tick(gap_ticks);
-            }
+        static void on_tick(units::tick gap_ticks)
+        {
         }
     };
 };  // namespace schd

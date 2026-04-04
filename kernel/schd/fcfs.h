@@ -17,130 +17,104 @@
 #include <sustcore/errcode.h>
 
 namespace schd::fcfs {
-    class Metadata {
+    class Entity {
     public:
-        ThreadState state                   = ThreadState::EMPTY;
-        util::ListHead<Metadata> _schd_head = {};
+        ThreadState state                = ThreadState::EMPTY;
+        util::ListHead<Entity> list_head = {};
 
-        Metadata()  = default;
-        ~Metadata() = default;
+        constexpr Entity()  = default;
+        constexpr ~Entity() = default;
     };
 
     class tags : public schd::tags::empty {};
 
     template <typename SU>
-    class FCFS : public SchdBase<SU, Metadata, tags> {
+    class FCFS : public SchdBase<SU, tags> {
     public:
-        using SUType       = SU;
-        using MetadataType = Metadata;
-        using Tags         = tags;
-        using Base         = SchdBase<SUType, MetadataType, Tags>;
-        using Base::downcast;
-        using Base::upcast;
+        using SUType     = SU;
+        using EntityType = Entity;
+        using Tags       = tags;
+        using Base       = SchdBase<SUType, Tags>;
+
+        static_assert(
+            requires(SUType su) { su.fcfs_entity; },
+            "SUType须具有类型为schd::fcfs::Entity的成员fcfs_entity");
+        constexpr static size_t ENTITY_OFFSET = offsetof(SUType, fcfs_entity);
+
+        constexpr static EntityType *get_entity(SUType *su) {
+            return &su->fcfs_entity;
+        }
+
+        constexpr static const EntityType *get_entity(const SUType *su) {
+            return &su->fcfs_entity;
+        }
+
+        constexpr static SUType *get_su(EntityType *entity) {
+            return reinterpret_cast<SUType *>(
+                reinterpret_cast<char *>(entity) - ENTITY_OFFSET);
+        }
 
     private:
-        util::IntrusiveList<MetadataType, &MetadataType::_schd_head>
-            _ready_queue    = {};
-        SUType *_current_su = nullptr;
-
-        constexpr static bool P_ready(const MetadataType &meta) {
-            return meta.state == ThreadState::READY;
-        }
-
-        constexpr static bool P_runnable(const MetadataType &meta) {
-            return meta.state == ThreadState::READY ||
-                   meta.state == ThreadState::RUNNING;
-        }
-
-        constexpr static bool P_rescheduable(const MetadataType &meta) {
-            return meta.state == ThreadState::READY ||
-                   meta.state == ThreadState::YIELD ||
-                   meta.state == ThreadState::RUNNING;
-        }
+        util::IntrusiveList<EntityType> ready_queue;
     public:
         constexpr FCFS()  = default;
         constexpr ~FCFS() = default;
 
-        virtual Result<void> insert(SUType *su) override {
-            if (su == nullptr) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            auto meta   = downcast(su);
-            meta->state = ThreadState::READY;
-            _ready_queue.push_back(*meta);
+        // 向就绪队列加入一个已知 SU
+        virtual Result<void> put(util::nonnull<SUType *> su) override {
+            auto e   = get_entity(su);
+            e->state = ThreadState::READY;
+            ready_queue.push_back(*e);
             void_return();
         }
 
-        virtual Result<void> remove(SUType *su) override {
-            if (su == nullptr) {
+        // 插入一个全新的 SU，与 put 语义相同
+        virtual Result<void> insert(util::nonnull<SUType *> su) override {
+            return put(su);
+        }
+
+        // 从就绪队列中移除一个 SU
+        virtual Result<void> fetch(util::nonnull<SUType *> su) override {
+            auto e = get_entity(su);
+            if (!ready_queue.contains(*e)) {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
-            auto meta = downcast(su);
-            if (!_ready_queue.contains(*meta)) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            _ready_queue.remove(*meta);
-            meta->state = ThreadState::EMPTY;
+            ready_queue.remove(*e);
+            e->state = ThreadState::EMPTY;
             void_return();
         }
 
-        virtual SUType *current() override {
-            return _current_su;
+        // remove 语义与 fetch 相同
+        virtual Result<void> remove(util::nonnull<SUType *> su) override {
+            return fetch(su);
         }
 
-        virtual SUType *peer() override {
-            if (_ready_queue.empty()) {
-                return _current_su;
+        // 选择下一个要运行的 SU（不修改其状态与队列，仅返回引用）
+        virtual Result<util::nonnull<SUType *>> pick() override {
+            if (ready_queue.empty()) {
+                unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
             }
-            auto meta = &_ready_queue.front();
-            return upcast(meta);
+            auto e  = &ready_queue.front();
+            auto su = get_su(e);
+            return util::nonnull<SUType *>::from(su).transform_error(always(ErrCode::NULLPTR));
         }
 
-        virtual SUType *pick() override {
-            if (_ready_queue.empty()) {
-                return _current_su;
-            }
-            auto next_meta = &_ready_queue.front();
-            _ready_queue.pop_front();
-            if (_current_su) {
-                auto current_meta   = downcast(_current_su);
-                if (P_rescheduable(*current_meta)) {
-                    current_meta->state = ThreadState::READY;
-                    _ready_queue.push_back(*current_meta);
-                }
-            }
-            _current_su      = upcast(next_meta);
-            next_meta->state = ThreadState::RUNNING;
-            return _current_su;
+        // 将 SU 标记为 RUNNING
+        virtual Result<void> set_run(util::nonnull<SUType *> su) override {
+            auto e   = get_entity(su);
+            e->state = ThreadState::RUNNING;
+            void_return();
         }
 
-        virtual bool should_switch() override {
-            if (_ready_queue.empty()) {
+        // FCFS: 只要当前仍处于 RUNNING，就不主动切换
+        virtual Result<bool> runout(
+            util::nonnull<const SUType *> su) override {
+            if (ready_queue.empty()) {
                 return false;
             }
 
-            if (_current_su == nullptr) {
-                return true;
-            }
-
-            auto current_meta = downcast(_current_su);
-            // 当前线程不可继续运行则需要切换
-            return !P_runnable(*current_meta);
-        }
-
-        virtual void yield() override {
-            if (_current_su) {
-                auto current_meta   = downcast(_current_su);
-                current_meta->state = ThreadState::YIELD;
-            }
-        }
-
-        virtual void suspend() override {
-            if (_current_su) {
-                auto current_meta   = downcast(_current_su);
-                current_meta->state = ThreadState::EMPTY;
-                _current_su         = nullptr;
-            }
+            auto e = get_entity(su.get());
+            return e->state != ThreadState::RUNNING;
         }
     };
 }  // namespace schd::fcfs

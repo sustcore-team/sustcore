@@ -1,13 +1,13 @@
 /**
- * @file schd_fcfs.h
+ * @file fcfs.h
  * @author
- * @brief FCFS 调度器测试头文件
+ * @brief FCFS 调度器测试
  */
 
 #pragma once
 
 #include <test/framework.h>
 
-namespace test::schd::fcfs {
+namespace test::schd_test::fcfs {
     void collect_tests(TestFramework& framework);
-}  // namespace test::schd_fcfs
+}

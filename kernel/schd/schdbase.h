@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <sus/nonnull.h>
 #include <sustcore/errcode.h>
 
 enum class ThreadState { EMPTY = 0, READY = 1, RUNNING = 2, YIELD = 3 };
@@ -26,37 +27,71 @@ constexpr const char *to_string(ThreadState state) {
 }
 
 namespace schd {
-    template <typename SU, typename Metadata, typename Tags>
+    template <typename SU, typename Tags>
     class SchdBase {
     public:
-        using SUType       = SU;
-        using MetadataType = Metadata;
-        using TagsType     = Tags;
+        using SUType   = SU;
+        using TagsType = Tags;
+
     protected:
         constexpr SchdBase()  = default;
         constexpr ~SchdBase() = default;
 
-        constexpr static SUType *upcast(MetadataType *meta) {
-            return static_cast<SUType *>(meta);
-        }
-
-        constexpr static MetadataType *downcast(SUType *su) {
-            return static_cast<MetadataType *>(su);
-        }
     public:
-        virtual Result<void> insert(SUType *su) = 0;
-        virtual Result<void> remove(SUType *su) = 0;
-        virtual SUType *current() = 0;
-        // 获得下一个应被调度的SU
-        virtual SUType *peer()       = 0;
-        // 切换到下一个SU
-        virtual SUType *pick()       = 0;
-        // 判断是否需要切换到下一个SU
-        virtual bool should_switch() = 0;
+        /**
+         * @brief 向调度器中添加一个SU
+         *
+         * @param su 调度单元
+         */
+        virtual Result<void> put(util::nonnull<SUType *> su) = 0;
+        /**
+         * @brief 从调度器中移除一个SU
+         *
+         * @param su 调度单元
+         */
+        virtual Result<void> fetch(util::nonnull<SUType *> su) = 0;
+        /**
+         * @brief 将一个SU插入调度器.
+         *
+         * @note 该函数与put的区别在于, insert添加的SU对调度器而言是全新的
+         *
+         * @param su 调度单元
+         */
+        virtual Result<void> insert(util::nonnull<SUType *> su)  = 0;
+        /**
+         * @brief 从调度器中移除一个SU
+         *
+         * @note 该函数与fetch的区别在于, remove后的SU对调度器而言是全新的
+         *
+         * @param su 调度单元
+         */
+        virtual Result<void> remove(util::nonnull<SUType *> su)  = 0;
+        /**
+         * @brief 从调度器中选择一个SU进行运行
+         *
+         * @return SUType* 选择的SU
+         */
+        virtual Result<util::nonnull<SUType *>> pick()           = 0;
 
-        // yield current SU
-        virtual void yield()   = 0;
-        // 将当前SU移出调度器
-        virtual void suspend() = 0;
+        /**
+         * @brief 将一个SU设置为正在运行状态
+         *
+         * 该函数一般与pick配合使用, 即:
+         * auto su = pick();
+         * fetch(su);
+         * set_run(su);
+         *
+         * @param su 调度单元
+         * @return Result<void> 设置结果
+         */
+        virtual Result<void> set_run(util::nonnull<SUType *> su) = 0;
+
+        /**
+         * @brief 判断当前运行的SU是否需要被切换掉
+         *
+         * @return true 需要切换
+         * @return false 不需要切换
+         */
+        virtual Result<bool> runout(util::nonnull<const SUType *> su)  = 0;
     };
 }  // namespace schd

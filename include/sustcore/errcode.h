@@ -12,6 +12,7 @@
 #pragma once
 
 #include <nt/errors.h>
+
 #include <expected>
 
 enum class ErrCode : int {
@@ -25,6 +26,7 @@ enum class ErrCode : int {
     NOT_SUPPORTED            = GENERIC_ERROR | 0x0003,
     BUSY                     = GENERIC_ERROR | 0x0004,
     OUT_OF_MEMORY            = GENERIC_ERROR | 0x0005,
+    NULLPTR                  = GENERIC_ERROR | 0x0006,
     // capability errors
     CAP_ERROR                = 0x01'0000,
     INVALID_CAPABILITY       = CAP_ERROR | 0x0001,
@@ -37,6 +39,9 @@ enum class ErrCode : int {
     ENTRY_NOT_FOUND          = FS_ERROR | 0x0001,
     // io errors
     IO_ERROR                 = 0x03'0000,
+    // task errors
+    TASK_ERROR               = 0x04'0000,
+    NO_RUNNABLE_THREAD       = TASK_ERROR | 0x0001,
     // 别名
     SLOT_BUSY                = BUSY,
 };
@@ -61,7 +66,9 @@ constexpr const char *to_cstring(ErrCode err) {
     }
 }
 
-[[deprecated("该方法的返回值将从const char *变为std::string_view, 请改用to_cstring()方法")]]
+[[deprecated(
+    "该方法的返回值将从const char *变为std::string_view, "
+    "请改用to_cstring()方法")]]
 constexpr const char *to_string(ErrCode err) {
     return to_cstring(err);
 }
@@ -70,14 +77,19 @@ template <typename T>
 using Result = std::result<T, ErrCode>;
 using std::unexpect;
 
-#define unexpect_return(x) return std::unexpected(x)
+#define unexpect_return(x)  return std::unexpected(x)
 #define propagate_return(x) unexpect_return(x.error())
-#define propagate(x) do { if (!(x).has_value()) { propagate_return(x); } } while(0)
+#define propagate(x)             \
+    do {                         \
+        if (!(x).has_value()) {  \
+            propagate_return(x); \
+        }                        \
+    } while (0)
 #define void_return() return std::expected<void, ErrCode>{};
 
 template <typename T>
 constexpr auto always(T &&value) {
-    return [value = std::forward<T>(value)](auto&&...) -> decltype(auto) {
+    return [value = std::forward<T>(value)](auto &&...) -> decltype(auto) {
         return value;
     };
 }

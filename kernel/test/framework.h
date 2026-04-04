@@ -24,6 +24,9 @@ private:
     mutable bool passflag = false;
     mutable util::ArrayList<std::string> fail_reasons;
 
+    // 是否在检查通过时也输出信息; 默认 true 保持原有语义
+    bool verbose_pass = true;
+
 public:
     TestCase(const char* name) : _name(name) {}
     virtual ~TestCase() = default;
@@ -31,6 +34,10 @@ public:
     [[nodiscard]]
     const char* name() const {
         return _name;
+    }
+
+    void set_verbose_pass(bool v) {
+        verbose_pass = v;
     }
 
     virtual void _run(void* env) const noexcept = 0;
@@ -41,7 +48,7 @@ protected:
             kprintfln(ANSI_GRAPHIC(ANSI_FG_RED) "      - 检查失败:" ANSI_GRAPHIC(
                 ANSI_GM_RESET)" %s" , reason.c_str());
             fail_reasons.emplace_back(std::move(reason));
-        } else {
+        } else if (verbose_pass) {
             kprintfln(ANSI_GRAPHIC(ANSI_FG_GREEN) "    - 检查通过:" ANSI_GRAPHIC(
                 ANSI_GM_RESET)" %s" ANSI_GRAPHIC(
                 ANSI_GM_RESET), reason.c_str());
@@ -54,7 +61,7 @@ protected:
             kprintfln(ANSI_GRAPHIC(ANSI_FG_RED) "      - 检查失败:" ANSI_GRAPHIC(
                 ANSI_GM_RESET)" %s" , reason);
             fail_reasons.emplace_back(reason);
-        } else {
+        } else if (verbose_pass) {
             kprintfln(ANSI_GRAPHIC(ANSI_FG_GREEN) "    - 检查通过:" ANSI_GRAPHIC(
                 ANSI_GM_RESET)" %s" ANSI_GRAPHIC(
                 ANSI_GM_RESET), reason);
