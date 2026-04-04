@@ -22,6 +22,8 @@ typedef int pid_t;
 
 // Make sure that TCB is has standard layout,
 // so that we can use offsetof to get the TCB pointer from the SU pointer.
-class TCB
+struct TCB
 {
+    tid_t tid;
 };
+

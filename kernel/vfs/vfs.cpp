@@ -84,7 +84,7 @@ Result<void> VFS::mount(const char *fs_name, IBlockDevice *device,
         unexpect_return(ErrCode::INVALID_PARAM);  // 未注册该文件系统
     }
     // 获取文件系统驱动
-    VFsDriver *fsd = lookup_result.value();
+    VFsDriver *fsd = lookup_result.value().get();
 
     // 挂载文件系统
     auto mount_result = fsd->fsd()->mount(device, options);
@@ -98,12 +98,12 @@ Result<void> VFS::mount(const char *fs_name, IBlockDevice *device,
 
 Result<void> VFS::umount(const char *mountpoint) {
     util::Path mnt_path = util::Path::normalize(mountpoint);
-    auto lookup_result  = mount_table.get_entry(mnt_path);
+    auto lookup_result  = mount_table.get(mnt_path);
     if (!lookup_result.has_value()) {
         unexpect_return(ErrCode::INVALID_PARAM);  // 没有该挂载点
     }
 
-    util::owner<VSuperblock *> vsb = lookup_result.value().second;
+    util::owner<VSuperblock *> vsb = lookup_result.value().get();
 
     // 确定没有打开的文件属于该挂载点
     // 先进行一次tidy_up, 清理掉已亡文件
@@ -136,7 +136,7 @@ Result<util::owner<VFileAccessor *>> VFS::open(const char *filepath) {
     // get virtual inode from dentry
     auto get_res = dentry_cache.get(path);
     assert(get_res.has_value());
-    VINode *vind = get_res.value()->vind();
+    VINode *vind = get_res.value().get()->vind();
     return util::owner(new VFileAccessor(vind));
 }
 
@@ -230,7 +230,7 @@ Result<void> VFS::update_root(const util::Path &mnt_path) {
     if (!get_res.has_value()) {
         unexpect_return(ErrCode::UNKNOWN_ERROR);
     }
-    VSuperblock *vsb = get_res.value();
+    VSuperblock *vsb = get_res.value().get();
     auto root_res = vsb->sb()->root().and_then(
         [vsb](inode_t root_id) { return vsb->update_inode(root_id); }
     );

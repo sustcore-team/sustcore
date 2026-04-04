@@ -19,28 +19,6 @@
 #include <functional>
 
 namespace util {
-    template <typename Map, typename _K, typename _V>
-    concept MapType = requires(Map m, _K k, _V v) {
-        {
-            m.get(k)
-        } -> std::same_as<std::expected<_V, bool>>;
-        {
-            m.put(k, v)
-        } -> std::same_as<void>;
-        {
-            m.remove(k)
-        } -> std::same_as<void>;
-        {
-            m.contains(k)
-        } -> std::same_as<bool>;
-        {
-            m.empty()
-        } -> std::same_as<bool>;
-        {
-            m.size()
-        } -> std::same_as<size_t>;
-    };
-
     template <typename _K, typename _V, typename Equality = std::equal_to<_K>>
     class LinkedMap;
 
@@ -207,18 +185,37 @@ namespace util {
                 delete &e;
             }
         }
-        std::expected<_V, bool> get(const _K &key) {
+        std::expected<std::reference_wrapper<_V>, bool> get(const _K &key) {
             for (auto &e : entries) {
                 if (Equality()(e.pair.first, key)) {
-                    return e.pair.second;
+                    return std::ref(e.pair.second);
                 }
             }
             return {std::unexpect, false};
         }
-        std::expected<Pair<_K, _V>, bool> get_entry(const _K &key) {
+        std::expected<std::reference_wrapper<const _V>, bool> get(
+            const _K &key) const {
             for (auto &e : entries) {
                 if (Equality()(e.pair.first, key)) {
-                    return e.pair;
+                    return std::cref(e.pair.second);
+                }
+            }
+            return {std::unexpect, false};
+        }
+        std::expected<std::reference_wrapper<Pair<_K, _V>>, bool> get_entry(
+            const _K &key) {
+            for (auto &e : entries) {
+                if (Equality()(e.pair.first, key)) {
+                    return std::ref(e.pair);
+                }
+            }
+            return {std::unexpect, false};
+        }
+        std::expected<std::reference_wrapper<const Pair<_K, _V>>, bool>
+        get_entry(const _K &key) const {
+            for (auto &e : entries) {
+                if (Equality()(e.pair.first, key)) {
+                    return std::cref(e.pair);
                 }
             }
             return {std::unexpect, false};
@@ -279,6 +276,4 @@ namespace util {
             return const_iterator(entries.cend());
         }
     };
-
-    static_assert(MapType<LinkedMap<int, int>, int, int>);
 }  // namespace util

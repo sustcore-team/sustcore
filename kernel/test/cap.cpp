@@ -25,11 +25,16 @@ namespace test::cap {
         CaseInitCHolder() : TestCase("初始化 CHolder 与 CSA") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("创建两个 CHolder, 分别作为源/目标 CSpace");
-            CHolder holder0;
-            CHolder holder1;
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            auto holder1_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value() && holder1_res.has_value(),
+                "创建 CHolder 实例");
+            CHolder* holder0 = holder0_res.value();
+            CHolder* holder1 = holder1_res.value();
 
-            auto csa_result0 = holder0.csa();
-            auto csa_result1 = holder1.csa();
+            auto csa_result0 = holder0->csa();
+            auto csa_result1 = holder1->csa();
             tassert(csa_result0.has_value() && csa_result1.has_value(),
                     "获取 CHolder 的 CSA 能力");
             check("两个 CHolder 的 CSA 能力均已就绪");
@@ -40,8 +45,12 @@ namespace test::cap {
     public:
         CaseCreateObject() : TestCase("创建对象能力并验证初始读值") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value(), "创建 CHolder");
+            CHolder* holder0 = holder0_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
 
@@ -54,7 +63,7 @@ namespace test::cap {
             tassert(create_result.has_value(), "创建 IntObj");
 
             check("从 CSpace 取回新建能力并执行 read() 校验初始值");
-            auto get_result = holder0.space().get(idx_obj0);
+            auto get_result = holder0->space().get(idx_obj0);
             tassert(get_result.has_value(), "获取初始对象能力");
 
             IntOp op_obj0(get_result.value());
@@ -68,8 +77,12 @@ namespace test::cap {
     public:
         CaseSharedObject() : TestCase("共享对象 SIntObj split 生命周期测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value(), "创建 CHolder");
+            CHolder* holder0 = holder0_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
 
@@ -86,7 +99,7 @@ namespace test::cap {
             tassert(create_result.has_value(), "创建根能力 #0");
             ttest(manager.object_count() == 1);
 
-            auto get_root_result = holder0.space().get(idx_root);
+            auto get_root_result = holder0->space().get(idx_root);
             tassert(get_root_result.has_value(), "获取共享对象根能力 #0");
             SIntOp root_op(get_root_result.value());
             auto root_read0 = root_op.read();
@@ -101,18 +114,18 @@ namespace test::cap {
             tassert(gfs_result_root1.has_value(), "分配槽位 idx_sint_root1");
             CapIdx idx_root1 = gfs_result_root1.value();
             auto split_root1_result =
-                op0.split<SIntAcc>(idx_root1, &holder0.space(), idx_root);
+                op0.split<SIntAcc>(idx_root1, &holder0->space(), idx_root);
             tassert(split_root1_result.has_value(), "split 创建根能力 #1");
 
             auto gfs_result_root2 = op0.get_free_slot();
             tassert(gfs_result_root2.has_value(), "分配槽位 idx_sint_root2");
             CapIdx idx_root2 = gfs_result_root2.value();
             auto split_root2_result =
-                op0.split<SIntAcc>(idx_root2, &holder0.space(), idx_root);
+                op0.split<SIntAcc>(idx_root2, &holder0->space(), idx_root);
             tassert(split_root2_result.has_value(), "split 创建根能力 #2");
 
-            auto get_root1_result = holder0.space().get(idx_root1);
-            auto get_root2_result = holder0.space().get(idx_root2);
+            auto get_root1_result = holder0->space().get(idx_root1);
+            auto get_root2_result = holder0->space().get(idx_root2);
             tassert(get_root1_result.has_value() && get_root2_result.has_value(),
                     "获取 split 后根能力");
             SIntOp root1_op(get_root1_result.value());
@@ -134,9 +147,9 @@ namespace test::cap {
             action("删除根能力 #1, 其余根能力不应受影响");
                 auto remove_root1_result = op0.remove(idx_root1);
                 tassert(remove_root1_result.has_value(), "删除根能力 #1");
-            ttest(!holder0.space().get(idx_root1).has_value());
-            ttest(holder0.space().get(idx_root).has_value());
-            ttest(holder0.space().get(idx_root2).has_value());
+            ttest(!holder0->space().get(idx_root1).has_value());
+            ttest(holder0->space().get(idx_root).has_value());
+            ttest(holder0->space().get(idx_root2).has_value());
 
             action("中间执行 GC, 因仍有根能力存活, 对象不应被回收");
             manager.GC();
@@ -145,7 +158,7 @@ namespace test::cap {
             action("删除根能力 #2, 根能力 #0 仍应可读");
                 auto remove_root2_result = op0.remove(idx_root2);
                 tassert(remove_root2_result.has_value(), "删除根能力 #2");
-            ttest(!holder0.space().get(idx_root2).has_value());
+            ttest(!holder0->space().get(idx_root2).has_value());
             auto read_after_remove = root_op.read();
             tassert(read_after_remove.has_value() &&
                         read_after_remove.value() == 31416,
@@ -154,7 +167,7 @@ namespace test::cap {
             action("最后删除根能力 #0, 再执行 GC 应回收对象");
                     auto remove_root_result = op0.remove(idx_root);
                     tassert(remove_root_result.has_value(), "删除根能力 #0");
-            ttest(!holder0.space().get(idx_root).has_value());
+            ttest(!holder0->space().get(idx_root).has_value());
             manager.GC();
             ttest(manager.object_count() == 0);
         }
@@ -164,8 +177,12 @@ namespace test::cap {
     public:
         CaseSplitPermission() : TestCase("SIntObj split 权限边界测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value(), "创建 CHolder");
+            CHolder* holder0 = holder0_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
             SIntManager manager;
@@ -179,7 +196,7 @@ namespace test::cap {
             tassert(create_no_split_result.has_value(),
                     "创建无 SPLIT 负向场景源能力");
 
-            auto get_no_split_result = holder0.space().get(idx_no_split_src);
+            auto get_no_split_result = holder0->space().get(idx_no_split_src);
             tassert(get_no_split_result.has_value(), "获取负向场景源能力");
             PermissionBits no_split_perm(perm::sintobj::READ,
                                          PayloadType::SINTOBJ);
@@ -195,12 +212,12 @@ namespace test::cap {
 
             expect("去除 SPLIT 权限后执行 split 应失败");
             auto split_no_split_result = op0.split<SIntAcc>(
-                idx_no_split_dst, &holder0.space(), idx_no_split_src);
+                idx_no_split_dst, &holder0->space(), idx_no_split_src);
             tassert(!split_no_split_result.has_value() &&
                         split_no_split_result.error() ==
                             ErrCode::INSUFFICIENT_PERMISSIONS,
                     "验证无 SPLIT 权限时 split 失败");
-            ttest(!holder0.space().get(idx_no_split_dst).has_value());
+            ttest(!holder0->space().get(idx_no_split_dst).has_value());
 
             auto gfs_result_split_only_src = op0.get_free_slot();
             tassert(gfs_result_split_only_src.has_value(),
@@ -211,7 +228,7 @@ namespace test::cap {
             tassert(create_split_only_result.has_value(),
                     "创建 SPLIT-only 场景源能力");
 
-            auto get_split_only_result = holder0.space().get(idx_split_only_src);
+            auto get_split_only_result = holder0->space().get(idx_split_only_src);
             tassert(get_split_only_result.has_value(),
                     "获取 SPLIT-only 场景源能力");
 
@@ -220,11 +237,11 @@ namespace test::cap {
                     "分配槽位 idx_split_observer");
             CapIdx idx_split_observer = gfs_result_split_observer.value();
             auto split_observer_result = op0.split<SIntAcc>(
-                idx_split_observer, &holder0.space(), idx_split_only_src);
+                idx_split_observer, &holder0->space(), idx_split_only_src);
             tassert(split_observer_result.has_value(), "创建观测能力(完整权限)");
 
             auto get_split_observer_result =
-                holder0.space().get(idx_split_observer);
+                holder0->space().get(idx_split_observer);
             tassert(get_split_observer_result.has_value(), "获取观测能力");
             SIntOp split_observer_op(get_split_observer_result.value());
             auto observer_read0 = split_observer_op.read();
@@ -274,7 +291,7 @@ namespace test::cap {
 
             expect("保留 SPLIT 且移除其它权限后, split 仍应成功");
             auto split_chain_l1_result = op0.split<SIntAcc>(
-                idx_split_chain_l1, &holder0.space(), idx_split_only_src);
+                idx_split_chain_l1, &holder0->space(), idx_split_only_src);
             tassert(split_chain_l1_result.has_value(),
                     "验证 SPLIT-only 权限下 split 成功");
 
@@ -283,14 +300,14 @@ namespace test::cap {
                     "分配槽位 idx_split_chain_l2");
             CapIdx idx_split_chain_l2 = gfs_result_split_chain_l2.value();
             auto split_chain_l2_result = op0.split<SIntAcc>(
-                idx_split_chain_l2, &holder0.space(), idx_split_chain_l1);
+                idx_split_chain_l2, &holder0->space(), idx_split_chain_l1);
             tassert(split_chain_l2_result.has_value(),
                     "验证链式 split 成功(l1 -> l2)");
 
             auto get_split_chain_l1_result =
-                holder0.space().get(idx_split_chain_l1);
+                holder0->space().get(idx_split_chain_l1);
             auto get_split_chain_l2_result =
-                holder0.space().get(idx_split_chain_l2);
+                holder0->space().get(idx_split_chain_l2);
             tassert(get_split_chain_l1_result.has_value() &&
                         get_split_chain_l2_result.has_value(),
                     "获取链式 split 结果能力");
@@ -329,8 +346,12 @@ namespace test::cap {
     public:
         CaseClone() : TestCase("Clone 测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value(), "创建 CHolder");
+            CHolder* holder0 = holder0_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
 
@@ -348,11 +369,11 @@ namespace test::cap {
 
             expect("执行 clone, 两者应指向同一 payload");
             auto clone_result =
-                op0.clone(idx_obj0_clone, &holder0.space(), idx_obj0);
+                op0.clone(idx_obj0_clone, &holder0->space(), idx_obj0);
             tassert(clone_result.has_value(), "执行能力 clone");
 
             check("读取 clone 能力, 期望值仍为 12345");
-            auto get_clone_result = holder0.space().get(idx_obj0_clone);
+            auto get_clone_result = holder0->space().get(idx_obj0_clone);
             tassert(get_clone_result.has_value());
             IntOp op_clone(get_clone_result.value());
             auto read_clone_result = op_clone.read();
@@ -366,9 +387,16 @@ namespace test::cap {
     public:
         CaseMigrate() : TestCase("Migrate 跨 CSpace 测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0, holder1;
-            auto csa_result0 = holder0.csa();
-            auto csa_result1 = holder1.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            auto holder1_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value() && holder1_res.has_value(),
+                "创建 CHolder 实例");
+            CHolder* holder0 = holder0_res.value();
+            CHolder* holder1 = holder1_res.value();
+
+            auto csa_result0 = holder0->csa();
+            auto csa_result1 = holder1->csa();
             tassert(csa_result0.has_value() && csa_result1.has_value(),
                     "获取源/目标 CHolder 的 CSA 能力");
             CSAOp op0(csa_result0.value());
@@ -385,14 +413,14 @@ namespace test::cap {
             CapIdx idx_obj1 = gfs_result_obj1.value();
             expect("执行迁移, 源槽位应被清空");
             auto migrate_result =
-                op1.migrate(idx_obj1, &holder0.space(), idx_obj0);
+                op1.migrate(idx_obj1, &holder0->space(), idx_obj0);
             tassert(migrate_result.has_value(), "执行能力 migrate");
 
             check("校验源槽位是否已清空");
-            ttest(!holder0.space().get(idx_obj0).has_value());
+            ttest(!holder0->space().get(idx_obj0).has_value());
 
             check("校验目标槽位读值正确");
-            auto get_migrated_result = holder1.space().get(idx_obj1);
+            auto get_migrated_result = holder1->space().get(idx_obj1);
             tassert(get_migrated_result.has_value());
             IntOp op_migrated(get_migrated_result.value());
             auto read_migrated_result = op_migrated.read();
@@ -406,8 +434,12 @@ namespace test::cap {
     public:
         CaseDowngrade() : TestCase("降权测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value(), "创建 CHolder");
+            CHolder* holder0 = holder0_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
             auto gfs_result = op0.get_free_slot();
@@ -415,7 +447,7 @@ namespace test::cap {
             CapIdx idx = gfs_result.value();
             auto create_result = op0.create<IntObj>(idx, 12345);
             tassert(create_result.has_value(), "创建 IntObj");
-            auto get_result = holder0.space().get(idx);
+            auto get_result = holder0->space().get(idx);
             tassert(get_result.has_value(), "获取 IntObj 能力");
             Capability* cap = get_result.value();
 
@@ -451,8 +483,15 @@ namespace test::cap {
     public:
         CaseRecvSpace() : TestCase("RecvSpace 接收测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0, holder1;
-            auto csa_result = holder0.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            auto holder1_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value() && holder1_res.has_value(),
+                "创建 CHolder 实例");
+            CHolder* holder0 = holder0_res.value();
+            CHolder* holder1 = holder1_res.value();
+
+            auto csa_result = holder0->csa();
             tassert(csa_result.has_value());
             CSAOp op0(csa_result.value());
             auto gfs_result_src = op0.get_free_slot();
@@ -460,7 +499,7 @@ namespace test::cap {
             CapIdx idx_src = gfs_result_src.value();
             auto create_result = op0.create<IntObj>(idx_src, 24680);
             tassert(create_result.has_value(), "创建 IntObj");
-            auto get_src_result = holder0.space().get(idx_src);
+            auto get_src_result = holder0->space().get(idx_src);
             tassert(get_src_result.has_value(), "获取源能力");
             Capability* cap_src = get_src_result.value();
 
@@ -468,30 +507,30 @@ namespace test::cap {
 
             check("未设置 sender 时接收应失败");
             auto recv_without_sender_result =
-                holder1.recv_space().migrate(idx_dst, cap_src);
+                holder1->recv_space().migrate(idx_dst, cap_src);
             tassert(!recv_without_sender_result.has_value() &&
                         recv_without_sender_result.error() ==
                             ErrCode::INVALID_INDEX,
                     "未设置 sender 时接收失败");
 
             check("设置错误 sender 时接收应失败");
-            holder1.recv_space().set_sender(idx_dst.group, holder1.cholder_id);
+            holder1->recv_space().set_sender(idx_dst.group, holder1->cholder_id);
             auto recv_wrong_sender_result =
-                holder1.recv_space().migrate(idx_dst, cap_src);
+                holder1->recv_space().migrate(idx_dst, cap_src);
             tassert(!recv_wrong_sender_result.has_value() &&
                         recv_wrong_sender_result.error() ==
                             ErrCode::INVALID_INDEX,
                     "设置错误 sender 时接收失败");
 
             check("设置正确 sender 后接收应成功");
-            holder1.recv_space().set_sender(idx_dst.group, holder0.cholder_id);
+            holder1->recv_space().set_sender(idx_dst.group, holder0->cholder_id);
             auto recv_success_result =
-                holder1.recv_space().migrate(idx_dst, cap_src);
+                holder1->recv_space().migrate(idx_dst, cap_src);
             tassert(recv_success_result.has_value(),
                     "通过 RecvSpace 进行迁移");
 
             check("通过 CHolder::access 访问应成功");
-            auto access_result = holder1.access(idx_dst);
+            auto access_result = holder1->access(idx_dst);
             tassert(access_result.has_value(), "通过 CHolder::access 访问能力");
             IntOp op_dst(access_result.value());
             auto read_dst_result = op_dst.read();
@@ -504,9 +543,16 @@ namespace test::cap {
     public:
         CaseRevoke() : TestCase("Revoke 子树清理测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolder holder0, holder1;
-            auto csa_result0 = holder0.csa();
-            auto csa_result1 = holder1.csa();
+            CHolderManager cholder_manager;
+            auto holder0_res = cholder_manager.create_holder();
+            auto holder1_res = cholder_manager.create_holder();
+            tassert(holder0_res.has_value() && holder1_res.has_value(),
+                "创建 CHolder 实例");
+            CHolder* holder0 = holder0_res.value();
+            CHolder* holder1 = holder1_res.value();
+
+            auto csa_result0 = holder0->csa();
+            auto csa_result1 = holder1->csa();
             tassert(csa_result0.has_value() && csa_result1.has_value(),
                     "获取源/目标 CHolder 的 CSA 能力");
             CSAOp op0(csa_result0.value());
@@ -522,28 +568,28 @@ namespace test::cap {
             tassert(gfs_result_l1_keep.has_value(), "分配槽位 idx_l1_keep");
             CapIdx idx_l1_keep = gfs_result_l1_keep.value();
             auto clone_l1_keep_result =
-                op0.clone(idx_l1_keep, &holder0.space(), idx_root);
+                op0.clone(idx_l1_keep, &holder0->space(), idx_root);
             tassert(clone_l1_keep_result.has_value(), "创建保留分支 l1");
 
             auto gfs_result_l1_revoke = op0.get_free_slot();
             tassert(gfs_result_l1_revoke.has_value(), "分配槽位 idx_l1_revoke");
             CapIdx idx_l1_revoke = gfs_result_l1_revoke.value();
             auto clone_l1_revoke_result =
-                op0.clone(idx_l1_revoke, &holder0.space(), idx_root);
+                op0.clone(idx_l1_revoke, &holder0->space(), idx_root);
             tassert(clone_l1_revoke_result.has_value(), "创建待撤销分支 l1");
 
             auto gfs_result_l2_revoke = op0.get_free_slot();
             tassert(gfs_result_l2_revoke.has_value(), "分配槽位 idx_l2_revoke");
             CapIdx idx_l2_revoke = gfs_result_l2_revoke.value();
             auto clone_l2_revoke_result =
-                op0.clone(idx_l2_revoke, &holder0.space(), idx_l1_revoke);
+                op0.clone(idx_l2_revoke, &holder0->space(), idx_l1_revoke);
             tassert(clone_l2_revoke_result.has_value(), "创建待撤销分支 l2");
 
             auto gfs_result_l3_revoke = op1.get_free_slot();
             tassert(gfs_result_l3_revoke.has_value(), "分配槽位 idx_l3_revoke");
             CapIdx idx_l3_revoke = gfs_result_l3_revoke.value();
             auto clone_l3_revoke_result =
-                op1.clone(idx_l3_revoke, &holder0.space(), idx_l2_revoke);
+                op1.clone(idx_l3_revoke, &holder0->space(), idx_l2_revoke);
             tassert(clone_l3_revoke_result.has_value(), "创建待撤销分支 l3");
 
             action("删除待撤销分支根节点, 触发子树清理");
@@ -551,10 +597,10 @@ namespace test::cap {
             tassert(remove_result.has_value(), "执行能力 remove(revoke)");
 
             check("校验后代是否已删除, 根与兄弟是否保留");
-            ttest(!holder0.space().get(idx_l2_revoke).has_value());
-            ttest(!holder1.space().get(idx_l3_revoke).has_value());
-            ttest(holder0.space().get(idx_root).has_value());
-            ttest(holder0.space().get(idx_l1_keep).has_value());
+            ttest(!holder0->space().get(idx_l2_revoke).has_value());
+            ttest(!holder1->space().get(idx_l3_revoke).has_value());
+            ttest(holder0->space().get(idx_root).has_value());
+            ttest(holder0->space().get(idx_l1_keep).has_value());
         }
     };
 
