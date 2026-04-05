@@ -166,9 +166,14 @@ namespace slub {
     public:
         SlubAllocator() : inuse_objects_(0) {}
         ObjType *alloc() {
-            PhyAddr p = GFP::get_free_page(obj_pages);
-            if (p.nonnull())
-                inuse_objects_++;
+            auto gfp_res = GFP::get_free_page(obj_pages);
+            if (! gfp_res.has_value()) {
+                SLUB::ERROR("无法分配大对象内存");
+                return nullptr;
+            }
+            PhyAddr p = gfp_res.value();
+            assert(p.nonnull());
+            inuse_objects_++;
             return convert<KpaAddr>(p).as<ObjType>();
         }
         void free(ObjType *ptr) {
@@ -229,11 +234,12 @@ namespace slub {
 
     template <typename ObjType>
     SlabHeader *SlubAllocator<ObjType>::new_slab() {
-        PhyAddr paddr = GFP::get_free_page(pages_);
-        if (!paddr.nonnull()) {
+        Result<PhyAddr> gfp_res = GFP::get_free_page(pages_);
+        if (! gfp_res.has_value()) {
             SLUB::ERROR("无法分配新的 slab 内存");
             return nullptr;
         }
+        PhyAddr paddr = gfp_res.value();
         KpaAddr kpaddr   = convert<KpaAddr>(paddr);
         SlabHeader *slab = new (kpaddr.addr()) SlabHeader{};
         init_slab_headers(slab);
@@ -458,11 +464,12 @@ namespace slub {
             assert(is_pow2(rsz));
             const size_t pages = get_pages(rsz);
             assert(pages > 0);
-            PhyAddr paddr = GFP::get_free_page(pages);
-            if (!paddr.nonnull()) {
+            Result<PhyAddr> gfp_res = GFP::get_free_page(pages);
+            if (!gfp_res.has_value()) {
                 SLUB::ERROR("无法分配大对象内存");
                 return nullptr;
             }
+            PhyAddr paddr = gfp_res.value();
             return convert<KpaAddr>(paddr).addr();
         }
 

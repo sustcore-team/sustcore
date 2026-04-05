@@ -42,6 +42,10 @@ enum class ErrCode : int {
     // task errors
     TASK_ERROR               = 0x04'0000,
     NO_RUNNABLE_THREAD       = TASK_ERROR | 0x0001,
+    // memory errors
+    MEM_ERROR                = 0x05'0000,
+    PAGE_NOT_PRESENT         = MEM_ERROR | 0x0001,
+    INVALID_PTE              = MEM_ERROR | 0x0002,
     // 别名
     SLOT_BUSY                = BUSY,
 };

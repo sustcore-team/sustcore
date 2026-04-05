@@ -9,12 +9,15 @@
  *
  */
 
+#include <arch/riscv64/description.h>
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
+#include <env.h>
 #include <kio.h>
 #include <sbi/sbi.h>
 #include <sus/logger.h>
-#include <sustcore/timer.h>
+#include <sustcore/addr.h>
+#include <sustcore/epacks.h>
 #include <task/scheduler.h>
 #include <task/task_struct.h>
 
@@ -63,61 +66,9 @@ namespace Exceptions {
 };  // namespace Exceptions
 
 namespace Handlers {
-    void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                   Riscv64Context *ctx) {
-        switch (scause.cause) {
-            case Exceptions::ECALL_U: {
-                break;
-            }
-            case Exceptions::ILLEGAL_INST:
-                illegal_instruction(scause, sepc, stval, ctx);
-                break;
-            case Exceptions::INST_PAGE_FAULT:
-            case Exceptions::LOAD_PAGE_FAULT:
-            case Exceptions::STORE_PAGE_FAULT:
-                paging_fault(scause, sepc, stval, ctx);
-                break;
-            default:
-                // 输出异常类型
-                if (scause.cause <
-                    sizeof(Exceptions::MSG) / sizeof(Exceptions::MSG[0]))
-                {
-                    INTERRUPT::ERROR("发生异常! 类型: %s (%lu)",
-                                     Exceptions::MSG[scause.cause],
-                                     scause.cause);
-                } else {
-                    INTERRUPT::ERROR("发生异常! 类型: 未知 (%lu)",
-                                     scause.cause);
-                }
-
-                // 输出寄存器状态
-                INTERRUPT::ERROR("scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx",
-                                 scause.value, sepc, stval);
-                INTERRUPT::ERROR("ctx: 0x%lx", ctx);
-
-                // 输出异常发生特权级
-                if (ctx->sstatus.spp) {
-                    INTERRUPT::ERROR("异常发生在S-Mode");
-                } else {
-                    INTERRUPT::ERROR("异常发生在U-Mode");
-                }
-                INTERRUPT::ERROR("无对应解决方案: 0x%lx", scause.cause);
-                while (true);
-        }
-    }
-
-    void illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
+    bool illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
                              Riscv64Context *ctx) {
-        INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
-                         Exceptions::MSG[scause.cause], scause.cause);
-        INTERRUPT::INFO("非法指令处理程序: sepc=0x%lx, stval=0x%lx", sepc,
-                        stval);
-        if (ctx->sstatus.spp) {
-            INTERRUPT::DEBUG("异常发生在S-Mode");
-        } else {
-            INTERRUPT::DEBUG("异常发生在U-Mode");
-        }
-
+        INTERRUPT::DEBUG("进入非法指令异常处理程序");
         // 我们可以通过该指令自定义kernel服务
         dword ins = *((dword *)sepc);
         INTERRUPT::INFO("指令内容: 0x%08x", ins);
@@ -138,26 +89,174 @@ namespace Handlers {
             INTERRUPT::INFO("计算完成!");
         } else {
             INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
+            return false;
         }
 
         ctx->sepc += 4;  // 跳过该指令
+        return true;
     }
 
-    void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
+    bool paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
                       Riscv64Context *ctx) {
-        INTERRUPT::DEBUG("发生异常! 类型: %s (%lu)",
-                         Exceptions::MSG[scause.cause], scause.cause);
-        INTERRUPT::INFO("页异常处理程序: scause=0x%lx, sepc=0x%lx, stval=0x%lx",
-                        scause.value, sepc, stval);
-
+        INTERRUPT::DEBUG("进入页异常处理程序");
         INTERRUPT::INFO("异常页地址: 0x%016lx", stval);
 
-        if (ctx->sstatus.spp) {
-            INTERRUPT::DEBUG("异常发生在S-Mode");
-        } else {
-            INTERRUPT::DEBUG("异常发生在U-Mode");
+        const VirAddr fault_addr = VirAddr(stval);
+        PhyAddr hw_root          = PageMan::read_root();
+        Environment &e           = env();
+        INTERRUPT::DEBUG("paging_fault: hw_root=%p, env.pgd=%p, tm=%p",
+                         hw_root.addr(), e.pgd.addr(), e.tm);
+        PageMan pman(hw_root);
+
+        if (!e.pgd.nonnull()) {
+            return false;
         }
-        while (true);
+
+        enum class FaultCause {
+            NO_PRESENT,  // No present page
+            SAU_NO_SUM,  // S-mode Access User page without SUM
+            UAS,         // User Access Supervisor page
+            INVALID_AD,  // Invalid A/D bit
+            UNKNOWN      // Unknown cause
+        } cause = FaultCause::UNKNOWN;
+
+        if (scause.cause == Exceptions::INST_PAGE_FAULT ||
+            scause.cause == Exceptions::LOAD_PAGE_FAULT ||
+            scause.cause == Exceptions::STORE_PAGE_FAULT)
+        {
+            // 判断是否为缺页异常
+            auto query_res = pman.query_page(fault_addr);
+            if (!query_res.has_value()) {
+                // 真正的缺页异常: 页表中不存在该页
+                if (query_res.error() == ErrCode::PAGE_NOT_PRESENT) {
+                    cause = FaultCause::NO_PRESENT;
+                } else {
+                    INTERRUPT::ERROR("查询页表时发生错误: addr=%p, err=%d",
+                                     fault_addr.addr(), query_res.error());
+                    cause = FaultCause::UNKNOWN;
+                }
+            } else {
+                // 页存在，但仍然触发了页错误: 可能是权限或 A/D 位导致
+                auto qres                  = query_res.value();
+                typename PageMan::PTE *pte = qres.pte;
+
+                if (pte->u && !ctx->sstatus.sum && ctx->sstatus.spp) {
+                    // 内核态访问用户页且未设置 SUM 位时触发页异常
+                    cause = FaultCause::SAU_NO_SUM;
+                } else if (!pte->u && !ctx->sstatus.spp) {
+                    // 用户态访问用户页但权限不足时触发页异常
+                    cause = FaultCause::UAS;
+                }
+                else if (PageMan::is_present(*pte)) {
+                    if (!pte->a) {
+                        cause = FaultCause::INVALID_AD;
+                    }
+
+                    PageMan::RWX rwx = PageMan::rwx(*pte);
+                    if ((scause.cause == Exceptions::STORE_PAGE_FAULT) &&
+                        !pte->d && PageMan::is_writable(rwx))
+                    {
+                        cause = FaultCause::INVALID_AD;
+                    }
+
+                } else {
+                    INTERRUPT::ERROR(
+                        "页面存在但未被标记为有效! addr=%p, pte=%p",
+                        fault_addr.addr(), pte);
+                    cause = FaultCause::UNKNOWN;
+                }
+            }
+        }
+
+        bool processsed = false;
+
+        switch (cause) {
+            case FaultCause::NO_PRESENT: {
+                INTERRUPT::INFO("缺页异常: 0x%016lx", stval);
+                // 使用缺页异常处理程序处理缺页异常
+                auto *tm = e.tm;
+                if (tm != nullptr) {
+                    INTERRUPT::DEBUG(
+                        "调用 TM::on_np 处理缺页: addr=%p, tm_pgd=%p",
+                        fault_addr.addr(), tm->pgd().addr());
+                    processsed |= tm->on_np({fault_addr});
+
+                    // for debug:
+                    if (processsed) {
+                        // 再次查询，验证该页已被映射
+                        PhyAddr hw_root_after = PageMan::read_root();
+                        PageMan verify_pman(hw_root_after);
+                        auto verify_res = verify_pman.query_page(fault_addr);
+                        if (!verify_res.has_value()) {
+                            INTERRUPT::ERROR(
+                                "TM::on_np 返回成功但页面仍不存在: addr=%p, "
+                                "err=%d, hw_root_after=%p",
+                                fault_addr.addr(), verify_res.error(),
+                                hw_root_after.addr());
+                        } else {
+                            INTERRUPT::DEBUG(
+                                "TM::on_np 映射完成: addr=%p, hw_root_after=%p",
+                                fault_addr.addr(), hw_root_after.addr());
+                        }
+                    }
+                }
+                break;
+            }
+            case FaultCause::SAU_NO_SUM: {
+                INTERRUPT::ERROR("内核态访问用户页但未设置 SUM 位! addr=%p",
+                                 fault_addr.addr());
+                break;
+            }
+            case FaultCause::UAS: {
+                INTERRUPT::ERROR("用户态访问用户页但权限不足! addr=%p",
+                                 fault_addr.addr());
+                break;
+            }
+            case FaultCause::INVALID_AD: {
+                auto query_res = pman.query_page(fault_addr);
+                if (!query_res.has_value()) {
+                    INTERRUPT::ERROR(
+                        "处理 A/D 位错误时查询页表失败: addr=%p, err=%d",
+                        fault_addr.addr(), query_res.error());
+                    break;
+                }
+                PageMan::PTE *pte = query_res.value().pte;
+                bool present      = PageMan::is_present(*pte);
+                if (!present) {
+                    INTERRUPT::ERROR(
+                        "处理 A/D 位错误时页面不存在: addr=%p, pte=%p",
+                        fault_addr.addr(), pte);
+                    break;
+                }
+
+                bool updated = false;
+
+                if (!pte->a) {
+                    cause = FaultCause::INVALID_AD;
+                }
+
+                PageMan::RWX rwx = PageMan::rwx(*pte);
+                if ((scause.cause == Exceptions::STORE_PAGE_FAULT) && !pte->d &&
+                    PageMan::is_writable(rwx))
+                {
+                    cause = FaultCause::INVALID_AD;
+                }
+
+                processsed |= updated;
+                if (updated) {
+                    PageMan::flush_tlb();
+                    INTERRUPT::DEBUG("修复 A/D 位后重试: addr=%p, A=%d, D=%d",
+                                     fault_addr.addr(), pte->a, pte->d);
+                }
+                break;
+            }
+            default: {
+                INTERRUPT::ERROR("未知页异常! addr=%p", fault_addr.addr());
+                break;
+            }
+        }
+
+        return processsed;
 
         // 接下来应该执行页异常相关处理
         // 1. 检查地址是否合法
@@ -168,16 +267,61 @@ namespace Handlers {
         // 3. 如果是权限错误, 则终止相关进程
     }
 
+    void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
+                   Riscv64Context *ctx) {
+        // 输出异常类型
+        if (scause.cause < sizeof(Exceptions::MSG) / sizeof(Exceptions::MSG[0]))
+        {
+            INTERRUPT::INFO("发生异常! 类型: %s (%lu)",
+                            Exceptions::MSG[scause.cause], scause.cause);
+        } else {
+            INTERRUPT::INFO("发生异常! 类型: 未知 (%lu)", scause.cause);
+        }
+        if (ctx->sstatus.spp) {
+            INTERRUPT::ERROR("异常发生在S-Mode");
+        } else {
+            INTERRUPT::ERROR("异常发生在U-Mode");
+        }
+        // 输出寄存器状态
+        INTERRUPT::ERROR(
+            "scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx, sstatus: 0x%lx",
+            scause.value, sepc, stval, ctx->sstatus.value);
+        INTERRUPT::ERROR("ctx: 0x%lx", ctx);
+
+        bool processed = false;
+        switch (scause.cause) {
+            case Exceptions::ECALL_U: {
+                break;
+            }
+            case Exceptions::ILLEGAL_INST:
+                processed = illegal_instruction(scause, sepc, stval, ctx);
+                break;
+            case Exceptions::INST_PAGE_FAULT:
+            case Exceptions::LOAD_PAGE_FAULT:
+            case Exceptions::STORE_PAGE_FAULT:
+                processed = paging_fault(scause, sepc, stval, ctx);
+                break;
+            default:
+                INTERRUPT::INFO("无异常处理程序!");
+                processed = false;
+                break;
+        }
+
+        if (!processed) {
+            INTERRUPT::ERROR("无法处理该异常, 终止相关进程");
+            while (true);
+        }
+    }
+
     void timer(csr_scause_t scause, umb_t sepc, umb_t stval,
                Riscv64Context *ctx) {
         // 计算时间差
         units::tick current_ticks = units::tick::from_ticks(csr_get_time());
         units::tick gap_ticks     = current_ticks - timer_info.last_ticks;
 
-        // 发布TimerTickEvent
-        TimerTickInfo tick_info = {.last_tick = timer_info.last_ticks,
-                                   .increment = timer_info.increment,
-                                   .gap_ticks = gap_ticks};
+        TimerTickEvent e = {.last_tick = timer_info.last_ticks,
+                            .increment = timer_info.increment,
+                            .gap_ticks = gap_ticks};
 
         timer_info.last_ticks = current_ticks;
 

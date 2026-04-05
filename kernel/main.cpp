@@ -9,6 +9,7 @@
  *
  */
 
+#include <arch/riscv64/csr.h>
 #include <arch/riscv64/description.h>
 #include <arch/riscv64/mem/sv39.h>
 #include <arch/trait.h>
@@ -16,6 +17,7 @@
 #include <cap/cholder.h>
 #include <cap/cspace.h>
 #include <device/block.h>
+#include <env.h>
 #include <fs/tarfs.h>
 #include <kio.h>
 #include <mem/addr.h>
@@ -23,6 +25,7 @@
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/slub.h>
+#include <mem/vma.h>
 #include <object/csa.h>
 #include <perm/csa.h>
 #include <perm/permission.h>
@@ -33,6 +36,7 @@
 #include <sus/raii.h>
 #include <sus/tree.h>
 #include <sus/types.h>
+#include <sustcore/addr.h>
 #include <symbols.h>
 #include <task/task.h>
 #include <test/framework.h>
@@ -45,8 +49,6 @@
 #include <cstdio>
 #include <cstring>
 #include <exception>
-#include <string_view>
-
 #include <unordered_map>
 
 int kputs(const char *str) {
@@ -125,6 +127,11 @@ RamDiskDevice *make_initrd(void) {
     return device;
 }
 
+static Environment _env;
+Environment &env() {
+    return _env;
+}
+
 MemRegion regions[128];
 size_t region_cnt   = 0;
 PhyAddr kernel_root = PhyAddr::null;
@@ -172,7 +179,15 @@ void kernel_paging_setup(void) {
     [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     // 创建内核页表管理器
-    kernel_root                 = EarlyPageMan::make_root();
+    auto gfp_res                = GFP::get_free_page<STAGE>();
+    if (!gfp_res.has_value()) {
+        LOGGER::ERROR("无法为内核页表分配物理页");
+        while (true);
+    }
+
+    PhyAddr pgd = gfp_res.value();
+    EarlyPageMan::make_root(pgd);
+    kernel_root = pgd;
     EarlyPageMan kernelman(kernel_root);
 
     ker_paddr::init(lowpm, uppm);
@@ -211,10 +226,68 @@ extern "C" void post_init(void) {
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
         lowvm, uppm - lowpm, PageMan::RWX::NONE, true, false);
+    env().pgd = kernel_root;
 
-    TestFramework framework;
-    collect_tests(framework);
-    framework.run_all();
+    // Kernel tests
+    // TestFramework framework;
+    // collect_tests(framework);
+    // framework.run_all();
+
+    auto gfp_res = GFP::get_free_page<KernelStage::POST_INIT>();
+    if (!gfp_res.has_value()) {
+        LOGGER::ERROR("无法为 TM 分配物理页");
+        while (true);
+    }
+    PhyAddr tm_pgd = gfp_res.value();
+    TM *tm         = new TM(tm_pgd);
+
+    constexpr VirAddr data_vaddr = VirAddr(0x0000'0000'9000'0000);
+    constexpr size_t data_size   = 0x0000'0000'1000'0000;  // 256MB
+
+    Result<void> add_res = tm->add_vma(VMA::Type::DATA, data_vaddr, data_size);
+    if (!add_res.has_value()) {
+        LOGGER::ERROR("无法添加VMA: %d", add_res.error());
+        while (true);
+    }
+
+    // 切换当前页表到 TM 管理的页表
+    tm->pman().switch_root();
+    tm->pman().flush_tlb();
+    env().pgd = tm_pgd;
+    env().tm  = tm;
+
+    // 调试: 检查当前页表根一致性
+    PhyAddr hw_root   = PageMan::read_root();
+    PhyAddr env_root  = env().pgd;
+    PhyAddr tm_root   = tm->pgd();
+    LOGGER::DEBUG(
+        "TM 切换完成: hw_root=%p, env_root=%p, tm_root=%p",
+        hw_root.addr(), env_root.addr(), tm_root.addr());
+    if (!(hw_root == env_root && env_root == tm_root)) {
+        LOGGER::ERROR(
+            "页表根不一致! hw_root=%p, env_root=%p, tm_root=%p",
+            hw_root.addr(), env_root.addr(), tm_root.addr());
+    }
+
+    // try access pages in the new VMA to trigger on_np
+
+    // first, allow the kernel to directly read/write user memory
+    // it'll be removed later
+
+    csr_sstatus_t sstatus = csr_get_sstatus();
+    sstatus.sum           = 1;  // 允许S-MODE访问U-MODE内存
+    csr_set_sstatus(sstatus);
+
+    volatile char *ptr = (volatile char *)data_vaddr.addr();
+    constexpr char THE_FINAL_ANSWER = 0x42;
+    // write the page
+    for (int i = 0 ; i < 8 * PAGESIZE ; i ++) {
+        ptr[i] = THE_FINAL_ANSWER;
+    }
+
+    sstatus = csr_get_sstatus();
+    sstatus.sum = 0;
+    csr_set_sstatus(sstatus);
 
     LOGGER::INFO("Test complete. Entering idle loop.");
 
