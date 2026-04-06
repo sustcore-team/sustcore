@@ -18,6 +18,8 @@
 #include <mem/gfp.h>
 #include <sus/logger.h>
 #include <sus/types.h>
+#include <sustcore/addr.h>
+#include <sustcore/errcode.h>
 
 #include <cassert>
 #include <cstring>
@@ -97,7 +99,7 @@ public:
     using RWX       = Riscv64SV39RWX;
     using StageAddr = _StageAddr<Stage>;
 
-    static PhyAddr new_page(void) {
+    static Result<PhyAddr> new_page(void) {
         return GFP::get_free_page<Stage>();
     }
 
@@ -186,7 +188,7 @@ public:
     static_assert(sizeof(PTE) == 8);
 
     // 扩展页表项(加入页大小信息)
-    struct ExtendedPTE {
+    struct QueryResult {
         PTE *pte;
         PageSize size;
     };
@@ -260,18 +262,17 @@ public:
     }
 
     // 页表管理操作
-    static PTE *read_root(void) {
+    static PhyAddr read_root(void) {
         csr_satp_t satp = csr_get_satp();
         if (satp.mode != SATPMode::SV39) {
-            return nullptr;
+            return PhyAddr::null;
         }
         umb_t root_ppn = satp.ppn;
-        return _as<PTE>(from_ppn(root_ppn));
+        return from_ppn(root_ppn);
     }
-    static PhyAddr make_root(void) {
-        PhyAddr __root = new_page();
-        memset(_convert(__root).addr(), 0, PAGESIZE);
-        return __root;
+
+    static void make_root(PhyAddr root) {
+        memset(_convert(root).addr(), 0, PAGESIZE);
     }
 
 private:
@@ -282,7 +283,6 @@ private:
 
 public:
     explicit constexpr Riscv64SV39PageMan(PhyAddr root) : __root(root) {}
-    Riscv64SV39PageMan() : Riscv64SV39PageMan(make_root()) {}
 
     template <PageSize size>
     inline static void make_vpn(VirAddr vaddr, umb_t vpn[level(size)]) {
@@ -306,7 +306,7 @@ public:
     }
 
     // 查询页
-    ExtendedPTE query_page(VirAddr vaddr) {
+    Result<QueryResult> query_page(VirAddr vaddr) {
         // 将vaddr拆分为三级索引
         umb_t vpn[3];
         make_vpn<PageSize::_4K>(vaddr, vpn);
@@ -318,7 +318,7 @@ public:
             // 查询当前级页表项
             PTE &pte = pt[vpn[level]];
             if (!pte.v) {
-                return {nullptr, PageSize::_NULL};
+                unexpect_return(ErrCode::PAGE_NOT_PRESENT);
             }
 
             // 不为P且有效，说明是叶子页表项
@@ -330,7 +330,7 @@ public:
                 } else if (level == 1) {
                     size = PageSize::_2M;
                 }
-                return {&pte, size};
+                return QueryResult{&pte, size};
             }
 
             // 否则, 取下一级页表
@@ -338,8 +338,8 @@ public:
         }
 
         // 到达此处, 当且仅当最后一级页表项的RWX也为RWX::P
-        // 因此返回一个无效的页表项
-        return {nullptr, PageSize::_NULL};  // 不应该到达这里
+        // 因此返回 INVALID_PTE
+        unexpect_return(ErrCode::INVALID_PTE);
     }
 
     template <PageSize size>
@@ -383,30 +383,29 @@ public:
                     break;
                 }
                 // 分配下一级页表
-                PhyAddr new_pt = new_page();
+                auto new_page_res = new_page();
+                if (!new_page_res.has_value()) {
+                    PAGING::ERROR("无法映射页: 无可用物理页");
+                    return;
+                }
+                PhyAddr new_pt = new_page_res.value();
                 assert(new_pt.nonnull());
                 // 初始化该页
                 memset(_convert(new_pt).addr(), 0, PAGESIZE);
-                // 添加到当前页表中
                 pte.ppn = to_ppn(new_pt);
                 pte.v   = true;
                 pte.rwx = rwx_cast(RWX::P);
-                pte.u   = u;
-                pte.g   = g;
+                pte.u   = 0;
+                pte.g   = 0;
+                pte.a   = 0;
+                pte.d   = 0;
+                pte.np  = 0;
                 PAGING::DEBUG(
                     "VPN[%d] = %d 处页表项 %p 不存在, 构造为 pte = %p", level,
                     vpn[level], &pte, pte.value);
             }
 
-            // 确保 pte->u/g 与 u/g 参数匹配
-            if ((pte.u ^ u) || (pte.g ^ g)) {
-                PAGING::ERROR(
-                    "VPN[%d] = %d 处页表项用户/全局属性不匹配! pte->u = %d, "
-                    "pte->g = %d, 参数u = %d, 参数g = %d",
-                    level, vpn[level], pte.u, pte.g, u, g);
-                break;
-            }
-
+            // 继续向下级页表遍历
             pt = _as<PTE>(from_ppn(pte.ppn));
         }
 
@@ -421,6 +420,8 @@ public:
         target_pte->rwx = rwx_cast(rwx);
         target_pte->u   = u;
         target_pte->g   = g;
+        target_pte->a   = 0;
+        target_pte->d   = 0;
         PAGING::DEBUG(
             "成功映射 vaddr = %p 到 paddr = %p, rwx = %d, u = %d, g = %d",
             vaddr.addr(), paddr.addr(), rwx_cast(rwx), u, g);
@@ -515,13 +516,13 @@ public:
 
     template <ModifyMask mask>
     PageSize __modify_flags(VirAddr vaddr, RWX rwx, bool u, bool g) {
-        ExtendedPTE ext_pte = query_page(vaddr);
-        if (ext_pte.pte == nullptr || ext_pte.size == PageSize::_NULL) {
+        Result<QueryResult> query_res = query_page(vaddr);
+        if (!query_res.has_value()) {
             // 错误, 页面不存在
             return PageSize::_NULL;
         }
-
-        PTE *pte = ext_pte.pte;
+        QueryResult qres = query_res.value();
+        PTE *pte         = qres.pte;
 
         constexpr umb_t rwx_mask = to_rwx_mask(mask);
         if constexpr (rwx_mask != 0b000) {
@@ -541,7 +542,7 @@ public:
             pte->g = g;
         }
 
-        return ext_pte.size;
+        return qres.size;
     }
 
     template <ModifyMask mask>

@@ -15,7 +15,6 @@
 #include <kio.h>
 #include <perm/permission.h>
 #include <sus/defer.h>
-#include <sus/id.h>
 #include <sus/list.h>
 #include <sus/queue.h>
 #include <sustcore/capability.h>

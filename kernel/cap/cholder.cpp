@@ -14,14 +14,11 @@
 #include <object/csa.h>
 #include <sustcore/capability.h>
 
-static util::Defer<util::IDManager<>> CHOLDER_ID;
-AutoDefer(CHOLDER_ID);
-
-CHolder::CHolder(void)
+CHolder::CHolder(size_t cholder_id)
     : _space(this),
       _recv_space(this),
       _csa_idx(0, 0),
-      cholder_id(CHOLDER_ID->get()) {
+      cholder_id(cholder_id) {
     auto ret= _space.create<CSpaceAccessor>(_csa_idx, &_space);
     assert(ret.has_value());
 }

@@ -11,10 +11,13 @@
 
 #pragma once
 
+#include <mem/addr.h>
+#include <sus/types.h>
+#include <sustcore/addr.h>
+#include <sustcore/errcode.h>
+
 #include <concepts>
 #include <cstddef>
-#include <sus/types.h>
-#include <mem/addr.h>
 
 /**
  * @brief 架构串口 Trait
@@ -117,7 +120,7 @@ concept ArchPageManTrait_RWX = requires(bool r, bool w, bool x, T::RWX rwx) {
 
 template <typename T>
 concept ArchPageManTrait_PagingStructures =
-    requires(T::PageSize size, T::ExtendedPTE ext_pte) {
+    requires(T::PageSize size, T::QueryResult query_res) {
         // PageSize 枚举类型
         // 要求有4K页
         std::is_scoped_enum_v<typename T::PageSize>;
@@ -132,13 +135,13 @@ concept ArchPageManTrait_PagingStructures =
         {
             T::PTE_CNT
         } -> std::convertible_to<size_t>;
-        // ExtendedPTE
-        typename T::ExtendedPTE;
+        // QueryResult
+        typename T::QueryResult;
         {
-            ext_pte.pte
+            query_res.pte
         } -> std::same_as<typename T::PTE *&>;
         {
-            ext_pte.size
+            query_res.size
         } -> std::same_as<typename T::PageSize &>;
     };
 
@@ -188,9 +191,8 @@ concept ArchPageManTrait_Mask =
 
 // 页表管理器 Trait
 template <typename T>
-concept ArchPageManTrait = requires(T root, size_t size,
-                                    VirAddr vaddr, PhyAddr paddr, T::RWX rwx,
-                                    bool u, bool g) {
+concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
+                                    PhyAddr paddr, T::RWX rwx, bool u, bool g) {
     // 初始化条件
     requires ArchPageManTrait_Initialization<T>;
     // 满足RWX条件
@@ -202,21 +204,18 @@ concept ArchPageManTrait = requires(T root, size_t size,
     // 获得/构造页表根
     {
         T::read_root()
-    } -> std::same_as<typename T::PTE *>;
-    {
-        T::make_root()
     } -> std::same_as<PhyAddr>;
-    // 构造页表管理器
     {
-        T()
-    } -> std::same_as<T>;
+        T::make_root(paddr)
+    } -> std::same_as<void>;
+    // 构造页表管理器
     {
         T(paddr)
     } -> std::same_as<T>;
     // 查询页
     {
         root.query_page(vaddr)
-    } -> std::same_as<typename T::ExtendedPTE>;
+    } -> std::same_as<Result<typename T::QueryResult>>;
     // 单页映射
     {
         root.template map_page<T::PageSize::_4K>(vaddr, paddr, rwx, u, g)
@@ -243,7 +242,8 @@ concept ArchPageManTrait = requires(T root, size_t size,
     } -> std::same_as<void>;
     // 修改范围页面标志
     {
-        root.template modify_range_flags<T::ModifyMask::NONE>(vaddr, size, rwx, u, g)
+        root.template modify_range_flags<T::ModifyMask::NONE>(vaddr, size, rwx,
+                                                              u, g)
     } -> std::same_as<void>;
     // 更换页表根
     {
@@ -292,6 +292,4 @@ concept InterruptTrait = requires() {
 
 // Write-Protection Fault Infomation Trait
 template <typename T>
-concept WPFaultTrait = requires() {
-    true;
-};
+concept WPFaultTrait = requires() { true; };

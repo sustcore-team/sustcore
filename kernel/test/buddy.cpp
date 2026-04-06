@@ -20,23 +20,28 @@ namespace test::buddy {
         CaseFragmentation() : TestCase("Buddy 混合大小分配与碎片化") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("分配 1, 2, 4, 3 页物理内存");
-            PhyAddr p1 = GFP::get_free_page(1);
-            PhyAddr p2 = GFP::get_free_page(2);
-            PhyAddr p4 = GFP::get_free_page(4);
-            PhyAddr p3 = GFP::get_free_page(3);
+            auto r1 = GFP::get_free_page(1);
+            auto r2 = GFP::get_free_page(2);
+            auto r4 = GFP::get_free_page(4);
+            auto r3 = GFP::get_free_page(3);
 
-            tassert(p1.nonnull() && p2.nonnull() && p3.nonnull() && p4.nonnull(), "所有分配均成功");
+            tassert(r1.has_value() && r2.has_value() && r3.has_value() && r4.has_value(), "所有分配均成功");
+
+            PhyAddr p1 = r1.value();
+            PhyAddr p2 = r2.value();
+            PhyAddr p4 = r4.value();
+            PhyAddr p3 = r3.value();
 
             action("释放中间块 (2p, 3p) 以制造碎片");
             GFP::put_page(p2, 2);
             GFP::put_page(p3, 3);
 
             expect("重新分配 2 页 (应从碎片中重用空间)");
-            PhyAddr p_new = GFP::get_free_page(2);
-            ttest(p_new.nonnull());
+            auto r_new = GFP::get_free_page(2);
+            tassert(r_new.has_value(), "重新分配 2 页成功");
+            PhyAddr p_new = r_new.value();
 
-            if (p_new.nonnull())
-                GFP::put_page(p_new, 2);
+            GFP::put_page(p_new, 2);
             GFP::put_page(p1, 1);
             GFP::put_page(p4, 4);
         }
@@ -52,10 +57,11 @@ namespace test::buddy {
             int alloc_count = 0;
 
             for (int i = 0; i < MAX_singles; i++) {
-                singles[i] = GFP::get_free_page(1);
-                if (!singles[i].nonnull()) {
+                auto r = GFP::get_free_page(1);
+                if (!r.has_value()) {
                     break;
                 }
+                singles[i] = r.value();
                 alloc_count++;
             }
             check("记录并验证至少分配成功");
@@ -73,18 +79,20 @@ namespace test::buddy {
         CaseMerge() : TestCase("Buddy 大块分割与合并验证") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("分配一个 64 页的大块");
-            PhyAddr huge = GFP::get_free_page(64);
-            tassert(huge.nonnull(), "初始分配 64 页成功");
+            auto r = GFP::get_free_page(64);
+            tassert(r.has_value(), "初始分配 64 页成功");
+            PhyAddr huge = r.value();
 
             action("释放该大块");
             GFP::put_page(huge, 64);
 
             expect("再次分配 64 页, 验证是否能得到相同的起始地址 (合并成功)");
-            PhyAddr huge2 = GFP::get_free_page(64);
+            auto r2 = GFP::get_free_page(64);
+            tassert(r2.has_value(), "再次分配 64 页成功");
+            PhyAddr huge2 = r2.value();
             ttest(huge2 == huge);
 
-            if (huge2.nonnull())
-                GFP::put_page(huge2, 64);
+            GFP::put_page(huge2, 64);
         }
     };
 
@@ -93,12 +101,12 @@ namespace test::buddy {
         CaseInvalidArgs() : TestCase("Buddy 参数合法性与界限测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("尝试请求 0 页内存 (应返回空地址)");
-            PhyAddr p0 = GFP::get_free_page(0);
-            ttest(!p0.nonnull());
+            auto r0 = GFP::get_free_page(0);
+            ttest(!r0.has_value());
 
             expect("尝试请求极大页数 (预期失败)");
-            PhyAddr p_large = GFP::get_free_page(1ULL << 30); // 1TB of pages
-            ttest(!p_large.nonnull());
+            auto r_large = GFP::get_free_page(1ULL << 30); // 1TB of pages
+            ttest(!r_large.has_value());
 
             expect("释放空地址 (应能静默处理或不崩溃)");
             GFP::put_page(PhyAddr::null, 1);
@@ -113,8 +121,9 @@ namespace test::buddy {
             expect("分配不同 order 的块, 验证其对齐性 (Addr % (PageSize * Count) == 0)");
             for (int order_shift = 0; order_shift <= 6; order_shift++) {
                 size_t count = 1ULL << order_shift;
-                PhyAddr p = GFP::get_free_page(count);
-                if (p.nonnull()) {
+                auto r = GFP::get_free_page(count);
+                if (r.has_value()) {
+                    PhyAddr p = r.value();
                     addr_t addr = p.arith();
                     size_t align_mask = (count << 12) - 1; // 4KB page size
                     ttest((addr & align_mask) == 0);
@@ -135,8 +144,9 @@ namespace test::buddy {
             expect("连续分配不同大小的块直到失败或达到上限");
             for (int i = 0; i < ITERATIONS; i++) {
                 size_t sz = (i % 5) + 1; // 1-5 pages
-                pages[i] = GFP::get_free_page(sz);
-                if (!pages[i].nonnull()) break;
+                auto r = GFP::get_free_page(sz);
+                if (!r.has_value()) break;
+                pages[i] = r.value();
                 count++;
             }
 

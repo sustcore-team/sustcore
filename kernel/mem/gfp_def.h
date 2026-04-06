@@ -14,12 +14,13 @@
 #include <arch/trait.h>
 #include <mem/addr.h>
 #include <sus/types.h>
+#include <sustcore/errcode.h>
 
 #include <cstddef>
 
 template <typename T>
-concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr,
-                            size_t page_count) {
+concept GFPTrait = requires(MemRegion *regions, size_t region_count,
+                            PhyAddr ptr, size_t page_count) {
     {
         T::pre_init(regions, region_count)
     } -> std::same_as<void>;
@@ -28,22 +29,22 @@ concept GFPTrait = requires(MemRegion *regions, size_t region_count, PhyAddr ptr
     } -> std::same_as<void>;
     {
         T::get_free_page()
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::get_free_page(page_count)
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::template get_free_page<KernelStage::PRE_INIT>()
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::template get_free_page<KernelStage::PRE_INIT>(page_count)
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::template get_free_page<KernelStage::POST_INIT>()
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::template get_free_page<KernelStage::POST_INIT>(page_count)
-    } -> std::same_as<PhyAddr>;
+    } -> std::same_as<Result<PhyAddr>>;
     {
         T::put_page(ptr)
     } -> std::same_as<void>;
@@ -72,17 +73,18 @@ class LinearGrowGFP {
     static PhyAddr baseaddr;
     static PhyAddr curaddr;
     static PhyAddr boundary;
+
 public:
     static void pre_init(MemRegion *regions, size_t region_count);
     static void post_init(MemRegion *regions, size_t region_count);
     template <KernelStage Stage = KernelStage::POST_INIT>
-    static PhyAddr get_free_page(size_t page_count = 1) {
+    static Result<PhyAddr> get_free_page(size_t page_count = 1) {
         PhyAddr _bound = curaddr + page_count * PAGESIZE;
         if (_bound > boundary) {
-            return PhyAddr::null;  // 内存不足
+            unexpect_return(ErrCode::OUT_OF_MEMORY);
         }
         PhyAddr ptr = curaddr;
-        curaddr = _bound;
+        curaddr     = _bound;
         return ptr;
     }
     template <KernelStage Stage = KernelStage::POST_INIT>
@@ -91,6 +93,4 @@ public:
     }
 };
 
-static_assert(
-    GFPTrait<LinearGrowGFP>,
-    "LinearGrowthGFP 不满足 GFPTrait");
+static_assert(GFPTrait<LinearGrowGFP>, "LinearGrowthGFP 不满足 GFPTrait");

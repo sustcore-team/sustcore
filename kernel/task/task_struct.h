@@ -13,7 +13,17 @@
 
 #include <arch/description.h>
 #include <mem/vma.h>
+#include <schd/rr.h>
 #include <sus/list.h>
 
 typedef int tid_t;
 typedef int pid_t;
+
+
+// Make sure that TCB is has standard layout,
+// so that we can use offsetof to get the TCB pointer from the SU pointer.
+struct TCB
+{
+    tid_t tid;
+};
+

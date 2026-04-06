@@ -17,7 +17,6 @@
 #include <sus/refcount.h>
 #include <sus/rtti.h>
 #include <sus/tree.h>
-#include <sus/id.h>
 #include <sustcore/capability.h>
 
 #include <new>

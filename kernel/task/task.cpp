@@ -13,6 +13,5 @@
 #include <mem/alloc.h>
 #include <mem/slub.h>
 #include <sus/defer.h>
-#include <sus/id.h>
 #include <task/task.h>
 #include <task/task_struct.h>

@@ -15,6 +15,9 @@
 #include <mem/addr.h>
 #include <sus/list.h>
 #include <sus/types.h>
+#include <sus/nonnull.h>
+#include <sustcore/epacks.h>
+#include <sustcore/errcode.h>
 
 class TM;
 
@@ -33,14 +36,14 @@ struct VMA {
 
     static constexpr PageMan::RWX seg2rwx(Type type) {
         switch (type) {
-            case Type::CODE:      return PageMan::rwx(true, false, true);
+            case Type::CODE:      return PageMan::RWX::RX;
             case Type::DATA:
             case Type::STACK:
             case Type::HEAP:
-            case Type::SHARE_RW:  return PageMan::rwx(true, true, false);
-            case Type::SHARE_RO:  return PageMan::rwx(true, false, false);
-            case Type::SHARE_RX:  return PageMan::rwx(true, false, true);
-            case Type::SHARE_RWX: return PageMan::rwx(true, true, true);
+            case Type::SHARE_RW:  return PageMan::RWX::RW;
+            case Type::SHARE_RO:  return PageMan::RWX::RO;
+            case Type::SHARE_RX:  return PageMan::RWX::RX;
+            case Type::SHARE_RWX: return PageMan::RWX::RWX;
             default:              return PageMan::RWX::NONE;
         }
     }
@@ -72,24 +75,6 @@ struct VMA {
         }
     }
 
-    /**
-     * @brief 判断该VMA是否能够通过TM::map_vma映射到页表中
-     *
-     * 仅有CODE, DATA类型的VMA允许这么做, 因为程序加载时,
-     * 需要让CODE与DATA段的VMA映射 到内存中实际存储程序代码与数据的页上
-     *
-     * @param type
-     * @return true
-     * @return false
-     */
-    static constexpr bool mappable(Type type) {
-        switch (type) {
-            case Type::CODE:
-            case Type::DATA: return true;
-            default:         return false;
-        }
-    }
-
     TM *tm;
     Type type;
     VirAddr vaddr;
@@ -97,11 +82,7 @@ struct VMA {
     util::ListHead<VMA> list_head;
 
     constexpr VMA()
-        : tm(nullptr),
-          type(Type::NONE),
-          vaddr(),
-          size(0),
-          list_head({}) {}
+        : tm(nullptr), type(Type::NONE), vaddr(), size(0), list_head({}) {}
     constexpr VMA(TM *tm, Type t, VirAddr v, size_t s)
         : tm(tm), type(t), vaddr(v), size(s), list_head({}) {}
     constexpr VMA(TM *tm, const VMA &other)
@@ -128,20 +109,30 @@ constexpr const char *to_string(VMA::Type type) {
     }
 }
 
+// Task Memory
 class TM {
     util::IntrusiveList<VMA> vma_list;
-    PageMan __pgd;
+    PhyAddr _pgd;
+    PageMan _pman;
+
 public:
-    TM();
+    TM(PhyAddr _pgd);
     ~TM();
 
-    void add_vma(VMA::Type type, VirAddr vaddr, size_t size);
-    void clone_vma(TM &other, VMA *vma);
-    VMA *find_vma(VirAddr vaddr);
-    void remove_vma(VMA *vma);
-    void map_vma(VMA *vma, PhyAddr paddr, size_t size);
+    Result<void> add_vma(VMA::Type type, VirAddr vaddr, size_t size);
+    Result<void> clone_vma(TM &other, VirAddr vma_addr);
+    Result<util::nonnull<VMA *>> locate(VirAddr vaddr);
+    Result<util::nonnull<VMA *>> locate_range(VirAddr vaddr, size_t size);
+    Result<void> remove_vma(VirAddr vma_addr);
 
-    constexpr PageMan &pgd() {
-        return __pgd;
+    constexpr PhyAddr pgd() const {
+        return _pgd;
     }
+
+    constexpr PageMan &pman() {
+        return _pman;
+    }
+
+    // On No Present Pages
+    bool on_np(const NoPresentEvent &e);
 };

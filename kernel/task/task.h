@@ -12,6 +12,5 @@
 #pragma once
 
 #include <arch/description.h>
-#include <sus/id.h>
 #include <sus/list.h>
 #include <task/task_struct.h>

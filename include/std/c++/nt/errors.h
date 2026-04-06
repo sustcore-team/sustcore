@@ -19,7 +19,8 @@ namespace std {
         NONE,
         OVERFLOW_ERROR,
         UNDERFLOW_ERROR,
-        OUT_OF_RANGE
+        OUT_OF_RANGE,
+        NULLPTR,
     };
 
     namespace __helper {

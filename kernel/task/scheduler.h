@@ -12,4 +12,3 @@
 #pragma once
 
 #include <task/task_struct.h>
-#include <sustcore/timer.h>

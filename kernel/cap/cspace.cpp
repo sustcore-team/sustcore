@@ -152,9 +152,6 @@ void CGroup::operator delete(void *ptr) {
     kop::CGroup->free(static_cast<CGroup *>(ptr));
 }
 
-static util::Defer<util::IDManager<>> CSPACE_ID;
-AutoDefer(CSPACE_ID);
-
 // CSpace
 CSpace::CSpace(CHolder *holder) :  _holder(holder), sp_idx(0) {
     memset(_groups, 0, sizeof(_groups));

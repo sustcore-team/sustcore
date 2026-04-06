@@ -24,7 +24,12 @@ size_t LinearGrowAllocator::lga_offset = 0;
 void* LinearGrowAllocator::malloc(size_t size) {
     if (size >= 4096) {
         size_t pages = page_align_up(size) / PAGESIZE;
-        PhyAddr paddr = GFP::get_free_page(pages);
+        Result<PhyAddr> gfp_res = GFP::get_free_page(pages);
+        if (! gfp_res.has_value()) {
+            MEMORY::ERROR("无法分配大对象内存");
+            return nullptr;
+        }
+        PhyAddr paddr = gfp_res.value();
         return convert<KpaAddr>(paddr).addr();
     }
     if (lga_offset + size > SIZE) {

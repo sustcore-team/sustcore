@@ -9,8 +9,10 @@
  *
  */
 
-#include <mem/pmm.h>
+#include <kio.h>
 #include <mem/addr.h>
+#include <mem/pmm.h>
+
 #include <cassert>
 #include <cstring>
 
@@ -19,15 +21,21 @@ size_t PMM::__arraysz;
 umb_t PMM::__lower_ppn, PMM::__upper_ppn;
 
 void PMM::init(PhyAddr lowerbound, PhyAddr upperbound) {
-    __lower_ppn    = phys2ppn(lowerbound);
-    __upper_ppn    = phys2ppn(upperbound);
+    __lower_ppn              = phys2ppn(lowerbound);
+    __upper_ppn              = phys2ppn(upperbound);
     // pages
-    size_t pagecnt = (__upper_ppn - __lower_ppn) / PAGESIZE;
+    size_t pagecnt           = (__upper_ppn - __lower_ppn) / PAGESIZE;
     // 物理页信息队列大小
-    __arraysz      = pagecnt * sizeof(page);
+    __arraysz                = pagecnt * sizeof(page);
     // 转化为页数并申请内存
-    __base_address =
-        (page *)GFP::get_free_page(page_align_up(__arraysz) / PAGESIZE).addr();
+    const size_t page_needed = page_align_up(__arraysz) / PAGESIZE;
+    auto gfp_res             = GFP::get_free_page(page_needed);
+    if (!gfp_res.has_value()) {
+        MEMORY::ERROR("无法为物理页信息分配内存");
+        return;
+    }
+
+    __base_address = (page *)gfp_res.value().addr();
     // 初始化
     memset(__base_address, 0, __arraysz);
     for (int i = 0; i < pagecnt; i++) {

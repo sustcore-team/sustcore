@@ -48,7 +48,7 @@ public:
      * @return PhyAddr
      */
     template <KernelStage Stage = KernelStage::POST_INIT>
-    static PhyAddr get_free_page(size_t frame_count = 1);
+    static Result<PhyAddr> get_free_page(size_t frame_count = 1);
 
     /**
      * @brief 按order阶数分配
@@ -57,7 +57,7 @@ public:
      * @return void*
      */
     template <KernelStage Stage = KernelStage::POST_INIT>
-    static PhyAddr get_free_pages_in_order(size_t order);
+    static Result<PhyAddr> get_free_pages_in_order(size_t order);
 
     /**
      * @brief 释放多个页
@@ -158,7 +158,7 @@ private:
      * @return void*
      */
     template <KernelStage Stage>
-    static PhyAddr fetch_frame_order(size_t order) {
+    static Result<PhyAddr> fetch_frame_order(size_t order) {
         // 寻找第一个非空链表
         size_t current_order = order;
         while (current_order <= BuddyAllocator::MAX_BUDDY_ORDER) {
@@ -172,7 +172,7 @@ private:
         if (current_order > BuddyAllocator::MAX_BUDDY_ORDER) {
             // 无可用内存块
             BUDDY::ERROR("无可用内存块");
-            return PhyAddr::null;
+            unexpect_return(ErrCode::OUT_OF_MEMORY);
         }
 
         // 从链表头部取出一个内存块
@@ -229,17 +229,21 @@ void BuddyAllocator::add_memory_range(const PhyAddr paddr, const size_t pages) {
 }
 
 template <KernelStage Stage>
-PhyAddr BuddyAllocator::get_free_page(size_t frame_count) {
+Result<PhyAddr> BuddyAllocator::get_free_page(size_t frame_count) {
     if (frame_count == 0) {
-        return PhyAddr::null;
+        unexpect_return(ErrCode::INVALID_PARAM);
     }
     if (frame_count > (1ul << MAX_BUDDY_ORDER)) {
         BUDDY::ERROR("请求的页数 %u 超出最大支持的范围", frame_count);
-        return PhyAddr::null;
+        unexpect_return(ErrCode::INVALID_PARAM);
     }
 
     const size_t order  = pages2order(frame_count);
-    const PhyAddr paddr = fetch_frame_order<Stage>(order);
+    auto fetch_res = fetch_frame_order<Stage>(order);
+    if (! fetch_res.has_value()) {
+        unexpect_return(fetch_res.error());
+    }
+    const PhyAddr paddr = fetch_res.value();
 
     // 归还多余部分
     const size_t allocated_pages = 1ul << order;
@@ -254,10 +258,10 @@ PhyAddr BuddyAllocator::get_free_page(size_t frame_count) {
 }
 
 template <KernelStage Stage>
-PhyAddr BuddyAllocator::get_free_pages_in_order(size_t order) {
+Result<PhyAddr> BuddyAllocator::get_free_pages_in_order(size_t order) {
     if (order > BuddyAllocator::MAX_BUDDY_ORDER) {
         BUDDY::ERROR("无可用内存块: order %d 超出范围", order);
-        return PhyAddr::null;
+        unexpect_return(ErrCode::INVALID_PARAM);
     }
     return fetch_frame_order<Stage>(order);
 }
