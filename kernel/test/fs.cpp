@@ -9,7 +9,7 @@
  *
  */
 
-#include <fs/tarfs.h>
+#include <vfs/tarfs.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <symbols.h>

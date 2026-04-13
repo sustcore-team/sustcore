@@ -18,7 +18,7 @@
 #include <cap/cspace.h>
 #include <device/block.h>
 #include <env.h>
-#include <fs/tarfs.h>
+#include <vfs/tarfs.h>
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/alloc.h>

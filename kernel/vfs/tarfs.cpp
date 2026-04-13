@@ -10,7 +10,7 @@
  */
 
 #include <device/block.h>
-#include <fs/tarfs.h>
+#include <vfs/tarfs.h>
 #include <mem/alloc.h>
 #include <sus/defer.h>
 
