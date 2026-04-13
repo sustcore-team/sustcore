@@ -11,9 +11,11 @@
 
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/trait.h>
+#include <arch/trait.h>
+#include <env.h>
 #include <kio.h>
+#include <sustcore/errcode.h>
 #include <symbols.h>
-
 #include <algorithm>
 
 constexpr int MEM_REGION_BUF      = 8;
@@ -25,6 +27,15 @@ constexpr char MEMORY_NODE_NAME[]          = "memory";
 constexpr char REG_PROPERTY_NAME[]         = "reg";
 constexpr char RESERVED_MEMORY_NODE_NAME[] = "reserved-memory";
 constexpr char MMODE_RESERVED_BASE[]       = "mmode_resv";
+
+namespace key
+{
+    struct memory : public env::key::meminfo
+    {
+    public:
+        memory() = default;
+    };
+}
 
 static bool read_regions(FDTHelper::RegVal regions[MEM_REGION_BUF],
                          FDTHelper::RegVal reserved[RESERVED_REGION_BUF],
@@ -113,14 +124,14 @@ static bool add_region(MemRegion *regions, int max_cnt, int &idx, void *addr,
     return true;
 }
 
-int Riscv64MemoryLayout::detect_memory_layout(MemRegion *regions, int max_cnt) {
+Result<void> Riscv64MemoryLayout::detect() {
     FDTHelper::RegVal regions_buf[MEM_REGION_BUF];
     FDTHelper::RegVal reserved_buf[RESERVED_REGION_BUF + 1];
 
     // 根据Regions与Reserved计算最终内存布局
     int num_regions, num_reserved;
     if (!read_regions(regions_buf, reserved_buf, num_regions, num_reserved)) {
-        return -1;
+        unexpect_return(ErrCode::FDT_ERROR);
     }
 
     int idx = 0;
@@ -143,9 +154,12 @@ int Riscv64MemoryLayout::detect_memory_layout(MemRegion *regions, int max_cnt) {
                   return a.ptr < b.ptr;
               });
 
+    constexpr size_t MAX_REGIONS = env::MemInfo::MAX_REGIONS;
+    MemRegion* regions = env::inst().meminfo(key::memory()).regions;
+
     // 加入所有保留区域
     for (int i = 0; i < num_reserved; i++) {
-        add_region(regions, max_cnt, idx, reserved_buf[i].ptr,
+        add_region(regions, env::MemInfo::MAX_REGIONS, idx, reserved_buf[i].ptr,
                    reserved_buf[i].size, MemRegion::MemoryStatus::RESERVED);
     }
 
@@ -180,7 +194,7 @@ int Riscv64MemoryLayout::detect_memory_layout(MemRegion *regions, int max_cnt) {
             // [rsvd_e, reg_e)部分继续处理
             if (reg_s < rsvd_s && reg_e > rsvd_e) {
                 size_t sz = rsvd_s - reg_s;
-                add_region(regions, max_cnt, idx, (void *)reg_s, sz,
+                add_region(regions, MAX_REGIONS, idx, (void *)reg_s, sz,
                            MemRegion::MemoryStatus::FREE);
                 reg_s = rsvd_e;
                 continue;
@@ -211,10 +225,11 @@ int Riscv64MemoryLayout::detect_memory_layout(MemRegion *regions, int max_cnt) {
         if (reg_s < reg_e) {
             // 处理剩余部分
             size_t sz = reg_e - reg_s;
-            add_region(regions, max_cnt, idx, (void *)reg_s, sz,
+            add_region(regions, MAX_REGIONS, idx, (void *)reg_s, sz,
                        MemRegion::MemoryStatus::FREE);
         }
     }
 
-    return idx;
+    env::inst().meminfo(key::memory()).region_cnt = idx;
+    void_return();
 }

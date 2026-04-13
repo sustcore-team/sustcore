@@ -19,13 +19,12 @@
 #include <cstddef>
 
 template <typename T>
-concept GFPTrait = requires(MemRegion *regions, size_t region_count,
-                            PhyAddr ptr, size_t page_count) {
+concept GFPTrait = requires(PhyAddr ptr, size_t page_count) {
     {
-        T::pre_init(regions, region_count)
+        T::pre_init()
     } -> std::same_as<void>;
     {
-        T::post_init(regions, region_count)
+        T::post_init()
     } -> std::same_as<void>;
     {
         T::get_free_page()
@@ -75,8 +74,8 @@ class LinearGrowGFP {
     static PhyAddr boundary;
 
 public:
-    static void pre_init(MemRegion *regions, size_t region_count);
-    static void post_init(MemRegion *regions, size_t region_count);
+    static void pre_init();
+    static void post_init();
     template <KernelStage Stage = KernelStage::POST_INIT>
     static Result<PhyAddr> get_free_page(size_t page_count = 1) {
         PhyAddr _bound = curaddr + page_count * PAGESIZE;

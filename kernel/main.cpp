@@ -51,74 +51,52 @@
 #include <exception>
 #include <unordered_map>
 
-int kputs(const char *str) {
-    size_t len        = strlen(str);
-    PhyAddr str_paddr = convert_pointer(str);
-    Serial::serial_write_string(len, str_paddr.as<char>());
-    return strlen(str);
+namespace env {
+    static Environment _env;
+    Environment &inst() {
+        return _env;
+    }
+    
+    void construct()
+    {
+        // call the constructor here
+        new(&_env) Environment();
+    }
+
+    TM *Environment::tm() const {
+        return this->_tm;
+    }
+    TM *&Environment::tm(key::tm) {
+        return this->_tm;
+    }
+
+    PhyAddr Environment::pgd() const {
+        return PageMan::read_root();
+    }
+
+    const MemInfo &Environment::meminfo() const
+    {
+        return _meminfo;
+    }
+
+    MemInfo &Environment::meminfo(key::meminfo)
+    {
+        return _meminfo;
+    }
 }
 
-int kputchar(char ch) {
-    Serial::serial_write_char(ch);
-    return ch;
+namespace key {
+    struct main : public env::key::tm, env::key::meminfo
+    {
+    public:
+        main() = default;
+    };
 }
 
-char kgetchar() {
-    return '\0';
-}
-
-int KernelIO::putchar(char c) {
-    return kputchar(c);
-}
-
-int KernelIO::puts(const char *str) {
-    return kputs(str);
-}
-
-char KernelIO::getchar() {
-    return kgetchar();
-}
-
-int kprintf(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    int len = vbprintf<KernelIO>(fmt, args);
-    va_end(args);
-    return len;
-}
-
-int kprintfln(const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    int len = vbprintf<KernelIO>(fmt, args);
-    va_end(args);
-    kputchar('\n');
-    return len + 1;
-}
-
-#ifndef __SUS_NO_RTTI__
-#error \
-    "RTTI is not supported in the kernel. Please define __SUS_NO_RTTI__ to compile."
-#endif
-
-#ifndef __SUS_NO_EXCEPTIONS__
-#error \
-    "Exceptions are not supported in the kernel. Please define __SUS_NO_EXCEPTIONS__ to compile."
-#endif
-
-/**
- * @brief This function will just print the exception
- * and then halt the system. It will never return.
- * @param s the exception to throw
- */
-[[noreturn]]
-void __sus_cxa_throw(const std::exception &e) {
-    kprintfln(
-        ANSI_GRAPHIC(
-            ANSI_FG_RED) "There is an exception of type %s: %s" ANSI_GRAPHIC(ANSI_GM_RESET),
-        e.type(), e.what());
-    while (true);
-}
+// path
+PhyAddr kernel_root = PhyAddr::null;
+constexpr const char *initrd_path   = "/initrd";
+constexpr const char *setupmod_path = "mods/setup.mod";
 
 RamDiskDevice *make_initrd(void) {
     size_t sz             = (char *)&e_initrd - (char *)&s_initrd;
@@ -126,18 +104,6 @@ RamDiskDevice *make_initrd(void) {
     loggers::SUSTCORE::INFO("initrd大小为 %u KB", sz / 1024, sz / 1024 / 1024);
     return device;
 }
-
-static Environment _env;
-Environment &env() {
-    return _env;
-}
-
-MemRegion regions[128];
-size_t region_cnt   = 0;
-PhyAddr kernel_root = PhyAddr::null;
-const PhyAddr lowpm = PhyAddr::null;
-PhyAddr uppm        = PhyAddr::null;
-const VirAddr lowvm = VirAddr::null;
 
 void run_defers(void *s_defer, void *e_defer) {
     constexpr size_t DEFER_ENTRY_SIZE = sizeof(util::DeferEntry);
@@ -169,8 +135,9 @@ void run_defers(void *s_defer, void *e_defer) {
         if (duplicated) {
             continue;
         }
-        loggers::SUSTCORE::DEBUG("运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p",
-                      i, entry->_instance, entry->_constructor);
+        loggers::SUSTCORE::DEBUG(
+            "运行第%d个defer构造函数, defer实例地址为%p, 构造器为%p", i,
+            entry->_instance, entry->_constructor);
         entry->_constructor(entry->_instance);
     }
 }
@@ -178,6 +145,7 @@ void run_defers(void *s_defer, void *e_defer) {
 void kernel_paging_setup(void) {
     [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
+    auto &e = env::inst();
     // 创建内核页表管理器
     auto gfp_res                = GFP::get_free_page<STAGE>();
     if (!gfp_res.has_value()) {
@@ -190,12 +158,12 @@ void kernel_paging_setup(void) {
     kernel_root = pgd;
     EarlyPageMan kernelman(kernel_root);
 
-    ker_paddr::init(lowpm, uppm);
+    ker_paddr::init();
     ker_paddr::mapping_kernel_areas(kernelman);
 
     // 对[0, uppm)进行恒等映射
-    size_t sz = uppm - lowpm;
-    kernelman.map_range<true>(lowvm, lowpm, sz,
+    size_t sz = e.meminfo().uppm - e.meminfo().lowpm;
+    kernelman.map_range<true>(e.meminfo().lowvm, e.meminfo().lowpm, sz,
                               EarlyPageMan::rwx(true, true, true), false, true);
 
     kernelman.switch_root();
@@ -203,35 +171,34 @@ void kernel_paging_setup(void) {
 }
 
 extern "C" void post_init(void) {
-    // logger
     loggers::SUSTCORE::INFO("已进入 post-init 阶段");
+    auto &e = env::inst();
 
     // 将 pre-init 阶段中初始化的子系统再次初始化, 以适应内核虚拟地址空间
-    GFP::post_init(regions, region_cnt);
+    GFP::post_init();
     PageMan::init();
 
-    // 初始化默认 Allocator 子系统
     Allocator::init();
 
-    // 收集全局对象Defer并执行构造
+    // Allocator初始化后, 系统的基本功能已经可用
+    // 此时可以执行绝大部分的构造函数, 因此在此时调用defer初始化
     run_defers(&s_defer, &e_defer);
 
-    // 初始化中断
     Interrupt::init();
-
-    // 架构后初始化
     Initialization::post_init();
 
     // 将低端内存设置为用户态
+    auto &meminfo = e.meminfo();
     PageMan kernelman(kernel_root);
     kernelman.modify_range_flags<PageMan::ModifyMask::U>(
-        lowvm, uppm - lowpm, PageMan::RWX::NONE, true, false);
-    env().pgd = kernel_root;
+        meminfo.lowvm, meminfo.uppm - meminfo.lowpm, PageMan::RWX::NONE, true, false);
 
     // Kernel tests
-    // TestFramework framework;
-    // collect_tests(framework);
-    // framework.run_all();
+#ifdef __CONF_KERNEL_TESTS
+    TestFramework framework;
+    collect_tests(framework);
+    framework.run_all();
+#endif
 
     auto gfp_res = GFP::get_free_page<KernelStage::POST_INIT>();
     if (!gfp_res.has_value()) {
@@ -253,20 +220,15 @@ extern "C" void post_init(void) {
     // 切换当前页表到 TM 管理的页表
     tm->pman().switch_root();
     tm->pman().flush_tlb();
-    env().pgd = tm_pgd;
-    env().tm  = tm;
+    env::inst().tm(key::main()) = tm;
 
     // 调试: 检查当前页表根一致性
-    PhyAddr hw_root   = PageMan::read_root();
-    PhyAddr env_root  = env().pgd;
-    PhyAddr tm_root   = tm->pgd();
-    loggers::SUSTCORE::DEBUG(
-        "TM 切换完成: hw_root=%p, env_root=%p, tm_root=%p",
-        hw_root.addr(), env_root.addr(), tm_root.addr());
-    if (!(hw_root == env_root && env_root == tm_root)) {
-        loggers::SUSTCORE::ERROR(
-            "页表根不一致! hw_root=%p, env_root=%p, tm_root=%p",
-            hw_root.addr(), env_root.addr(), tm_root.addr());
+    PhyAddr tm_root  = tm->pgd();
+    loggers::SUSTCORE::DEBUG("TM 切换完成: hw_root=%p, tm_root=%p",
+                             env::inst().pgd().addr(), tm_root.addr());
+    if (env::inst().pgd() != tm_root) {
+        loggers::SUSTCORE::ERROR("页表根不一致!");
+        while (true);
     }
 
     // try access pages in the new VMA to trigger on_np
@@ -278,14 +240,14 @@ extern "C" void post_init(void) {
     sstatus.sum           = 1;  // 允许S-MODE访问U-MODE内存
     csr_set_sstatus(sstatus);
 
-    volatile char *ptr = (volatile char *)data_vaddr.addr();
+    volatile char *ptr              = (volatile char *)data_vaddr.addr();
     constexpr char THE_FINAL_ANSWER = 0x42;
     // write the page
-    for (int i = 0 ; i < 8 * PAGESIZE ; i ++) {
+    for (int i = 0; i < 8 * PAGESIZE; i++) {
         ptr[i] = THE_FINAL_ANSWER;
     }
 
-    sstatus = csr_get_sstatus();
+    sstatus     = csr_get_sstatus();
     sstatus.sum = 0;
     csr_set_sstatus(sstatus);
 
@@ -299,39 +261,54 @@ extern "C" void redive(void);
 void pre_init(void) {
     [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
+    // construct the env
+    env::construct();
+
     Initialization::pre_init();
 
-    memset(regions, 0, sizeof(regions));
-    region_cnt          = MemoryLayout::detect_memory_layout(regions, 128);
-    PhyAddr upper_bound = PhyAddr::null;
-    for (int i = 0; i < region_cnt; i++) {
-        PhyAddr start = regions[i].ptr;
-        PhyAddr end   = start + regions[i].size;
+    auto &e = env::inst();
+    auto detect_res = MemoryLayout::detect();
 
-        loggers::SUSTCORE::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i, start.addr(),
-                     end.addr(), static_cast<int>(regions[i].status));
+    if (! detect_res.has_value())
+    {
+        loggers::SUSTCORE::FATAL("探测内存区域失败!错误码: %s", to_cstring(detect_res.error()));
+        while (true);
+    }
+
+    PhyAddr upper_bound = PhyAddr::null;
+    for (int i = 0; i < e.meminfo().region_cnt; i++) {
+        const auto &reg = e.meminfo().regions[i];
+        PhyAddr start = reg.ptr;
+        PhyAddr end   = start + reg.size;
+
+        loggers::SUSTCORE::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
+                                start.addr(), end.addr(),
+                                static_cast<int>(reg.status));
         if (upper_bound < end) {
             upper_bound = end;
         }
     }
+    e.meminfo(key::main()).uppm = upper_bound;
 
     loggers::SUSTCORE::INFO("初始化GFP");
-    GFP::pre_init(regions, region_cnt);
+    GFP::pre_init();
 
     loggers::SUSTCORE::INFO("初始化内核地址空间管理器");
     EarlyPageMan::init();
-    uppm = upper_bound;
+
     kernel_paging_setup();
 
     // 进入 post-init 阶段
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
+    // 将 redive() 函数定位到KvaAddr
     typedef void (*RediveFuncType)(void);
     PhyAddr redive_paddr  = (PhyAddr)(void *)redive;
     KvaAddr redive_kvaddr = convert<KvaAddr>(redive_paddr);
     loggers::SUSTCORE::DEBUG("redive函数物理地址: %p, 内核虚拟地址: %p",
-                  redive_paddr.addr(), redive_kvaddr.addr());
+                             redive_paddr.addr(), redive_kvaddr.addr());
     RediveFuncType redive_func = (RediveFuncType)redive_kvaddr.addr();
-    loggers::SUSTCORE::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p", redive_func);
+    loggers::SUSTCORE::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p",
+                             redive_func);
     redive_func();
     loggers::SUSTCORE::ERROR("redive函数返回了, 这不应该发生!");
     while (true);

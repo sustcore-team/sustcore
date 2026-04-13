@@ -39,7 +39,7 @@ namespace ker_paddr {
     extern Segment misc;
     extern Segment kphy_space;
 
-    void init(PhyAddr lower_bound, PhyAddr upper_bound);
+    void init();
 
     template <KernelStage Stage>
     void map_seg(_PageMan<Stage> &man, const Segment &seg, PageMan::RWX rwx,

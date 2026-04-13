@@ -77,7 +77,8 @@ namespace Handlers {
         if (ins == 0x000000FF) {
             loggers::INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
         } else if (ins == 0x00FF00FF) {
-            loggers::INTERRUPT::INFO("自定义Kernel服务: 计算t0的t1次方, 结果存储到t0中");
+            loggers::INTERRUPT::INFO(
+                "自定义Kernel服务: 计算t0的t1次方, 结果存储到t0中");
             int t0 = ctx->regs[5 - 1];  // x5 = t0
             int t1 = ctx->regs[6 - 1];  // x6 = t1
             loggers::INTERRUPT::INFO("计算参数: t0=%d, t1=%d", t0, t1);
@@ -102,13 +103,12 @@ namespace Handlers {
         loggers::INTERRUPT::INFO("异常页地址: 0x%016lx", stval);
 
         const VirAddr fault_addr = VirAddr(stval);
-        PhyAddr hw_root          = PageMan::read_root();
-        Environment &e           = env();
-        loggers::INTERRUPT::DEBUG("paging_fault: hw_root=%p, env.pgd=%p, tm=%p",
-                         hw_root.addr(), e.pgd.addr(), e.tm);
-        PageMan pman(hw_root);
+        auto &e                  = env::inst();
+        loggers::INTERRUPT::DEBUG("paging_fault: env.pgd=%p, tm=%p",
+                                  e.pgd().addr(), e.tm());
+        PageMan pman(e.pgd());
 
-        if (!e.pgd.nonnull()) {
+        if (!e.pgd().nonnull()) {
             return false;
         }
 
@@ -131,8 +131,9 @@ namespace Handlers {
                 if (query_res.error() == ErrCode::PAGE_NOT_PRESENT) {
                     cause = FaultCause::NO_PRESENT;
                 } else {
-                    loggers::INTERRUPT::ERROR("查询页表时发生错误: addr=%p, err=%d",
-                                     fault_addr.addr(), query_res.error());
+                    loggers::INTERRUPT::ERROR(
+                        "查询页表时发生错误: addr=%p, err=%d",
+                        fault_addr.addr(), query_res.error());
                     cause = FaultCause::UNKNOWN;
                 }
             } else {
@@ -146,8 +147,7 @@ namespace Handlers {
                 } else if (!pte->u && !ctx->sstatus.spp) {
                     // 用户态访问用户页但权限不足时触发页异常
                     cause = FaultCause::UAS;
-                }
-                else if (PageMan::is_present(*pte)) {
+                } else if (PageMan::is_present(*pte)) {
                     if (!pte->a) {
                         cause = FaultCause::INVALID_AD;
                     }
@@ -174,7 +174,7 @@ namespace Handlers {
             case FaultCause::NO_PRESENT: {
                 loggers::INTERRUPT::INFO("缺页异常: 0x%016lx", stval);
                 // 使用缺页异常处理程序处理缺页异常
-                auto *tm = e.tm;
+                auto *tm = e.tm();
                 if (tm != nullptr) {
                     loggers::INTERRUPT::DEBUG(
                         "调用 TM::on_np 处理缺页: addr=%p, tm_pgd=%p",
@@ -203,13 +203,14 @@ namespace Handlers {
                 break;
             }
             case FaultCause::SAU_NO_SUM: {
-                loggers::INTERRUPT::ERROR("内核态访问用户页但未设置 SUM 位! addr=%p",
-                                 fault_addr.addr());
+                loggers::INTERRUPT::ERROR(
+                    "内核态访问用户页但未设置 SUM 位! addr=%p",
+                    fault_addr.addr());
                 break;
             }
             case FaultCause::UAS: {
                 loggers::INTERRUPT::ERROR("用户态访问用户页但权限不足! addr=%p",
-                                 fault_addr.addr());
+                                          fault_addr.addr());
                 break;
             }
             case FaultCause::INVALID_AD: {
@@ -245,13 +246,15 @@ namespace Handlers {
                 processsed |= updated;
                 if (updated) {
                     PageMan::flush_tlb();
-                    loggers::INTERRUPT::DEBUG("修复 A/D 位后重试: addr=%p, A=%d, D=%d",
-                                     fault_addr.addr(), pte->a, pte->d);
+                    loggers::INTERRUPT::DEBUG(
+                        "修复 A/D 位后重试: addr=%p, A=%d, D=%d",
+                        fault_addr.addr(), pte->a, pte->d);
                 }
                 break;
             }
             default: {
-                loggers::INTERRUPT::ERROR("未知页异常! addr=%p", fault_addr.addr());
+                loggers::INTERRUPT::ERROR("未知页异常! addr=%p",
+                                          fault_addr.addr());
                 break;
             }
         }
@@ -273,9 +276,11 @@ namespace Handlers {
         if (scause.cause < sizeof(Exceptions::MSG) / sizeof(Exceptions::MSG[0]))
         {
             loggers::INTERRUPT::INFO("发生异常! 类型: %s (%lu)",
-                            Exceptions::MSG[scause.cause], scause.cause);
+                                     Exceptions::MSG[scause.cause],
+                                     scause.cause);
         } else {
-            loggers::INTERRUPT::INFO("发生异常! 类型: 未知 (%lu)", scause.cause);
+            loggers::INTERRUPT::INFO("发生异常! 类型: 未知 (%lu)",
+                                     scause.cause);
         }
         if (ctx->sstatus.spp) {
             loggers::INTERRUPT::ERROR("异常发生在S-Mode");

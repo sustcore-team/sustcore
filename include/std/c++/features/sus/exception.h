@@ -21,6 +21,7 @@
  * and then halt the system. It will never return.
  * @param s the exception to throw
  */
+extern "C"
 [[noreturn]]
 void __sus_cxa_throw(const std::exception &e);
 

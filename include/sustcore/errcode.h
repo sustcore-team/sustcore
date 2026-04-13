@@ -46,6 +46,9 @@ enum class ErrCode : int {
     MEM_ERROR                = 0x05'0000,
     PAGE_NOT_PRESENT         = MEM_ERROR | 0x0001,
     INVALID_PTE              = MEM_ERROR | 0x0002,
+    // device errors
+    DEVICE_ERROR             = 0x06'0000,
+    FDT_ERROR                = DEVICE_ERROR | 0x0001,
     // 别名
     SLOT_BUSY                = BUSY,
 };

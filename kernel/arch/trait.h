@@ -83,10 +83,10 @@ struct MemRegion {
  * @tparam T 架构内存布局类
  */
 template <typename T>
-concept MemoryLayoutTrait = requires(MemRegion *regions, int cnt) {
+concept MemoryLayoutTrait = requires() {
     {
-        T::detect_memory_layout(regions, cnt)
-    } -> std::same_as<int>;
+        T::detect()
+    } -> std::same_as<Result<void>>;
 };
 
 // 初始化条件

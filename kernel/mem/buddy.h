@@ -37,9 +37,9 @@ public:
 
     static constexpr int MAX_BUDDY_ORDER = 15;
 
-    static void pre_init(MemRegion *regions, size_t region_count);
+    static void pre_init();
 
-    static void post_init(MemRegion *regions, size_t region_count);
+    static void post_init();
 
     /**
      * @brief 分配多个页

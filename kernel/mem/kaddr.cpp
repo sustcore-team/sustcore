@@ -9,6 +9,7 @@
  *
  */
 
+#include <env.h>
 #include <mem/addr.h>
 #include <mem/kaddr.h>
 #include <symbols.h>
@@ -40,7 +41,7 @@ namespace ker_paddr {
         return Segment(ps, pe, vs, ve);
     }
 
-    void init(PhyAddr lower_bound, PhyAddr upper_bound) {
+    void init() {
         ker_paddr::kernel = make_kva_seg(&skernel, &ekernel);
         ker_paddr::text   = make_kva_seg(&s_text, &e_text);
         ker_paddr::ivt    = make_kva_seg(&s_ivt, &e_ivt);
@@ -48,6 +49,6 @@ namespace ker_paddr {
         ker_paddr::data   = make_kva_seg(&s_data, &e_data);
         ker_paddr::bss    = make_kva_seg(&s_bss, &e_bss);
         ker_paddr::misc   = make_kva_seg(&s_misc, &ekernel);
-        ker_paddr::kphy_space = make_kpa_seg(lower_bound, upper_bound);
+        ker_paddr::kphy_space = make_kpa_seg(env::inst().meminfo().lowpm, env::inst().meminfo().uppm);
     }
 }  // namespace ker_paddr

@@ -10,6 +10,7 @@
  */
 
 #include <arch/trait.h>
+#include <env.h>
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/buddy.h>
@@ -23,14 +24,15 @@
 util::Defer<BuddyAllocator::BlockList>
     BuddyAllocator::free_area[BuddyAllocator::MAX_BUDDY_ORDER + 1];
 
-void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
+void BuddyAllocator::pre_init() {
     // 初始化空闲块链表
     for (int i = 0; i <= BuddyAllocator::MAX_BUDDY_ORDER; i++) {
         BuddyAllocator::free_area[i].construct();
     }
 
-    for (size_t i = 0; i < region_count; ++i) {
-        MemRegion &region = regions[i];
+    auto &meminfo = env::inst().meminfo();
+    for (size_t i = 0; i < meminfo.region_cnt; ++i) {
+        const MemRegion &region = meminfo.regions[i];
         if (region.status == MemRegion::MemoryStatus::FREE) {
             PhyAddr start_addr = region.ptr.page_align_up();
             PhyAddr end_addr   = (region.ptr + region.size).page_align_down();
@@ -44,7 +46,7 @@ void BuddyAllocator::pre_init(MemRegion *regions, size_t region_count) {
     }
 }
 
-void BuddyAllocator::post_init(MemRegion *regions, size_t region_count) {
+void BuddyAllocator::post_init() {
     loggers::BUDDY::DEBUG("进入 BuddyAllocator::post_init, 迁移空闲块链表到KPA空间");
 
     // 先进行一次遍历, 打印迁移前的链表状态

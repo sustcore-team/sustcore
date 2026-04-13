@@ -46,7 +46,7 @@ public:
      * @param cnt 数组大小
      * @return 内存区域数量, < 0说明数组大小不足
      */
-    static int detect_memory_layout(MemRegion *regions, int cnt);
+    static Result<void> detect();
 };
 
 static_assert(MemoryLayoutTrait<Riscv64MemoryLayout>);

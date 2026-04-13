@@ -4,18 +4,24 @@
  * @brief 日志配置
  * @version alpha-1.0.0
  * @date 2026-04-12
- * 
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
 
+#include <config/detector.h>
+
 // default values
+#ifndef DEFAULT_LOG_LEVEL
+
 #ifdef __CONF_LOGGER_DISABLE
 #define DEFAULT_LOG_LEVEL LogLevel::DISABLE
 #else
 #define DEFAULT_LOG_LEVEL LogLevel::INFO
+#endif
+
 #endif
 
 #ifndef __CONF_LOGGER_LEVEL_SUSTCORE
