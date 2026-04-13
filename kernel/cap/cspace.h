@@ -46,7 +46,7 @@ public:
         const size_t slot_idx = idx.slot;
         if (slot_idx >= CGROUP_SLOTS) {
             loggers::CAPABILITY::ERROR("槽位索引%u超出CGroup容量", slot_idx);
-            return {unexpect, ErrCode::INVALID_INDEX};
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
         }
         if (_slot_used[slot_idx]) {
             loggers::CAPABILITY::ERROR("槽位索引%u已被占用", slot_idx);
@@ -115,7 +115,7 @@ public:
         if (group_idx >= CSPACE_SIZE) {
             loggers::CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx,
                               this->sp_idx);
-            return {unexpect, ErrCode::INVALID_INDEX};
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
         }
         CGroup *group = group_at(group_idx);
         return group->create<PayloadType>(this, idx,

@@ -77,7 +77,7 @@ Result<void> CGroup::clone(CSpace *space, CapIdx idx, Capability *parent) {
     const size_t slot_idx = idx.slot;
     if (slot_idx >= CGROUP_SLOTS) {
         loggers::CAPABILITY::ERROR("槽位索引%u超出CGroup容量", slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     if (_slot_used[slot_idx]) {
         loggers::CAPABILITY::ERROR("槽位索引%u已被占用", slot_idx);
@@ -91,7 +91,7 @@ Result<void> CGroup::migrate(CSpace *space, CapIdx idx, Capability *origin) {
     const size_t slot_idx = idx.slot;
     if (slot_idx >= CGROUP_SLOTS) {
         loggers::CAPABILITY::ERROR("槽位索引%u超出CGroup容量", slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     if (_slot_used[slot_idx]) {
         loggers::CAPABILITY::ERROR("槽位索引%u已被占用", slot_idx);
@@ -106,11 +106,11 @@ Result<void> CGroup::remove(CapIdx idx) {
     if (slot_idx >= CGROUP_SLOTS) {
         loggers::CAPABILITY::ERROR("槽位索引(%u, %u)超出CGroup容量", idx.group,
                           slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     if (!_slot_used[slot_idx]) {
         loggers::CAPABILITY::ERROR("槽位索引(%u, %u)未被占用", idx.group, slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     _remove(slot_idx);
     return {};
@@ -120,11 +120,11 @@ Result<Capability *> CGroup::get(CapIdx idx) {
     const size_t slot_idx = idx.slot;
     if (slot_idx >= CGROUP_SLOTS) {
         loggers::CAPABILITY::ERROR("槽位索引(%u, %u)超出CGroup容量", idx.group, slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     if (!_slot_used[slot_idx]) {
         loggers::CAPABILITY::ERROR("槽位索引(%u, %u)未被占用", idx.group, slot_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     Capability *cap =
         reinterpret_cast<Capability *>(&_cap_storage[slot_idx].data);
@@ -169,7 +169,7 @@ Result<void> CSpace::clone(CapIdx idx, Capability *parent) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
         loggers::CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     CGroup *group = group_at(group_idx);
     return group->clone(this, idx, parent);
@@ -179,7 +179,7 @@ Result<void> CSpace::migrate(CapIdx idx, Capability *origin) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
         loggers::CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     CGroup *group = group_at(group_idx);
     return group->migrate(this, idx, origin);
@@ -189,11 +189,11 @@ Result<void> CSpace::remove(CapIdx idx) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
         loggers::CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     if (!_groups[group_idx]) {
         loggers::CAPABILITY::ERROR("CGroup索引%u在CSpace %d中未被创建", group_idx, sp_idx);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     return _groups[group_idx]->remove(idx);
 }
@@ -201,10 +201,10 @@ Result<void> CSpace::remove(CapIdx idx) {
 Result<CGroup *> CSpace::group(CapIdx idx) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
-        return {unexpect,ErrCode::INVALID_INDEX};
+        return {unexpect,ErrCode::OUT_OF_BOUNDARY};
     }
     if (!_groups[group_idx]) {
-        return {unexpect,ErrCode::INVALID_INDEX};
+        return {unexpect,ErrCode::OUT_OF_BOUNDARY};
     }
     return _groups[group_idx];
 }
@@ -213,11 +213,11 @@ Result<Capability *> CSpace::get(CapIdx idx) {
     const size_t group_idx = idx.group;
     if (group_idx >= CSPACE_SIZE) {
         loggers::CAPABILITY::ERROR("CGroup索引%u超出CSpace %d容量", group_idx, sp_idx);
-        return {unexpect,ErrCode::INVALID_INDEX};
+        return {unexpect,ErrCode::OUT_OF_BOUNDARY};
     }
     if (!_groups[group_idx]) {
         loggers::CAPABILITY::ERROR("CGroup索引%u在CSpace %d中未被创建", group_idx, sp_idx);
-        return {unexpect,ErrCode::INVALID_INDEX};
+        return {unexpect,ErrCode::OUT_OF_BOUNDARY};
     }
     return _groups[group_idx]->get(idx);
 }
@@ -241,7 +241,7 @@ Result<void> RecvSpace::migrate(CapIdx idx, Capability *origin) {
     if (origin->holder()->cholder_id != _recv_src[idx.group]) {
         loggers::CAPABILITY::ERROR("无法接收从CHolder %d迁移过来的能力: 接收空间的recv_src不匹配",
                           _recv_src[idx.group]);
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
     return CSpace::migrate(idx, origin);
 }

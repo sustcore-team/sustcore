@@ -510,7 +510,7 @@ namespace test::cap {
                 holder1->recv_space().migrate(idx_dst, cap_src);
             tassert(!recv_without_sender_result.has_value() &&
                         recv_without_sender_result.error() ==
-                            ErrCode::INVALID_INDEX,
+                            ErrCode::OUT_OF_BOUNDARY,
                     "未设置 sender 时接收失败");
 
             check("设置错误 sender 时接收应失败");
@@ -519,7 +519,7 @@ namespace test::cap {
                 holder1->recv_space().migrate(idx_dst, cap_src);
             tassert(!recv_wrong_sender_result.has_value() &&
                         recv_wrong_sender_result.error() ==
-                            ErrCode::INVALID_INDEX,
+                            ErrCode::OUT_OF_BOUNDARY,
                     "设置错误 sender 时接收失败");
 
             check("设置正确 sender 后接收应成功");

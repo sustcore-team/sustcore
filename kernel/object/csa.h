@@ -97,7 +97,7 @@ public:
 
         auto cap_opt = src_space->get(src_idx);
         if (!cap_opt.has_value()) {
-            return {unexpect, ErrCode::INVALID_INDEX};
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
         }
 
         Capability *src_cap = cap_opt.value();
@@ -114,7 +114,7 @@ public:
         // 首先, 从original_cap中获取原始的Accessor对象
         AccessorType *original_acc = src_cap->payload<AccessorType>();
         if (original_acc == nullptr) {
-            return {unexpect, ErrCode::INVALID_INDEX};
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
         }
         auto original_obj = original_acc->obj();
         // 通过create接口在dst_idx上创建一个新的Accessor对象, 该对象持有与original_obj相同的SharedObject
@@ -140,7 +140,7 @@ public:
         }
         auto cap_opt = _space->get(idx);
         if (!cap_opt.has_value()) {
-            return {unexpect, ErrCode::INVALID_INDEX};
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
         }
         return cap_opt.value();
     }

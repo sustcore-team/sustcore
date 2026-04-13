@@ -26,7 +26,7 @@ Result<void> CSAOp::clone(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
 
     auto cap_opt = src_space->get(src_idx);
     if (!cap_opt.has_value()) {
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
 
     Capability *src_cap = cap_opt.value();
@@ -52,7 +52,7 @@ Result<void> CSAOp::migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx) {
 
     auto cap_opt = src_space->get(src_idx);
     if (!cap_opt.has_value()) {
-        return {unexpect, ErrCode::INVALID_INDEX};
+        return {unexpect, ErrCode::OUT_OF_BOUNDARY};
     }
 
     Capability *src_cap = cap_opt.value();

@@ -69,7 +69,7 @@ public:
 
     Result<CHolder *> get_holder(size_t id) const {
         return _holders.get(id)
-            .transform_error(always(ErrCode::INVALID_INDEX))
+            .transform_error(always(ErrCode::OUT_OF_BOUNDARY))
             .transform(
                 std::mem_fn(&std::reference_wrapper<CHolder *const>::get));
     }
