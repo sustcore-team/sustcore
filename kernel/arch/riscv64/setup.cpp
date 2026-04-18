@@ -50,27 +50,7 @@ void Riscv64Initialization::pre_init(void) {
     loggers::DEVICE::DEBUG("时钟频率为 %d Hz", hz.to_hz());
 }
 
-// 触发非法指令异常
-__attribute__((noinline)) int trigger_illegal_instruction(void) {
-    asm volatile(".word 0x00000000");  // 全零是非法指令
-    asm volatile(".word 0x000000FF");  // 自定义非法指令
-    int a = 3, b = 3;
-    asm volatile(
-        "mv t0, %1\n"
-        "mv t1, %2\n"
-        ".word 0x00FF00FF\n"
-        "mv %0, t0\n"
-        : "=r"(a)
-        : "r"(a), "r"(b)
-        : "t0", "t1");  // 自定义非法指令2
-    loggers::INTERRUPT::INFO("计算结果: %d", a);
-    return -1;
-}
-
 void Riscv64Initialization::post_init(void) {
-    // 测试非法指令异常处理
-    // trigger_illegal_instruction();
-
     // 我们希望50ms触发1次时钟中断(调试用)
     units::frequency freq = get_clock_freq();
     if (freq < 0) {

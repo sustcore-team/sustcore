@@ -9,9 +9,7 @@
  * 
  */
 
-void kputs(const char *str) {
-    // do nothing
-}
+void kputs(const char *str);
 
 class Test {
 public:
@@ -23,5 +21,7 @@ public:
 Test test_goc;
 
 int kmod_main(void) {
+    kputs("Hello from kmod_main!");
+    while (true);
     return 0;
 }

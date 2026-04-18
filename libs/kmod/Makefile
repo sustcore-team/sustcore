@@ -18,7 +18,7 @@ flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
 		   -fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 		   -fno-stack-protector -Wno-int-to-pointer-cast \
-		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medlow
+		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medany
 
 include-c := -I$(path-include) -I$(path-include)/std -I$(path-include)/libs -I./third_party/include -I./third_party/include/std
 
@@ -29,7 +29,7 @@ defs-c :=
 flags-cpp := -std=gnu++26 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 		   -fno-stack-protector -Wno-int-to-pointer-cast -fno-rtti -fno-exceptions \
-		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medlow
+		   -fno-toplevel-reorder -fno-tree-scev-cprop -mcmodel=medany
 include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
 						   -I$(path-third_party)/include/std
 include-cpp := -I$(path-include) -I$(path-include)/std -I$(path-include)/std/c++ \

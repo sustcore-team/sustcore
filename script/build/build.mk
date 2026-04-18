@@ -27,5 +27,16 @@ obj-crt0-libc ?= $(dir-obj)/$(obj-crt0)
 obj-crti-libc ?= $(dir-obj)/$(obj-crti)
 obj-crtn-libc ?= $(dir-obj)/$(obj-crtn)
 
+# module链接时, 若默认链接kmod, 则将kmod的CRT对象显式注入最终链接
+module-use-kmod-crt ?= $(if $(filter kmod,$(libraries)),true,false)
+ifeq ($(module-use-kmod-crt),true)
+module-crt-head-objs ?= $(path-objects)/kmod/$(architecture)/crt0.o \
+						$(path-objects)/kmod/$(architecture)/crti.o
+module-crt-tail-objs ?= $(path-objects)/kmod/$(architecture)/crtn.o
+else
+module-crt-head-objs ?=
+module-crt-tail-objs ?=
+endif
+
 # 架构(x86 x86_64 riscv loongrach)
 architecture ?= riscv

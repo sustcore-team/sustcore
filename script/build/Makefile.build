@@ -47,7 +47,7 @@ endif
 # module
 ifeq ($(mode), m)
 
-$(target): $(build-objects)
+$(target): $(module-crt-head-objs) $(build-objects) $(module-crt-tail-objs)
 	$(call prepare, $@, $^)
 	$(call ld-link, $@, $^)
 

@@ -14,6 +14,7 @@
 #include <arch/riscv64/int/isr.h>
 #include <env.h>
 #include <kio.h>
+#include <mem/kaddr.h>
 #include <sbi/sbi.h>
 #include <sus/logger.h>
 #include <sustcore/addr.h>
@@ -65,36 +66,103 @@ namespace Exceptions {
                          "硬件错误"};
 };  // namespace Exceptions
 
-namespace Handlers {
-    bool illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
-                             Riscv64Context *ctx) {
-        loggers::INTERRUPT::DEBUG("进入非法指令异常处理程序");
-        // 我们可以通过该指令自定义kernel服务
-        dword ins = *((dword *)sepc);
-        loggers::INTERRUPT::INFO("指令内容: 0x%08x", ins);
-        // 这是一个任意的非法指令
-        // 被我们选中用于模拟真实指令
-        if (ins == 0x000000FF) {
-            loggers::INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
-        } else if (ins == 0x00FF00FF) {
-            loggers::INTERRUPT::INFO(
-                "自定义Kernel服务: 计算t0的t1次方, 结果存储到t0中");
-            int t0 = ctx->regs[5 - 1];  // x5 = t0
-            int t1 = ctx->regs[6 - 1];  // x6 = t1
-            loggers::INTERRUPT::INFO("计算参数: t0=%d, t1=%d", t0, t1);
-            int result = 1;
-            for (int i = 0; i < t1; i++) {
-                result *= t0;
-            }
-            ctx->regs[5 - 1] = result;  // x5 = t0
-            loggers::INTERRUPT::INFO("计算完成!");
-        } else {
-            loggers::INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
-            return false;
+namespace handlers::paging {
+    enum class FaultCause {
+        NO_PRESENT,       // No present page
+        SAU_NO_SUM,       // S-mode Access User page without SUM
+        SEU,              // S-mode Execute User page
+        UAS,              // User Access Supervisor page
+        INVALID_AD,       // Invalid A/D bit
+        WRITE_PROTECT,    // Write protection
+        EXECUTE_PROTECT,  // Execute protection
+        UNKNOWN           // Unknown cause
+    };
+
+    static FaultCause confirm_fault_cause(const csr_scause_t &scause,
+                                          const VirAddr &fault_addr,
+                                          const Riscv64Context *ctx,
+                                          PageMan &pman) {
+        if (scause.cause != Exceptions::INST_PAGE_FAULT &&
+            scause.cause != Exceptions::LOAD_PAGE_FAULT &&
+            scause.cause != Exceptions::STORE_PAGE_FAULT)
+        {
+            return FaultCause::UNKNOWN;
         }
 
-        ctx->sepc += 4;  // 跳过该指令
-        return true;
+        auto query_res = pman.query_page(fault_addr);
+        if (!query_res.has_value()) {
+            // 页面不存在
+            if (query_res.error() == ErrCode::PAGE_NOT_PRESENT) {
+                return FaultCause::NO_PRESENT;
+            }
+            loggers::INTERRUPT::ERROR("查询页表时发生错误: addr=%p, err=%d",
+                                      fault_addr.addr(), query_res.error());
+            return FaultCause::UNKNOWN;
+        }
+
+        auto qres                  = query_res.value();
+        typename PageMan::PTE *pte = qres.pte;
+
+        // 页面不存在
+        if (!PageMan::is_present(*pte)) {
+            return FaultCause::NO_PRESENT;
+        }
+
+        int acc_priv =
+            ctx->sstatus.spp ? 1 : 0;  // 访问发生时的特权级, 0=用户态, 1=内核态
+        int pte_priv = pte->u ? 0 : 1;  // 页表项的特权级, 0=用户页, 1=内核页
+        int priv_gap =
+            acc_priv - pte_priv;  // 访问特权级与页表项特权级的差值
+                                  // = 0 说明访问特权级与页表项特权级相同
+                                  // > 0 说明访问特权级比页表项特权级高
+                                  // < 0 说明访问特权级比页表项特权级低
+
+        // 访问特权级比页表项特权级高, 说明是内核态访问用户页
+        if (priv_gap > 0) {
+            if (scause.cause == Exceptions::INST_PAGE_FAULT) {
+                return FaultCause::SEU;
+            } else if (!ctx->sstatus.sum) {
+                return FaultCause::SAU_NO_SUM;
+            }
+        }
+
+        // PTE为S页, 但访问发生在U态
+        if (priv_gap < 0) {
+            return FaultCause::UAS;
+        }
+
+        PageMan::RWX rwx = PageMan::rwx(*pte);
+        // 存储页异常且页面不可写
+        if ((scause.cause == Exceptions::STORE_PAGE_FAULT) &&
+            !PageMan::is_writable(rwx))
+        {
+            return FaultCause::WRITE_PROTECT;
+        }
+        // 取指页异常且页面不可执行
+        if ((scause.cause == Exceptions::INST_PAGE_FAULT) &&
+            !PageMan::is_executable(rwx))
+        {
+            return FaultCause::EXECUTE_PROTECT;
+        }
+        // 取指页异常且是高特权级访问用户页
+        if ((scause.cause == Exceptions::INST_PAGE_FAULT) &&
+            !PageMan::is_executable(rwx))
+        {
+            return FaultCause::EXECUTE_PROTECT;
+        }
+
+        // AD位错误
+        if (!pte->a) {
+            return FaultCause::INVALID_AD;
+        }
+        // 存储页异常且D位未设置但页面可写
+        if ((scause.cause == Exceptions::STORE_PAGE_FAULT) && !pte->d &&
+            PageMan::is_writable(rwx))
+        {
+            return FaultCause::INVALID_AD;
+        }
+
+        return FaultCause::UNKNOWN;
     }
 
     bool paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
@@ -112,61 +180,7 @@ namespace Handlers {
             return false;
         }
 
-        enum class FaultCause {
-            NO_PRESENT,  // No present page
-            SAU_NO_SUM,  // S-mode Access User page without SUM
-            UAS,         // User Access Supervisor page
-            INVALID_AD,  // Invalid A/D bit
-            UNKNOWN      // Unknown cause
-        } cause = FaultCause::UNKNOWN;
-
-        if (scause.cause == Exceptions::INST_PAGE_FAULT ||
-            scause.cause == Exceptions::LOAD_PAGE_FAULT ||
-            scause.cause == Exceptions::STORE_PAGE_FAULT)
-        {
-            // 判断是否为缺页异常
-            auto query_res = pman.query_page(fault_addr);
-            if (!query_res.has_value()) {
-                // 真正的缺页异常: 页表中不存在该页
-                if (query_res.error() == ErrCode::PAGE_NOT_PRESENT) {
-                    cause = FaultCause::NO_PRESENT;
-                } else {
-                    loggers::INTERRUPT::ERROR(
-                        "查询页表时发生错误: addr=%p, err=%d",
-                        fault_addr.addr(), query_res.error());
-                    cause = FaultCause::UNKNOWN;
-                }
-            } else {
-                // 页存在，但仍然触发了页错误: 可能是权限或 A/D 位导致
-                auto qres                  = query_res.value();
-                typename PageMan::PTE *pte = qres.pte;
-
-                if (pte->u && !ctx->sstatus.sum && ctx->sstatus.spp) {
-                    // 内核态访问用户页且未设置 SUM 位时触发页异常
-                    cause = FaultCause::SAU_NO_SUM;
-                } else if (!pte->u && !ctx->sstatus.spp) {
-                    // 用户态访问用户页但权限不足时触发页异常
-                    cause = FaultCause::UAS;
-                } else if (PageMan::is_present(*pte)) {
-                    if (!pte->a) {
-                        cause = FaultCause::INVALID_AD;
-                    }
-
-                    PageMan::RWX rwx = PageMan::rwx(*pte);
-                    if ((scause.cause == Exceptions::STORE_PAGE_FAULT) &&
-                        !pte->d && PageMan::is_writable(rwx))
-                    {
-                        cause = FaultCause::INVALID_AD;
-                    }
-
-                } else {
-                    loggers::INTERRUPT::ERROR(
-                        "页面存在但未被标记为有效! addr=%p, pte=%p",
-                        fault_addr.addr(), pte);
-                    cause = FaultCause::UNKNOWN;
-                }
-            }
-        }
+        FaultCause cause = confirm_fault_cause(scause, fault_addr, ctx, pman);
 
         bool processsed = false;
 
@@ -213,6 +227,11 @@ namespace Handlers {
                                           fault_addr.addr());
                 break;
             }
+            case FaultCause::SEU: {
+                loggers::INTERRUPT::ERROR("内核态执行用户页! addr=%p",
+                                          fault_addr.addr());
+                break;
+            }
             case FaultCause::INVALID_AD: {
                 auto query_res = pman.query_page(fault_addr);
                 if (!query_res.has_value()) {
@@ -252,6 +271,16 @@ namespace Handlers {
                 }
                 break;
             }
+            case FaultCause::WRITE_PROTECT: {
+                loggers::INTERRUPT::ERROR("写保护异常: addr=%p",
+                                          fault_addr.addr());
+                break;
+            }
+            case FaultCause::EXECUTE_PROTECT: {
+                loggers::INTERRUPT::ERROR("执行保护异常: addr=%p",
+                                          fault_addr.addr());
+                break;
+            }
             default: {
                 loggers::INTERRUPT::ERROR("未知页异常! addr=%p",
                                           fault_addr.addr());
@@ -268,6 +297,38 @@ namespace Handlers {
         // 2.2 如果是写保护错误, 则检查是否为写时复制
         // 2.3 更新页表项和TLB
         // 3. 如果是权限错误, 则终止相关进程
+    }
+}  // namespace handlers::paging
+
+namespace Handlers {
+
+    bool illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
+                             Riscv64Context *ctx) {
+        loggers::INTERRUPT::DEBUG("进入非法指令异常处理程序");
+        // 我们可以通过该指令自定义kernel服务
+        dword ins = *((dword *)sepc);
+        loggers::INTERRUPT::INFO("指令内容: 0x%08x", ins);
+        // 这是一个任意的非法指令
+        // 被我们选中用于模拟真实指令
+        if (ins == 0x000000FF) {
+            loggers::INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
+        } else if (ins == 0x00FF00FF) {
+            loggers::INTERRUPT::INFO(
+                "自定义Kernel服务: 输出 t0寄存器指向的日志");
+
+            ker_paddr::SumGuard guard;  // 确保可以访问用户空间地址
+            char msg[64];
+            // t0 = x5 = regs[5 - 1]
+            memcpy(msg, (void *)ctx->regs[4], sizeof(msg) - 1);
+            msg[sizeof(msg) - 1] = '\0';  // 确保字符串以 null 结尾
+            loggers::INTERRUPT::INFO("用户程序传递的消息: %s", msg);
+        } else {
+            loggers::INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
+            return false;
+        }
+
+        ctx->sepc += 4;  // 跳过该指令
+        return true;
     }
 
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
@@ -304,7 +365,8 @@ namespace Handlers {
             case Exceptions::INST_PAGE_FAULT:
             case Exceptions::LOAD_PAGE_FAULT:
             case Exceptions::STORE_PAGE_FAULT:
-                processed = paging_fault(scause, sepc, stval, ctx);
+                processed =
+                    handlers::paging::paging_fault(scause, sepc, stval, ctx);
                 break;
             default:
                 loggers::INTERRUPT::INFO("无异常处理程序!");

@@ -44,6 +44,22 @@ namespace kmod {
     }
 }
 
+void kputs(const char *str)
+{
+    // 暂时用自定义的 0x00FF00FF 指令来输出字符串
+    asm volatile(
+        "mv t0, %0\n"
+        ".word 0x00FF00FF\n"
+        :
+        : "r"(str)
+        : "t0");  // 自定义非法指令2
+    return;
+}
+
+void kmod_main(void);
+
 extern "C" void _cpp_setup(void) {
+    kmod::init();
+    kmod_main();
     while (true);
 }

@@ -18,8 +18,8 @@
 #include <cap/cspace.h>
 #include <device/block.h>
 #include <env.h>
-#include <exe/task.h>
 #include <exe/elfloader.h>
+#include <exe/task.h>
 #include <kio.h>
 #include <mem/addr.h>
 #include <mem/alloc.h>
@@ -247,9 +247,35 @@ Result<void> test_elf_loader() {
     // 开始加载程序
     auto load_res = loader::elf::load(spec, load_prm);
     if (!load_res.has_value()) {
-        loggers::SUSTCORE::ERROR("加载ELF程序失败! 错误码: %s", to_cstring(load_res.error()));
+        loggers::SUSTCORE::ERROR("加载ELF程序失败! 错误码: %s",
+                                 to_cstring(load_res.error()));
         unexpect_return(ErrCode::CREATION_FAILED);
     }
+
+    // 为了最小化验证路径, 直接切换到程序页表并跳入入口点执行一次。
+    // 如果程序返回, 再恢复内核页表和当前 TM。
+    TM *origin_tm      = e.tm();
+    PhyAddr origin_pgd = e.pgd();
+
+    do {
+        ker_paddr::SumGuard sum_guard;
+
+        e.tm(key::main()) = spec.tm.get();
+        spec.tm->pman().switch_root();
+        spec.tm->pman().flush_tlb();
+
+        using EntryFunc = void (*)();
+        auto entry      = reinterpret_cast<EntryFunc>(spec.entrypoint.addr());
+        loggers::SUSTCORE::INFO("开始执行已加载程序入口点: %p", entry);
+        entry();
+        loggers::SUSTCORE::INFO("已加载程序入口点返回, 准备恢复内核页表");
+
+        e.tm(key::main()) = origin_tm;
+        PageMan kernelman(origin_pgd);
+        kernelman.switch_root();
+        kernelman.flush_tlb();
+    } while (0);
+    
 
     void_return();
 }

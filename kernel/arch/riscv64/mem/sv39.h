@@ -261,6 +261,12 @@ public:
         return mask;
     }
 
+    static constexpr ModifyMask make_mask(b64 mask)
+    {
+        return make_mask(mask & 0b000001, mask & 0b000010, mask & 0b000100, mask & 0b001000,
+                         mask & 0b010000, mask & 0b100000);
+    }
+
     // 页表管理操作
     static PhyAddr read_root(void) {
         csr_satp_t satp = csr_get_satp();

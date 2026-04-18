@@ -151,6 +151,8 @@ namespace loader::elf {
         auto valid_res = validate_elf64(ehdr, file_size);
         propagate(valid_res);
 
+        spec.entrypoint = VirAddr(ehdr.e_entry);
+
         // 解析程序头表并为TM添加相应的VMA
         for (size_t i = 0; i < ehdr.e_phnum; ++i) {
             Elf64_Phdr phdr{};
@@ -214,8 +216,10 @@ namespace loader::elf {
         for (auto &vma : spec.tm->vma_list) {
             vma.loading      = false;
             PageMan::RWX rwx = VMA::seg2rwx(vma.type);
-            spec.tm->pman().modify_range_flags<PageMan::ModifyMask::RWX>(
-                vma.vaddr, vma.size, rwx, true, false);
+            // TODO: 将 u 设置为 true 以保证其为用户页
+            // 但是目前要进行测试，暂时设置为 false 以避免内核态不能访问用户页导致的各种问题
+            spec.tm->pman().modify_range_flags<PageMan::make_mask(0b001111)>(
+                vma.vaddr, vma.size, rwx, false, false);
         }
 
         // 输出每个VMA的开头几个字节以供调试
@@ -241,7 +245,8 @@ namespace loader::elf {
 
         // 恢复到原来的TM, 以便继续执行内核代码
         env::inst().tm(key::elfloader()) = origin_tm;
-        PageMan(env::inst().pgd()).switch_root();
+        // 恢复到原来的内核页表
+        PageMan(origin_pgd).switch_root();
 
         void_return();
     }

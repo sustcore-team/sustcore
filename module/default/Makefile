@@ -15,7 +15,7 @@ subdirs :=
 
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)
 
-flags-ld := -z max-page-size=0x100 -nostdlib -e_start
+flags-ld := -z max-page-size=0x1000 -nostdlib -e_start
 
 # C
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc++ \
@@ -62,7 +62,7 @@ endif
 
 libs := basecpp kmod
 
-args-ld := flags-ld="$(flags-ld)"
+args-ld := flags-ld="$(flags-ld)" script-ld="$(path-d)/mod.ld"
 
 args-c := defs-c="$(defs-c)" include-c="$(include-c)" flags-c="$(flags-c)"
 args-cpp := defs-cpp="$(defs-cpp)" include-cpp="$(include-cpp)" flags-cpp="$(flags-cpp)"
@@ -74,5 +74,5 @@ dir := dir-obj="$(path-objects)/module/default" dir-src="$(path-d)"
 
 .PHONY: build
 build:
-	$(q)$(MAKE) $(builder-k)=$(target) architecture=$(architecture) attachments="$(attachments)" deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
+	$(q)$(MAKE) $(builder-m)=$(target) architecture=$(architecture) attachments="$(attachments)" deps="$(deps)" objects="$(objects)" $(dir) $(args) $(target)
 	$(q)$(copy) $(target) $(initrd-target)
