@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <iterator>
+#include <kio.h>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -43,7 +44,11 @@ namespace std {
         using node_type = HashNode<value_type>;
         using node_allocator = typename std::allocator_traits<
             Allocator>::template rebind_alloc<node_type>;
+        using bucket_allocator = typename std::allocator_traits<
+            Allocator>::template rebind_alloc<node_type *>;
+
         node_allocator alloc_;
+        bucket_allocator bucket_alloc_;
         Hash hash_;
         KeyEqual equal_;
         node_type **buckets_;
@@ -186,6 +191,7 @@ namespace std {
 
         unordered_map() noexcept
             : alloc_(),
+              bucket_alloc_(),
               hash_(),
               equal_(),
               buckets_(nullptr),
@@ -197,6 +203,7 @@ namespace std {
 
         explicit unordered_map(const allocator_type &alloc) noexcept
             : alloc_(alloc),
+              bucket_alloc_(alloc),
               hash_(),
               equal_(),
               buckets_(nullptr),
@@ -211,6 +218,7 @@ namespace std {
                                const KeyEqual &keyequal = KeyEqual(),
                                const Allocator &alloc   = Allocator())
             : alloc_(alloc),
+              bucket_alloc_(alloc),
               hash_(hash),
               equal_(keyequal),
               buckets_(nullptr),
@@ -225,6 +233,7 @@ namespace std {
 
         unordered_map(const unordered_map &other)
             : alloc_(other.alloc_),
+              bucket_alloc_(other.bucket_alloc_),
               hash_(other.hash_),
               equal_(other.equal_),
               buckets_(nullptr),
@@ -243,16 +252,17 @@ namespace std {
 
         unordered_map(unordered_map &&other) noexcept
             : alloc_(std::move(other.alloc_)),
+              bucket_alloc_(std::move(other.bucket_alloc_)),
               hash_(std::move(other.hash_)),
               equal_(std::move(other.equal_)),
               buckets_(other.buckets_),
               bucket_count_(other.bucket_count_),
               size_(other.size_),
               max_load_factor_(other.max_load_factor_) {
-            other.buckets_          = nullptr;
-            other.bucket_count_     = 0;
-            other.size_             = 0;
-            other.max_load_factor_  = 1.0f;
+            other.buckets_         = nullptr;
+            other.bucket_count_    = 0;
+            other.size_            = 0;
+            other.max_load_factor_ = 1.0f;
         }
 
         unordered_map &operator=(const unordered_map &other) {
@@ -274,6 +284,7 @@ namespace std {
             dealloc_buckets(buckets_, bucket_count_);
 
             alloc_            = std::move(other.alloc_);
+            bucket_alloc_     = std::move(other.bucket_alloc_);
             hash_             = std::move(other.hash_);
             equal_            = std::move(other.equal_);
             buckets_          = other.buckets_;
@@ -630,7 +641,9 @@ namespace std {
         }
 
         iterator erase(const_iterator first, const_iterator last) noexcept {
-            iterator result = first == cend() ? end() : iterator(this, first.bucket_index_, first.node_);
+            iterator result =
+                first == cend() ? end()
+                                : iterator(this, first.bucket_index_, first.node_);
             while (result != end() && const_iterator(result) != last) {
                 result = erase(result);
             }
@@ -658,6 +671,7 @@ namespace std {
         void swap(unordered_map &other) noexcept {
             using std::swap;
             swap(alloc_, other.alloc_);
+            swap(bucket_alloc_, other.bucket_alloc_);
             swap(hash_, other.hash_);
             swap(equal_, other.equal_);
             swap(buckets_, other.buckets_);
@@ -719,8 +733,13 @@ namespace std {
                 count = 1;
             }
 
-            node_type **buckets = static_cast<node_type **>(
-                ::operator new(sizeof(node_type *) * count));
+            node_type **buckets =
+                std::allocator_traits<bucket_allocator>::allocate(bucket_alloc_,
+                                                                  count);
+            kprintfln(
+                "[umap][bucket alloc] map=%p buckets=%p count=%u bytes=%u",
+                this, buckets, static_cast<unsigned>(count),
+                static_cast<unsigned>(count * sizeof(node_type *)));
             for (size_type i = 0; i < count; ++i) {
                 buckets[i] = nullptr;
             }
@@ -731,14 +750,23 @@ namespace std {
             if (buckets == nullptr) {
                 return;
             }
-            (void)count;
-            ::operator delete(buckets);
+            if (count == 0) {
+                count = 1;
+            }
+            kprintfln(
+                "[umap][bucket free] map=%p buckets=%p count=%u bytes=%u",
+                this, buckets, static_cast<unsigned>(count),
+                static_cast<unsigned>(count * sizeof(node_type *)));
+            std::allocator_traits<bucket_allocator>::deallocate(bucket_alloc_,
+                                                                buckets, count);
         }
 
         template <class V>
         node_type *create_node(V &&value) {
             node_type *node =
                 std::allocator_traits<node_allocator>::allocate(alloc_, 1);
+            kprintfln("[umap][node alloc] map=%p node=%p bytes=%u", this, node,
+                      static_cast<unsigned>(sizeof(node_type)));
             alloc_.construct(node, std::forward<V>(value));
             return node;
         }
@@ -747,6 +775,8 @@ namespace std {
             if (node == nullptr) {
                 return;
             }
+            kprintfln("[umap][node free] map=%p node=%p bytes=%u", this, node,
+                      static_cast<unsigned>(sizeof(node_type)));
             alloc_.destroy(node);
             std::allocator_traits<node_allocator>::deallocate(alloc_, node, 1);
         }

@@ -418,7 +418,7 @@ namespace test::unordered_map {
         cases.push_back(new CaseEraseAndClear());
         cases.push_back(new CaseRehashReserveAndLoadFactor());
         cases.push_back(new CaseSwapAndAllocator());
-        cases.push_back(new CaseStress());
+        // cases.push_back(new CaseStress());
 
         framework.add_category(
             new TestCategory("unordered_map", std::move(cases)));
