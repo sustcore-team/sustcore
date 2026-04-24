@@ -7,6 +7,9 @@ deps += test/cap.d
 objects += test/expected.o
 deps += test/expected.d
 
+objects += test/format.o
+deps += test/format.d
+
 objects += test/framework.o
 deps += test/framework.d
 

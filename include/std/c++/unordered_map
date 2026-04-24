@@ -1,15 +1,18 @@
+#pragma once
+
 #include <functional>
 #include <iterator>
+#include <kio.h>
 #include <memory>
+#include <stdexcept>
+#include <utility>
 
 namespace std {
 
     template <class Value>
     struct HashNode {
-        Value value;     // 存储的值（pair<const Key, T>）
-        HashNode *next;  // 下一个节点
-
-        HashNode() : next(nullptr) {}
+        Value value;
+        HashNode *next;
 
         HashNode(const Value &v) : value(v), next(nullptr) {}
 
@@ -26,8 +29,9 @@ namespace std {
     public:
         using key_type        = Key;
         using mapped_type     = T;
-        using value_type      = std::pair<key_type, mapped_type>;
+        using value_type      = std::pair<const Key, T>;
         using size_type       = std::size_t;
+        using difference_type = std::ptrdiff_t;
         using hasher          = Hash;
         using key_equal       = KeyEqual;
         using allocator_type  = Allocator;
@@ -37,16 +41,14 @@ namespace std {
         using const_pointer   = const value_type *;
 
     private:
-        using node_type      = HashNode<value_type>;
+        using node_type = HashNode<value_type>;
         using node_allocator = typename std::allocator_traits<
             Allocator>::template rebind_alloc<node_type>;
-        // using node_alloc = std::allocator<HashNode<value_type>>;
         using bucket_allocator = typename std::allocator_traits<
             Allocator>::template rebind_alloc<node_type *>;
 
         node_allocator alloc_;
         bucket_allocator bucket_alloc_;
-        // node_alloc _alloc;
         Hash hash_;
         KeyEqual equal_;
         node_type **buckets_;
@@ -56,44 +58,47 @@ namespace std {
 
     public:
         class unordered_map_iterator {
+            friend class unordered_map;
+            friend class unordered_map_const_iterator;
+
         public:
             using iterator_category = forward_iterator_tag;
+            using value_type        = typename unordered_map::value_type;
+            using difference_type   = typename unordered_map::difference_type;
+            using pointer           = typename unordered_map::pointer;
+            using reference         = typename unordered_map::reference;
 
         private:
-            using map_type  = unordered_map<Key, T, Hash, KeyEqual, Allocator>;
-            using node_type = HashNode<value_type>;
+            using map_type = unordered_map<Key, T, Hash, KeyEqual, Allocator>;
 
-            map_type *map;
-            size_t bucket_index;
-            node_type *node;
+            map_type *map_;
+            size_type bucket_index_;
+            node_type *node_;
 
         public:
             unordered_map_iterator() noexcept
-                : map(nullptr), bucket_index(0), node(nullptr) {}
+                : map_(nullptr), bucket_index_(0), node_(nullptr) {}
 
-            explicit unordered_map_iterator(map_type *m, size_t index,
+            explicit unordered_map_iterator(map_type *map, size_type index,
                                             node_type *node) noexcept
-                : map(m), bucket_index(index), node(node) {}
+                : map_(map), bucket_index_(index), node_(node) {}
 
             reference operator*() const noexcept {
-                return node->value;
+                return node_->value;
             }
 
             pointer operator->() const noexcept {
-                return &(node->value);
+                return &node_->value;
             }
 
             unordered_map_iterator &operator++() noexcept {
-                if (node) {
-                    node = node->next;
-                    if (!node) {
-                        while (++bucket_index < map->bucket_count_) {
-                            node = map->buckets_[bucket_index];
-                            if (node) {
-                                break;
-                            }
-                        }
-                    }
+                if (map_ == nullptr || node_ == nullptr) {
+                    return *this;
+                }
+
+                node_ = node_->next;
+                while (node_ == nullptr && ++bucket_index_ < map_->bucket_count_) {
+                    node_ = map_->buckets_[bucket_index_];
                 }
                 return *this;
             }
@@ -104,61 +109,62 @@ namespace std {
                 return tmp;
             }
 
-            bool operator==(
-                const unordered_map_iterator &other) const noexcept {
-                return node == other.node;
+            bool operator==(const unordered_map_iterator &other) const noexcept {
+                return map_ == other.map_ && node_ == other.node_;
             }
 
-            bool operator!=(
-                const unordered_map_iterator &other) const noexcept {
+            bool operator!=(const unordered_map_iterator &other) const noexcept {
                 return !(*this == other);
             }
         };
 
         class unordered_map_const_iterator {
+            friend class unordered_map;
+
         public:
             using iterator_category = forward_iterator_tag;
+            using value_type        = typename unordered_map::value_type;
+            using difference_type   = typename unordered_map::difference_type;
+            using pointer           = typename unordered_map::const_pointer;
+            using reference         = typename unordered_map::const_reference;
 
         private:
-            using map_type  = unordered_map<Key, T, Hash, KeyEqual, Allocator>;
-            using node_type = HashNode<value_type>;
+            using map_type = unordered_map<Key, T, Hash, KeyEqual, Allocator>;
 
-            map_type *map;
-            size_t bucket_index;
-            node_type *node;
+            const map_type *map_;
+            size_type bucket_index_;
+            node_type *node_;
 
         public:
             unordered_map_const_iterator() noexcept
-                : map(nullptr), bucket_index(0), node(nullptr) {}
+                : map_(nullptr), bucket_index_(0), node_(nullptr) {}
 
-            explicit unordered_map_const_iterator(map_type *m, size_t index,
+            explicit unordered_map_const_iterator(const map_type *map,
+                                                  size_type index,
                                                   node_type *node) noexcept
-                : map(m), bucket_index(index), node(node) {}
+                : map_(map), bucket_index_(index), node_(node) {}
 
-            template <class k, class t, class v, class r, class p>
             unordered_map_const_iterator(
                 const unordered_map_iterator &it) noexcept
-                : map(it.map), bucket_index(it.bucket_index), node(it.node) {}
+                : map_(it.map_), bucket_index_(it.bucket_index_),
+                  node_(it.node_) {}
 
             reference operator*() const noexcept {
-                return node->value;
+                return node_->value;
             }
 
             pointer operator->() const noexcept {
-                return &node->value;
+                return &node_->value;
             }
 
             unordered_map_const_iterator &operator++() noexcept {
-                if (node) {
-                    node = node->next;
-                    if (!node) {
-                        while (++bucket_index < map->bucket_count_) {
-                            node = map->buckets_[bucket_index];
-                            if (node) {
-                                break;
-                            }
-                        }
-                    }
+                if (map_ == nullptr || node_ == nullptr) {
+                    return *this;
+                }
+
+                node_ = node_->next;
+                while (node_ == nullptr && ++bucket_index_ < map_->bucket_count_) {
+                    node_ = map_->buckets_[bucket_index_];
                 }
                 return *this;
             }
@@ -171,7 +177,7 @@ namespace std {
 
             bool operator==(
                 const unordered_map_const_iterator &other) const noexcept {
-                return node == other.node;
+                return map_ == other.map_ && node_ == other.node_;
             }
 
             bool operator!=(
@@ -180,7 +186,6 @@ namespace std {
             }
         };
 
-    public:
         using iterator       = unordered_map_iterator;
         using const_iterator = unordered_map_const_iterator;
 
@@ -193,7 +198,19 @@ namespace std {
               bucket_count_(1),
               size_(0),
               max_load_factor_(1.0f) {
-            buckets_ = alloc_buckets();
+            buckets_ = alloc_buckets(bucket_count_);
+        }
+
+        explicit unordered_map(const allocator_type &alloc) noexcept
+            : alloc_(alloc),
+              bucket_alloc_(alloc),
+              hash_(),
+              equal_(),
+              buckets_(nullptr),
+              bucket_count_(1),
+              size_(0),
+              max_load_factor_(1.0f) {
+            buckets_ = alloc_buckets(bucket_count_);
         }
 
         explicit unordered_map(size_type bucket_count,
@@ -205,12 +222,9 @@ namespace std {
               hash_(hash),
               equal_(keyequal),
               buckets_(nullptr),
-              bucket_count_(bucket_count),
+              bucket_count_(bucket_count == 0 ? 1 : bucket_count),
               size_(0),
               max_load_factor_(1.0f) {
-            if (bucket_count_ == 0) {
-                bucket_count_ = 1;
-            }
             buckets_ = alloc_buckets(bucket_count_);
         }
 
@@ -219,17 +233,17 @@ namespace std {
 
         unordered_map(const unordered_map &other)
             : alloc_(other.alloc_),
-              bucket_alloc_(other.alloc_),
+              bucket_alloc_(other.bucket_alloc_),
               hash_(other.hash_),
               equal_(other.equal_),
               buckets_(nullptr),
-              bucket_count_(other.bucket_count_),
+              bucket_count_(other.bucket_count_ == 0 ? 1 : other.bucket_count_),
               size_(0),
               max_load_factor_(other.max_load_factor_) {
             buckets_ = alloc_buckets(bucket_count_);
             for (size_type i = 0; i < other.bucket_count_; ++i) {
                 node_type *node = other.buckets_[i];
-                while (node) {
+                while (node != nullptr) {
                     insert(node->value);
                     node = node->next;
                 }
@@ -245,30 +259,72 @@ namespace std {
               bucket_count_(other.bucket_count_),
               size_(other.size_),
               max_load_factor_(other.max_load_factor_) {
-            other.bucket_count_ = 0;
-            other.buckets_      = nullptr;
-            other.size_         = 0;
+            other.buckets_         = nullptr;
+            other.bucket_count_    = 0;
+            other.size_            = 0;
+            other.max_load_factor_ = 1.0f;
+        }
+
+        unordered_map &operator=(const unordered_map &other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            unordered_map tmp(other);
+            swap(tmp);
+            return *this;
+        }
+
+        unordered_map &operator=(unordered_map &&other) noexcept {
+            if (this == &other) {
+                return *this;
+            }
+
+            clear();
+            dealloc_buckets(buckets_, bucket_count_);
+
+            alloc_            = std::move(other.alloc_);
+            bucket_alloc_     = std::move(other.bucket_alloc_);
+            hash_             = std::move(other.hash_);
+            equal_            = std::move(other.equal_);
+            buckets_          = other.buckets_;
+            bucket_count_     = other.bucket_count_;
+            size_             = other.size_;
+            max_load_factor_  = other.max_load_factor_;
+
+            other.buckets_         = nullptr;
+            other.bucket_count_    = 0;
+            other.size_            = 0;
+            other.max_load_factor_ = 1.0f;
+            return *this;
         }
 
         ~unordered_map() {
             clear();
             dealloc_buckets(buckets_, bucket_count_);
-            buckets_ = nullptr;
-            buckets_ = 0;
+            buckets_      = nullptr;
+            bucket_count_ = 0;
         }
 
-        /*
-         * 拷贝赋值
-         * 移动赋值
-         */
-
         allocator_type get_allocator() const noexcept {
-            return alloc_;
+            return allocator_type(alloc_);
+        }
+
+        hasher hash_function() const {
+            return hash_;
+        }
+
+        key_equal key_eq() const {
+            return equal_;
         }
 
         iterator begin() noexcept {
+            if (buckets_ == nullptr) {
+                return end();
+            }
+
             for (size_type i = 0; i < bucket_count_; ++i) {
-                if (buckets_[i]) {
+                if (buckets_[i] != nullptr) {
                     return iterator(this, i, buckets_[i]);
                 }
             }
@@ -279,27 +335,29 @@ namespace std {
             return cbegin();
         }
 
-        const_iterator cend() const noexcept {
-            return const_iterator(const_cast<unordered_map *>(this),
-                                  bucket_count_, nullptr);
-        }
-
         const_iterator cbegin() const noexcept {
+            if (buckets_ == nullptr) {
+                return cend();
+            }
+
             for (size_type i = 0; i < bucket_count_; ++i) {
-                if (buckets_[i]) {
-                    return const_iterator(const_cast<unordered_map *>(this), i,
-                                          buckets_[i]);
+                if (buckets_[i] != nullptr) {
+                    return const_iterator(this, i, buckets_[i]);
                 }
             }
             return cend();
         }
 
-        const_iterator cend() noexcept {
-            return const_iterator(this, bucket_count_, nullptr);
-        }
-
         iterator end() noexcept {
             return iterator(this, bucket_count_, nullptr);
+        }
+
+        const_iterator end() const noexcept {
+            return cend();
+        }
+
+        const_iterator cend() const noexcept {
+            return const_iterator(this, bucket_count_, nullptr);
         }
 
         [[nodiscard]] bool empty() const noexcept {
@@ -310,13 +368,61 @@ namespace std {
             return size_;
         }
 
+        size_type max_size() const noexcept {
+            return static_cast<size_type>(-1) / sizeof(node_type);
+        }
+
+        float load_factor() const noexcept {
+            if (bucket_count_ == 0) {
+                return 0.0f;
+            }
+            return static_cast<float>(size_) /
+                   static_cast<float>(bucket_count_);
+        }
+
+        float max_load_factor() const noexcept {
+            return max_load_factor_;
+        }
+
+        void max_load_factor(float factor) {
+            if (factor > 0.0f) {
+                max_load_factor_ = factor;
+                rehash(bucket_count_);
+            }
+        }
+
+        mapped_type &at(const key_type &key) {
+            iterator it = find(key);
+            if (it == end()) {
+                _THROW(out_of_range("unordered_map::at"));
+            }
+            return it->second;
+        }
+
+        const mapped_type &at(const key_type &key) const {
+            const_iterator it = find(key);
+            if (it == cend()) {
+                _THROW(out_of_range("unordered_map::at"));
+            }
+            return it->second;
+        }
+
+        mapped_type &operator[](const key_type &key) {
+            return try_emplace(key).first->second;
+        }
+
+        mapped_type &operator[](key_type &&key) {
+            return try_emplace(std::move(key)).first->second;
+        }
+
         iterator find(const key_type &key) noexcept {
             if (bucket_count_ == 0 || buckets_ == nullptr) {
                 return end();
             }
+
             size_type index = bucket_index(key);
             node_type *node = buckets_[index];
-            while (node) {
+            while (node != nullptr) {
                 if (equal_(node->value.first, key)) {
                     return iterator(this, index, node);
                 }
@@ -329,81 +435,232 @@ namespace std {
             if (bucket_count_ == 0 || buckets_ == nullptr) {
                 return cend();
             }
+
             size_type index = bucket_index(key);
             node_type *node = buckets_[index];
-            while (node) {
+            while (node != nullptr) {
                 if (equal_(node->value.first, key)) {
-                    return const_iterator(const_cast<unordered_map *>(this),
-                                          index, node);
+                    return const_iterator(this, index, node);
                 }
                 node = node->next;
             }
             return cend();
         }
 
+        size_type count(const key_type &key) const noexcept {
+            return find(key) == cend() ? 0 : 1;
+        }
+
         bool contains(const key_type &key) const noexcept {
-            return find(key) != cend();
+            return count(key) != 0;
         }
 
-        mapped_type &operator[](const key_type &key) {
-            return try_emplace(key, mapped_type()).first->second;
+        std::pair<iterator, iterator> equal_range(const key_type &key) noexcept {
+            iterator it = find(key);
+            if (it == end()) {
+                return std::pair<iterator, iterator>(it, it);
+            }
+
+            iterator next = it;
+            ++next;
+            return std::pair<iterator, iterator>(it, next);
         }
 
-        mapped_type &operator[](key_type &&key) {
-            return try_emplace(std::move(key), mapped_type()).first->second;
+        std::pair<const_iterator, const_iterator>
+        equal_range(const key_type &key) const noexcept {
+            const_iterator it = find(key);
+            if (it == cend()) {
+                return std::pair<const_iterator, const_iterator>(it, it);
+            }
+
+            const_iterator next = it;
+            ++next;
+            return std::pair<const_iterator, const_iterator>(it, next);
+        }
+
+        std::pair<iterator, bool> insert(const value_type &value) {
+            return insert_value(value);
+        }
+
+        std::pair<iterator, bool> insert(value_type &&value) {
+            return insert_value(std::move(value));
+        }
+
+        template <class P>
+        std::pair<iterator, bool> insert(P &&value) {
+            return try_emplace(std::forward<P>(value).first,
+                               std::forward<P>(value).second);
+        }
+
+        iterator insert(const_iterator hint, const value_type &value) {
+            (void)hint;
+            return insert(value).first;
+        }
+
+        iterator insert(const_iterator hint, value_type &&value) {
+            (void)hint;
+            return insert(std::move(value)).first;
+        }
+
+        template <class P>
+        iterator insert(const_iterator hint, P &&value) {
+            (void)hint;
+            return insert(std::forward<P>(value)).first;
+        }
+
+        template <class... Args>
+        std::pair<iterator, bool> emplace(Args &&...args) {
+            value_type value(std::forward<Args>(args)...);
+            return insert(std::move(value));
+        }
+
+        template <class... Args>
+        std::pair<iterator, bool> try_emplace(const key_type &key,
+                                              Args &&...args) {
+            iterator existing = find(key);
+            if (existing != end()) {
+                return std::pair<iterator, bool>(existing, false);
+            }
+
+            ensure_capacity_for_insert();
+            size_type index = bucket_index(key);
+            node_type *new_node =
+                create_node(value_type(key, mapped_type(std::forward<Args>(args)...)));
+            new_node->next  = buckets_[index];
+            buckets_[index] = new_node;
+            ++size_;
+            return std::pair<iterator, bool>(iterator(this, index, new_node), true);
+        }
+
+        template <class... Args>
+        std::pair<iterator, bool> try_emplace(key_type &&key, Args &&...args) {
+            iterator existing = find(key);
+            if (existing != end()) {
+                return std::pair<iterator, bool>(existing, false);
+            }
+
+            ensure_capacity_for_insert();
+            size_type index = bucket_index(key);
+            node_type *new_node = create_node(
+                value_type(std::move(key), mapped_type(std::forward<Args>(args)...)));
+            new_node->next  = buckets_[index];
+            buckets_[index] = new_node;
+            ++size_;
+            return std::pair<iterator, bool>(iterator(this, index, new_node), true);
         }
 
         template <class M>
         std::pair<iterator, bool> insert_or_assign(const key_type &key,
                                                    M &&value) {
-            iterator it = find(key);
-            if (it != end()) {
-                it->second = std::forward<M>(value);
-                return std::pair(it, false);
+            iterator existing = find(key);
+            if (existing != end()) {
+                existing->second = std::forward<M>(value);
+                return std::pair<iterator, bool>(existing, false);
             }
             return try_emplace(key, std::forward<M>(value));
         }
 
+        template <class M>
+        std::pair<iterator, bool> insert_or_assign(key_type &&key, M &&value) {
+            iterator existing = find(key);
+            if (existing != end()) {
+                existing->second = std::forward<M>(value);
+                return std::pair<iterator, bool>(existing, false);
+            }
+            return try_emplace(std::move(key), std::forward<M>(value));
+        }
+
+        iterator erase(iterator pos) noexcept {
+            return erase(const_iterator(pos));
+        }
+
+        iterator erase(const_iterator pos) noexcept {
+            if (pos == cend() || pos.node_ == nullptr || pos.map_ != this) {
+                return end();
+            }
+
+            node_type *node = pos.node_;
+            size_type index = pos.bucket_index_;
+            node_type *prev = nullptr;
+            node_type *cur  = buckets_[index];
+
+            while (cur != nullptr && cur != node) {
+                prev = cur;
+                cur  = cur->next;
+            }
+
+            if (cur == nullptr) {
+                return end();
+            }
+
+            node_type *next = cur->next;
+            if (prev != nullptr) {
+                prev->next = cur->next;
+            } else {
+                buckets_[index] = cur->next;
+            }
+
+            destroy_node(cur);
+            --size_;
+
+            if (next != nullptr) {
+                return iterator(this, index, next);
+            }
+
+            for (size_type i = index + 1; i < bucket_count_; ++i) {
+                if (buckets_[i] != nullptr) {
+                    return iterator(this, i, buckets_[i]);
+                }
+            }
+            return end();
+        }
+
         size_type erase(const key_type &key) noexcept {
-            if (bucket_count_ == 0) {
+            if (bucket_count_ == 0 || buckets_ == nullptr) {
                 return 0;
             }
 
             size_type index = bucket_index(key);
             node_type *prev = nullptr;
-            node_type *node = buckets_[index];
-            while (node) {
-                if (equal_(node->value.first, key)) {
-                    if (prev) {
-                        prev->next = node->next;
+            node_type *cur  = buckets_[index];
+            while (cur != nullptr) {
+                if (equal_(cur->value.first, key)) {
+                    if (prev != nullptr) {
+                        prev->next = cur->next;
                     } else {
-                        buckets_[index] = node->next;
+                        buckets_[index] = cur->next;
                     }
-
-                    alloc_.destroy(node);
-                    std::allocator_traits<node_allocator>::deallocate(alloc_,
-                                                                      node, 1);
+                    destroy_node(cur);
                     --size_;
                     return 1;
                 }
-                prev = node;
-                node = node->next;
+                prev = cur;
+                cur  = cur->next;
             }
             return 0;
         }
 
+        iterator erase(const_iterator first, const_iterator last) noexcept {
+            iterator result =
+                first == cend() ? end()
+                                : iterator(this, first.bucket_index_, first.node_);
+            while (result != end() && const_iterator(result) != last) {
+                result = erase(result);
+            }
+            return result;
+        }
+
         void clear() noexcept {
-            for (size_type i = 0; i < bucket_count_; i++) {
+            if (buckets_ == nullptr) {
+                size_ = 0;
+                return;
+            }
+
+            for (size_type i = 0; i < bucket_count_; ++i) {
                 node_type *node = buckets_[i];
-                while (node) {
+                while (node != nullptr) {
                     node_type *next = node->next;
-
-                    std::allocator_traits<node_allocator>::construct(alloc_,
-                                                                     node);
-
-                    std::allocator_traits<node_allocator>::deallocate(alloc_,
-                                                                      node, 1);
-
+                    destroy_node(node);
                     node = next;
                 }
                 buckets_[i] = nullptr;
@@ -411,139 +668,154 @@ namespace std {
             size_ = 0;
         }
 
-        std::pair<iterator, bool> insert(const value_type &value) {
-            return try_emplace(value.first, value.second);
-        }
-
-    private:
-        node_type **alloc_buckets(size_type count = 1) {
-            node_type **buckets =
-                std::allocator_traits<bucket_allocator>::allocate(bucket_alloc_,
-                                                                  count);
-            for (size_type i = 0; i < count; ++i) {
-                buckets[i] = nullptr;
-            }
-            return buckets;
-        }
-
-        void dealloc_buckets(node_type **buckets, size_type count) {
-            if (buckets != nullptr)
-                std::allocator_traits<bucket_allocator>::deallocate(
-                    bucket_alloc_, buckets, count);
-        }
-
-        size_type bucket_index(const key_type &key) const {
-            return bucket_index_for_size(key, bucket_count_);
-        }
-
-        size_type bucket_index_for_size(const key_type &key,
-                                        size_type num_buckets) const {
-            if (num_buckets == 0) {
-                return 0;
-            }
-            return hash_(key) % num_buckets;
-        }
-
-        template <class K, class M>
-        std::pair<iterator, bool> try_emplace(K &&key, M &&value) {
-            size_t index = bucket_index(key);
-
-            node_type *node = buckets_[index];
-            while (node) {
-                if (equal_(node->value.first, key)) {
-                    return std::pair(iterator(this, index, node), false);
-                }
-                node = node->next;
-            }
-
-            if (size_ + 1 > bucket_count_ * max_load_factor_) {
-                rehash(bucket_count_ * 2);
-                index = bucket_index(key);
-            }
-
-            node_type *new_node =
-                std::allocator_traits<node_allocator>::allocate(alloc_, 1);
-            std::allocator_traits<node_allocator>::construct(
-                alloc_, new_node,
-                std::make_pair(std::forward<K>(key), std::forward<M>(value)));
-
-            new_node->next  = buckets_[index];
-            buckets_[index] = new_node;
-            ++size_;
-
-            return std::pair(iterator(this, index, new_node), true);
-        }
-
-        iterator erase(const_iterator pos) noexcept {
-            if (pos == end()) {
-                return end();
-            }
-
-            node_type *node = pos.node;
-            size_type index = pos.bucket_index;
-
-            node_type *prev = nullptr;
-            node_type *cur  = buckets_[index];
-            while (cur != node) {
-                prev = cur;
-                cur  = cur->next;
-            }
-
-            if (prev) {
-                prev->next = node->next;
-            } else {
-                buckets_[index] = node->next;
-            }
-
-            node_type *next = node->next;
-            alloc_.destroy(node);
-            std::allocator_traits<node_allocator>::deallocate(alloc_, node, 1);
-
-            if (next) {
-                return iterator(this, index, next);
-            }
-
-            for (size_type i = index + 1; i < bucket_count_; i++) {
-                if (buckets_[i]) {
-                    return iterator(this, i, buckets_[i]);
-                }
-            }
-            return end();
+        void swap(unordered_map &other) noexcept {
+            using std::swap;
+            swap(alloc_, other.alloc_);
+            swap(bucket_alloc_, other.bucket_alloc_);
+            swap(hash_, other.hash_);
+            swap(equal_, other.equal_);
+            swap(buckets_, other.buckets_);
+            swap(bucket_count_, other.bucket_count_);
+            swap(size_, other.size_);
+            swap(max_load_factor_, other.max_load_factor_);
         }
 
         void rehash(size_type new_bucket_count) {
-            if (new_bucket_count < bucket_count_) {
-                return;
+            size_type min_bucket_count = minimum_bucket_count_for_size(size_);
+            if (new_bucket_count < min_bucket_count) {
+                new_bucket_count = min_bucket_count;
             }
-
             if (new_bucket_count == 0) {
                 new_bucket_count = 1;
             }
 
+            if (new_bucket_count == bucket_count_ && buckets_ != nullptr) {
+                return;
+            }
+
             node_type **new_buckets = alloc_buckets(new_bucket_count);
-            for (size_type i = 0; i < bucket_count_; i++) {
-                node_type *origin_node = buckets_[i];
-                while (origin_node) {
-                    // 头插法
-                    node_type *next     = origin_node->next;
-                    size_type new_index = bucket_index_for_size(
-                        origin_node->value.first, new_bucket_count);
-                    origin_node->next      = new_buckets[new_index];
-                    new_buckets[new_index] = origin_node;
-                    origin_node            = next;
+            for (size_type i = 0; i < bucket_count_; ++i) {
+                node_type *node = buckets_[i];
+                while (node != nullptr) {
+                    node_type *next = node->next;
+                    size_type new_index =
+                        bucket_index_for_size(node->value.first, new_bucket_count);
+                    node->next = new_buckets[new_index];
+                    new_buckets[new_index] = node;
+                    node = next;
                 }
             }
+
             dealloc_buckets(buckets_, bucket_count_);
             buckets_      = new_buckets;
             bucket_count_ = new_bucket_count;
         }
 
         void reserve(size_type n) {
-            // 计算需要的最小桶数量：n / max_load_factor_
-            // 向上取整以确保空间足够
-            size_type new_bucket_count =
-                static_cast<size_type>(n / max_load_factor_) + 1;
-            rehash(new_bucket_count);
+            rehash(minimum_bucket_count_for_size(n));
+        }
+
+    private:
+        size_type bucket_index(const key_type &key) const {
+            return bucket_index_for_size(key, bucket_count_);
+        }
+
+        size_type bucket_index_for_size(const key_type &key,
+                                        size_type bucket_count) const {
+            if (bucket_count == 0) {
+                return 0;
+            }
+            return hash_(key) % bucket_count;
+        }
+
+        node_type **alloc_buckets(size_type count) {
+            if (count == 0) {
+                count = 1;
+            }
+
+            node_type **buckets =
+                std::allocator_traits<bucket_allocator>::allocate(bucket_alloc_,
+                                                                  count);
+            kprintfln(
+                "[umap][bucket alloc] map=%p buckets=%p count=%u bytes=%u",
+                this, buckets, static_cast<unsigned>(count),
+                static_cast<unsigned>(count * sizeof(node_type *)));
+            for (size_type i = 0; i < count; ++i) {
+                buckets[i] = nullptr;
+            }
+            return buckets;
+        }
+
+        void dealloc_buckets(node_type **buckets, size_type count) noexcept {
+            if (buckets == nullptr) {
+                return;
+            }
+            if (count == 0) {
+                count = 1;
+            }
+            kprintfln(
+                "[umap][bucket free] map=%p buckets=%p count=%u bytes=%u",
+                this, buckets, static_cast<unsigned>(count),
+                static_cast<unsigned>(count * sizeof(node_type *)));
+            std::allocator_traits<bucket_allocator>::deallocate(bucket_alloc_,
+                                                                buckets, count);
+        }
+
+        template <class V>
+        node_type *create_node(V &&value) {
+            node_type *node =
+                std::allocator_traits<node_allocator>::allocate(alloc_, 1);
+            kprintfln("[umap][node alloc] map=%p node=%p bytes=%u", this, node,
+                      static_cast<unsigned>(sizeof(node_type)));
+            alloc_.construct(node, std::forward<V>(value));
+            return node;
+        }
+
+        void destroy_node(node_type *node) noexcept {
+            if (node == nullptr) {
+                return;
+            }
+            kprintfln("[umap][node free] map=%p node=%p bytes=%u", this, node,
+                      static_cast<unsigned>(sizeof(node_type)));
+            alloc_.destroy(node);
+            std::allocator_traits<node_allocator>::deallocate(alloc_, node, 1);
+        }
+
+        void ensure_capacity_for_insert() {
+            if (bucket_count_ == 0 || buckets_ == nullptr) {
+                bucket_count_ = 1;
+                buckets_      = alloc_buckets(bucket_count_);
+            }
+
+            if (static_cast<float>(size_ + 1) >
+                static_cast<float>(bucket_count_) * max_load_factor_) {
+                rehash(bucket_count_ * 2);
+            }
+        }
+
+        size_type minimum_bucket_count_for_size(size_type count) const {
+            size_type bucket_count = 1;
+            while (static_cast<float>(bucket_count) * max_load_factor_ <
+                   static_cast<float>(count)) {
+                bucket_count *= 2;
+            }
+            return bucket_count;
+        }
+
+        template <class V>
+        std::pair<iterator, bool> insert_value(V &&value) {
+            iterator existing = find(value.first);
+            if (existing != end()) {
+                return std::pair<iterator, bool>(existing, false);
+            }
+
+            ensure_capacity_for_insert();
+            size_type index = bucket_index(value.first);
+            node_type *new_node = create_node(std::forward<V>(value));
+            new_node->next      = buckets_[index];
+            buckets_[index]     = new_node;
+            ++size_;
+            return std::pair<iterator, bool>(iterator(this, index, new_node), true);
         }
     };
 
