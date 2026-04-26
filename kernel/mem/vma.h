@@ -113,11 +113,10 @@ constexpr const char *to_string(VMA::Type type) {
 // Task Memory
 class TM {
 private:
+    util::IntrusiveList<VMA> vma_list;
     PhyAddr _pgd;
     PageMan _pman;
-
 public:
-    util::IntrusiveList<VMA> vma_list;
     TM(PhyAddr _pgd);
     ~TM();
 
@@ -127,10 +126,22 @@ public:
     Result<util::nonnull<VMA *>> locate_range(VirAddr vaddr, size_t size);
     Result<void> remove_vma(VirAddr vma_addr);
 
+    [[nodiscard]]
+    constexpr const util::IntrusiveList<VMA> &vmas() const {
+        return vma_list;
+    }
+
+    [[nodiscard]]
+    constexpr util::IntrusiveList<VMA> &vmas() {
+        return vma_list;
+    }
+
+    [[nodiscard]]
     constexpr PhyAddr pgd() const {
         return _pgd;
     }
 
+    [[nodiscard]]
     constexpr PageMan &pman() {
         return _pman;
     }

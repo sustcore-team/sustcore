@@ -9,8 +9,9 @@
  *
  */
 
-#include <cap/cspace.h>
 #include <object/csa.h>
+#include <cap/cholder.h>
+#include <env.h>
 #include <perm/csa.h>
 
 #include <cassert>
@@ -95,6 +96,42 @@ Result<void> CSAOperator::remove(CapIdx idx) {
     }
 
     return _space->remove(idx);
+}
+
+Result<ReceiveToken> CSAOperator::send(CapIdx src_idx, size_t target_id) {
+    auto src_cap_res = lookup(src_idx);
+    propagate(src_cap_res);
+
+    Capability *src_cap = src_cap_res.value();
+    if (!src_cap->perm().basic_imply(perm::basic::MIGRATE)) {
+        return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
+    }
+
+    auto *chman = env::inst().chman();
+    auto target_holder_res = chman->get_holder(target_id);
+    propagate(target_holder_res);
+
+    auto *holder = _space->holder();
+    assert(holder != nullptr);
+    return holder->send_capability(target_id, src_idx);
+}
+
+Result<void> CSAOperator::receive(CapIdx dst_idx, ReceiveToken token) {
+    auto *chman = env::inst().chman();
+    auto sender_holder_res = chman->get_holder(token.sender_id);
+    propagate(sender_holder_res);
+
+    auto *receiver_holder = _space->holder();
+    assert(receiver_holder != nullptr);
+
+    auto src_idx_res = sender_holder_res.value()->try_receive(
+        receiver_holder->id(), token);
+    propagate(src_idx_res);
+
+    auto sender_cap_res = sender_holder_res.value()->space().get(src_idx_res.value());
+    propagate(sender_cap_res);
+
+    return migrate(dst_idx, &sender_holder_res.value()->space(), src_idx_res.value());
 }
 
 CapIdx CSAOperator::__get_free_slot(void) {

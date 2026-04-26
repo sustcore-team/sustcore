@@ -9,11 +9,12 @@
  *
  */
 
-#include <vfs/tarfs.h>
+#include <env.h>
 #include <kio.h>
 #include <mem/alloc.h>
 #include <symbols.h>
 #include <test/fs.h>
+#include <vfs/tarfs.h>
 #include <vfs/vfs.h>
 
 #include <cstdint>
@@ -26,7 +27,7 @@ namespace test::fs {
         CaseMountOpenRead() : TestCase("VFS 挂载 initrd 并读取 license") {}
 
         void _run(void* env) const noexcept override {
-            auto* vfs = static_cast<VFS*>(env);
+            auto* vfs = ::env::inst().vfs();
             tassert(vfs != nullptr, "测试环境应提供已初始化的 VFS 实例");
 
             RamDiskDevice* initrd = make_initrd();
@@ -80,7 +81,7 @@ namespace test::fs {
         CaseMountBusyUmount() : TestCase("VFS 忙状态阻止卸载") {}
 
         void _run(void* env) const noexcept override {
-            auto* vfs = static_cast<VFS*>(env);
+            auto* vfs = ::env::inst().vfs();
             tassert(vfs != nullptr, "测试环境应提供已初始化的 VFS 实例");
 
             RamDiskDevice* initrd = make_initrd();
@@ -129,7 +130,7 @@ namespace test::fs {
         CaseOpenMissingFile() : TestCase("VFS 打开不存在文件应失败") {}
 
         void _run(void* env) const noexcept override {
-            auto* vfs = static_cast<VFS*>(env);
+            auto* vfs = ::env::inst().vfs();
             tassert(vfs != nullptr, "测试环境应提供已初始化的 VFS 实例");
 
             RamDiskDevice* initrd = make_initrd();
@@ -154,7 +155,7 @@ namespace test::fs {
         CaseMountParamValidation() : TestCase("VFS 挂载参数与重复挂载检查") {}
 
         void _run(void* env) const noexcept override {
-            auto* vfs = static_cast<VFS*>(env);
+            auto* vfs = ::env::inst().vfs();
             tassert(vfs != nullptr, "测试环境应提供已初始化的 VFS 实例");
 
             RamDiskDevice* initrd = make_initrd();
@@ -192,28 +193,12 @@ namespace test::fs {
         return device;
     }
 
-    static void* setup_vfs() {
-        VFS* vfs = new VFS();
-        auto ret = vfs->register_fs(
-            util::owner(static_cast<IFsDriver*>(new tarfs::TarFSDriver())));
-        if (!ret.has_value()) {
-            delete vfs;
-            return nullptr;
-        }
-        return vfs;
-    }
-
-    static void teardown_vfs(void* env) {
-        delete static_cast<VFS*>(env);
-    }
-
     void collect_tests(TestFramework& framework) {
         auto cases = util::ArrayList<TestCase*>();
         cases.push_back(new CaseMountOpenRead());
         cases.push_back(new CaseMountBusyUmount());
         cases.push_back(new CaseOpenMissingFile());
         cases.push_back(new CaseMountParamValidation());
-        framework.add_category(
-            new TestCategory("fs", std::move(cases), setup_vfs, teardown_vfs));
+        framework.add_category(new TestCategory("fs", std::move(cases)));
     }
 }  // namespace test::fs

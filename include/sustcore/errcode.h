@@ -22,7 +22,7 @@ enum class ErrCode : int {
     SUCCESS                  = GENERIC_ERROR | 0x0000,
     FAILURE                  = GENERIC_ERROR | 0xFFFF,
     INVALID_PARAM            = GENERIC_ERROR | 0x0001,
-    OUT_OF_BOUNDARY            = GENERIC_ERROR | 0x0002,
+    OUT_OF_BOUNDARY          = GENERIC_ERROR | 0x0002,
     NOT_SUPPORTED            = GENERIC_ERROR | 0x0003,
     BUSY                     = GENERIC_ERROR | 0x0004,
     OUT_OF_MEMORY            = GENERIC_ERROR | 0x0005,
@@ -34,6 +34,7 @@ enum class ErrCode : int {
     TYPE_NOT_MATCHED         = CAP_ERROR | 0x0004,
     PAYLOAD_ERROR            = CAP_ERROR | 0x0005,
     CREATION_FAILED          = CAP_ERROR | 0x0006,
+    INVALID_TOKEN            = CAP_ERROR | 0x0007,
     // fs errors
     FS_ERROR                 = 0x02'0000,
     ENTRY_NOT_FOUND          = FS_ERROR | 0x0001,
@@ -59,7 +60,7 @@ constexpr const char *to_cstring(ErrCode err) {
         case ErrCode::FAILURE:            return "FAILURE";
         case ErrCode::UNKNOWN_ERROR:      return "UNKNOWN_ERROR";
         case ErrCode::INVALID_PARAM:      return "INVALID_PARAM";
-        case ErrCode::OUT_OF_BOUNDARY:      return "OUT_OF_BOUNDARY";
+        case ErrCode::OUT_OF_BOUNDARY:    return "OUT_OF_BOUNDARY";
         case ErrCode::NOT_SUPPORTED:      return "NOT_SUPPORTED";
         case ErrCode::INVALID_CAPABILITY: return "INVALID_CAPABILITY";
         case ErrCode::INSUFFICIENT_PERMISSIONS:

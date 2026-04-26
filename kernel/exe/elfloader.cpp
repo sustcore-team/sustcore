@@ -128,8 +128,6 @@ namespace loader::elf {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
 
-        auto *vfs = env::inst().vfs();
-
         // Get file capabilty from CHolder
         auto access_res = spec.holder->access(prm.image_file_cap);
         propagate(access_res);
@@ -191,7 +189,7 @@ namespace loader::elf {
         }
         // 输出TM中的VMA信息以供调试
         loggers::SUSTCORE::INFO("ELF加载完成，TM中的VMA列表:");
-        for (const auto &vma : spec.tm->vma_list) {
+        for (const auto &vma : spec.tm->vmas()) {
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 起始地址: %p, 大小: %u B",
                 vma.type == VMA::Type::CODE ? "CODE" : "DATA", vma.vaddr.addr(),
@@ -213,7 +211,7 @@ namespace loader::elf {
 
         // 将各个段的VMA的loading标记为false
         // 同时将其对应的内存权限改回正常值
-        for (auto &vma : spec.tm->vma_list) {
+        for (auto &vma : spec.tm->vmas()) {
             vma.loading      = false;
             PageMan::RWX rwx = VMA::seg2rwx(vma.type);
             // TODO: 将 u 设置为 true 以保证其为用户页
@@ -224,7 +222,7 @@ namespace loader::elf {
 
         // 输出每个VMA的开头几个字节以供调试
         loggers::SUSTCORE::INFO("每个VMA的前16字节内容:");
-        for (const auto &vma : spec.tm->vma_list) {
+        for (const auto &vma : spec.tm->vmas()) {
             ker_paddr::SumGuard sum_guard;  // 确保可以访问用户空间地址
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 起始地址: %p",

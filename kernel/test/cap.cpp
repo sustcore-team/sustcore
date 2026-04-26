@@ -11,7 +11,7 @@
 
 #include <cap/capability.h>
 #include <cap/cholder.h>
-#include <cap/cspace.h>
+#include <env.h>
 #include <kio.h>
 #include <object/csa.h>
 #include <object/intobj.h>
@@ -25,9 +25,10 @@ namespace test::cap {
         CaseInitCHolder() : TestCase("初始化 CHolder 与 CSA") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
             expect("创建两个 CHolder, 分别作为源/目标 CSpace");
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
-            auto holder1_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
+            auto holder1_res = chman->create_holder();
             tassert(holder0_res.has_value() && holder1_res.has_value(),
                 "创建 CHolder 实例");
             CHolder* holder0 = holder0_res.value();
@@ -45,8 +46,9 @@ namespace test::cap {
     public:
         CaseCreateObject() : TestCase("创建对象能力并验证初始读值") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
             tassert(holder0_res.has_value(), "创建 CHolder");
             CHolder* holder0 = holder0_res.value();
 
@@ -77,8 +79,9 @@ namespace test::cap {
     public:
         CaseSharedObject() : TestCase("共享对象 SharedIntObject split 生命周期测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
             tassert(holder0_res.has_value(), "创建 CHolder");
             CHolder* holder0 = holder0_res.value();
 
@@ -177,8 +180,9 @@ namespace test::cap {
     public:
         CaseSplitPermission() : TestCase("SharedIntObject split 权限边界测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
             tassert(holder0_res.has_value(), "创建 CHolder");
             CHolder* holder0 = holder0_res.value();
 
@@ -346,8 +350,9 @@ namespace test::cap {
     public:
         CaseClone() : TestCase("Clone 测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
             tassert(holder0_res.has_value(), "创建 CHolder");
             CHolder* holder0 = holder0_res.value();
 
@@ -387,9 +392,10 @@ namespace test::cap {
     public:
         CaseMigrate() : TestCase("Migrate 跨 CSpace 测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
-            auto holder1_res = cholder_manager.create_holder();
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
+            auto holder1_res = chman->create_holder();
             tassert(holder0_res.has_value() && holder1_res.has_value(),
                 "创建 CHolder 实例");
             CHolder* holder0 = holder0_res.value();
@@ -430,12 +436,62 @@ namespace test::cap {
         }
     };
 
+    class CaseSendReceive : public TestCase {
+    public:
+        CaseSendReceive() : TestCase("SendRecord 收发流程测试") {}
+        void _run(void* env [[maybe_unused]]) const noexcept override {
+            auto* chman = ::env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+
+            auto sender_res = chman->create_holder();
+            auto receiver_res = chman->create_holder();
+            tassert(sender_res.has_value() && receiver_res.has_value(),
+                    "创建发送方与接收方 CHolder");
+            CHolder* sender = sender_res.value();
+            CHolder* receiver = receiver_res.value();
+
+            auto sender_csa_res = sender->csa();
+            auto receiver_csa_res = receiver->csa();
+            tassert(sender_csa_res.has_value() && receiver_csa_res.has_value(),
+                    "获取双方 CSA 能力");
+            CSAOperator sender_op(sender_csa_res.value());
+            CSAOperator receiver_op(receiver_csa_res.value());
+
+            auto gfs_src_res = sender_op.get_free_slot();
+            tassert(gfs_src_res.has_value(), "分配发送方槽位");
+            CapIdx src_idx = gfs_src_res.value();
+            auto create_res = sender_op.create<IntObject>(src_idx, 20260426);
+            tassert(create_res.has_value(), "发送方创建待发送能力");
+
+            auto send_res = sender_op.send(src_idx, receiver->id());
+            tassert(send_res.has_value(), "生成 ReceiveToken");
+            ReceiveToken token = send_res.value();
+
+            auto gfs_dst_res = receiver_op.get_free_slot();
+            tassert(gfs_dst_res.has_value(), "分配接收方槽位");
+            CapIdx dst_idx = gfs_dst_res.value();
+
+            auto receive_res = receiver_op.receive(dst_idx, token);
+            tassert(receive_res.has_value(), "接收方完成 migrate");
+
+            ttest(!sender->space().get(src_idx).has_value());
+
+            auto get_received_res = receiver->space().get(dst_idx);
+            tassert(get_received_res.has_value(), "接收方槽位应已装载能力");
+            IntObjOperator received_op(get_received_res.value());
+            auto read_res = received_op.read();
+            tassert(read_res.has_value() && read_res.value() == 20260426,
+                    "接收后的能力读值校验");
+        }
+    };
+
     class CaseDowngrade : public TestCase {
     public:
         CaseDowngrade() : TestCase("降权测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
+            auto* chman = env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
             tassert(holder0_res.has_value(), "创建 CHolder");
             CHolder* holder0 = holder0_res.value();
 
@@ -483,9 +539,10 @@ namespace test::cap {
     public:
         CaseRevoke() : TestCase("Revoke 子树清理测试") {}
         void _run(void* env [[maybe_unused]]) const noexcept override {
-            CHolderManager cholder_manager;
-            auto holder0_res = cholder_manager.create_holder();
-            auto holder1_res = cholder_manager.create_holder();
+            auto* chman = env::inst().chman();
+            tassert(chman != nullptr, "应能从 env 获取 CHolderManager");
+            auto holder0_res = chman->create_holder();
+            auto holder1_res = chman->create_holder();
             tassert(holder0_res.has_value() && holder1_res.has_value(),
                 "创建 CHolder 实例");
             CHolder* holder0 = holder0_res.value();
@@ -552,6 +609,7 @@ namespace test::cap {
         cases.push_back(new CaseSplitPermission());
         cases.push_back(new CaseClone());
         cases.push_back(new CaseMigrate());
+        cases.push_back(new CaseSendReceive());
         cases.push_back(new CaseDowngrade());
         cases.push_back(new CaseRevoke());
 

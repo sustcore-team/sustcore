@@ -12,12 +12,13 @@
 #pragma once
 
 #include <cap/capability.h>
-#include <cap/cspace.h>
 #include <object/shared.h>
 #include <perm/csa.h>
 #include <perm/perm.h>
 #include <perm/permission.h>
 #include <sustcore/capability.h>
+
+struct ReceiveToken;
 
 // CSpace Accessor
 // 其提供了一系列接口, 用于对CSpace进行操作
@@ -143,6 +144,8 @@ public:
 
     Result<void> migrate(CapIdx dst_idx, CSpace *src_space, CapIdx src_idx);
     Result<void> remove(CapIdx idx);
+    Result<ReceiveToken> send(CapIdx src_idx, size_t target_id);
+    Result<void> receive(CapIdx dst_idx, ReceiveToken token);
     Result<Capability *> lookup(CapIdx idx) const {
         using namespace perm::csa;
         if (!slot_imply<SLOT_READ>(idx)) {
