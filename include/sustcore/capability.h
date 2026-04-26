@@ -45,7 +45,9 @@ constexpr const char *to_string(PayloadType type) {
 }
 
 // CSpace中的CGroup数量
-constexpr size_t CSPACE_SIZE = 1024;
+constexpr size_t CSPACE_SIZE    = 1024;
+// SendSpace中的CGroup数量
+constexpr size_t SENDSPACE_SIZE = 32;
 
 // CGroup中的槽位数
 // 每个槽位都存放着一个Capability
@@ -55,7 +57,7 @@ constexpr size_t CGROUP_SLOTS = 64;
 // 因此CSpace的容量为:
 constexpr size_t CSPACE_CAPACITY = CSPACE_SIZE * CGROUP_SLOTS;
 
-using CapIdx = b64;
+using CapIdx  = b64;
 using RecvIdx = b64;
 
 namespace capidx {
@@ -74,10 +76,10 @@ namespace capidx {
     constexpr CapIdx null  = 0;
     constexpr CapIdx error = 0xFFFFFFFFFFFFFFFF;
 
-    constexpr b64 MASK_VALID = 0x8000000000000000;
-    constexpr b64 MASK_SLOT  = 0x00000000000FFFFF;
-    constexpr b64 SLOT_SHIFT = CALC_MASK_SHIFT<MASK_SLOT>();
-    constexpr b64 MASK_GROUP  = 0x00000FFFFF000000;
+    constexpr b64 MASK_VALID  = 0x8000000000000000;
+    constexpr b64 MASK_SLOT   = 0x0000000000FFFFFF;
+    constexpr b64 SLOT_SHIFT  = CALC_MASK_SHIFT<MASK_SLOT>();
+    constexpr b64 MASK_GROUP  = 0x0000FFFFFF000000;
     constexpr b64 GROUP_SHIFT = CALC_MASK_SHIFT<MASK_GROUP>();
     constexpr b64 MASK_RSVD =
         0xFFFFFFFFFFFFFFFF & ~(MASK_VALID | MASK_SLOT | MASK_GROUP);
@@ -87,8 +89,7 @@ namespace capidx {
     }
 
     constexpr CapIdx make(b64 group, b64 slot) {
-        return MASK_VALID |
-               ((group << GROUP_SHIFT) & MASK_GROUP) |
+        return MASK_VALID | ((group << GROUP_SHIFT) & MASK_GROUP) |
                (slot & MASK_SLOT);
     }
 

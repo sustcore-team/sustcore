@@ -15,7 +15,6 @@
 #include <arch/trait.h>
 #include <cap/capability.h>
 #include <cap/cholder.h>
-#include <cap/cspace.h>
 #include <device/block.h>
 #include <env.h>
 #include <exe/elfloader.h>
@@ -45,12 +44,10 @@
 #include <vfs/tarfs.h>
 #include <vfs/vfs.h>
 
-#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <exception>
 #include <unordered_map>
 
 namespace env {
@@ -114,29 +111,28 @@ constexpr const char *INITRD_PATH     = "/initrd";
 constexpr const char *SETUPMOD_PATH   = "/initrd/setup.mod";
 constexpr const char *DEFAULTMOD_PATH = "/initrd/default.mod";
 
-RamDiskDevice *make_initrd(void) {
-    size_t sz             = (char *)&e_initrd - (char *)&s_initrd;
-    RamDiskDevice *device = new RamDiskDevice(&s_initrd, sz, 1);
+util::owner<RamDiskDevice *> make_initrd() {
+    auto e_initrd_ptr = static_cast<char *>(e_initrd);
+    auto s_initrd_ptr = static_cast<char *>(s_initrd);
+    size_t sz         = e_initrd_ptr - s_initrd_ptr;
+    auto device       = util::owner(new RamDiskDevice(&s_initrd, sz, 1));
     loggers::SUSTCORE::INFO("initrd大小为 %u KB", sz / 1024, sz / 1024 / 1024);
     return device;
 }
 
 void run_defers(void *s_defer, void *e_defer) {
-    constexpr size_t DEFER_ENTRY_SIZE = sizeof(util::DeferEntry);
-    size_t defer_seg_size             = (char *)e_defer - (char *)s_defer;
-    assert(defer_seg_size % DEFER_ENTRY_SIZE == 0);
-    size_t defer_count = defer_seg_size / DEFER_ENTRY_SIZE;
+    auto *s_defer_ptr  = static_cast<util::DeferEntry *>(s_defer);
+    auto *e_defer_ptr  = static_cast<util::DeferEntry *>(e_defer);
+    size_t defer_count = (e_defer_ptr - s_defer_ptr);
     loggers::SUSTCORE::INFO(
         "开始运行defer构造函数。本批次defer起始地址为%p, 终结于%p, "
         "总共%u个defer",
-        s_defer, e_defer, defer_count);
+        s_defer_ptr, e_defer_ptr, defer_count);
     for (size_t i = 0; i < defer_count; i++) {
-        util::DeferEntry *entry =
-            (util::DeferEntry *)((uintptr_t)s_defer + i * DEFER_ENTRY_SIZE);
+        auto *entry     = &s_defer_ptr[i];
         bool duplicated = false;
         for (size_t j = 0; j < i; j++) {
-            util::DeferEntry *prev =
-                (util::DeferEntry *)((uintptr_t)s_defer + j * DEFER_ENTRY_SIZE);
+            auto *prev = &s_defer_ptr[j];
             if (prev->_instance == entry->_instance &&
                 prev->_constructor == entry->_constructor)
             {
@@ -158,7 +154,7 @@ void run_defers(void *s_defer, void *e_defer) {
     }
 }
 
-void kernel_paging_setup(void) {
+void kernel_paging_setup() {
     [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     auto &e                     = env::inst();
@@ -257,7 +253,7 @@ Result<void> test_elf_loader() {
     TM *origin_tm      = e.tm();
     PhyAddr origin_pgd = e.pgd();
 
-    do {
+    {
         ker_paddr::SumGuard sum_guard;
 
         e.tm(key::main()) = spec.tm.get();
@@ -274,8 +270,7 @@ Result<void> test_elf_loader() {
         PageMan kernelman(origin_pgd);
         kernelman.switch_root();
         kernelman.flush_tlb();
-    } while (0);
-    
+    }
 
     void_return();
 }
@@ -304,12 +299,7 @@ extern "C" void post_init(void) {
         meminfo.lowvm, meminfo.uppm - meminfo.lowpm, PageMan::RWX::NONE, true,
         false);
 
-    // Kernel tests
-#ifdef __CONF_KERNEL_TESTS
-    TestFramework framework;
-    collect_tests(framework);
-    framework.run_all();
-#endif
+    e.chman(key::main()) = new CHolderManager();
 
     auto init_res = init_vfs();
     if (!init_res.has_value()) {
@@ -318,14 +308,19 @@ extern "C" void post_init(void) {
         while (true);
     }
 
-    e.chman(key::main()) = new CHolderManager();
-
+    // Kernel tests
+#ifdef __CONF_KERNEL_TESTS
+    TestFramework framework;
+    collect_tests(framework);
+    framework.run_all();
+#else
     auto test_res = test_elf_loader();
     if (!test_res.has_value()) {
         loggers::SUSTCORE::ERROR("测试ELF加载器失败! 错误码: %s",
                                  to_cstring(test_res.error()));
         while (true);
     }
+#endif
 
     loggers::SUSTCORE::INFO("Test complete. Entering idle loop.");
 
@@ -334,7 +329,7 @@ extern "C" void post_init(void) {
 
 extern "C" void redive(void);
 
-void pre_init(void) {
+void pre_init() {
     [[maybe_unused]]
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     // construct the env
@@ -378,11 +373,11 @@ void pre_init(void) {
     // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
     // 将 redive() 函数定位到KvaAddr
     typedef void (*RediveFuncType)(void);
-    PhyAddr redive_paddr  = (PhyAddr)(void *)redive;
-    KvaAddr redive_kvaddr = convert<KvaAddr>(redive_paddr);
+    auto redive_paddr  = (PhyAddr)(void *)redive;
+    auto redive_kvaddr = convert<KvaAddr>(redive_paddr);
     loggers::SUSTCORE::DEBUG("redive函数物理地址: %p, 内核虚拟地址: %p",
                              redive_paddr.addr(), redive_kvaddr.addr());
-    RediveFuncType redive_func = (RediveFuncType)redive_kvaddr.addr();
+    auto redive_func = (RediveFuncType)redive_kvaddr.addr();
     loggers::SUSTCORE::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p",
                              redive_func);
     redive_func();
