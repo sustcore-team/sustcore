@@ -11,118 +11,109 @@
 
 #pragma once
 
-#include <schd/hook.h>
 #include <schd/schdbase.h>
 #include <sus/list.h>
+#include <sus/nonnull.h>
+#include <sus/units.h>
 #include <sustcore/errcode.h>
 
 namespace schd::rr {
-    class Entity {
-    public:
-        ThreadState state                = ThreadState::EMPTY;
-        int slice_cnt                    = 0;
-        util::ListHead<Entity> list_head = {};
-
-        constexpr Entity()  = default;
-        constexpr ~Entity() = default;
+    struct Entity {
+        int slice_cnt = 0;
     };
 
-    class tags : public schd::tags::on_tick {};
-
     template <typename SU>
-    class RR : public SchdBase<SU, tags> {
+    class RR {
     public:
-        using SUType                     = SU;
-        using EntityType                 = Entity;
-        using Tags                       = tags;
-        using Base                       = SchdBase<SUType, Tags>;
+        using SUType                          = SU;
+        constexpr static ClassType CLASS_TYPE = ClassType::RR;
+        SchedMeta *cursched                   = nullptr;
         constexpr static int TIME_SLICES = 5;
-        static_assert(
-            requires(SUType su) { su.rr_entity; },
-            "SUType须具有类型为schd::rr::Entity的成员rr_entity");
-        constexpr static size_t ENTITY_OFFSET = offsetof(SUType, rr_entity);
-
-        constexpr static EntityType *get_entity(SUType *su) {
-            return &su->rr_entity;
-        }
-        constexpr static const EntityType *get_entity(const SUType *su) {
-            return &su->rr_entity;
-        }
-        constexpr static SUType *get_su(EntityType *entity) {
-            return reinterpret_cast<SUType *>(reinterpret_cast<char *>(entity) -
-                                              ENTITY_OFFSET);
-        }
 
     private:
-        util::IntrusiveList<EntityType> ready_queue;
+        inline util::nonnull<SchedMeta *> asmeta(util::nonnull<SUType *> unit) {
+            return SchedMeta::as_entity(unit);
+        }
+
+        inline util::nonnull<SUType *> asunit(util::nonnull<SchedMeta *> meta) {
+            return SchedMeta::as_su<SUType>(meta);
+        }
+
+        inline util::nonnull<Entity *> as_entity(util::nonnull<SUType *> unit) {
+            return util::guarantee_nonnull(&unit->rr_entity);
+        }
+
+        inline util::nonnull<Entity *> as_entity(
+            util::nonnull<SchedMeta *> meta) {
+            return as_entity(asunit(meta));
+        }
 
     public:
-        constexpr RR()  = default;
-        constexpr ~RR() = default;
-
-        virtual Result<void> put(util::nonnull<SUType *> su) override {
-            auto e       = get_entity(su);
-            e->state     = ThreadState::READY;
-            e->slice_cnt = 0;
-            ready_queue.push_back(*e);
-            void_return();
-        }
-
-        virtual Result<void> insert(util::nonnull<SUType *> su) override {
-            return put(su);
-        }
-
-        virtual Result<void> fetch(util::nonnull<SUType *> su) override {
-            auto e = get_entity(su);
-            if (!ready_queue.contains(*e)) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            ready_queue.remove(*e);
-            e->state = ThreadState::EMPTY;
-            void_return();
-        }
-
-        virtual Result<void> remove(util::nonnull<SUType *> su) override {
-            return fetch(su);
-        }
-
-        virtual Result<util::nonnull<SUType *>> pick() override {
-            if (ready_queue.empty()) {
+        Result<util::nonnull<SUType *>> current() {
+            if (cursched == nullptr) {
                 unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
             }
-            auto e = &ready_queue.front();
-            auto su = get_su(e);
-            return util::nonnull<SUType *>::from(su).transform_error(always(ErrCode::NULLPTR));
+            return asunit(util::guarantee_nonnull(cursched));
         }
 
-        virtual Result<void> set_run(util::nonnull<SUType *> su) override {
-            auto e = get_entity(su);
-            e->state = ThreadState::RUNNING;
-            e->slice_cnt = 0;
+        Result<void> enqueue(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            auto meta   = asmeta(unit);
+            meta->state = ThreadState::READY;
+            rq->rr_list.push_back(*meta);
             void_return();
         }
 
-        virtual Result<bool> runout(util::nonnull<const SUType *> su) override
-        {
-            if (ready_queue.empty()) {
-                return false;
+        Result<void> dequeue(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            auto meta = asmeta(unit);
+            if (!rq->rr_list.contains(*meta)) {
+                unexpect_return(ErrCode::INVALID_PARAM);
             }
-
-            auto e = get_entity(su.get());
-
-            if (e->slice_cnt >= TIME_SLICES) {
-                return true;
-            }
-
-            // 仅在当前仍处于 RUNNING 且时间片未用尽时继续运行
-            return e->state != ThreadState::RUNNING;
+            rq->rr_list.remove(*meta);
+            meta->state = ThreadState::EMPTY;
+            void_return();
         }
 
-        virtual void on_tick(util::nonnull<SUType *> su, units::tick /*gap_ticks*/) {
-            auto e = get_entity(su);
-            if (e->state == ThreadState::RUNNING) {
-                e->slice_cnt++;
+        Result<util::nonnull<SUType *>> pick_next(util::nonnull<RQ *> rq) {
+            if (rq->rr_list.empty())
+                unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
+            // fetch the first task in the queue
+            SchedMeta &meta = rq->rr_list.front();
+            meta.state      = ThreadState::RUNNING;
+            auto entity    = as_entity(util::nonnull_from(meta));
+            entity->slice_cnt = TIME_SLICES;
+            return asunit(util::nonnull_from(meta));
+        }
+
+        Result<void> put_prev(util::nonnull<RQ *> rq,
+                              util::nonnull<SUType *> unit) {
+            auto meta   = asmeta(unit);
+            meta->state = ThreadState::READY;
+            rq->rr_list.push_back(*meta);
+            void_return();
+        }
+
+        Result<void> yield(util::nonnull<RQ *> rq) {
+            // 为当前进程添加 NEED_RESCHED 标志
+            if (cursched != nullptr) {
+                cursched->flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
             }
+            void_return();
+        }
+
+        Result<void> on_tick(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            auto entity = as_entity(unit);
+            if (entity->slice_cnt > 0) {
+                entity->slice_cnt--;
+            }
+            if (entity->slice_cnt == 0) {
+                // 时间片用尽，添加 NEED_RESCHED 标志
+                util::nonnull<SchedMeta *> meta = asmeta(unit);
+                meta->flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
+            }
+            void_return();
         }
     };
 }  // namespace schd::rr

@@ -11,110 +11,84 @@
 
 #pragma once
 
-#include <schd/hook.h>
 #include <schd/schdbase.h>
 #include <sus/list.h>
+#include <sus/nonnull.h>
 #include <sustcore/errcode.h>
 
 namespace schd::fcfs {
-    class Entity {
-    public:
-        ThreadState state                = ThreadState::EMPTY;
-        util::ListHead<Entity> list_head = {};
-
-        constexpr Entity()  = default;
-        constexpr ~Entity() = default;
-    };
-
-    class tags : public schd::tags::empty {};
-
     template <typename SU>
-    class FCFS : public SchdBase<SU, tags> {
+    class FCFS {
     public:
-        using SUType     = SU;
-        using EntityType = Entity;
-        using Tags       = tags;
-        using Base       = SchdBase<SUType, Tags>;
-
-        static_assert(
-            requires(SUType su) { su.fcfs_entity; },
-            "SUType须具有类型为schd::fcfs::Entity的成员fcfs_entity");
-        constexpr static size_t ENTITY_OFFSET = offsetof(SUType, fcfs_entity);
-
-        constexpr static EntityType *get_entity(SUType *su) {
-            return &su->fcfs_entity;
-        }
-
-        constexpr static const EntityType *get_entity(const SUType *su) {
-            return &su->fcfs_entity;
-        }
-
-        constexpr static SUType *get_su(EntityType *entity) {
-            return reinterpret_cast<SUType *>(
-                reinterpret_cast<char *>(entity) - ENTITY_OFFSET);
-        }
+        using SUType                          = SU;
+        constexpr static ClassType CLASS_TYPE = ClassType::FCFS;
+        SchedMeta *cursched                   = nullptr;
 
     private:
-        util::IntrusiveList<EntityType> ready_queue;
+        inline util::nonnull<SchedMeta *> asmeta(util::nonnull<SUType *> unit) {
+            return SchedMeta::as_entity(unit);
+        }
+
+        inline util::nonnull<SUType *> asunit(util::nonnull<SchedMeta *> meta) {
+            return SchedMeta::as_su<SUType>(meta);
+        }
+
     public:
-        constexpr FCFS()  = default;
-        constexpr ~FCFS() = default;
-
-        // 向就绪队列加入一个已知 SU
-        virtual Result<void> put(util::nonnull<SUType *> su) override {
-            auto e   = get_entity(su);
-            e->state = ThreadState::READY;
-            ready_queue.push_back(*e);
-            void_return();
-        }
-
-        // 插入一个全新的 SU，与 put 语义相同
-        virtual Result<void> insert(util::nonnull<SUType *> su) override {
-            return put(su);
-        }
-
-        // 从就绪队列中移除一个 SU
-        virtual Result<void> fetch(util::nonnull<SUType *> su) override {
-            auto e = get_entity(su);
-            if (!ready_queue.contains(*e)) {
-                unexpect_return(ErrCode::INVALID_PARAM);
-            }
-            ready_queue.remove(*e);
-            e->state = ThreadState::EMPTY;
-            void_return();
-        }
-
-        // remove 语义与 fetch 相同
-        virtual Result<void> remove(util::nonnull<SUType *> su) override {
-            return fetch(su);
-        }
-
-        // 选择下一个要运行的 SU（不修改其状态与队列，仅返回引用）
-        virtual Result<util::nonnull<SUType *>> pick() override {
-            if (ready_queue.empty()) {
+        Result<util::nonnull<SUType *>> current() {
+            if (cursched == nullptr) {
                 unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
             }
-            auto e  = &ready_queue.front();
-            auto su = get_su(e);
-            return util::nonnull<SUType *>::from(su).transform_error(always(ErrCode::NULLPTR));
+            return asunit(util::guarantee_nonnull(cursched));
         }
 
-        // 将 SU 标记为 RUNNING
-        virtual Result<void> set_run(util::nonnull<SUType *> su) override {
-            auto e   = get_entity(su);
-            e->state = ThreadState::RUNNING;
+        Result<void> enqueue(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            auto meta   = asmeta(unit);
+            meta->state = ThreadState::READY;
+            rq->fcfs_list.push_back(*meta);
             void_return();
         }
 
-        // FCFS: 只要当前仍处于 RUNNING，就不主动切换
-        virtual Result<bool> runout(
-            util::nonnull<const SUType *> su) override {
-            if (ready_queue.empty()) {
-                return false;
+        Result<void> dequeue(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            auto meta = asmeta(unit);
+            if (!rq->fcfs_list.contains(*meta)) {
+                unexpect_return(ErrCode::INVALID_PARAM);
             }
+            rq->fcfs_list.remove(*meta);
+            meta->state = ThreadState::EMPTY;
+            void_return();
+        }
 
-            auto e = get_entity(su.get());
-            return e->state != ThreadState::RUNNING;
+        Result<util::nonnull<SUType *>> pick_next(util::nonnull<RQ *> rq) {
+            if (rq->fcfs_list.empty())
+                unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
+            // fetch the first task in the queue
+            SchedMeta &meta = rq->fcfs_list.front();
+            meta.state      = ThreadState::RUNNING;
+            rq->fcfs_list.pop_front();
+            return asunit(util::nonnull_from(meta));
+        }
+
+        Result<void> put_prev(util::nonnull<RQ *> rq,
+                              util::nonnull<SUType *> unit) {
+            auto meta   = asmeta(unit);
+            meta->state = ThreadState::READY;
+            rq->fcfs_list.push_back(&meta);
+        }
+
+        Result<void> yield(util::nonnull<RQ *> rq) {
+            // 为当前进程添加 NEED_RESCHED 标志
+            if (cursched != nullptr) {
+                cursched->flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
+            }
+            void_return();
+        }
+
+        Result<void> on_tick(util::nonnull<RQ *> rq,
+                             util::nonnull<SUType *> unit) {
+            // FCFS 不需要在时钟中断时进行任何操作
+            void_return();
         }
     };
 }  // namespace schd::fcfs

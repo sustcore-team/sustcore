@@ -28,9 +28,8 @@ namespace util
         constexpr explicit nonnull(T *p) : ptr(p) {
             assert (p != nullptr);
         }
-
-        constexpr nonnull(std::nullptr_t) = delete;
     public:
+        constexpr nonnull(std::nullptr_t) = delete;
         static constexpr std::result_nt<nonnull<T*, true>> from(T *p)
         {
             if (p == nullptr) {
@@ -69,5 +68,12 @@ namespace util
     constexpr nonnull<T*, true> nonnull_from(T &p)
     {
         return nonnull<T *, true>::from(&p).value();
+    }
+
+    template <typename T>
+    constexpr nonnull<T*, true> guarantee_nonnull(T *p)
+    {
+        assert (p != nullptr);
+        return nonnull<T *, true>::from(p).value();
     }
 }

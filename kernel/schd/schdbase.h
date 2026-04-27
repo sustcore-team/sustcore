@@ -11,8 +11,12 @@
 
 #pragma once
 
+#include <sus/list.h>
 #include <sus/nonnull.h>
+#include <sus/types.h>
 #include <sustcore/errcode.h>
+
+#include <concepts>
 
 enum class ThreadState { EMPTY = 0, READY = 1, RUNNING = 2, YIELD = 3 };
 
@@ -27,71 +31,87 @@ constexpr const char *to_string(ThreadState state) {
 }
 
 namespace schd {
-    template <typename SU, typename Tags>
-    class SchdBase {
-    public:
-        using SUType   = SU;
-        using TagsType = Tags;
 
-    protected:
-        constexpr SchdBase()  = default;
-        constexpr ~SchdBase() = default;
+    enum class ClassType { RR, FCFS };
 
-    public:
-        /**
-         * @brief 向调度器中添加一个SU
-         *
-         * @param su 调度单元
-         */
-        virtual Result<void> put(util::nonnull<SUType *> su) = 0;
-        /**
-         * @brief 从调度器中移除一个SU
-         *
-         * @param su 调度单元
-         */
-        virtual Result<void> fetch(util::nonnull<SUType *> su) = 0;
-        /**
-         * @brief 将一个SU插入调度器.
-         *
-         * @note 该函数与put的区别在于, insert添加的SU对调度器而言是全新的
-         *
-         * @param su 调度单元
-         */
-        virtual Result<void> insert(util::nonnull<SUType *> su)  = 0;
-        /**
-         * @brief 从调度器中移除一个SU
-         *
-         * @note 该函数与fetch的区别在于, remove后的SU对调度器而言是全新的
-         *
-         * @param su 调度单元
-         */
-        virtual Result<void> remove(util::nonnull<SUType *> su)  = 0;
-        /**
-         * @brief 从调度器中选择一个SU进行运行
-         *
-         * @return SUType* 选择的SU
-         */
-        virtual Result<util::nonnull<SUType *>> pick()           = 0;
+    constexpr const char *to_string(ClassType type) {
+        switch (type) {
+            case ClassType::RR:   return "RR";
+            case ClassType::FCFS: return "FCFS";
+        }
+        return "UNKNOWN";
+    }
 
-        /**
-         * @brief 将一个SU设置为正在运行状态
-         *
-         * 该函数一般与pick配合使用, 即:
-         * auto su = pick();
-         * fetch(su);
-         * set_run(su);
-         *
-         * @param su 调度单元
-         * @return Result<void> 设置结果
-         */
-        virtual Result<void> set_run(util::nonnull<SUType *> su) = 0;
+    struct SchedMeta {
+        ThreadState state;
+        util::ListHead<SchedMeta> rq_head;
+        b64 flags;
 
-        /**
-         * @brief 判断当前运行的SU是否需要被切换掉
-         *
-         * @return true 需要切换
-         * @return false 不需要切换
-         */
-        virtual Result<bool> runout(util::nonnull<const SUType *> su)  = 0;
+        constexpr static b64 FLAGS_NEED_RESCHED = 0x1;
+
+        template <b64 set_flags>
+        constexpr void flags_set() {
+            flags |= set_flags;
+        }
+
+        template <b64 reset_flags>
+        constexpr void flags_reset() {
+            flags &= ~reset_flags;
+        }
+
+        template <typename SUType>
+        constexpr static size_t ENTITY_OFFSET = offsetof(SUType, basic_entity);
+
+        template <typename SUType>
+        inline static util::nonnull<SchedMeta *> as_entity(
+            util::nonnull<SUType *> su) {
+            return util::guarantee_nonnull(su->basic_entity);
+        }
+
+        template <typename SUType>
+        inline static util::nonnull<SUType *> as_su(
+            util::nonnull<SchedMeta *> entity) {
+            auto *entity_ptr = reinterpret_cast<char *>(entity.get());
+            auto *su_ptr     = entity_ptr - ENTITY_OFFSET<SUType>;
+            return util::guarantee_nonnull(reinterpret_cast<SUType *>(su_ptr));
+        }
     };
+
+    struct RQ {
+        util::IntrusiveList<SchedMeta, &SchedMeta::rq_head> fcfs_list;
+        util::IntrusiveList<SchedMeta, &SchedMeta::rq_head> rr_list;
+    };
+
+    template <template <typename> class SchdPolicy, typename SU>
+    concept SchdClassBasicTrait =
+        requires(SchdPolicy<SU> &policy, util::nonnull<RQ *> rq,
+                 util::nonnull<SU *> unit) {
+            {
+                SchdPolicy<SU>::CLASS_TYPE
+            } -> std::convertible_to<ClassType>;
+            {
+                policy.current()
+            } -> std::same_as<Result<util::nonnull<SU *>>>;
+            {
+                policy.enqueue(rq, unit)
+            } -> std::same_as<Result<void>>;
+            {
+                policy.dequeue(rq, unit)
+            } -> std::same_as<Result<void>>;
+            {
+                policy.pick_next(rq)
+            } -> std::same_as<Result<util::nonnull<SU *>>>;
+            {
+                policy.put_prev(rq, unit)
+            } -> std::same_as<Result<void>>;
+            {
+                policy.yield(rq)
+            } -> std::same_as<Result<void>>;
+            {
+                policy.on_tick(rq, unit)
+            } -> std::same_as<Result<void>>;
+        };
+
+    template <template <typename> class SchdPolicy, typename SU>
+    concept SchdClassTrait = SchdClassBasicTrait<SchdPolicy, SU>;
 }  // namespace schd
