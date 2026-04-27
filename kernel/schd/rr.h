@@ -36,7 +36,7 @@ namespace schd::rr {
         }
 
         inline util::nonnull<SUType *> asunit(util::nonnull<SchedMeta *> meta) {
-            return SchedMeta::as_su<SUType>(meta);
+            return SchedMeta::asunit<SUType>(meta);
         }
 
         inline util::nonnull<Entity *> as_entity(util::nonnull<SUType *> unit) {
@@ -83,6 +83,7 @@ namespace schd::rr {
             meta.state      = ThreadState::RUNNING;
             auto entity    = as_entity(util::nonnull_from(meta));
             entity->slice_cnt = TIME_SLICES;
+            cursched = &meta;
             return asunit(util::nonnull_from(meta));
         }
 

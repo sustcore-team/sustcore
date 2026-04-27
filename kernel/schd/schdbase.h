@@ -64,12 +64,12 @@ namespace schd {
 
         template <typename SUType>
         inline static util::nonnull<SchedMeta *> as_entity(
-            util::nonnull<SUType *> su) {
-            return util::guarantee_nonnull(su->basic_entity);
+            util::nonnull<SUType *> unit) {
+            return util::guarantee_nonnull(&unit->basic_entity);
         }
 
         template <typename SUType>
-        inline static util::nonnull<SUType *> as_su(
+        inline static util::nonnull<SUType *> asunit(
             util::nonnull<SchedMeta *> entity) {
             auto *entity_ptr = reinterpret_cast<char *>(entity.get());
             auto *su_ptr     = entity_ptr - ENTITY_OFFSET<SUType>;

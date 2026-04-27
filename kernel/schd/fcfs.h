@@ -30,7 +30,7 @@ namespace schd::fcfs {
         }
 
         inline util::nonnull<SUType *> asunit(util::nonnull<SchedMeta *> meta) {
-            return SchedMeta::as_su<SUType>(meta);
+            return SchedMeta::asunit<SUType>(meta);
         }
 
     public:
@@ -67,6 +67,7 @@ namespace schd::fcfs {
             SchedMeta &meta = rq->fcfs_list.front();
             meta.state      = ThreadState::RUNNING;
             rq->fcfs_list.pop_front();
+            cursched = &meta;
             return asunit(util::nonnull_from(meta));
         }
 
@@ -74,7 +75,8 @@ namespace schd::fcfs {
                               util::nonnull<SUType *> unit) {
             auto meta   = asmeta(unit);
             meta->state = ThreadState::READY;
-            rq->fcfs_list.push_back(&meta);
+            rq->fcfs_list.push_back(*meta);
+            void_return();
         }
 
         Result<void> yield(util::nonnull<RQ *> rq) {

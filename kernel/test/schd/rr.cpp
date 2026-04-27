@@ -9,9 +9,8 @@
 
 namespace test::schd_test::rr {
     struct TestThread {
-        schd::SchedMeta meta{};
+        schd::SchedMeta basic_entity{};
         schd::rr::Entity rr_entity{};
-        schd::SchedMeta* basic_entity = &meta;
     };
 
     class CaseEmptyQueue : public TestCase {
@@ -46,14 +45,14 @@ namespace test::schd_test::rr {
                                           util::guarantee_nonnull(&first)).has_value(),
                         "时间片递减调用成功");
                 ttest(first.rr_entity.slice_cnt == schd::rr::RR<TestThread>::TIME_SLICES - 1 - i);
-                ttest((first.meta.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) == 0);
+                ttest((first.basic_entity.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) == 0);
             }
 
             tassert(scheduler.on_tick(util::guarantee_nonnull(&rq),
                                       util::guarantee_nonnull(&first)).has_value(),
                     "最后一次时间片递减成功");
             ttest(first.rr_entity.slice_cnt == 0);
-            ttest((first.meta.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) != 0);
+            ttest((first.basic_entity.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) != 0);
         }
     };
 
@@ -80,7 +79,7 @@ namespace test::schd_test::rr {
                                       util::guarantee_nonnull(&second)).has_value(),
                     "第二个线程出队成功");
             ttest(rq.rr_list.size() == 1);
-            ttest(second.meta.state == ThreadState::EMPTY);
+            ttest(second.basic_entity.state == ThreadState::EMPTY);
         }
     };
 

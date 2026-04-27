@@ -53,4 +53,9 @@ namespace std {
     constexpr T abs(const T& value) {
         return (value < 0) ? -value : value;
     }
+
+    template <typename T>
+    constexpr T clamp(const T& value, const T& low, const T& high) {
+        return max(low, min(value, high));
+    }
 }  // namespace std
