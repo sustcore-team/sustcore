@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/buddy.h>
 #include <mem/gfp_def.h>
 

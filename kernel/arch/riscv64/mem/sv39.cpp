@@ -11,7 +11,7 @@
 
 #include <arch/riscv64/mem/sv39.h>
 #include <kio.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 
 template<>
 void Riscv64SV39PageMan<KernelStage::PRE_INIT>::init(void) {

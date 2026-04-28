@@ -42,7 +42,7 @@ struct LoadPrm
 struct TaskSpec
 {
     // 进程内存管理
-    util::owner<TM *> tm;
+    util::owner<TaskMemoryManager *> tmm;
     // 进程Capability Holder
     // 进程文件能力已经存放在该CHolder中了
     CHolder * holder;

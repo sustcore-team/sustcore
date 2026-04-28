@@ -47,10 +47,13 @@ build-libfdt:
 build-libs: build-libsbi build-libbasecpp build-libkmod build-libfdt
 	$(q)echo "All libraries built successfully."
 
-build-moddefault: build-libs
+build-mod-default: build-libs
 	$(q)$(MAKE) -f $(path-e)/module/default/Makefile $(arg-basic) build
 
-build-mods: build-moddefault
+build-mod-init: build-libs
+	$(q)$(MAKE) -f $(path-e)/module/init/Makefile $(arg-basic) build
+
+build-mods: build-mod-default build-mod-init
 	$(q)echo "All modules built successfully."
 
 make-initrd:

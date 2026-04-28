@@ -12,7 +12,7 @@
 #pragma once
 
 #include <arch/trait.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <sus/types.h>
 #include <sustcore/errcode.h>
 

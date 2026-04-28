@@ -22,6 +22,7 @@ namespace util::range {
 
         Range() = default;
         constexpr Range(T begin, T end) : begin(begin), end(end) {}
+        [[nodiscard]]
         constexpr bool nullable() const {
             return begin >= end;
         }

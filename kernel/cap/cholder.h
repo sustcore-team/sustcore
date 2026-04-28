@@ -15,6 +15,7 @@
 #include <sus/map.h>
 #include <sus/queue.h>
 #include <sustcore/capability.h>
+#include <sustcore/errcode.h>
 
 // 能力发送记录
 struct SendRecord {
@@ -144,6 +145,16 @@ public:
         auto holder = new CHolder(id, std::forward<Args>(args)...);
         _holders.put(id, holder);
         return holder;
+    }
+
+    Result<void> remove_holder(size_t id) {
+        if (!_holders.contains(id)) {
+            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
+        }
+        auto holder = _holders.get(id).value();
+        delete holder;
+        _holders.remove(id);
+        void_return();
     }
 
     [[nodiscard]]

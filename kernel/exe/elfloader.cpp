@@ -18,6 +18,7 @@
 #include <exe/elfloader.h>
 #include <kio.h>
 #include <mem/kaddr.h>
+#include <mem/vma.h>
 #include <object/csa.h>
 #include <object/vfile.h>
 #include <sustcore/addr.h>
@@ -28,7 +29,7 @@
 
 namespace key {
     using namespace env::key;
-    struct elfloader : public tm {
+    struct elfloader : public tmm {
     public:
         elfloader() = default;
     };
@@ -121,7 +122,7 @@ namespace loader::elf {
     }
 
     Result<void> load(TaskSpec &spec, const LoadPrm &prm) {
-        if (spec.tm.get() == nullptr) {
+        if (spec.tmm.get() == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
         }
         if (prm.src_path.empty()) {
@@ -179,7 +180,7 @@ namespace loader::elf {
 
             // 为该段在TM中添加一个VMA
             VMA::Type vma_type = phdr_to_vma_type(phdr.p_flags);
-            auto add_res = spec.tm->add_vma(vma_type, segvaddr, phdr.p_memsz);
+            auto add_res = spec.tmm->add_vma(vma_type, segvaddr, segvaddr + phdr.p_memsz);
             if (!add_res.has_value()) {
                 loggers::SUSTCORE::ERROR("无法为段%d添加VMA: %d", i,
                                          add_res.error());
@@ -189,21 +190,21 @@ namespace loader::elf {
         }
         // 输出TM中的VMA信息以供调试
         loggers::SUSTCORE::INFO("ELF加载完成，TM中的VMA列表:");
-        for (const auto &vma : spec.tm->vmas()) {
+        for (const auto &vma : spec.tmm->vmas()) {
             loggers::SUSTCORE::INFO(
-                "  VMA类型: %s, 起始地址: %p, 大小: %u B",
-                vma.type == VMA::Type::CODE ? "CODE" : "DATA", vma.vaddr.addr(),
-                vma.size);
+                "  VMA类型: %s, 地址: %p~%p, 大小: %u B",
+                vma.type == VMA::Type::CODE ? "CODE" : "DATA", vma.vstart.addr(),
+                vma.vend.addr(), vma.size());
         }
 
         // 记录当前的TM, 以便稍后恢复
-        TM *origin_tm      = env::inst().tm();
+        TaskMemoryManager *origin_tmm      = env::inst().tmm();
         PhyAddr origin_pgd = env::inst().pgd();
 
         // 切换到加载程序的TM
-        env::inst().tm(key::elfloader()) = spec.tm.get();
+        env::inst().tmm(key::elfloader()) = spec.tmm.get();
         // 切换到加载程序的页表
-        spec.tm->pman().switch_root();
+        spec.tmm->pman().switch_root();
 
         // 开始加载段
         auto load_res = loadsegs(fop, ehdr);
@@ -211,26 +212,24 @@ namespace loader::elf {
 
         // 将各个段的VMA的loading标记为false
         // 同时将其对应的内存权限改回正常值
-        for (auto &vma : spec.tm->vmas()) {
+        for (auto &vma : spec.tmm->vmas()) {
             vma.loading      = false;
             PageMan::RWX rwx = VMA::seg2rwx(vma.type);
-            // TODO: 将 u 设置为 true 以保证其为用户页
-            // 但是目前要进行测试，暂时设置为 false 以避免内核态不能访问用户页导致的各种问题
-            spec.tm->pman().modify_range_flags<PageMan::make_mask(0b001111)>(
-                vma.vaddr, vma.size, rwx, false, false);
+            spec.tmm->pman().modify_range_flags<PageMan::make_mask(0b001111)>(
+                vma.vstart, vma.size(), rwx, true, false);
         }
 
         // 输出每个VMA的开头几个字节以供调试
         loggers::SUSTCORE::INFO("每个VMA的前16字节内容:");
-        for (const auto &vma : spec.tm->vmas()) {
+        for (const auto &vma : spec.tmm->vmas()) {
             ker_paddr::SumGuard sum_guard;  // 确保可以访问用户空间地址
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 起始地址: %p",
                 vma.type == VMA::Type::CODE ? "CODE" : "DATA",
-                vma.vaddr.addr());
-            const size_t dump_size = vma.size < 16 ? vma.size : 16;
+                vma.vstart.addr());
+            const size_t dump_size = vma.size() < 16 ? vma.size() : 16;
             const unsigned char *data =
-                reinterpret_cast<const unsigned char *>(vma.vaddr.addr());
+                reinterpret_cast<const unsigned char *>(vma.vstart.addr());
             std::string hex_dump;
             for (size_t i = 0; i < dump_size; ++i) {
                 char buf[4];
@@ -242,7 +241,7 @@ namespace loader::elf {
         }
 
         // 恢复到原来的TM, 以便继续执行内核代码
-        env::inst().tm(key::elfloader()) = origin_tm;
+        env::inst().tmm(key::elfloader()) = origin_tmm;
         // 恢复到原来的内核页表
         PageMan(origin_pgd).switch_root();
 

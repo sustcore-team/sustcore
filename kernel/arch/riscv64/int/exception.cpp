@@ -12,6 +12,7 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/int/isr.h>
 #include <arch/riscv64/trait.h>
+#include <env.h>
 #include <kio.h>
 #include <sus/logger.h>
 #include <sus/types.h>
@@ -26,6 +27,10 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
     } else {
         // 异常
         Handlers::exception(scause, sepc, stval, ctx);
+    }
+    auto *scheduler = env::inst().scheduler();
+    if (scheduler != nullptr) {
+        scheduler->schedule();
     }
 }
 
@@ -60,6 +65,6 @@ void Riscv64Interrupt::cli(void) {
     csr_set_sstatus(sstatus);
 }
 
-void Riscv64Context::switch_to(void *kstack) {
-    csr_set_sscratch((umb_t)kstack);
+void Riscv64Context::switch_to(void *kstack_top) {
+    csr_set_sscratch((umb_t)kstack_top);
 }

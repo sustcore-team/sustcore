@@ -20,7 +20,6 @@
 #include <exe/elfloader.h>
 #include <exe/task.h>
 #include <kio.h>
-#include <mem/addr.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
@@ -32,6 +31,7 @@
 #include <sus/baseio.h>
 #include <sus/defer.h>
 #include <sus/logger.h>
+#include <sus/nonnull.h>
 #include <sus/path.h>
 #include <sus/raii.h>
 #include <sus/tree.h>
@@ -60,46 +60,11 @@ namespace env {
         // call the constructor here
         new (&_env) Environment();
     }
-
-    TM *Environment::tm() const {
-        return this->_tm;
-    }
-    TM *&Environment::tm(key::tm) {
-        return this->_tm;
-    }
-
-    PhyAddr Environment::pgd() const {
-        return PageMan::read_root();
-    }
-
-    const MemInfo &Environment::meminfo() const {
-        return _meminfo;
-    }
-
-    MemInfo &Environment::meminfo(key::meminfo) {
-        return _meminfo;
-    }
-
-    VFS *Environment::vfs() const {
-        return _vfs;
-    }
-
-    VFS *&Environment::vfs(key::vfs) {
-        return _vfs;
-    }
-
-    CHolderManager *Environment::chman() const {
-        return _chman;
-    }
-
-    CHolderManager *&Environment::chman(key::chman) {
-        return _chman;
-    }
 }  // namespace env
 
 namespace key {
     using namespace env::key;
-    struct main : public tm, meminfo, vfs, chman {
+    struct main : public tmm, meminfo, vfs, chman, scheduler, tm {
     public:
         main() = default;
     };
@@ -107,16 +72,17 @@ namespace key {
 
 // path
 PhyAddr kernel_root                   = PhyAddr::null;
-constexpr const char *INITRD_PATH     = "/initrd";
+constexpr const char *INITRD_PATH     = "/initrd/";
+constexpr const char *INITMOD_PATH    = "/initrd/init.mod";
 constexpr const char *SETUPMOD_PATH   = "/initrd/setup.mod";
 constexpr const char *DEFAULTMOD_PATH = "/initrd/default.mod";
 
 util::owner<RamDiskDevice *> make_initrd() {
-    auto e_initrd_ptr = static_cast<char *>(e_initrd);
-    auto s_initrd_ptr = static_cast<char *>(s_initrd);
+    auto e_initrd_ptr = reinterpret_cast<char *>(&e_initrd);
+    auto s_initrd_ptr = reinterpret_cast<char *>(&s_initrd);
     size_t sz         = e_initrd_ptr - s_initrd_ptr;
     auto device       = util::owner(new RamDiskDevice(&s_initrd, sz, 1));
-    loggers::SUSTCORE::INFO("initrd大小为 %u KB", sz / 1024, sz / 1024 / 1024);
+    loggers::SUSTCORE::INFO("initrd大小为 %u KB =  %u MB", sz / 1024, sz / 1024 / 1024);
     return device;
 }
 
@@ -198,82 +164,32 @@ Result<void> init_vfs() {
     auto mount_res     = vfs->mount("tarfs", initrd_device, INITRD_PATH,
                                     MountFlags::NONE, nullptr);
     propagate(mount_res);
-
     void_return();
 }
 
-Result<void> test_elf_loader() {
-    auto &e = env::inst();
+Result<void> init_tm() {
+    auto &e           = env::inst();
+    e.tm(key::main()) = new TaskManager();
+    void_return();
+}
 
-    TaskSpec spec;
-    auto create_res = e.chman()->create_holder();
-    if (!create_res.has_value()) {
-        loggers::SUSTCORE::ERROR("创建CHolder失败! 错误码: %s",
-                                 to_cstring(create_res.error()));
-        unexpect_return(ErrCode::CREATION_FAILED);
-    }
-    spec.holder = create_res.value();
-
-    // 构造一个页表以开始加载程序
-    auto gfp_res = GFP::get_free_page();
-    if (!gfp_res.has_value()) {
-        loggers::SUSTCORE::ERROR("无法为程序页表分配物理页");
-        unexpect_return(ErrCode::CREATION_FAILED);
-    }
-    spec.tm = util::owner(new TM(gfp_res.value()));
-
-    // 测试 ELF 程序加载
-    LoadPrm load_prm;
-    load_prm.src_path = DEFAULTMOD_PATH;
-
-    // 打开文件
-    auto *vfs     = env::inst().vfs();
-    auto open_res = vfs->open(DEFAULTMOD_PATH);
-    propagate(open_res);
-    util::owner<VFileAccessor *> file_acc = open_res.value();
-
-    // 加载到CHolder中
-    auto csa_res = spec.holder->csa();
-    propagate(csa_res);
-    CSAOperator csa_op(csa_res.value());
-    auto insert_res = csa_op.insert_from<VFileAccessor>(file_acc);
-    propagate(insert_res);
-    load_prm.image_file_cap = insert_res.value();
-
-    // 开始加载程序
-    auto load_res = loader::elf::load(spec, load_prm);
+Result<void> init_scheduler() {
+    auto &e       = env::inst();
+    auto load_res = e.tm()->load_init(INITMOD_PATH);
     if (!load_res.has_value()) {
-        loggers::SUSTCORE::ERROR("加载ELF程序失败! 错误码: %s",
+        loggers::SUSTCORE::ERROR("加载初始进程失败! 错误码: %s",
                                  to_cstring(load_res.error()));
-        unexpect_return(ErrCode::CREATION_FAILED);
+        propagate_return(load_res);
     }
 
-    // 为了最小化验证路径, 直接切换到程序页表并跳入入口点执行一次。
-    // 如果程序返回, 再恢复内核页表和当前 TM。
-    TM *origin_tm      = e.tm();
-    PhyAddr origin_pgd = e.pgd();
-
-    {
-        ker_paddr::SumGuard sum_guard;
-
-        e.tm(key::main()) = spec.tm.get();
-        spec.tm->pman().switch_root();
-        spec.tm->pman().flush_tlb();
-
-        using EntryFunc = void (*)();
-        auto entry      = reinterpret_cast<EntryFunc>(spec.entrypoint.addr());
-        loggers::SUSTCORE::INFO("开始执行已加载程序入口点: %p", entry);
-        entry();
-        loggers::SUSTCORE::INFO("已加载程序入口点返回, 准备恢复内核页表");
-
-        e.tm(key::main()) = origin_tm;
-        PageMan kernelman(origin_pgd);
-        kernelman.switch_root();
-        kernelman.flush_tlb();
-    }
-
+    auto task = load_res.value();
+    assert(task->threads.size() == 1);
+    e.scheduler(key::main()) =
+        new schd::Scheduler(util::nonnull_from(task->threads.front()));
+    e.scheduler()->init();
     void_return();
 }
+
 
 extern "C" void post_init(void) {
     loggers::SUSTCORE::INFO("已进入 post-init 阶段");
@@ -289,7 +205,12 @@ extern "C" void post_init(void) {
     // 此时可以执行绝大部分的构造函数, 因此在此时调用defer初始化
     run_defers(&s_defer, &e_defer);
 
+    // 初始化中断处理程序
     Interrupt::init();
+    // 按理来说这个东西应该放在下面的
+    // 但是我忘记把device tree给提升到kernel physical address space中了
+    // 我现在也改不动了
+    // 就先放在这吧
     Initialization::post_init();
 
     // 将低端内存设置为用户态
@@ -308,18 +229,29 @@ extern "C" void post_init(void) {
         while (true);
     }
 
+    init_res = init_tm();
+    if (!init_res.has_value()) {
+        loggers::SUSTCORE::ERROR("初始化TaskManager失败! 错误码: %s",
+                                 to_cstring(init_res.error()));
+        while (true);
+    }
+
+    init_res = init_scheduler();
+    if (!init_res.has_value()) {
+        loggers::SUSTCORE::ERROR("初始化Scheduler失败! 错误码: %s",
+                                 to_cstring(init_res.error()));
+        while (true);
+    }
+
+    // 打开中断
+    Interrupt::sti();
+
     // Kernel tests
 #ifdef __CONF_KERNEL_TESTS
     TestFramework framework;
     collect_tests(framework);
     framework.run_all();
 #else
-    auto test_res = test_elf_loader();
-    if (!test_res.has_value()) {
-        loggers::SUSTCORE::ERROR("测试ELF加载器失败! 错误码: %s",
-                                 to_cstring(test_res.error()));
-        while (true);
-    }
 #endif
 
     loggers::SUSTCORE::INFO("Test complete. Entering idle loop.");

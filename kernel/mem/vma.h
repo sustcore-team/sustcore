@@ -12,15 +12,18 @@
 #pragma once
 
 #include <arch/description.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <sus/list.h>
-#include <sus/types.h>
 #include <sus/nonnull.h>
+#include <sus/range.h>
+#include <sus/types.h>
 #include <sustcore/addr.h>
 #include <sustcore/epacks.h>
 #include <sustcore/errcode.h>
 
-class TM;
+using util::range::Range;
+
+class TaskMemoryManager;
 
 struct VMA {
     enum class Type {
@@ -76,23 +79,33 @@ struct VMA {
         }
     }
 
-    TM *tm = nullptr;
-    Type type = Type::NONE;
-    VirAddr vaddr = VirAddr::null;
-    size_t size = 0;
-    bool loading = false; // 是否正在加载（如ELF加载），用于处理缺页异常时区分是正常访问还是加载过程中访问
+    TaskMemoryManager *tm         = nullptr;
+    Type type      = Type::NONE;
+    VirAddr vstart = VirAddr::null;
+    VirAddr vend   = VirAddr::null;
+    bool loading =
+        false;  // 是否正在加载（如ELF加载），用于处理缺页异常时区分是正常访问还是加载过程中访问
     util::ListHead<VMA> list_head = {};
 
     constexpr VMA() = default;
-    constexpr VMA(TM *tm, Type t, VirAddr v, size_t s)
-        : tm(tm), type(t), vaddr(v), size(s), list_head({}) {}
-    constexpr VMA(TM *tm, const VMA &other)
+    constexpr VMA(TaskMemoryManager *tm, Type t, Range<VirAddr> varea)
+        : tm(tm),
+          type(t),
+          vstart(varea.begin),
+          vend(varea.end),
+          list_head({}) {}
+    constexpr VMA(TaskMemoryManager *tm, const VMA &other)
         : tm(tm),
           type(other.type),
-          vaddr(other.vaddr),
-          size(other.size),
+          vstart(other.vstart),
+          vend(other.vend),
           list_head({}) {}
     constexpr VMA(VMA &&other) = delete;
+
+    [[nodiscard]]
+    constexpr size_t size() const {
+        return vend - vstart;
+    }
 };
 
 constexpr const char *to_string(VMA::Type type) {
@@ -111,17 +124,19 @@ constexpr const char *to_string(VMA::Type type) {
 }
 
 // Task Memory
-class TM {
+class TaskMemoryManager {
 private:
     util::IntrusiveList<VMA> vma_list;
     PhyAddr _pgd;
     PageMan _pman;
-public:
-    TM(PhyAddr _pgd);
-    ~TM();
 
-    Result<util::nonnull<VMA *>> add_vma(VMA::Type type, VirAddr vaddr, size_t size);
-    Result<util::nonnull<VMA *>> clone_vma(TM &other, VirAddr vma_addr);
+public:
+    TaskMemoryManager(PhyAddr _pgd);
+    ~TaskMemoryManager();
+
+    Result<util::nonnull<VMA *>> add_vma(VMA::Type type, VirAddr vstart,
+                                         VirAddr vend);
+    Result<util::nonnull<VMA *>> clone_vma(TaskMemoryManager &other, VirAddr vma_addr);
     Result<util::nonnull<VMA *>> locate(VirAddr vaddr);
     Result<util::nonnull<VMA *>> locate_range(VirAddr vaddr, size_t size);
     Result<void> remove_vma(VirAddr vma_addr);
@@ -149,3 +164,12 @@ public:
     // On No Present Pages
     bool on_np(const NoPresentEvent &e);
 };
+
+// TODO: 这两个值应当是架构相关的
+// 但是我实在懒得管了, 遇到再说吧
+constexpr static VirAddr USER_STACK_TOP =
+    VirAddr(0x4000000000);  // 初始栈顶地址
+constexpr static size_t MAX_INITIAL_STACK_SIZE =
+    0x10000000;  // 初始栈最大大小(256MB)
+constexpr static VirAddr USER_STACK_BOTTOM =
+    USER_STACK_TOP - MAX_INITIAL_STACK_SIZE;  // 初始栈底地址

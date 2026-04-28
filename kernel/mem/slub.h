@@ -13,7 +13,7 @@
 #pragma once
 
 #include <kio.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/alloc_def.h>
 #include <mem/gfp.h>
 #include <sus/defer.h>

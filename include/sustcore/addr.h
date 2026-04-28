@@ -91,13 +91,13 @@ constexpr bool within_scope(addr_t addr, AddrType type) {
 
 template <AddrType Type>
 class Addr {
-protected:
-    addr_t _addr;
-
+private:
+    addr_t _addr = 0;
 public:
-    explicit constexpr Addr(addr_t addr = 0) : _addr(addr) {
+    explicit constexpr Addr(addr_t addr) : _addr(addr) {
         assert(within_scope(addr, Type));
     }
+    constexpr Addr() = default;
     explicit inline Addr(void *addr) : Addr((addr_t)addr) {}
     static const Addr null;
     inline void *addr() const noexcept {
@@ -176,14 +176,14 @@ public:
 using PhyAddr = Addr<AddrType::PA>;
 using KpaAddr = Addr<AddrType::KPA>;
 using KvaAddr = Addr<AddrType::KVA>;
-using VirAddr   = Addr<AddrType::VADDR>;
+using VirAddr = Addr<AddrType::VADDR>;
 
 template <AddrType Type>
 constexpr Addr<Type> Addr<Type>::null = Addr();
 
 template <typename AddrT>
 constexpr AddrT convert(PhyAddr pa) {
-    if (! pa.nonnull()) {
+    if (!pa.nonnull()) {
         return AddrT::null;
     }
     if constexpr (std::same_as<AddrT, PhyAddr>) {
@@ -197,7 +197,7 @@ constexpr AddrT convert(PhyAddr pa) {
 
 template <typename AddrT>
 constexpr AddrT convert(KpaAddr kpa) {
-    if (! kpa.nonnull()) {
+    if (!kpa.nonnull()) {
         return AddrT::null;
     }
     if constexpr (std::same_as<AddrT, PhyAddr>) {
@@ -211,7 +211,7 @@ constexpr AddrT convert(KpaAddr kpa) {
 
 template <typename AddrT>
 constexpr AddrT convert(KvaAddr kva) {
-    if (! kva.nonnull()) {
+    if (!kva.nonnull()) {
         return AddrT::null;
     }
     if constexpr (std::same_as<AddrT, PhyAddr>) {
@@ -243,7 +243,7 @@ using _StageAddr = typename _StageAddrConf<Stage>::Type;
 
 template <typename T>
 inline static PhyAddr convert_pointer(T *ptr) {
-    AddrType types[] = {AddrType::PA, AddrType::KPA, AddrType::KVA};
+    AddrType types[]       = {AddrType::PA, AddrType::KPA, AddrType::KVA};
     AddrType detected_type = AddrType::PA;  // Default to PA if no match
     for (AddrType type : types) {
         if (within_scope((addr_t)ptr, type)) {

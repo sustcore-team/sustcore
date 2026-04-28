@@ -173,7 +173,7 @@ namespace handlers::paging {
         const VirAddr fault_addr = VirAddr(stval);
         auto &e                  = env::inst();
         loggers::INTERRUPT::DEBUG("paging_fault: env.pgd=%p, tm=%p",
-                                  e.pgd().addr(), e.tm());
+                                  e.pgd().addr(), e.tmm());
         PageMan pman(e.pgd());
 
         if (!e.pgd().nonnull()) {
@@ -188,7 +188,7 @@ namespace handlers::paging {
             case FaultCause::NO_PRESENT: {
                 loggers::INTERRUPT::INFO("缺页异常: 0x%016lx", stval);
                 // 使用缺页异常处理程序处理缺页异常
-                auto *tm = e.tm();
+                auto *tm = e.tmm();
                 if (tm != nullptr) {
                     loggers::INTERRUPT::DEBUG(
                         "调用 TM::on_np 处理缺页: addr=%p, tm_pgd=%p",
@@ -223,7 +223,7 @@ namespace handlers::paging {
                 break;
             }
             case FaultCause::UAS: {
-                loggers::INTERRUPT::ERROR("用户态访问用户页但权限不足! addr=%p",
+                loggers::INTERRUPT::ERROR("用户态访问特权页但权限不足! addr=%p",
                                           fault_addr.addr());
                 break;
             }
@@ -306,13 +306,14 @@ namespace Handlers {
                              Riscv64Context *ctx) {
         loggers::INTERRUPT::DEBUG("进入非法指令异常处理程序");
         // 我们可以通过该指令自定义kernel服务
-        dword ins = *((dword *)sepc);
-        loggers::INTERRUPT::INFO("指令内容: 0x%08x", ins);
-        // 这是一个任意的非法指令
-        // 被我们选中用于模拟真实指令
-        if (ins == 0x000000FF) {
-            loggers::INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
-        } else if (ins == 0x00FF00FF) {
+
+        // 此处存在问题:
+        // 直接读取sepc处的指令几乎一定会导致页异常
+        // 因为此处的指令几乎一定是用户态的RX页
+        // 因此我们暂不处理
+        // 不过, 为了测试我们的程序, 我们暂时按照输入的总是0x00FF00FF来处理
+
+        {
             loggers::INTERRUPT::INFO(
                 "自定义Kernel服务: 输出 t0寄存器指向的日志");
 
@@ -322,13 +323,34 @@ namespace Handlers {
             memcpy(msg, (void *)ctx->regs[4], sizeof(msg) - 1);
             msg[sizeof(msg) - 1] = '\0';  // 确保字符串以 null 结尾
             loggers::INTERRUPT::INFO("用户程序传递的消息: %s", msg);
-        } else {
-            loggers::INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
-            return false;
         }
 
         ctx->sepc += 4;  // 跳过该指令
         return true;
+
+        // dword ins = *((dword *)sepc);
+        // loggers::INTERRUPT::INFO("指令内容: 0x%08x", ins);
+        // 这是一个任意的非法指令
+        // 被我们选中用于模拟真实指令
+        // if (ins == 0x000000FF) {
+        //     loggers::INTERRUPT::INFO("自定义Kernel服务: Hello, World!");
+        // } else if (ins == 0x00FF00FF) {
+        //     loggers::INTERRUPT::INFO(
+        //         "自定义Kernel服务: 输出 t0寄存器指向的日志");
+
+        //     ker_paddr::SumGuard guard;  // 确保可以访问用户空间地址
+        //     char msg[64];
+        //     // t0 = x5 = regs[5 - 1]
+        //     memcpy(msg, (void *)ctx->regs[4], sizeof(msg) - 1);
+        //     msg[sizeof(msg) - 1] = '\0';  // 确保字符串以 null 结尾
+        //     loggers::INTERRUPT::INFO("用户程序传递的消息: %s", msg);
+        // } else {
+        //     loggers::INTERRUPT::ERROR("非kernel自定义指令: 0x%08x", ins);
+        //     return false;
+        // }
+
+        // ctx->sepc += 4;  // 跳过该指令
+        // return true;
     }
 
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
@@ -391,6 +413,7 @@ namespace Handlers {
                             .gap_ticks = gap_ticks};
 
         timer_info.last_ticks = current_ticks;
+        env::inst().scheduler()->do_tick(e);
 
         // 重新设置下一次时钟中断
         sbi_legacy_set_timer((current_ticks + timer_info.increment).to_ticks());

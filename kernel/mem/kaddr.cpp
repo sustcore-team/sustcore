@@ -10,7 +10,7 @@
  */
 
 #include <env.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/kaddr.h>
 #include <symbols.h>
 

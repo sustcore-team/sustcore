@@ -9,7 +9,7 @@
  *
  */
 
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/vma.h>
@@ -19,26 +19,27 @@
 #include <sustcore/addr.h>
 #include <sustcore/errcode.h>
 
-TM::TM(PhyAddr _pgd) : vma_list(), _pgd(_pgd), _pman(_pgd) {
+TaskMemoryManager::TaskMemoryManager(PhyAddr _pgd) : vma_list(), _pgd(_pgd), _pman(_pgd) {
     PageMan::make_root(_pgd);
     ker_paddr::mapping_kernel_areas(_pman);
 }
 
-TM::~TM() {
+TaskMemoryManager::~TaskMemoryManager() {
     auto &&list = std::move(vma_list);
     for (VMA &vma : list) {
         delete util::owner(&vma);
     }
+    // TODO: 释放所有内存占用与页表
 }
 
-Result<util::nonnull<VMA *>> TM::add_vma(VMA::Type type, VirAddr vaddr,
-                                         size_t size) {
-    VMA *vma = new VMA(this, type, vaddr, size);
+Result<util::nonnull<VMA *>> TaskMemoryManager::add_vma(VMA::Type type, VirAddr vma_start,
+                                         VirAddr vma_end) {
+    VMA *vma = new VMA(this, type, Range(VirAddr(vma_start), VirAddr(vma_end)));
     vma_list.push_back(*vma);
     return util::nonnull_from(*vma);
 }
 
-Result<util::nonnull<VMA *>> TM::clone_vma(TM &other, VirAddr vma_addr) {
+Result<util::nonnull<VMA *>> TaskMemoryManager::clone_vma(TaskMemoryManager &other, VirAddr vma_addr) {
     auto locate_res = locate(vma_addr);
     if (!locate_res.has_value()) {
         unexpect_return(locate_res.error());
@@ -49,10 +50,9 @@ Result<util::nonnull<VMA *>> TM::clone_vma(TM &other, VirAddr vma_addr) {
     return util::nonnull_from(*vma);
 }
 
-Result<util::nonnull<VMA *>> TM::locate(VirAddr vaddr) {
-    using namespace util::range;
+Result<util::nonnull<VMA *>> TaskMemoryManager::locate(VirAddr vaddr) {
     for (auto &vma : vma_list) {
-        Range<VirAddr> vma_range(vma.vaddr, vma.vaddr + vma.size);
+        Range<VirAddr> vma_range(vma.vstart, vma.vend);
         if (within(vma_range, vaddr)) {
             return util::nonnull_from(vma);
         }
@@ -60,10 +60,9 @@ Result<util::nonnull<VMA *>> TM::locate(VirAddr vaddr) {
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);
 }
 
-Result<util::nonnull<VMA *>> TM::locate_range(VirAddr vaddr, size_t size) {
-    using namespace util::range;
+Result<util::nonnull<VMA *>> TaskMemoryManager::locate_range(VirAddr vaddr, size_t size) {
     for (auto &vma : vma_list) {
-        Range<VirAddr> vma_range(vma.vaddr, vma.vaddr + vma.size);
+        Range<VirAddr> vma_range(vma.vstart, vma.vend);
         Range<VirAddr> query_range(vaddr, vaddr + size);
         if (is_intersecting(vma_range, query_range)) {
             return util::nonnull_from(vma);
@@ -72,7 +71,7 @@ Result<util::nonnull<VMA *>> TM::locate_range(VirAddr vaddr, size_t size) {
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);
 }
 
-Result<void> TM::remove_vma(VirAddr vma_addr) {
+Result<void> TaskMemoryManager::remove_vma(VirAddr vma_addr) {
     auto locate_res = locate(vma_addr);
     if (!locate_res.has_value()) {
         unexpect_return(locate_res.error());
@@ -83,7 +82,7 @@ Result<void> TM::remove_vma(VirAddr vma_addr) {
     void_return();
 }
 
-bool TM::on_np(const NoPresentEvent &e) {
+bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
     loggers::PAGING::DEBUG(
         "TM::on_np: access_address=%p, tm_pgd=%p, pman_root=%p",
         e.access_address.addr(), _pgd.addr(), _pman.get_root().addr());

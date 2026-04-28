@@ -30,6 +30,12 @@ namespace util
         }
     public:
         constexpr nonnull(std::nullptr_t) = delete;
+        template <typename U>
+        constexpr nonnull(nonnull<U *, true> other) : ptr(other.get()) {
+            static_assert(std::is_convertible_v<U*, T*>, "Incompatible pointer type");
+            assert (ptr != nullptr);
+        }
+
         static constexpr std::result_nt<nonnull<T*, true>> from(T *p)
         {
             if (p == nullptr) {

@@ -12,7 +12,7 @@
 #pragma once
 
 #include <arch/description.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 
 namespace ker_paddr {
     struct Segment {

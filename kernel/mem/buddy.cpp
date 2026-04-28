@@ -12,7 +12,7 @@
 #include <arch/trait.h>
 #include <env.h>
 #include <kio.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/buddy.h>
 #include <sus/list.h>
 #include <sus/logger.h>

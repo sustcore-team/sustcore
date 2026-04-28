@@ -11,7 +11,7 @@
 
 #include <cap/capability.h>
 #include <kio.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/alloc_def.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>

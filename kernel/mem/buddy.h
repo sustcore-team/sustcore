@@ -13,7 +13,7 @@
 
 #include <arch/trait.h>
 #include <kio.h>
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <mem/gfp_def.h>
 #include <stddef.h>
 #include <sus/defer.h>

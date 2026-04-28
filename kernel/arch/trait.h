@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <mem/addr.h>
+#include <sustcore/addr.h>
 #include <sus/types.h>
 #include <sustcore/addr.h>
 #include <sustcore/errcode.h>

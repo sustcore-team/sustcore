@@ -59,9 +59,5 @@ void Riscv64Initialization::post_init(void) {
         loggers::DEVICE::ERROR("获取时钟频率失败, 使用默认值 %d Hz", freq);
     }
     loggers::DEVICE::INFO("时钟频率: %d Hz = %d KHz = %d MHz", freq.to_hz(), freq.to_khz(), freq.to_mhz());
-    init_timer(freq, 100_Hz); 
-    loggers::DEVICE::INFO("启用时钟中断...");
-
-    // 开启中断
-    Riscv64Interrupt::sti();
+    init_timer(freq, 100_Hz); // 100Hz的时钟频率意味着每10ms触发一次时钟中断
 }

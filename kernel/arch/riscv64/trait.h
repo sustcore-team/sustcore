@@ -11,15 +11,12 @@
 
 #pragma once
 
-#include <arch/trait.h>
 #include <arch/riscv64/csr.h>
+#include <arch/trait.h>
 #include <sus/types.h>
 
 // 该功能必须通过宏来实现, 以保证其一定会内联到原代码片段中
-#define RELOAD_SP()            \
-    asm volatile(                  \
-        "la sp, boot_stack_top\n"     \
-    );
+#define RELOAD_SP() asm volatile("la sp, boot_stack_top\n");
 
 class Riscv64Serial {
 public:
@@ -66,27 +63,32 @@ struct Riscv64Context {
     }
 
     static void switch_to(void *kstack);
+    constexpr static size_t CONTEXT_OFFSET = 0;
+    inline static Riscv64Context *from_kstack(void *kstack_top) {
+        auto kstack_addr = reinterpret_cast<size_t>(kstack_top);
+        return reinterpret_cast<Riscv64Context *>(kstack_addr - CONTEXT_OFFSET - sizeof(Riscv64Context));
+    }
 };
 
 static_assert(ContextTrait<Riscv64Context>);
 
 struct Riscv64Interrupt {
     /**
-    * @brief 初始化IVT
-    *
-    */
+     * @brief 初始化IVT
+     *
+     */
     static void init(void);
 
     /**
-    * @brief 启用中断
-    *
-    */
+     * @brief 启用中断
+     *
+     */
     static void sti(void);
 
     /**
-    * @brief 关闭中断
-    *
-    */
+     * @brief 关闭中断
+     *
+     */
     static void cli(void);
 };
 

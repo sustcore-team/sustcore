@@ -11,9 +11,13 @@
 
 #pragma once
 
+#include <arch/riscv64/description.h>
 #include <cap/cholder.h>
 #include <mem/vma.h>
 #include <sustcore/addr.h>
+#include <task/scheduler.h>
+#include <task/task.h>
+#include <task/task_struct.h>
 #include <vfs/vfs.h>
 
 namespace env {
@@ -29,52 +33,98 @@ namespace env {
             unmodifiable() = default;
         };
 
-        struct tm : public tags {};
+        struct tmm : public tags {};
+        struct pgd : public unmodifiable {};
         struct meminfo : public tags {};
         struct vfs : public tags {};
         struct chman : public tags {};
-        struct pgd : public unmodifiable {};
+        struct scheduler : public tags {};
+        struct tm : public tags {};
     }  // namespace key
 
     struct MemInfo {
         constexpr static size_t MAX_REGIONS = 128;
         MemRegion regions[MAX_REGIONS];
-        size_t region_cnt   = 0;
-        PhyAddr lowpm       = PhyAddr::null;
-        PhyAddr uppm        = PhyAddr::null;
-        VirAddr lowvm       = VirAddr::null;
+        size_t region_cnt = 0;
+        PhyAddr lowpm     = PhyAddr::null;
+        PhyAddr uppm      = PhyAddr::null;
+        VirAddr lowvm     = VirAddr::null;
 
-        constexpr MemInfo()
-        {
-            memset(regions, 0, sizeof(regions));
+        constexpr MemInfo() {
+            memset((void *)regions, 0, sizeof(regions));
         }
     };
 
     class Environment {
-    protected:
-        TM *_tm;
+    private:
+        TaskMemoryManager *_tmm;
         VFS *_vfs;
         CHolderManager *_chman;
         MemInfo _meminfo;
+        schd::Scheduler *_scheduler;
+        TaskManager *_tm;
     public:
-        constexpr Environment()
-            : _meminfo()
-        {
-        }
+        constexpr Environment() : _meminfo() {}
 
         // readers
-        TM *tm() const;
-        TM *&tm(key::tm);
-        PhyAddr pgd() const;
+        [[nodiscard]]
+        TaskMemoryManager *tmm() const {
+            return _tmm;
+        }
+        [[nodiscard]]
+        TaskMemoryManager *&tmm(key::tmm) {
+            return _tmm;
+        }
 
-        const MemInfo &meminfo() const;
-        MemInfo &meminfo(key::meminfo);
+        [[nodiscard]]
+        PhyAddr pgd() const {
+            return PageMan::read_root();
+        }
 
-        VFS *vfs() const;
-        VFS *&vfs(key::vfs);
+        [[nodiscard]]
+        const MemInfo &meminfo() const {
+            return _meminfo;
+        }
+        [[nodiscard]]
+        MemInfo &meminfo(key::meminfo) {
+            return _meminfo;
+        }
 
-        CHolderManager *chman() const;
-        CHolderManager *&chman(key::chman);
+        [[nodiscard]]
+        VFS *vfs() const {
+            return _vfs;
+        }
+        [[nodiscard]]
+        VFS *&vfs(key::vfs) {
+            return _vfs;
+        }
+
+        [[nodiscard]]
+        CHolderManager *chman() const {
+            return _chman;
+        }
+        [[nodiscard]]
+        CHolderManager *&chman(key::chman) {
+            return _chman;
+        }
+
+        [[nodiscard]]
+        schd::Scheduler *scheduler() const {
+            return _scheduler;
+        }
+        [[nodiscard]]
+        schd::Scheduler *&scheduler(key::scheduler) {
+            return _scheduler;
+        }
+
+        [[nodiscard]]
+        TaskManager *tm() const {
+            return _tm;
+        }
+        [[nodiscard]]
+        TaskManager *&tm(key::tm) {
+            return _tm;
+        }
     };
 
     void construct();

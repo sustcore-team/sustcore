@@ -32,12 +32,13 @@ constexpr const char *to_string(ThreadState state) {
 
 namespace schd {
 
-    enum class ClassType { RR, FCFS };
+    enum class ClassType { RR, FCFS, IDLE };
 
-    constexpr const char *to_string(ClassType type) {
+    constexpr const char *to_cstring(ClassType type) {
         switch (type) {
             case ClassType::RR:   return "RR";
             case ClassType::FCFS: return "FCFS";
+            case ClassType::IDLE: return "IDLE";
         }
         return "UNKNOWN";
     }
@@ -57,6 +58,12 @@ namespace schd {
         template <b64 reset_flags>
         constexpr void flags_reset() {
             flags &= ~reset_flags;
+        }
+
+        template <b64 check_flags>
+        [[nodiscard]]
+        constexpr bool flags_check() const {
+            return (flags & check_flags) == check_flags;
         }
 
         template <typename SUType>
@@ -82,34 +89,91 @@ namespace schd {
         util::IntrusiveList<SchedMeta, &SchedMeta::rq_head> rr_list;
     };
 
+    template <typename SU>
+    class BaseSched {
+    public:
+        using SUType = SU;
+        virtual ~BaseSched() = default;
+
+        SchedMeta *cursched = nullptr;
+
+        inline util::nonnull<SchedMeta *> asmeta(util::nonnull<SUType *> unit) {
+            return SchedMeta::as_entity(unit);
+        }
+
+        inline util::nonnull<SUType *> asunit(util::nonnull<SchedMeta *> meta) {
+            return SchedMeta::asunit<SUType>(meta);
+        }
+
+        virtual Result<util::nonnull<SUType *>> current() {
+            if (cursched == nullptr) {
+                unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
+            }
+            return asunit(util::guarantee_nonnull(cursched));
+        }
+
+        /**
+         * @brief 将调度单元加入就绪队列
+         * 
+         * @param rq 调度器的就绪队列
+         * @param unit 需要入队的调度单元
+         */
+        virtual Result<void> enqueue(util::nonnull<RQ *> rq,
+                                     util::nonnull<SUType *> unit) = 0;
+        /**
+         * @brief 将调度单元从就绪队列中移除
+         * 
+         * @param rq 调度器的就绪队列
+         * @param unit 需要移除的调度单元
+         */
+        virtual Result<void> dequeue(util::nonnull<RQ *> rq,
+                                     util::nonnull<SUType *> unit) = 0;
+        /**
+         * @brief 选择下一个要运行的调度单元
+         * 
+         * 执行该函数时, 调度器会把 cursched 指针指向下一个要运行的调度单元
+         * 将下一个要运行的调度单元的状态设置为 RUNNING, 并从就绪队列中移除它
+         *
+         * @param rq 调度器的就绪队列
+         * @return Result<util::nonnull<SUType *>> 下一个要运行的调度单元
+         */
+        virtual Result<util::nonnull<SUType *>> pick_next(
+            util::nonnull<RQ *> rq) = 0;
+        /**
+         * @brief 将调度单元放回就绪队列
+         * 
+         * @param rq 调度器的就绪队列
+         * @param unit 需要放回的调度单元
+         */
+        virtual Result<void> put_prev(util::nonnull<RQ *> rq,
+                                      util::nonnull<SUType *> unit) = 0;
+        /**
+         * @brief 主动让出 CPU
+         *
+         * 这么做并不会立即切换到下一个任务, 而是为当前任务添加一个 NEED_RESCHED 标志,
+         * 让调度器在合适的时候切换到下一个任务
+         * 
+         * @param rq 调度器的就绪队列
+         */
+        virtual Result<void> yield(util::nonnull<RQ *> rq) = 0;
+        /**
+         * @brief 每个tick调用一次, 用于更新调度单元的状态
+         * 
+         * @param rq 调度器的就绪队列
+         * @param unit 当前正在运行的调度单元
+         */
+        virtual Result<void> on_tick(util::nonnull<RQ *> rq,
+                                     util::nonnull<SUType *> unit) = 0;
+    };
+
     template <template <typename> class SchdPolicy, typename SU>
     concept SchdClassBasicTrait =
+        std::derived_from<SchdPolicy<SU>, BaseSched<SU>> &&
         requires(SchdPolicy<SU> &policy, util::nonnull<RQ *> rq,
                  util::nonnull<SU *> unit) {
             {
                 SchdPolicy<SU>::CLASS_TYPE
             } -> std::convertible_to<ClassType>;
-            {
-                policy.current()
-            } -> std::same_as<Result<util::nonnull<SU *>>>;
-            {
-                policy.enqueue(rq, unit)
-            } -> std::same_as<Result<void>>;
-            {
-                policy.dequeue(rq, unit)
-            } -> std::same_as<Result<void>>;
-            {
-                policy.pick_next(rq)
-            } -> std::same_as<Result<util::nonnull<SU *>>>;
-            {
-                policy.put_prev(rq, unit)
-            } -> std::same_as<Result<void>>;
-            {
-                policy.yield(rq)
-            } -> std::same_as<Result<void>>;
-            {
-                policy.on_tick(rq, unit)
-            } -> std::same_as<Result<void>>;
         };
 
     template <template <typename> class SchdPolicy, typename SU>
