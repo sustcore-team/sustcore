@@ -108,7 +108,7 @@ char *ulltoa(unsigned long long val, char *buffer, int base) {
         return ret;
     }
 
-    char _buffer[12];
+    char _buffer[66];
     int cnt = 0;
 
     // val仍大于0
@@ -128,7 +128,6 @@ char *ulltoa(unsigned long long val, char *buffer, int base) {
     }
 
     *buffer = '\0';
-    buffer ++;
 
     return ret;
 }
@@ -160,7 +159,7 @@ char *lltoa(long long val, char *buffer, int base) {
     }
 
     // 正整数
-    uitoa(val, buffer, base);
+    ulltoa(val, buffer, base);
 
     return ret;
 }
