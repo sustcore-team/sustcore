@@ -15,6 +15,15 @@ extern "C" {
 void cpu_idle();
 }
 
+class Test {
+public:
+    Test() {
+        kputs("Test constructor called");
+    }
+};
+
+Test test_goc;
+
 int kmod_main() {
     kputs("Here is init module!");
     cpu_idle();

@@ -18,27 +18,37 @@
 
 #include <concepts>
 
-enum class ThreadState { EMPTY = 0, READY = 1, RUNNING = 2, YIELD = 3 };
+enum class ThreadState {
+    EMPTY          = 0,
+    INITIALIZATION = 1,
+    READY          = 2,
+    RUNNING        = 3,
+    YIELD          = 4
+};
 
 constexpr const char *to_string(ThreadState state) {
     switch (state) {
-        case ThreadState::EMPTY:   return "EMPTY";
-        case ThreadState::READY:   return "READY";
-        case ThreadState::RUNNING: return "RUNNING";
-        case ThreadState::YIELD:   return "YIELD";
-        default:                   return "UNKNOWN";
+        case ThreadState::EMPTY:          return "EMPTY";
+        case ThreadState::INITIALIZATION: return "INITIALIZATION";
+        case ThreadState::READY:          return "READY";
+        case ThreadState::RUNNING:        return "RUNNING";
+        case ThreadState::YIELD:          return "YIELD";
+        default:                          return "UNKNOWN";
     }
 }
 
 namespace schd {
-
-    enum class ClassType { RR, FCFS, IDLE };
+    // BOT is the lowest priority, served as the minimum of the class type
+    // however, there is no actual BOT class, it's just a placeholder for the
+    // end of the class type range
+    enum class ClassType { RR, FCFS, IDLE, BOT };
 
     constexpr const char *to_cstring(ClassType type) {
         switch (type) {
             case ClassType::RR:   return "RR";
             case ClassType::FCFS: return "FCFS";
             case ClassType::IDLE: return "IDLE";
+            case ClassType::BOT:  return "BOT";
         }
         return "UNKNOWN";
     }
@@ -72,7 +82,7 @@ namespace schd {
         template <typename SUType>
         inline static util::nonnull<SchedMeta *> as_entity(
             util::nonnull<SUType *> unit) {
-            return util::guarantee_nonnull(&unit->basic_entity);
+            return util::nnullforce(&unit->basic_entity);
         }
 
         template <typename SUType>
@@ -80,7 +90,7 @@ namespace schd {
             util::nonnull<SchedMeta *> entity) {
             auto *entity_ptr = reinterpret_cast<char *>(entity.get());
             auto *su_ptr     = entity_ptr - ENTITY_OFFSET<SUType>;
-            return util::guarantee_nonnull(reinterpret_cast<SUType *>(su_ptr));
+            return util::nnullforce(reinterpret_cast<SUType *>(su_ptr));
         }
     };
 
@@ -92,7 +102,7 @@ namespace schd {
     template <typename SU>
     class BaseSched {
     public:
-        using SUType = SU;
+        using SUType         = SU;
         virtual ~BaseSched() = default;
 
         SchedMeta *cursched = nullptr;
@@ -109,12 +119,12 @@ namespace schd {
             if (cursched == nullptr) {
                 unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
             }
-            return asunit(util::guarantee_nonnull(cursched));
+            return asunit(util::nnullforce(cursched));
         }
 
         /**
          * @brief 将调度单元加入就绪队列
-         * 
+         *
          * @param rq 调度器的就绪队列
          * @param unit 需要入队的调度单元
          */
@@ -122,7 +132,7 @@ namespace schd {
                                      util::nonnull<SUType *> unit) = 0;
         /**
          * @brief 将调度单元从就绪队列中移除
-         * 
+         *
          * @param rq 调度器的就绪队列
          * @param unit 需要移除的调度单元
          */
@@ -130,7 +140,7 @@ namespace schd {
                                      util::nonnull<SUType *> unit) = 0;
         /**
          * @brief 选择下一个要运行的调度单元
-         * 
+         *
          * 执行该函数时, 调度器会把 cursched 指针指向下一个要运行的调度单元
          * 将下一个要运行的调度单元的状态设置为 RUNNING, 并从就绪队列中移除它
          *
@@ -138,10 +148,10 @@ namespace schd {
          * @return Result<util::nonnull<SUType *>> 下一个要运行的调度单元
          */
         virtual Result<util::nonnull<SUType *>> pick_next(
-            util::nonnull<RQ *> rq) = 0;
+            util::nonnull<RQ *> rq)                                 = 0;
         /**
          * @brief 将调度单元放回就绪队列
-         * 
+         *
          * @param rq 调度器的就绪队列
          * @param unit 需要放回的调度单元
          */
@@ -150,20 +160,32 @@ namespace schd {
         /**
          * @brief 主动让出 CPU
          *
-         * 这么做并不会立即切换到下一个任务, 而是为当前任务添加一个 NEED_RESCHED 标志,
-         * 让调度器在合适的时候切换到下一个任务
-         * 
+         * 这么做并不会立即切换到下一个任务, 而是为当前任务添加一个 NEED_RESCHED
+         * 标志, 让调度器在合适的时候切换到下一个任务
+         *
          * @param rq 调度器的就绪队列
          */
-        virtual Result<void> yield(util::nonnull<RQ *> rq) = 0;
+        virtual Result<void> yield(util::nonnull<RQ *> rq)          = 0;
         /**
          * @brief 每个tick调用一次, 用于更新调度单元的状态
-         * 
+         *
          * @param rq 调度器的就绪队列
          * @param unit 当前正在运行的调度单元
          */
         virtual Result<void> on_tick(util::nonnull<RQ *> rq,
-                                     util::nonnull<SUType *> unit) = 0;
+                                     util::nonnull<SUType *> unit)  = 0;
+
+        /**
+         * @brief 判断当前任务是否要被new_su抢占(其中new_su的class
+         * type总是大于当前任务的class type)
+         *
+         * @param rq 调度器的就绪队列
+         * @param new_su 即将要运行的调度单元
+         * @return true 需要抢占当前任务
+         * @return false 不需要抢占当前任务
+         */
+        virtual bool check_preempt_curr(util::nonnull<RQ *> rq,
+                                        util::nonnull<SUType *> new_su) = 0;
     };
 
     template <template <typename> class SchdPolicy, typename SU>

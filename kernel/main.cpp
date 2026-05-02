@@ -185,7 +185,7 @@ Result<void> init_scheduler() {
     auto task = load_res.value();
     assert(task->threads.size() == 1);
     e.scheduler(key::main()) =
-        new schd::Scheduler(util::nonnull_from(task->threads.front()));
+        new schd::Scheduler(task->threads.front());
     e.scheduler()->init();
     void_return();
 }

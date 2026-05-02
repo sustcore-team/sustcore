@@ -36,7 +36,7 @@ Result<util::nonnull<VMA *>> TaskMemoryManager::add_vma(VMA::Type type, VirAddr 
                                          VirAddr vma_end) {
     VMA *vma = new VMA(this, type, Range(VirAddr(vma_start), VirAddr(vma_end)));
     vma_list.push_back(*vma);
-    return util::nonnull_from(*vma);
+    return util::nonnull(*vma);
 }
 
 Result<util::nonnull<VMA *>> TaskMemoryManager::clone_vma(TaskMemoryManager &other, VirAddr vma_addr) {
@@ -47,14 +47,14 @@ Result<util::nonnull<VMA *>> TaskMemoryManager::clone_vma(TaskMemoryManager &oth
     VMA *vma     = locate_res.value();
     VMA *new_vma = new VMA(&other, *vma);
     other.vma_list.push_back(*new_vma);
-    return util::nonnull_from(*vma);
+    return util::nonnull(*vma);
 }
 
 Result<util::nonnull<VMA *>> TaskMemoryManager::locate(VirAddr vaddr) {
     for (auto &vma : vma_list) {
         Range<VirAddr> vma_range(vma.vstart, vma.vend);
         if (within(vma_range, vaddr)) {
-            return util::nonnull_from(vma);
+            return util::nonnull(vma);
         }
     }
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);
@@ -65,7 +65,7 @@ Result<util::nonnull<VMA *>> TaskMemoryManager::locate_range(VirAddr vaddr, size
         Range<VirAddr> vma_range(vma.vstart, vma.vend);
         Range<VirAddr> query_range(vaddr, vaddr + size);
         if (is_intersecting(vma_range, query_range)) {
-            return util::nonnull_from(vma);
+            return util::nonnull(vma);
         }
     }
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);

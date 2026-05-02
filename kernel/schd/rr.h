@@ -31,7 +31,7 @@ namespace schd::rr {
 
     private:
         inline util::nonnull<Entity *> as_entity_rr(util::nonnull<SUType *> unit) {
-            return util::guarantee_nonnull(&unit->rr_entity);
+            return util::nnullforce(&unit->rr_entity);
         }
 
         inline util::nonnull<Entity *> as_entity_rr(
@@ -65,10 +65,10 @@ namespace schd::rr {
             // fetch the first task in the queue
             SchedMeta &meta = rq->rr_list.front();
             meta.state      = ThreadState::RUNNING;
-            auto entity    = as_entity_rr(util::nonnull_from(meta));
+            auto entity    = as_entity_rr(meta);
             entity->slice_cnt = TIME_SLICES;
             this->cursched = &meta;
-            return this->asunit(util::nonnull_from(meta));
+            return this->asunit(meta);
         }
 
         Result<void> put_prev(util::nonnull<RQ *> rq,
@@ -109,6 +109,11 @@ namespace schd::rr {
                 meta->flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
             }
             void_return();
+        }
+
+        bool check_preempt_curr(util::nonnull<RQ *> rq, util::nonnull<SUType *> new_su) override {
+            // 只要对方的级别比自己高, 就需要抢占当前任务
+            return true;
         }
     };
 }  // namespace schd::rr

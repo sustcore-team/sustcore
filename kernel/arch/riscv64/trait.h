@@ -66,7 +66,14 @@ struct Riscv64Context {
     constexpr static size_t CONTEXT_OFFSET = 0;
     inline static Riscv64Context *from_kstack(void *kstack_top) {
         auto kstack_addr = reinterpret_cast<size_t>(kstack_top);
-        return reinterpret_cast<Riscv64Context *>(kstack_addr - CONTEXT_OFFSET - sizeof(Riscv64Context));
+        return reinterpret_cast<Riscv64Context *>(kstack_addr - CONTEXT_OFFSET -
+                                                  sizeof(Riscv64Context));
+    }
+
+    inline void setup_regs(bool smode) {
+        this->regs[0]      = 0;  // ra设置为0
+        this->sstatus.spp  = smode;  // 代码运行在 S/U-Mode
+        this->sstatus.spie = 1;  // 用户进程应该开启中断
     }
 };
 

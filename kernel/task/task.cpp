@@ -9,7 +9,6 @@
  *
  */
 
-#include <arch/riscv64/description.h>
 #include <env.h>
 #include <exe/elfloader.h>
 #include <kio.h>
@@ -47,7 +46,7 @@ Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
 
     // calculate the top of the kernel stack
     tcb->kstack_phy = gfp_res.value() + TCB::KSTACK_PAGES * PAGESIZE;
-    tcb->kstack_top     = convert<KpaAddr>(tcb->kstack_phy).addr();
+    tcb->kstack_top = convert<KpaAddr>(tcb->kstack_phy).addr();
 
     // initialization the kstack and context
     void_return();
@@ -55,14 +54,11 @@ Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
 
 Result<void> TaskManager::init_ctx(util::nonnull<TCB *> tcb, void *entrypoint,
                                    void *stack_top) {
+    tcb->context()->setup_regs(false);
     tcb->context()->pc() = reinterpret_cast<umb_t>(entrypoint);
     tcb->context()->sp() = reinterpret_cast<umb_t>(stack_top);
     tcb->basic_entity    = {};
     tcb->rr_entity       = {};
-
-    tcb->context()->regs[0] = 0x114514;                          // ra设置为0
-    tcb->context()->sstatus.spp = 0;                      // 代码运行在 U-Mode
-    tcb->context()->sstatus.spie = 1;                     // 用户进程应该开启中断
 
     void_return();
 }
@@ -83,11 +79,6 @@ Result<void> TaskManager::construct_thread(util::nonnull<PCB *> pcb,
                                            void *entrypoint, void *stack_top,
                                            schd::ClassType schd_class) {
     util::nonnull<TCB *> tcb = alloc_tcb();
-    if (tcb == nullptr) {
-        loggers::SUSTCORE::ERROR("分配TCB失败!");
-        unexpect_return(ErrCode::OUT_OF_MEMORY);
-    }
-
     auto tcb_guard = util::Guard([this, tcb]() { tcb_pool.free(tcb); });
     auto init_res  = init_tcb(tcb, pcb);
     if (!init_res.has_value()) {
@@ -132,7 +123,7 @@ Result<void> TaskManager::terminate_tcb(util::nonnull<TCB *> tcb) {
 Result<void> TaskManager::terminate_pcb(util::nonnull<PCB *> pcb) {
     // terminate all threads in this process
     for (auto &tcb : pcb->threads) {
-        auto term_res = terminate_tcb(util::guarantee_nonnull(&tcb));
+        auto term_res = terminate_tcb(util::nnullforce(&tcb));
         if (!term_res.has_value()) {
             loggers::SUSTCORE::ERROR("终止线程 %d 失败! 错误码: %s", tcb.tid,
                                      to_cstring(term_res.error()));
@@ -156,11 +147,6 @@ Result<util::nonnull<PCB *>> TaskManager::create_init_task(
     TaskSpec spec /* ... args*/) {
     constexpr schd::ClassType INIT_SCHED_CLASS = schd::ClassType::IDLE;
     util::nonnull<PCB *> pcb                   = alloc_pcb();
-    if (pcb == nullptr) {
-        loggers::SUSTCORE::ERROR("分配PCB失败!");
-        unexpect_return(ErrCode::OUT_OF_MEMORY);
-    }
-
     auto pcb_guard = util::Guard([this, pcb]() { pcb_pool.free(pcb); });
 
     auto init_res = init_pcb(pcb, spec);

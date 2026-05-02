@@ -61,5 +61,10 @@ namespace schd::idle {
             // IDLE 不需要在时钟中断时进行任何操作
             void_return();
         }
+
+        bool check_preempt_curr(util::nonnull<RQ *> rq, util::nonnull<SUType *> new_su) override {
+            // 只要有新的调度单元要运行, 就需要抢占当前的 IDLE 线程
+            return true;
+        }
     };
 }  // namespace schd::idle

@@ -51,7 +51,7 @@ namespace schd::fcfs {
             meta.state      = ThreadState::RUNNING;
             rq->fcfs_list.pop_front();
             this->cursched = &meta;
-            return this->asunit(util::nonnull_from(meta));
+            return this->asunit(meta);
         }
 
         Result<void> put_prev(util::nonnull<RQ *> rq,
@@ -74,6 +74,11 @@ namespace schd::fcfs {
                              util::nonnull<SUType *> unit) override {
             // FCFS 不需要在时钟中断时进行任何操作
             void_return();
+        }
+
+        bool check_preempt_curr(util::nonnull<RQ *> rq, util::nonnull<SUType *> new_su) override {
+            // 只要对方的级别比自己高, 就需要抢占当前任务
+            return true;
         }
     };
 }  // namespace schd::fcfs

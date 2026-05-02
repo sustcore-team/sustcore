@@ -153,9 +153,9 @@ char *strrchr(const char *restrict str, char ch) {
 int strspn(const char *restrict str, const char *restrict accept) {
     // 记录accept中的字符
     char map[128] = {};
-    while ((int)*accept != 0) {
+    while (*(unsigned char *)accept != 0) {
         // 将accept中出现过的字符在map中标记
-        map[(int)*accept] = 1;
+        map[*(unsigned char *)accept] = 1;
         accept++;
     }
     int cnt = 0;
@@ -174,9 +174,9 @@ int strspn(const char *restrict str, const char *restrict accept) {
 int strcspn(const char *restrict str, const char *restrict accept) {
     // 记录accept中的字符
     char map[128] = {};
-    while ((int)*accept != 0) {
-        // 将accept中出现过的字符在map中标记
-        map[(int)*accept] = 1;
+    while (*(unsigned char *)accept != 0) {
+        // 将accept中出现过的字符在map中标记·
+        map[*(unsigned char *)accept] = 1;
         accept++;
     }
     int cnt = 0;
@@ -224,12 +224,53 @@ char *strncat(char *restrict dst, const char *restrict src, int count) {
     return dst;
 }
 
-// // 分割字符串
-// // TMD这玩意谁tmd爱写谁tmd写去
-// char *strtok(char *restrict str, const char *restrict split) {
-// 	//TODO: 摆烂啦哈哈哈哈不写啦
-// 	return NULL;
-// }
+// 分割字符串
+char *strtok(char *restrict str, const char *restrict delim) {
+    static char *save = NULL;
+
+    if (delim == NULL) {
+        return NULL;
+    }
+
+    if (str == NULL) {
+        str = save;
+    }
+
+    if (str == NULL) {
+        return NULL;
+    }
+
+    unsigned char map[256] = {0};
+    while (*delim != 0) {
+        map[*(unsigned char *)delim] = 1;
+        delim++;
+    }
+
+    unsigned char *s = (unsigned char *)str;
+    while (*s != 0 && map[*s]) {
+        s++;
+    }
+
+    if (*s == 0) {
+        save = NULL;
+        return NULL;
+    }
+
+    char *token = (char *)s;
+    while (*s != 0 && !map[*s]) {
+        s++;
+    }
+
+    if (*s != 0) {
+        *s = '\0';
+        s++;
+        save = (char *)s;
+    } else {
+        save = NULL;
+    }
+
+    return token;
+}
 
 // 从src中复制size个字节到dst中
 // 注意, dst与src内存区域可能重叠 不能施加restrict

@@ -8,6 +8,7 @@
 #include <sus/nonnull.h>
 #include <sus/queue.h>
 #include <sus/tostring.h>
+#include <sustcore/errcode.h>
 #include <test/schd/fcfs.h>
 
 #include <algorithm>
@@ -26,7 +27,7 @@ namespace test::schd_test::fcfs {
             schd::RQ rq{};
 
             expect("在没有就绪线程时尝试取下一个线程");
-            auto next = scheduler.pick_next(util::guarantee_nonnull(&rq));
+            auto next = scheduler.pick_next(util::nnullforce(&rq));
             ttest(!next.has_value());
 
             expect("在没有当前线程时调用 current");
@@ -47,13 +48,13 @@ namespace test::schd_test::fcfs {
 
             expect("先后入队两个线程后, 队列应保持先进先出顺序");
             tassert(scheduler
-                        .enqueue(util::guarantee_nonnull(&rq),
-                                 util::guarantee_nonnull(&first))
+                        .enqueue(util::nnullforce(&rq),
+                                 util::nnullforce(&first))
                         .has_value(),
                     "第一个线程入队成功");
             tassert(scheduler
-                        .enqueue(util::guarantee_nonnull(&rq),
-                                 util::guarantee_nonnull(&second))
+                        .enqueue(util::nnullforce(&rq),
+                                 util::nnullforce(&second))
                         .has_value(),
                     "第二个线程入队成功");
             ttest(rq.fcfs_list.size() == 2);
@@ -61,15 +62,15 @@ namespace test::schd_test::fcfs {
             ttest(second.basic_entity.state == ThreadState::READY);
 
             action("取出队首线程");
-            auto next = scheduler.pick_next(util::guarantee_nonnull(&rq));
+            auto next = scheduler.pick_next(util::nnullforce(&rq));
             tassert(next.has_value(), "成功取到可运行线程");
             ttest(rq.fcfs_list.size() == 1);
             ttest(first.basic_entity.state == ThreadState::RUNNING);
 
             action("将第二个线程从队列中移除");
             tassert(scheduler
-                        .dequeue(util::guarantee_nonnull(&rq),
-                                 util::guarantee_nonnull(&second))
+                        .dequeue(util::nnullforce(&rq),
+                                 util::nnullforce(&second))
                         .has_value(),
                     "第二个线程出队成功");
             ttest(rq.fcfs_list.empty());
@@ -88,7 +89,7 @@ namespace test::schd_test::fcfs {
             schd::RQ rq{};
 
             expect("当前线程调用 yield 后, 需要重调度标志应被置位");
-            tassert(scheduler.yield(util::guarantee_nonnull(&rq)).has_value(),
+            tassert(scheduler.yield(util::nnullforce(&rq)).has_value(),
                     "yield 调用成功");
             ttest((current.basic_entity.flags &
                    schd::SchedMeta::FLAGS_NEED_RESCHED) != 0);
@@ -134,6 +135,7 @@ namespace test::schd_test::fcfs {
             init_threads();
 
             bool exit_normally = true;
+            ErrCode errc = ErrCode::SUCCESS;
             size_t time = 0;
 
             for (time = 0; time < SYSTEM_RUNNING_TIME; time++) {
@@ -142,10 +144,11 @@ namespace test::schd_test::fcfs {
                 for (size_t i = 0; i < NUM_THREADS; ++i) {
                     if (threads[i].enqueue_time == time) {
                         auto enqueue_res = scheduler.enqueue(
-                            util::guarantee_nonnull(&rq),
-                            util::guarantee_nonnull(&threads[i]));
+                            util::nnullforce(&rq),
+                            util::nnullforce(&threads[i]));
                         if (!enqueue_res.has_value()) {
                             exit_normally = false;
+                            errc = enqueue_res.error();
                             break;
                         }
                     }
@@ -168,17 +171,19 @@ namespace test::schd_test::fcfs {
                     // if the thread has run for its required time, dequeue it
                     if (current->cnt >= current->maxcnt) {
                         exit_flag = true;
-                        auto yield_res = scheduler.yield(util::nonnull_from(rq));
+                        auto yield_res = scheduler.yield(rq);
                         if (!yield_res.has_value()) {
                             exit_normally = false;
+                            errc = yield_res.error();
                             break;
                         }
                     }
 
                     if (current->yield_cnt == current->cnt) {
-                        auto yield_res = scheduler.yield(util::nonnull_from(rq));
+                        auto yield_res = scheduler.yield(rq);
                         if (!yield_res.has_value()) {
                             exit_normally = false;
+                            errc = yield_res.error();
                             break;
                         }
                     }
@@ -186,7 +191,12 @@ namespace test::schd_test::fcfs {
 
                 if (current_opt.has_value()) {
                     auto current = current_opt.value();
-                    scheduler.on_tick(util::nonnull_from(rq), current);
+                    auto on_tick_res = scheduler.on_tick(rq, current);
+                    if (!on_tick_res.has_value()) {
+                        exit_normally = false;
+                        errc = on_tick_res.error();
+                        break;
+                    }
                 }
 
                 bool reschedflag = false;
@@ -201,15 +211,16 @@ namespace test::schd_test::fcfs {
                     if (current_opt.has_value() && !exit_flag) {
                         auto current = current_opt.value();
                         auto put_prev_res =
-                            scheduler.put_prev(util::nonnull_from(rq), current);
+                            scheduler.put_prev(rq, current);
                         current->basic_entity.flags_reset<schd::SchedMeta::FLAGS_NEED_RESCHED>();
                         if (!put_prev_res.has_value()) {
                             exit_normally = false;
+                            errc = put_prev_res.error();
                             break;
                         }
                     }
 
-                    auto pick_next_res = scheduler.pick_next(util::nonnull_from(rq));
+                    auto pick_next_res = scheduler.pick_next(rq);
                     if (!pick_next_res.has_value()) {
                         // end the simulation
                         break;
@@ -218,7 +229,7 @@ namespace test::schd_test::fcfs {
             }
 
             if (!exit_normally) {
-                loggers::SUSTCORE::ERROR("模拟运行过程中发生错误! 时间: %d", time);
+                loggers::SUSTCORE::ERROR("模拟运行过程中发生错误! 时间: %d; 错误代码: %s", time, to_cstring(errc));
             }
             tassert(exit_normally, "模拟运行过程中发生错误");
 

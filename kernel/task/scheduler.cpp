@@ -49,6 +49,29 @@ namespace schd {
         _curpcb = tcb->task;
     }
 
+    bool Scheduler::try_wakeup(TCB *tcb, int flags) {
+        // TODO: 实现flags并判断tcb是否满足唤醒条件
+        // 我先不做, 等着后面实现睡眠和唤醒机制的时候再说
+        // 目前的唯一用处就是执行 check_preempt_curr 并 enqueue 线程
+        auto enqueue_res = enqueue(util::nnullforce(tcb));
+        if (!enqueue_res.has_value()) {
+            loggers::SUSTCORE::ERROR("调度器处理enqueue失败! 错误码: %s",
+                                     to_cstring(enqueue_res.error()));
+            return false;
+        }
+        check_preempt_curr(tcb);
+        return true;
+    }
+
+    bool Scheduler::wakeup(TCB *tcb) {
+        return try_wakeup(tcb, 0);
+    }
+
+    bool Scheduler::wakeup_new(TCB *new_tcb) {
+        // 我们目前直接执行try_wakeup
+        return try_wakeup(new_tcb, 0);
+    }
+
     Result<util::nonnull<TCB *>> Scheduler::pick_next_task() {
         TCB *next = nullptr;
         foreach_schdclass([&](auto &&schd_inst) {
@@ -64,7 +87,38 @@ namespace schd {
         if (next == nullptr) {
             unexpect_return(ErrCode::NO_RUNNABLE_THREAD);
         }
-        return util::guarantee_nonnull(next);
+        return util::nnullforce(next);
+    }
+
+    void Scheduler::check_preempt_curr(TCB *new_tcb) {
+        if (_curtcb == nullptr) {
+            // 没有正在运行的线程, 不需要抢占
+            return;
+        }
+
+        bool do_preempt = false;
+        if (new_tcb->schd_class <= _curtcb->schd_class) {
+            // 如果新线程的调度类优先级不高于当前线程, 则不需要抢占
+            return;
+        }
+
+        // 否则, 需要询问新线程的调度类是否需要抢占当前线程
+        auto schd_res = schd(new_tcb->schd_class);
+        if (!schd_res.has_value()) {
+            loggers::SUSTCORE::ERROR("未知的调度类! 错误码: %s",
+                                     to_cstring(schd_res.error()));
+            return;
+        }
+
+        do_preempt = schd_res.value()->check_preempt_curr(
+            rq(), util::nnullforce(new_tcb));
+
+        if (do_preempt) {
+            // 为当前线程添加 NEED_RESCHED 标志,
+            // 让调度器在合适的时候切换到新线程
+            _curtcb->basic_entity
+                .template flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
+        }
     }
 
     void Scheduler::schedule() {
@@ -74,11 +128,8 @@ namespace schd {
             return;
         }
 
-        // TODO: 允许高位调度类抢占低位调度类的线程
-
         // 判断是否需要重新调度
-        if (!_curtcb->basic_entity
-                 .flags_check<SchedMeta::FLAGS_NEED_RESCHED>())
+        if (!_curtcb->basic_entity.flags_check<SchedMeta::FLAGS_NEED_RESCHED>())
         {
             return;
         }
@@ -92,7 +143,7 @@ namespace schd {
         }
         auto schdclass = schd_res.value();
         auto put_prev_res =
-            schdclass->put_prev(rq(), util::guarantee_nonnull(_curtcb));
+            schdclass->put_prev(rq(), util::nnullforce(_curtcb));
         if (!put_prev_res.has_value()) {
             loggers::SUSTCORE::ERROR(
                 "调度器处理put_prev失败! 错误码: %s 对应调度类: %s",
@@ -135,7 +186,7 @@ namespace schd {
             return;
         }
 
-        auto tcb_ptr  = util::guarantee_nonnull(_curtcb);
+        auto tcb_ptr  = util::nnullforce(_curtcb);
         auto schd_res = schd(tcb_ptr->schd_class);
         if (schd_res.has_value()) {
             auto yield_res = schd_res.value()->yield(rq());
@@ -154,7 +205,7 @@ namespace schd {
             return;
         }
 
-        auto tcb      = util::guarantee_nonnull(_curtcb);
+        auto tcb      = util::nnullforce(_curtcb);
         auto schd_res = schd(tcb->schd_class);
         if (!schd_res.has_value()) {
             loggers::SUSTCORE::ERROR("未知的调度类! 错误码: %s",
@@ -169,7 +220,7 @@ namespace schd {
                 to_cstring(tick_res.error()), to_cstring(tcb->schd_class));
         }
     }
-    
+
     void Scheduler::init() {
         // 将当前线程设置为 IDLE 调度类中的 IDLE 线程
         auto idle_res = idle_schd()->pick_next(rq());

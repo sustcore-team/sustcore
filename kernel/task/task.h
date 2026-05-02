@@ -37,11 +37,11 @@ private:
     slub::SlubAllocator<PCB> pcb_pool;
 
     util::nonnull<TCB *> alloc_tcb() {
-        return util::guarantee_nonnull(tcb_pool.alloc());
+        return util::nnullforce(tcb_pool.alloc());
     }
 
     util::nonnull<PCB *> alloc_pcb() {
-        return util::guarantee_nonnull(pcb_pool.alloc());
+        return util::nnullforce(pcb_pool.alloc());
     }
 
     Result<void> init_tcb(util::nonnull<TCB *> tcb, util::nonnull<PCB *> task/* ... args*/);

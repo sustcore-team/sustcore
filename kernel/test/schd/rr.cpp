@@ -22,7 +22,7 @@ namespace test::schd_test::rr {
             schd::RQ rq{};
 
             expect("在没有就绪线程时尝试取下一个线程");
-            auto next = scheduler.pick_next(util::guarantee_nonnull(&rq));
+            auto next = scheduler.pick_next(util::nnullforce(&rq));
             ttest(!next.has_value());
         }
     };
@@ -41,15 +41,15 @@ namespace test::schd_test::rr {
 
             action("连续消耗一个线程的时间片");
             for (int i = 0; i < schd::rr::RR<TestThread>::TIME_SLICES - 1; ++i) {
-                tassert(scheduler.on_tick(util::guarantee_nonnull(&rq),
-                                          util::guarantee_nonnull(&first)).has_value(),
+                tassert(scheduler.on_tick(util::nnullforce(&rq),
+                                          util::nnullforce(&first)).has_value(),
                         "时间片递减调用成功");
                 ttest(first.rr_entity.slice_cnt == schd::rr::RR<TestThread>::TIME_SLICES - 1 - i);
                 ttest((first.basic_entity.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) == 0);
             }
 
-            tassert(scheduler.on_tick(util::guarantee_nonnull(&rq),
-                                      util::guarantee_nonnull(&first)).has_value(),
+            tassert(scheduler.on_tick(util::nnullforce(&rq),
+                                      util::nnullforce(&first)).has_value(),
                     "最后一次时间片递减成功");
             ttest(first.rr_entity.slice_cnt == 0);
             ttest((first.basic_entity.flags & schd::SchedMeta::FLAGS_NEED_RESCHED) != 0);
@@ -66,17 +66,17 @@ namespace test::schd_test::rr {
             TestThread first{};
             TestThread second{};
 
-            tassert(scheduler.enqueue(util::guarantee_nonnull(&rq),
-                                      util::guarantee_nonnull(&first)).has_value(),
+            tassert(scheduler.enqueue(util::nnullforce(&rq),
+                                      util::nnullforce(&first)).has_value(),
                     "第一个线程入队成功");
-            tassert(scheduler.enqueue(util::guarantee_nonnull(&rq),
-                                      util::guarantee_nonnull(&second)).has_value(),
+            tassert(scheduler.enqueue(util::nnullforce(&rq),
+                                      util::nnullforce(&second)).has_value(),
                     "第二个线程入队成功");
 
             ttest(rq.rr_list.size() == 2);
 
-            tassert(scheduler.dequeue(util::guarantee_nonnull(&rq),
-                                      util::guarantee_nonnull(&second)).has_value(),
+            tassert(scheduler.dequeue(util::nnullforce(&rq),
+                                      util::nnullforce(&second)).has_value(),
                     "第二个线程出队成功");
             ttest(rq.rr_list.size() == 1);
             ttest(second.basic_entity.state == ThreadState::EMPTY);
