@@ -100,7 +100,7 @@ public:
     using StageAddr = _StageAddr<Stage>;
 
     static Result<PhyAddr> new_page(void) {
-        return GFP::get_free_page<Stage>();
+        return GFP::get_free_page<Stage>(1);
     }
 
     // 前初始化与后初始化

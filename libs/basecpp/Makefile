@@ -13,7 +13,7 @@ objects := baseio.o tostring.o string.o ctype.o stdlib.o path.o cow_string.o
 deps := baseio.d tostring.d string.d ctype.d stdlib.d path.d cow_string.d
 
 flags-c-kernel := -mcmodel=medany
-flags-c-non-kernel := -mcmodel=medlow
+flags-c-non-kernel := -mcmodel=medany
 
 flags-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
@@ -33,7 +33,7 @@ flags-cpp := -std=gnu++26 -nostdlib -fno-builtin -ffreestanding -nostdinc \
 		   -fno-toplevel-reorder -fno-tree-scev-cprop
 
 flags-cpp-kernel := -mcmodel=medany -D__SUS_NO_RTTI__  -fno-rtti -D__SUS_NO_EXCEPTIONS__ -fno-exceptions
-flags-cpp-non-kernel := -mcmodel=medlow
+flags-cpp-non-kernel := -mcmodel=medany
 
 include-third_party-cpp := -I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
 						   -I$(path-third_party)/include/std

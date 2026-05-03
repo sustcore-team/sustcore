@@ -99,7 +99,7 @@ bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
 
     // 此时已经判断该页未被换出
     // 分配物理页并映射
-    auto gfp_res = GFP::get_free_page();
+    auto gfp_res = GFP::get_free_page(1);
     if (!gfp_res.has_value()) {
         loggers::TASK::ERROR("无法处理缺页异常: 无可用物理页");
         return false;

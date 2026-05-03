@@ -20,6 +20,13 @@ int kputs(const char *str) {
     return strlen(str);
 }
 
+int kwrites(const char *str, size_t len)
+{
+    PhyAddr str_paddr = convert_pointer(str);
+    Serial::serial_write_string(len, str_paddr.as<char>());
+    return len;
+}
+
 int kputchar(char ch) {
     Serial::serial_write_char(ch);
     return ch;

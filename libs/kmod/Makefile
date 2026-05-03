@@ -8,7 +8,7 @@ include $(path-script)/helper.mk
 
 target := $(path-bin)/libs/$(architecture)/libkmod.a
 
-objects := setup.o
+objects := setup.o syscall.o
 deps := setup.d
 obj-crt0 := crt0.o
 obj-crti := crti.o

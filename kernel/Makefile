@@ -12,7 +12,7 @@ objects := main.o cxa.o assert.o kio.o
 deps := main.d cxa.d assert.d kio.d
 attachments := initrd.tar.attachment.o
 
-subdirs := ./arch/$(architecture)/ ./cap ./device ./exe ./mem ./object ./perm ./schd ./task ./test ./vfs
+subdirs := ./arch/$(architecture)/ ./cap ./device ./exe ./mem ./object ./perm ./schd ./syscall ./task ./test ./vfs
 
 include $(path-d)/arch/$(architecture)/subdirs.mk
 include $(foreach subdir, $(subdirs), $(path-d)/$(subdir)/include.mk)

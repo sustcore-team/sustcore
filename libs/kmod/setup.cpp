@@ -11,13 +11,12 @@
 
 // cpp setup入口点
 
-#include <cstddef>
 #include <cassert>
+#include <cstddef>
+#include <cstring>
 
-extern "C"
-void _init(void);
-extern "C"
-void _fini(void);
+extern "C" void _init(void);
+extern "C" void _fini(void);
 
 typedef void (*_init_func)(void);
 typedef void (*_fini_func)(void);
@@ -38,28 +37,26 @@ namespace kmod {
 
         // 执行fini
         _fini();
-        for (size_t i = 0 ; i < count2; i++) {
+        for (size_t i = 0; i < count2; i++) {
             __fini_array_start[i]();
         }
     }
-}
-
-void kputs(const char *str)
-{
-    // 暂时用自定义的 0x00FF00FF 指令来输出字符串
-    asm volatile(
-        "mv t0, %0\n"
-        ".word 0x00FF00FF\n"
-        :
-        : "r"(str)
-        : "t0");  // 自定义非法指令2
-    return;
-}
+}  // namespace kmod
 
 void kmod_main(void);
 
-extern "C" void _cpp_setup(void) {
+extern "C" {
+void kwrites(const char *str, size_t len);
+
+int kputs(const char *str) {
+    size_t len = strlen(str);
+    kwrites(str, len);
+    return len;
+}
+
+void _cpp_setup(void) {
     kmod::init();
     kmod_main();
     while (true);
+}
 }

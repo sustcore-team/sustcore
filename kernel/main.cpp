@@ -125,7 +125,7 @@ void kernel_paging_setup() {
     constexpr KernelStage STAGE = KernelStage::PRE_INIT;
     auto &e                     = env::inst();
     // 创建内核页表管理器
-    auto gfp_res                = GFP::get_free_page<STAGE>();
+    auto gfp_res                = GFP::get_free_page<STAGE>(1);
     if (!gfp_res.has_value()) {
         loggers::SUSTCORE::ERROR("无法为内核页表分配物理页");
         while (true);

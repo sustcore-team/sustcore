@@ -41,7 +41,7 @@ Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
     tcb->list_head = {};
 
     // ask for a kstack for this thread
-    Result<PhyAddr> gfp_res = GFP::get_free_page();
+    Result<PhyAddr> gfp_res = GFP::get_free_page(TCB::KSTACK_PAGES);
     propagate(gfp_res);
 
     // calculate the top of the kernel stack
@@ -186,7 +186,7 @@ Result<void> TaskManager::preload(const char *path, TaskSpec &spec,
     auto holder = create_res.value();
 
     // 申请一个页表以构造task memory manager
-    auto gfp_res = GFP::get_free_page();
+    auto gfp_res = GFP::get_free_page(1);
     if (!gfp_res.has_value()) {
         loggers::SUSTCORE::ERROR("无法为程序页表分配物理页");
         unexpect_return(ErrCode::CREATION_FAILED);

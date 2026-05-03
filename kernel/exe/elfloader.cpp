@@ -222,14 +222,19 @@ namespace loader::elf {
         // 输出每个VMA的开头几个字节以供调试
         loggers::SUSTCORE::INFO("每个VMA的前16字节内容:");
         for (const auto &vma : spec.tmm->vmas()) {
-            ker_paddr::SumGuard sum_guard;  // 确保可以访问用户空间地址
+            // 打开SUM以访问用户空间地址
+            ker_paddr::SumGuard sum_guard;
+            sum_guard.open();
+
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 起始地址: %p",
                 vma.type == VMA::Type::CODE ? "CODE" : "DATA",
                 vma.vstart.addr());
+
             const size_t dump_size = vma.size() < 16 ? vma.size() : 16;
             const unsigned char *data =
                 reinterpret_cast<const unsigned char *>(vma.vstart.addr());
+
             std::string hex_dump;
             for (size_t i = 0; i < dump_size; ++i) {
                 char buf[4];

@@ -12,6 +12,7 @@
 #include <arch/riscv64/description.h>
 #include <arch/riscv64/device/misc.h>
 #include <arch/riscv64/int/isr.h>
+#include <arch/riscv64/trait.h>
 #include <env.h>
 #include <kio.h>
 #include <mem/kaddr.h>
@@ -19,6 +20,7 @@
 #include <sus/logger.h>
 #include <sustcore/addr.h>
 #include <sustcore/epacks.h>
+#include <syscall/syscall.h>
 #include <task/scheduler.h>
 #include <task/task_struct.h>
 
@@ -184,6 +186,8 @@ namespace handlers::paging {
 
         bool processsed = false;
 
+        // 在此处可以允许中断发生
+
         switch (cause) {
             case FaultCause::NO_PRESENT: {
                 loggers::INTERRUPT::INFO("缺页异常: 0x%016lx", stval);
@@ -320,6 +324,7 @@ namespace Handlers {
             ker_paddr::SumGuard guard;  // 确保可以访问用户空间地址
             char msg[64];
             // t0 = x5 = regs[5 - 1]
+            guard.open();
             memcpy(msg, (void *)ctx->regs[4], sizeof(msg) - 1);
             msg[sizeof(msg) - 1] = '\0';  // 确保字符串以 null 结尾
             loggers::INTERRUPT::INFO("用户程序传递的消息: %s", msg);
@@ -379,6 +384,10 @@ namespace Handlers {
         bool processed = false;
         switch (scause.cause) {
             case Exceptions::ECALL_U: {
+                syscall::RetPack ret = syscall::entrance(ctx->read_args());
+                ctx->write_ret(ret);
+                processed = ret.processed;
+                ctx->sepc += 4;  // 跳过 ecall 指令
                 break;
             }
             case Exceptions::ILLEGAL_INST:

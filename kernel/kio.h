@@ -14,6 +14,7 @@
 #include <sus/baseio.h>
 
 int kputs(const char* str);
+int kwrites(const char* str, size_t len);
 int kputchar(char ch);
 char kgetchar();
 int kprintf(const char* fmt, ...);
@@ -43,4 +44,5 @@ namespace loggers {
     DECLARE_LOGGER(KernelIO, __CONF_LOGGER_LEVEL_INTERRUPT, INTERRUPT);
     DECLARE_LOGGER(KernelIO, __CONF_LOGGER_LEVEL_CAPABILITY, CAPABILITY);
     DECLARE_LOGGER(KernelIO, __CONF_LOGGER_LEVEL_TASK, TASK);
+    DECLARE_LOGGER(KernelIO, __CONF_LOGGER_LEVEL_SYSCALL, SYSCALL);
 };  // namespace loggers

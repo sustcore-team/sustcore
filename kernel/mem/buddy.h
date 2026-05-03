@@ -15,7 +15,7 @@
 #include <kio.h>
 #include <sustcore/addr.h>
 #include <mem/gfp_def.h>
-#include <stddef.h>
+#include <cstddef>
 #include <sus/defer.h>
 #include <sus/list.h>
 #include <sus/types.h>
@@ -48,7 +48,7 @@ public:
      * @return PhyAddr
      */
     template <KernelStage Stage = KernelStage::POST_INIT>
-    static Result<PhyAddr> get_free_page(size_t frame_count = 1);
+    static Result<PhyAddr> get_free_page(size_t frame_count);
 
     /**
      * @brief 按order阶数分配
@@ -66,7 +66,7 @@ public:
      * @param frame_count
      */
     template <KernelStage Stage = KernelStage::POST_INIT>
-    static void put_page(PhyAddr paddr, size_t frame_count = 1);
+    static void put_page(PhyAddr paddr, size_t frame_count);
 
     /**
      * @brief 按order阶数释放页

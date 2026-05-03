@@ -14,6 +14,7 @@
 #include <arch/riscv64/csr.h>
 #include <arch/trait.h>
 #include <sus/types.h>
+#include <syscall/syscall.h>
 
 // 该功能必须通过宏来实现, 以保证其一定会内联到原代码片段中
 #define RELOAD_SP() asm volatile("la sp, boot_stack_top\n");
@@ -54,12 +55,17 @@ struct Riscv64Context {
     csr_sstatus_t sstatus;
     umb_t kstack_sp;
 
-    inline umb_t &pc(void) {
+    constexpr umb_t &pc() {
         return this->sepc;
     }
 
-    inline umb_t &sp(void) {
-        return this->regs[2 - 1];  // x2 = sp
+    constexpr static size_t X1_BASE = 0;
+    constexpr static size_t RA_BASE = 1;
+    // x10 = a0
+    constexpr static size_t A0_BASE = X1_BASE + 9;
+
+    constexpr umb_t &sp() {
+        return this->regs[X1_BASE + 1];  // x2 = sp
     }
 
     static void switch_to(void *kstack);
@@ -70,14 +76,41 @@ struct Riscv64Context {
                                                   sizeof(Riscv64Context));
     }
 
-    inline void setup_regs(bool smode) {
-        this->regs[0]      = 0;  // ra设置为0
+    constexpr void setup_regs(bool smode) {
+        this->regs[RA_BASE]      = 0;  // ra设置为0
         this->sstatus.spp  = smode;  // 代码运行在 S/U-Mode
         this->sstatus.spie = 1;  // 用户进程应该开启中断
+    }
+
+    constexpr void write_ret(const syscall::RetPack &pack)
+    {
+        regs[A0_BASE] = pack.ret0;
+        regs[A0_BASE + 1] = pack.ret1;
+    }
+
+    constexpr void read_args(syscall::ArgPack& pack) const
+    {
+        pack.syscall_number = regs[A0_BASE + 7]; // a7: syscall number
+        pack.capidx = regs[A0_BASE + 6];
+
+        pack.args[0] = regs[A0_BASE + 0];
+        pack.args[1] = regs[A0_BASE + 1];
+        pack.args[2] = regs[A0_BASE + 2];
+        pack.args[3] = regs[A0_BASE + 3];
+        pack.args[4] = regs[A0_BASE + 4];
+    }
+
+    [[nodiscard]]
+    constexpr syscall::ArgPack read_args() const
+    {
+        syscall::ArgPack pack{};
+        read_args(pack);
+        return pack;
     }
 };
 
 static_assert(ContextTrait<Riscv64Context>);
+
 
 struct Riscv64Interrupt {
     /**

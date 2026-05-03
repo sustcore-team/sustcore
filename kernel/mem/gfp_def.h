@@ -27,37 +27,19 @@ concept GFPTrait = requires(PhyAddr ptr, size_t page_count) {
         T::post_init()
     } -> std::same_as<void>;
     {
-        T::get_free_page()
-    } -> std::same_as<Result<PhyAddr>>;
-    {
         T::get_free_page(page_count)
-    } -> std::same_as<Result<PhyAddr>>;
-    {
-        T::template get_free_page<KernelStage::PRE_INIT>()
     } -> std::same_as<Result<PhyAddr>>;
     {
         T::template get_free_page<KernelStage::PRE_INIT>(page_count)
     } -> std::same_as<Result<PhyAddr>>;
     {
-        T::template get_free_page<KernelStage::POST_INIT>()
-    } -> std::same_as<Result<PhyAddr>>;
-    {
         T::template get_free_page<KernelStage::POST_INIT>(page_count)
     } -> std::same_as<Result<PhyAddr>>;
-    {
-        T::put_page(ptr)
-    } -> std::same_as<void>;
     {
         T::put_page(ptr, page_count)
     } -> std::same_as<void>;
     {
-        T::template put_page<KernelStage::PRE_INIT>(ptr)
-    } -> std::same_as<void>;
-    {
         T::template put_page<KernelStage::PRE_INIT>(ptr, page_count)
-    } -> std::same_as<void>;
-    {
-        T::template put_page<KernelStage::POST_INIT>(ptr)
     } -> std::same_as<void>;
     {
         T::template put_page<KernelStage::POST_INIT>(ptr, page_count)

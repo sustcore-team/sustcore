@@ -77,9 +77,7 @@ namespace ker_paddr {
     private:
         bool opened = false;
     public:
-        SumGuard() {
-            open();
-        }
+        SumGuard() = default;
         ~SumGuard() {
             close();
         }

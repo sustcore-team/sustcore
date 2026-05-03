@@ -9,9 +9,8 @@
  * 
  */
 
-void kputs(const char *str);
-
 extern "C" {
+int kputs(const char *str);
 void cpu_idle();
 }
 
