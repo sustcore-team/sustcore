@@ -254,9 +254,8 @@ extern "C" void post_init(void) {
 #else
 #endif
 
-    loggers::SUSTCORE::INFO("Test complete. Entering idle loop.");
-
-    while (true);
+    loggers::SUSTCORE::INFO("Test complete. Start scheduler.");
+    e.scheduler()->run_current();
 }
 
 extern "C" void redive(void);

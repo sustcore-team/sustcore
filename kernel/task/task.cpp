@@ -54,6 +54,7 @@ Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
 
 Result<void> TaskManager::init_ctx(util::nonnull<TCB *> tcb, void *entrypoint,
                                    void *stack_top) {
+    *tcb->context() = {};
     tcb->context()->setup_regs(false);
     tcb->context()->pc() = reinterpret_cast<umb_t>(entrypoint);
     tcb->context()->sp() = reinterpret_cast<umb_t>(stack_top);
@@ -169,7 +170,37 @@ Result<util::nonnull<PCB *>> TaskManager::create_init_task(
 
 Result<util::nonnull<PCB *>> TaskManager::create_task(
     TaskSpec spec, schd::ClassType schd_class /* ... args*/) {
-    unexpect_return(ErrCode::NOT_SUPPORTED);
+    util::nonnull<PCB *> pcb = alloc_pcb();
+    auto pcb_guard = util::Guard([this, pcb]() { pcb_pool.free(pcb); });
+
+    auto init_res = init_pcb(pcb, spec);
+    if (!init_res.has_value()) {
+        loggers::SUSTCORE::ERROR("初始化PCB失败! 错误码: %s",
+                                 to_cstring(init_res.error()));
+        propagate_return(init_res);
+    }
+
+    auto main_thread_res = construct_main_thread(pcb, schd_class);
+    if (!main_thread_res.has_value()) {
+        loggers::SUSTCORE::ERROR("构造主线程失败! 错误码: %s",
+                                 to_cstring(main_thread_res.error()));
+        propagate_return(main_thread_res);
+    }
+
+    auto *scheduler = env::inst().scheduler();
+    if (scheduler == nullptr) {
+        loggers::SUSTCORE::ERROR("调度器尚未初始化, 无法唤醒新进程");
+        unexpect_return(ErrCode::CREATION_FAILED);
+    }
+
+    TCB *main_tcb = &pcb->threads.front();
+    if (!scheduler->wakeup_new(main_tcb)) {
+        loggers::SUSTCORE::ERROR("唤醒新进程失败");
+        unexpect_return(ErrCode::CREATION_FAILED);
+    }
+
+    pcb_guard.release();  // 进程已成功构造并加入调度队列
+    return pcb;
 }
 
 Result<void> TaskManager::preload(const char *path, TaskSpec &spec,
@@ -218,12 +249,14 @@ Result<void> TaskManager::preload(const char *path, TaskSpec &spec,
 
 Result<util::nonnull<PCB *>> TaskManager::load_elf(const char *path,
                                                    schd::ClassType schd_class) {
-    TaskSpec spec;
-    LoadPrm load_prm;
+    TaskSpec spec{util::owner<TaskMemoryManager *>(nullptr), nullptr,
+                  VirAddr(static_cast<addr_t>(0))};
+    LoadPrm load_prm{};
     auto preload_res = preload(path, spec, load_prm);
     if (!preload_res.has_value()) {
         loggers::SUSTCORE::ERROR("预加载程序资源失败! 错误码: %s",
                                  to_cstring(preload_res.error()));
+        propagate_return(preload_res);
     }
 
     // 开始加载程序
@@ -238,12 +271,14 @@ Result<util::nonnull<PCB *>> TaskManager::load_elf(const char *path,
 }
 
 Result<util::nonnull<PCB *>> TaskManager::load_init(const char *path) {
-    TaskSpec spec;
-    LoadPrm load_prm;
+    TaskSpec spec{util::owner<TaskMemoryManager *>(nullptr), nullptr,
+                  VirAddr(static_cast<addr_t>(0))};
+    LoadPrm load_prm{};
     auto preload_res = preload(path, spec, load_prm);
     if (!preload_res.has_value()) {
         loggers::SUSTCORE::ERROR("预加载程序资源失败! 错误码: %s",
                                  to_cstring(preload_res.error()));
+        propagate_return(preload_res);
     }
 
     // 开始加载程序

@@ -45,6 +45,11 @@ namespace schd {
             return _idle_schd;
         }
 
+        [[nodiscard]]
+        constexpr TCB *current_tcb() const {
+            return _curtcb;
+        }
+
         using BaseSchedPtr = util::nonnull<BaseSched<TCB> *>;
 
         constexpr Result<BaseSchedPtr> schd(ClassType type) {
@@ -72,13 +77,13 @@ namespace schd {
          */
         template <typename Func>
         void foreach_schdclass(Func f, ClassType bot = ClassType::BOT) {
-            if (ClassType::RR < bot) {
+            if (ClassType::RR >= bot) {
                 f(rr_schd());
             }
-            if (ClassType::FCFS < bot) {
+            if (ClassType::FCFS >= bot) {
                 f(fcfs_schd());
             }
-            if (ClassType::IDLE < bot) {
+            if (ClassType::IDLE >= bot) {
                 f(idle_schd());
             }
         }
@@ -90,12 +95,14 @@ namespace schd {
 
         bool try_wakeup(TCB *tcb, int flags);
         bool wakeup(TCB *tcb);
-        bool wakeup_new(TCB *new_tcb);
 
     public:
         void do_tick(const TimerTickEvent &e);
 
         void init();
+
+        [[noreturn]]
+        void run_current();
 
         /**
          * @brief 调度入口
@@ -115,7 +122,8 @@ namespace schd {
         // 任务出队/阻塞
         Result<void> dequeue(util::nonnull<TCB *> tcb);
 
-
+        // 唤醒新创建的任务并检查是否需要抢占当前任务
+        bool wakeup_new(TCB *new_tcb);
 
         // 主动放弃 CPU
         void yield();

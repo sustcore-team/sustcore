@@ -15,14 +15,14 @@ int kputs(const char *str);
 class Test {
 public:
     Test() {
-        kputs("Test constructor called");
+        kputs("Test constructor called\n");
     }
 };
 
 Test test_goc;
 
 int kmod_main(void) {
-    kputs("Hello from kmod_main!");
+    kputs("Hello from kmod_main!\n");
     while (true);
     return 0;
 }

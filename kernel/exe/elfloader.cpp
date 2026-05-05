@@ -10,7 +10,6 @@
  *
  */
 
-#include <arch/riscv64/csr.h>
 #include <cap/capability.h>
 #include <cap/cholder.h>
 #include <elf.h>
@@ -170,6 +169,9 @@ namespace loader::elf {
             {
                 unexpect_return(ErrCode::OUT_OF_BOUNDARY);
             }
+            if (overflow_add_u64(phdr.p_vaddr, phdr.p_memsz)) {
+                unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+            }
 
             VirAddr segvaddr(phdr.p_vaddr);
 
@@ -197,18 +199,25 @@ namespace loader::elf {
                 vma.vend.addr(), vma.size());
         }
 
-        // 记录当前的TM, 以便稍后恢复
-        TaskMemoryManager *origin_tmm      = env::inst().tmm();
+        auto *origin_tmm = env::inst().tmm();
         PhyAddr origin_pgd = env::inst().pgd();
 
-        // 切换到加载程序的TM
         env::inst().tmm(key::elfloader()) = spec.tmm.get();
-        // 切换到加载程序的页表
         spec.tmm->pman().switch_root();
+        PageMan::flush_tlb();
 
-        // 开始加载段
-        auto load_res = loadsegs(fop, ehdr);
-        propagate(load_res);
+        // 开始加载段。这里在 S-Mode 直接写用户虚拟地址，需要打开 SUM。
+        {
+            ker_paddr::SumGuard sum_guard;
+            sum_guard.open();
+            auto load_res = loadsegs(fop, ehdr);
+            if (!load_res.has_value()) {
+                env::inst().tmm(key::elfloader()) = origin_tmm;
+                PageMan(origin_pgd).switch_root();
+                PageMan::flush_tlb();
+                propagate_return(load_res);
+            }
+        }
 
         // 将各个段的VMA的loading标记为false
         // 同时将其对应的内存权限改回正常值
@@ -245,10 +254,9 @@ namespace loader::elf {
                                     hex_dump.c_str());
         }
 
-        // 恢复到原来的TM, 以便继续执行内核代码
         env::inst().tmm(key::elfloader()) = origin_tmm;
-        // 恢复到原来的内核页表
         PageMan(origin_pgd).switch_root();
+        PageMan::flush_tlb();
 
         void_return();
     }

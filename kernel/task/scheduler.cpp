@@ -23,13 +23,9 @@ namespace key {
     };
 }  // namespace key
 
-namespace schd {
-    void switch_kstack(void *kstack_top) {
-        // 切换到新的内核栈
-        // 我们通过切换 sscratch 寄存器来切换内核栈
-        Context::switch_to(kstack_top);
-    }
+extern "C" [[noreturn]] void isr_restore_user(void *kstack_top);
 
+namespace schd {
     void switch_pgd(TaskMemoryManager *tmm) {
         // 只在页表不为null且不等于当前页表时才切换
         if (tmm->pgd().nonnull() && tmm->pgd() != env::inst().pgd()) {
@@ -43,8 +39,6 @@ namespace schd {
     void Scheduler::switch_to(TCB *tcb) {
         // 切换页表
         switch_pgd(tcb->task->tmm);
-        // 切换内核栈
-        switch_kstack(tcb->kstack_top);
         _curtcb = tcb;
         _curpcb = tcb->task;
     }
@@ -133,6 +127,8 @@ namespace schd {
         {
             return;
         }
+        _curtcb->basic_entity
+            .template flags_reset<SchedMeta::FLAGS_NEED_RESCHED>();
 
         // 如果需要重新调度, 则将当前线程放回就绪队列
         auto schd_res = schd(_curtcb->schd_class);
@@ -237,5 +233,16 @@ namespace schd {
         }
         _curtcb = idle_res.value();
         _curpcb = _curtcb->task;
+    }
+
+    [[noreturn]]
+    void Scheduler::run_current() {
+        if (_curtcb == nullptr) {
+            loggers::SUSTCORE::ERROR("没有可运行线程, 无法进入用户态");
+            panic("调度器崩溃!");
+        }
+
+        switch_to(_curtcb);
+        isr_restore_user(_curtcb->kstack_top);
     }
 }  // namespace schd
