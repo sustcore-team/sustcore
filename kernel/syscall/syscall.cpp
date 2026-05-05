@@ -67,13 +67,49 @@ namespace syscall {
         }
     };
 
-    void write_serial(const UBuffer &str, size_t len) {
+    // 用户空间字符串(readonly)
+    class UString {
+    private:
+        UBuffer _ubuf;
+        int _len;
+    public:
+        UString(VirAddr uaddr, size_t maxlen) : _ubuf(uaddr, maxlen) {
+            sync_from_user();
+        }
+
+        ~UString() {
+        }
+
+        UString &sync_from_user() {
+            _ubuf.sync_from_user();
+            _len = strnlen(kbuf(), maxlen());
+            return *this;
+        }
+
+        [[nodiscard]] char *kbuf() const {
+            return _ubuf.kbuf();
+        }
+
+        [[nodiscard]] size_t len() const {
+            return _len;
+        }
+
+        [[nodiscard]] size_t maxlen() const {
+            return _ubuf.len();
+        }
+
+        [[nodiscard]] VirAddr uaddr() const {
+            return _ubuf.uaddr();
+        }
+    };
+
+    void write_serial(const UString &str, size_t len) {
         kwrites(str.kbuf(), len);
     }
 
     constexpr size_t MAX_SYSCALL_PATH = 256;
 
-    void create_process(const UBuffer &path) {
+    void create_process(const UString &path) {
         auto load_res =
             env::inst().tm()->load_elf(path.kbuf(), schd::ClassType::FCFS);
         if (!load_res.has_value()) {
@@ -103,17 +139,12 @@ namespace syscall {
         // 根据syscall number分发
         switch (sysno) {
             case SYS_WRITE_SERIAL: {
-                UBuffer buf((VirAddr)arg0, (size_t)arg1);
-                buf.sync_from_user();
-                write_serial(buf, arg1);
+                write_serial(UString((VirAddr)arg0, arg1), arg1);
                 ret0 = ret1 = 0;
                 break;
             }
             case SYS_CREATE_PROCESS: {
-                UBuffer path((VirAddr)arg0, MAX_SYSCALL_PATH);
-                path.sync_from_user();
-                path.kbuf()[path.len() - 1] = '\0';
-                create_process(path);
+                create_process(UString((VirAddr)arg0, MAX_SYSCALL_PATH));
                 ret0 = ret1 = 0;
                 break;
             }

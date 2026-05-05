@@ -15,18 +15,10 @@ void cpu_idle();
 void create_process(const char *path);
 }
 
-class Test {
-public:
-    Test() {
-        kputs("Test constructor called");
-    }
-};
-
-Test test_goc;
-
 int kmod_main() {
-    kputs("Here is init module!");
+    kputs("Here is init module!\n");
     create_process("/initrd/default.mod");
+    kputs("It shouldn't be printed!\n");
     cpu_idle();
     return 0;
 }
