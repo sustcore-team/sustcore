@@ -133,6 +133,8 @@ namespace schd {
         {
             return;
         }
+        _curtcb->basic_entity
+            .template flags_reset<SchedMeta::FLAGS_NEED_RESCHED>();
 
         // 如果需要重新调度, 则将当前线程放回就绪队列
         auto schd_res = schd(_curtcb->schd_class);

@@ -41,7 +41,7 @@ namespace schd {
     // BOT is the lowest priority, served as the minimum of the class type
     // however, there is no actual BOT class, it's just a placeholder for the
     // end of the class type range
-    enum class ClassType { RR, FCFS, IDLE, BOT };
+    enum class ClassType { BOT = 0, IDLE = 1, FCFS = 2, RR = 3 };
 
     constexpr const char *to_cstring(ClassType type) {
         switch (type) {
