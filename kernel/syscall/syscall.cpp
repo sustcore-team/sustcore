@@ -10,9 +10,12 @@
  */
 
 #include <kio.h>
+#include <env.h>
 #include <mem/kaddr.h>
+#include <schd/schdbase.h>
 #include <sus/owner.h>
 #include <sustcore/addr.h>
+#include <sustcore/errcode.h>
 #include <sustcore/syscall.h>
 #include <syscall/syscall.h>
 
@@ -68,6 +71,21 @@ namespace syscall {
         kwrites(str.kbuf(), len);
     }
 
+    constexpr size_t MAX_SYSCALL_PATH = 256;
+
+    void create_process(const UBuffer &path) {
+        auto load_res =
+            env::inst().tm()->load_elf(path.kbuf(), schd::ClassType::FCFS);
+        if (!load_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: path=%s, 错误码: %s",
+                                    path.kbuf(), to_cstring(load_res.error()));
+            return;
+        }
+
+        loggers::SYSCALL::INFO("创建进程成功: path=%s, pid=%d", path.kbuf(),
+                               load_res.value()->pid);
+    }
+
     RetPack entrance(const ArgPack &args) {
         b64 arg0 = args.args[0];
         b64 arg1 = args.args[1];
@@ -88,6 +106,14 @@ namespace syscall {
                 UBuffer buf((VirAddr)arg0, (size_t)arg1);
                 buf.sync_from_user();
                 write_serial(buf, arg1);
+                ret0 = ret1 = 0;
+                break;
+            }
+            case SYS_CREATE_PROCESS: {
+                UBuffer path((VirAddr)arg0, MAX_SYSCALL_PATH);
+                path.sync_from_user();
+                path.kbuf()[path.len() - 1] = '\0';
+                create_process(path);
                 ret0 = ret1 = 0;
                 break;
             }

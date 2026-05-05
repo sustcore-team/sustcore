@@ -45,10 +45,8 @@ isr_ustks:
     csrr x1, sscratch
     /* 保存 x2 */
     sd x1, 8(sp)
-    /* 此时将sscratch设置为原内核栈顶地址(依约定, sscratch中保存的就是内核栈顶地址) */
-    /* 原内核栈顶 - STACK_SIZE = sp => 原内核栈顶 = sp + STACK_SIZE */
-    addi x1, sp, STACK_SIZE
-    csrw sscratch, x1
+    /* 进入内核后 sscratch 固定为 0 */
+    csrw sscratch, zero
 /* 通用寄存器保存(除了x1, x2) */
 isr_sregs:
     sd x3, 16(sp)
@@ -167,3 +165,10 @@ isr_rtn:
     /* 此时, sp指向了之前的栈顶指针 */
     /* 上下文此时已彻底恢复 */
     sret
+
+.globl isr_restore_user
+.type isr_restore_user, @function
+isr_restore_user:
+    /* 从指定线程的内核栈恢复上下文, 用于第一次进入用户态 */
+    mv sp, a0
+    j isr_ustkr

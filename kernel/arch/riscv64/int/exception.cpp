@@ -20,6 +20,7 @@
 
 extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
                             Riscv64Context *ctx) {
+    bool from_umode = !ctx->sstatus.spp;
     if (scause.interrupt) {
         if (scause.cause == 5) {
             Handlers::timer(scause, sepc, stval, ctx);
@@ -29,8 +30,13 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
         Handlers::exception(scause, sepc, stval, ctx);
     }
     auto *scheduler = env::inst().scheduler();
-    if (scheduler != nullptr) {
+    if (scheduler != nullptr && from_umode) {
         scheduler->schedule();
+        auto *tcb = scheduler->current_tcb();
+        if (tcb != nullptr) {
+            csr_set_sscratch(
+                reinterpret_cast<csr_sscratch_t>(tcb->kstack_top));
+        }
     }
 }
 
@@ -65,6 +71,5 @@ void Riscv64Interrupt::cli(void) {
     csr_set_sstatus(sstatus);
 }
 
-void Riscv64Context::switch_to(void *kstack_top) {
-    csr_set_sscratch((umb_t)kstack_top);
+void Riscv64Context::switch_to([[maybe_unused]] void *kstack_top) {
 }

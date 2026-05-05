@@ -12,6 +12,7 @@
 extern "C" {
 int kputs(const char *str);
 void cpu_idle();
+void create_process(const char *path);
 }
 
 class Test {
@@ -25,6 +26,7 @@ Test test_goc;
 
 int kmod_main() {
     kputs("Here is init module!");
+    create_process("/initrd/default.mod");
     cpu_idle();
     return 0;
 }

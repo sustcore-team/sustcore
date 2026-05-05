@@ -45,6 +45,11 @@ namespace schd {
             return _idle_schd;
         }
 
+        [[nodiscard]]
+        constexpr TCB *current_tcb() const {
+            return _curtcb;
+        }
+
         using BaseSchedPtr = util::nonnull<BaseSched<TCB> *>;
 
         constexpr Result<BaseSchedPtr> schd(ClassType type) {
@@ -95,6 +100,9 @@ namespace schd {
         void do_tick(const TimerTickEvent &e);
 
         void init();
+
+        [[noreturn]]
+        void run_current();
 
         /**
          * @brief 调度入口
