@@ -19,3 +19,5 @@ documents/
 .cache/
 compile_commands.json
 .zed/
+.omx/
+CLAUDE.md

@@ -47,7 +47,7 @@ features ?=
 base-features := NO_RTTI NO_EXCEPTIONS
 all-features := $(base-features) $(features)
 feature-defs := $(foreach feature, $(all-features), -D__SUS_$(feature)__=1)
-defs-cpp := -DASSERT_IMPLEMENTED=1 $(feature-defs)
+defs-cpp := -DASSERT_IMPLEMENTED=1 -D__CONF_KERNEL_TESTS=1 $(feature-defs)
 
 # ASM
 flags-asm := 

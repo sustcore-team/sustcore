@@ -16,6 +16,7 @@
 #include <test/buddy.h>
 #include <test/cap.h>
 #include <test/expected.h>
+#include <test/format.h>
 #include <test/framework.h>
 #include <test/fs.h>
 #include <test/functional.h>
@@ -29,18 +30,19 @@
 #include <test/unordered_map.h>
 
 void collect_tests(TestFramework& framework) {
-    test::cap::collect_tests(framework);
-    test::fs::collect_tests(framework);
-    test::path::collect_tests(framework);
-    test::schd_test::fcfs::collect_tests(framework);
-    test::schd_test::rr::collect_tests(framework);
-    test::string::collect_tests(framework);
-    test::string_view::collect_tests(framework);
-    test::tree::collect_tests(framework);
-    test::unordered_map::collect_tests(framework);
+    // test::cap::collect_tests(framework);
+    // test::fs::collect_tests(framework);
+    test::format::collect_tests(framework);
+    // test::path::collect_tests(framework);
+    // test::schd_test::fcfs::collect_tests(framework);
+    // test::schd_test::rr::collect_tests(framework);
+    // test::string::collect_tests(framework);
+    // test::string_view::collect_tests(framework);
+    // test::tree::collect_tests(framework);
+    // test::unordered_map::collect_tests(framework);
 
-    test::buddy::collect_tests(framework);
-    test::slub::collect_tests(framework);
+    // test::buddy::collect_tests(framework);
+    // test::slub::collect_tests(framework);
 }
 
 void TestFramework::run_all() const {

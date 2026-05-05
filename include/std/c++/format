@@ -1,0 +1,1403 @@
+/**
+ * @file format
+ * @author jeromeyao (yaoshengqi726@outlook.com)
+ * @brief C++20 std::format implementation for embedded systems.
+ *
+ * This header provides a minimal but standards-compliant implementation of
+ * C++20 std::format, including:
+ * - Formatters for integral types (int, long long, etc.) with binary, octal,
+ *   decimal, and hexadecimal output support.
+ * - Formatters for floating-point types (float, double) with fixed-point,
+ *   scientific, and general notation.
+ * - Formatters for bool, char, string, pointer, and nullptr_t.
+ * - Format string parsing supporting positional arguments and escape sequences.
+ *
+ * @version alpha-1.0.0
+ * @date 2026-04-23
+ *
+ * @copyright Copyright (c) 2026
+ */
+
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+
+#include <sus/tostring.h>
+
+namespace std {
+
+// ========================================================================
+// Forward declarations
+// ========================================================================
+
+/// Forward declaration of the formatter template. Specializations are
+/// provided for each supported type (int, char, bool, etc.).
+template <typename T>
+struct formatter;
+
+// ========================================================================
+// format_parse_context
+// ========================================================================
+
+/**
+ * Context object for parsing a format specification string.
+ *
+ * @note This class is based on std::format_parse_context from C++20.
+ * It tracks the current position within the format string and provides
+ * iteration capabilities for the formatter's parse() method.
+ *
+ * @example
+ *   format_parse_context ctx("{d}", 3);
+ *   // ctx.begin() points to 'd', ctx.end() points past '}';
+ */
+class format_parse_context {
+public:
+    using iterator = const char*;  ///< Iterator type for traversing the format string.
+
+    /** Constructs a parse context pointing to [fmt, fmt + len). */
+    constexpr format_parse_context(const char* fmt, size_t len) noexcept
+        : M_fmt(fmt), M_len(len), M_pos(0) {}
+
+    /** Returns an iterator to the beginning of the format string. */
+    constexpr iterator begin() const noexcept {
+        return M_fmt + M_pos;
+    }
+
+    /** Returns an iterator to the end of the format string. */
+    constexpr iterator end() const noexcept {
+        return M_fmt + M_len;
+    }
+
+    /** Returns the length of the format string. */
+    constexpr size_t size() const noexcept {
+        return M_len;
+    }
+
+    /**
+     * Advances the parse context to the given iterator position.
+     *
+     * @param it  Iterator to advance to. Must be within [begin(), end()].
+     *           If it exceeds end(), position is clamped to end().
+     */
+    constexpr void advance_to(iterator it) noexcept {
+        if (it >= M_fmt && it <= M_fmt + M_len) {
+            M_pos = static_cast<size_t>(it - M_fmt);
+        } else if (it > M_fmt + M_len) {
+            M_pos = M_len;
+        }
+    }
+
+private:
+    const char* M_fmt;   ///< Pointer to the start of the format string.
+    size_t M_len;        ///< Length of the format string.
+    size_t M_pos;        ///< Current parsing position (index into M_fmt).
+};
+
+// ========================================================================
+// format_context
+// ========================================================================
+
+/**
+ * Context object for formatting output.
+ *
+ * @note This class is based on std::format_context from C++20.
+ * It provides the output iterator and manages cursor position during
+ * formatting operations.
+ */
+class format_context {
+public:
+    using char_type = char;  ///< Character type for output.
+    using iterator = char*;  ///< Output iterator type.
+
+    /** Constructs a format context with the given output iterator. */
+    explicit format_context(iterator out) : M_out(out) {}
+
+    /** Returns the current output iterator position. */
+    iterator out() {
+        return M_out;
+    }
+
+    /**
+     * Advances the output iterator to a new position.
+     *
+     * @param it  New position for the output iterator.
+     */
+    void advance(iterator it) {
+        M_out = it;
+    }
+
+private:
+    iterator M_out;  ///< Current output position.
+};
+
+// ========================================================================
+// Internal helpers
+// ========================================================================
+
+namespace __format_detail {
+
+/**
+ * @file format
+ * @author jeromeyao (yaoshengqi726@outlook.com)
+ * @brief std::format 实现
+ * @version alpha-1.0.0
+ * @date 2026-04-23
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+// Buffer size sufficient for any integer representation:
+// - Binary: 64 bits = 64 chars + null = 65 (use 66)
+// - Hex: 16 hex digits + null = 17 (sufficient with margin)
+// - Decimal: 20 digits for 64-bit + null = 21
+constexpr size_t MAXINTBUF = 66;
+
+/**
+ * Writes a null-terminated string to the output iterator.
+ *
+ * @param[out] out  Reference to the output iterator pointer.
+ * @param[in]  s    Null-terminated string to write.
+ *
+ * @note This function does NOT write the null terminator to output.
+ */
+inline void write_str(char*& out, const char* s) {
+    while (*s) {
+        *out++ = *s++;
+    }
+}
+
+/**
+ * Converts an unsigned integer to hexadecimal string.
+ *
+ * @param[out] buf  Output buffer (must be at least MAXINTBUF).
+ * @param[in]  val  Value to convert.
+ * @param[in]  upper If true, uses uppercase letters (A-F); otherwise lowercase.
+ * @return The length of the resulting string (excluding null terminator).
+ *
+ * @note Handles val == 0 correctly, returning "0".
+ */
+inline size_t to_hex(char* buf, unsigned long long val, bool upper) {
+    if (val == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return 1;
+    }
+
+    static const char digits_l[] = "0123456789abcdef";
+    static const char digits_u[] = "0123456789ABCDEF";
+    const char* digits           = upper ? digits_u : digits_l;
+
+    char tmp[MAXINTBUF];
+    size_t cnt = 0;
+    while (val > 0) {
+        tmp[cnt++] = digits[val & 0xF];
+        val >>= 4;
+    }
+
+    // Reverse the digit order (stored LSB-first) into output buffer.
+    for (size_t i = 0; i < cnt; ++i) {
+        buf[i] = tmp[cnt - 1 - i];
+    }
+    buf[cnt] = '\0';
+    return cnt;
+}
+
+/**
+ * Converts an unsigned integer to binary string.
+ *
+ * @param[out] buf  Output buffer (must be at least MAXINTBUF).
+ * @param[in]  val  Value to convert.
+ * @return The length of the resulting string (excluding null terminator).
+ *
+ * @note Handles val == 0 correctly, returning "0".
+ */
+inline size_t to_bin(char* buf, unsigned long long val) {
+    if (val == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return 1;
+    }
+
+    char tmp[MAXINTBUF];
+    size_t cnt = 0;
+    while (val > 0) {
+        tmp[cnt++] = '0' + (val & 1ULL);
+        val >>= 1;
+    }
+
+    // Reverse the digit order (stored LSB-first) into output buffer.
+    for (size_t i = 0; i < cnt; ++i) {
+        buf[i] = tmp[cnt - 1 - i];
+    }
+    buf[cnt] = '\0';
+    return cnt;
+}
+
+/**
+ * Converts an unsigned integer to octal string.
+ *
+ * @param[out] buf  Output buffer (must be at least MAXINTBUF).
+ * @param[in]  val  Value to convert.
+ * @return The length of the resulting string (excluding null terminator).
+ *
+ * @note Handles val == 0 correctly, returning "0".
+ */
+inline size_t to_oct(char* buf, unsigned long long val) {
+    if (val == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return 1;
+    }
+
+    char tmp[MAXINTBUF];
+    size_t cnt = 0;
+    while (val > 0) {
+        tmp[cnt++] = '0' + (val & 7ULL);
+        val >>= 3;
+    }
+
+    // Reverse the digit order (stored LSB-first) into output buffer.
+    for (size_t i = 0; i < cnt; ++i) {
+        buf[i] = tmp[cnt - 1 - i];
+    }
+    buf[cnt] = '\0';
+    return cnt;
+}
+
+/**
+ * Converts a floating-point value to fixed-point decimal notation.
+ *
+ * @param[out] out  Output iterator pointer.
+ * @param[in]  val  Value to convert.
+ * @return Iterator pointing to the one-past-end of the written characters.
+ *
+ * Output format: "integer_part.fractional_part" (6 digits after decimal).
+ * Handles NaN by outputting "nan" (sign handled by caller).
+ * Handles negative values by writing '-' before the absolute value.
+ */
+inline char* float_to_dec(char* out, double val) {
+    if (val != val) {
+        write_str(out, "nan");
+        return out;
+    }
+
+    double absval = val;
+    if (val < 0.0) {
+        *out++ = '-';
+        absval = -val;
+    }
+
+    unsigned long long ipart = static_cast<unsigned long long>(absval);
+    double fpart              = absval - static_cast<double>(ipart);
+
+    char ibuf[32];
+    ulltoa(ipart, ibuf, 10);
+    write_str(out, ibuf);
+
+    *out++ = '.';
+
+    for (int i = 0; i < 6; ++i) {
+        fpart *= 10.0;
+        unsigned long long d = static_cast<unsigned long long>(fpart);
+        *out++               = '0' + static_cast<char>(d % 10);
+    }
+
+    return out;
+}
+
+/**
+ * Converts a floating-point value to scientific notation.
+ *
+ * @param[out] out  Output iterator pointer.
+ * @param[in]  val  Value to convert.
+ * @param[in]  upper If true, uses 'E' for exponent; otherwise 'e'.
+ * @return Iterator pointing to the one-past-end of the written characters.
+ *
+ * Output format: "digit.fractional_part[DE]sign_exponent" (6 digits after decimal).
+ * Example: 1.234560e+02 for 123.456
+ * Handles NaN by outputting "nan" (sign handled by caller).
+ * Handles zero by outputting "0.000000e+00" (or "0.000000E+00").
+ */
+inline char* float_to_sci(char* out, double val, bool upper) {
+    if (val != val) {
+        write_str(out, "nan");
+        return out;
+    }
+
+    double absval = val;
+    if (val < 0.0) {
+        *out++ = '-';
+        absval = -val;
+    }
+
+    if (absval == 0.0) {
+        write_str(out, upper ? "0.000000E+00" : "0.000000e+00");
+        return out;
+    }
+
+    // Normalize to [1.0, 10.0) and track exponent.
+    int exp = 0;
+    while (absval >= 10.0) {
+        absval /= 10.0;
+        ++exp;
+    }
+    while (absval < 1.0) {
+        absval *= 10.0;
+        --exp;
+    }
+
+    unsigned long long ipart = static_cast<unsigned long long>(absval);
+    double fpart              = absval - static_cast<double>(ipart);
+
+    char ibuf[8];
+    ulltoa(ipart, ibuf, 10);
+    write_str(out, ibuf);
+    *out++ = '.';
+
+    for (int i = 0; i < 6; ++i) {
+        fpart *= 10.0;
+        unsigned long long d = static_cast<unsigned long long>(fpart);
+        *out++               = '0' + static_cast<char>(d % 10);
+    }
+
+    *out++ = upper ? 'E' : 'e';
+    if (exp < 0) {
+        *out++ = '-';
+        exp    = -exp;
+    } else {
+        *out++ = '+';
+    }
+
+    // Zero-pad exponent to 2 digits if needed.
+    ulltoa(static_cast<unsigned long long>(exp), ibuf, 10);
+    if (exp < 10) {
+        *out++ = '0';
+    }
+    write_str(out, ibuf);
+
+    return out;
+}
+
+}  // namespace __format_detail
+
+// ========================================================================
+// __arg_storage
+//
+// Type transformation trait for format argument storage.
+// Handles the special case of string literals (char arrays) which decay
+// to const char* pointers, while other types use their decayed form.
+// ========================================================================
+
+/**
+ * Type transformation trait for format argument storage.
+ *
+ * For most types, the stored type is decay_t<T> (reference removed, array
+ * decayed to pointer). For char arrays (string literals), the stored type
+ * is explicitly const char* to preserve the string content.
+ *
+ * @tparam T  The type to transform.
+ *
+ * @example
+ *   int -> int
+ *   int& -> int
+ *   char[6] -> const char*
+ *   const char[6] -> const char*
+ */
+template <typename T>
+struct __arg_storage {
+    using type = decay_t<T>;
+};
+
+/** Specialization: char arrays decay to const char* for string literals. */
+template <size_t N>
+struct __arg_storage<char[N]> {
+    using type = const char*;
+};
+
+/** Specialization: const char arrays also decay to const char*. */
+template <size_t N>
+struct __arg_storage<const char[N]> {
+    using type = const char*;
+};
+
+/** Convenience alias for the transformed type. */
+template <typename T>
+using __arg_storage_t = typename __arg_storage<T>::type;
+
+// ========================================================================
+// format_args
+//
+// A type-safe container for format arguments, using a singly-linked list
+// inheritance chain. Each node stores one argument and chains to the next.
+// get<I>() recursively descends through the chain to retrieve element I.
+// ========================================================================
+
+/**
+ * Type-safe container for format arguments.
+ *
+ * @tparam Args  The types of arguments stored in this container.
+ *
+ * @note Uses private inheritance to create a singly-linked chain of nodes.
+ * Each node stores one argument in M_head and inherits from a node
+ * containing the remaining arguments. This avoids dynamic allocation.
+ *
+ * @example
+ *   format_args<int, const char*, double> args(42, "hello", 3.14);
+ *   args.get<0>();  // returns 42
+ *   args.get<1>();  // returns "hello"
+ *   args.get<2>();  // returns 3.14
+ */
+template <typename... Args>
+class format_args;
+
+// Empty specialization: terminal case with no arguments.
+template <>
+class format_args<> {
+public:
+    format_args() = default;
+    static constexpr size_t size() { return 0; }
+
+    /** Returns nullptr for out-of-range index. */
+    template <size_t> const void* get() const { return nullptr; }
+};
+
+/**
+ * Recursive specialization: stores first argument in M_head,
+ * chains to base class for remaining arguments.
+ */
+template <typename Head, typename... Tail>
+class format_args<Head, Tail...> : public format_args<Tail...> {
+private:
+    using base = format_args<Tail...>;
+    __arg_storage_t<Head> M_head;  ///< Stored argument (array decayed if needed).
+
+public:
+    /**
+     * Constructor forwarding arguments to appropriate storage.
+     *
+     * @param head  First argument (may be decayed to pointer for arrays).
+     * @param tail  Remaining arguments.
+     */
+    template <typename H, typename... Ts>
+    format_args(H&& head, Ts&&... tail)
+        : base(std::forward<Ts>(tail)...),
+          M_head(__arg_storage_t<Head>(std::forward<H>(head))) {}
+
+    static constexpr size_t size() { return 1 + sizeof...(Tail); }
+
+    /**
+     * Gets a reference to the I-th argument.
+     *
+     * @tparam I  Index of the argument to retrieve.
+     * @return Reference to the stored argument.
+     *
+     * @note For I == 0, returns M_head. Otherwise recursively calls
+     *       base::get<I-1>() to descend the chain.
+     */
+    template <size_t I>
+    constexpr auto& get() {
+        if constexpr (I == 0) {
+            return M_head;
+        } else {
+            return base::template get<I - 1>();
+        }
+    }
+
+    /// Const overload of get().
+    template <size_t I>
+    constexpr const auto& get() const {
+        if constexpr (I == 0) {
+            return M_head;
+        } else {
+            return base::template get<I - 1>();
+        }
+    }
+};
+
+// ========================================================================
+// formatter specializations
+// ========================================================================
+
+/**
+ * formatter specialization for const char*.
+ *
+ * Outputs the string up to (but not including) the null terminator.
+ * Format specifiers are ignored for string output.
+ */
+template <>
+struct formatter<const char*> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(const char* val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        while (*val) {
+            *out++ = *val++;
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for char. */
+template <>
+struct formatter<char> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(char val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        *out++   = val;
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/**
+ * formatter specialization for bool.
+ *
+ * Supports two format types:
+ * - 'b' or unspecified: outputs "true"/"false" (boolalpha format).
+ * - 'd': outputs "1"/"0" (numeric format).
+ *
+ * @note This differs from printf-style where %d would output 1/0 for bool.
+ *       The C++20 standard specifies 'b' for boolalpha and 'd' for numeric.
+ */
+template <>
+struct formatter<bool> {
+    bool M_boolalpha = true;  ///< If true, outputs boolalpha (true/false).
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'b') {
+                M_boolalpha = true;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'd') {
+                M_boolalpha = false;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(bool val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        if (M_boolalpha) {
+            __format_detail::write_str(out, val ? "true" : "false");
+        } else {
+            __format_detail::write_str(out, val ? "1" : "0");
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/**
+ * formatter specialization for int.
+ *
+ * Supports the following format types:
+ * - 'd': decimal (base 10), e.g., 42, -123
+ * - 'b': binary (base 2), e.g., 101010
+ * - 'o': octal (base 8), e.g., 52
+ * - 'x': hexadecimal lowercase (base 16), e.g., 2a
+ * - 'X': hexadecimal uppercase (base 16), e.g., 2A
+ *
+ * @note For negative values, the minus sign is output first, followed by
+ *       the absolute value in the specified radix. This matches std::to_chars.
+ */
+template <>
+struct formatter<int> {
+    enum class FormatType { Decimal, Binary, Octal, Hex, HexUpper };
+    FormatType M_type = FormatType::Decimal;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'b') {
+                M_type = FormatType::Binary;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'o') {
+                M_type = FormatType::Octal;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'x') {
+                M_type = FormatType::Hex;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'X') {
+                M_type = FormatType::HexUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'd') {
+                M_type = FormatType::Decimal;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(int val, FormatContext& ctx) const {
+        char buf[32];
+        char* out = ctx.out();
+        unsigned long long uval;
+
+        // Handle negative values: write '-' first, then compute absolute value
+        // using the identity: -(val+1)+1 avoids overflow for INT_MIN.
+        if (val < 0) {
+            *out++ = '-';
+            uval = static_cast<unsigned long long>(-(val + 1)) + 1ULL;
+        } else {
+            uval = static_cast<unsigned long long>(val);
+        }
+
+        if (M_type == FormatType::Decimal) {
+            ulltoa(uval, buf, 10);
+            __format_detail::write_str(out, buf);
+            out += strlen(buf);
+        } else if (M_type == FormatType::Binary) {
+            size_t len = __format_detail::to_bin(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else if (M_type == FormatType::Octal) {
+            size_t len = __format_detail::to_oct(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else {
+            bool upper = (M_type == FormatType::HexUpper);
+            size_t len = __format_detail::to_hex(buf, uval, upper);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for unsigned int. Same format types as int. */
+template <>
+struct formatter<unsigned> {
+    enum class FormatType { Decimal, Binary, Octal, Hex, HexUpper };
+    FormatType M_type = FormatType::Decimal;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'b') {
+                M_type = FormatType::Binary;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'o') {
+                M_type = FormatType::Octal;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'x') {
+                M_type = FormatType::Hex;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'X') {
+                M_type = FormatType::HexUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'd') {
+                M_type = FormatType::Decimal;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(unsigned val, FormatContext& ctx) const {
+        char buf[32];
+        char* out = ctx.out();
+        unsigned long long uval = static_cast<unsigned long long>(val);
+        if (M_type == FormatType::Decimal) {
+            ulltoa(uval, buf, 10);
+            __format_detail::write_str(out, buf);
+            out += strlen(buf);
+        } else if (M_type == FormatType::Binary) {
+            size_t len = __format_detail::to_bin(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else if (M_type == FormatType::Octal) {
+            size_t len = __format_detail::to_oct(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else {
+            bool upper = (M_type == FormatType::HexUpper);
+            size_t len = __format_detail::to_hex(buf, uval, upper);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for long long. Same format types as int. */
+template <>
+struct formatter<long long> {
+    enum class FormatType { Decimal, Binary, Octal, Hex, HexUpper };
+    FormatType M_type = FormatType::Decimal;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'b') {
+                M_type = FormatType::Binary;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'o') {
+                M_type = FormatType::Octal;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'x') {
+                M_type = FormatType::Hex;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'X') {
+                M_type = FormatType::HexUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'd') {
+                M_type = FormatType::Decimal;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(long long val, FormatContext& ctx) const {
+        char buf[32];
+        char* out = ctx.out();
+        unsigned long long uval;
+        if (val < 0) {
+            *out++ = '-';
+            uval = static_cast<unsigned long long>(-(val + 1)) + 1ULL;
+        } else {
+            uval = static_cast<unsigned long long>(val);
+        }
+        if (M_type == FormatType::Decimal) {
+            ulltoa(uval, buf, 10);
+            __format_detail::write_str(out, buf);
+            out += strlen(buf);
+        } else if (M_type == FormatType::Binary) {
+            size_t len = __format_detail::to_bin(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else if (M_type == FormatType::Octal) {
+            size_t len = __format_detail::to_oct(buf, uval);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else {
+            bool upper = (M_type == FormatType::HexUpper);
+            size_t len = __format_detail::to_hex(buf, uval, upper);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for unsigned long long. Same format types as int. */
+template <>
+struct formatter<unsigned long long> {
+    enum class FormatType { Decimal, Binary, Octal, Hex, HexUpper };
+    FormatType M_type = FormatType::Decimal;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'b') {
+                M_type = FormatType::Binary;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'o') {
+                M_type = FormatType::Octal;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'x') {
+                M_type = FormatType::Hex;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'X') {
+                M_type = FormatType::HexUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'd') {
+                M_type = FormatType::Decimal;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(unsigned long long val, FormatContext& ctx) const {
+        char buf[32];
+        char* out = ctx.out();
+        if (M_type == FormatType::Decimal) {
+            ulltoa(val, buf, 10);
+            __format_detail::write_str(out, buf);
+            out += strlen(buf);
+        } else if (M_type == FormatType::Binary) {
+            size_t len = __format_detail::to_bin(buf, val);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else if (M_type == FormatType::Octal) {
+            size_t len = __format_detail::to_oct(buf, val);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        } else {
+            bool upper = (M_type == FormatType::HexUpper);
+            size_t len = __format_detail::to_hex(buf, val, upper);
+            for (size_t i = 0; i < len; ++i) {
+                *out++ = buf[i];
+            }
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/**
+ * formatter specialization for const void*.
+ *
+ * Outputs the pointer address in hexadecimal with "0x" prefix.
+ * Format specifiers are ignored for pointer output.
+ */
+template <>
+struct formatter<const void*> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(const void* val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        __format_detail::write_str(out, "0x");
+
+        unsigned long long addr = reinterpret_cast<unsigned long long>(val);
+        char buf[__format_detail::MAXINTBUF];
+        size_t len = __format_detail::to_hex(buf, addr, false);
+        for (size_t i = 0; i < len; ++i) {
+            *out++ = buf[i];
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for int*. Same behavior as const void*. */
+template <>
+struct formatter<int*> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(int* val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        __format_detail::write_str(out, "0x");
+
+        unsigned long long addr = reinterpret_cast<unsigned long long>(val);
+        char buf[__format_detail::MAXINTBUF];
+        size_t len = __format_detail::to_hex(buf, addr, false);
+        for (size_t i = 0; i < len; ++i) {
+            *out++ = buf[i];
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for std::nullptr_t. Outputs "0x0". */
+template <>
+struct formatter<std::nullptr_t> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(std::nullptr_t, FormatContext& ctx) const {
+        char* out = ctx.out();
+        __format_detail::write_str(out, "0x0");
+        ctx.advance(out + 3);
+        return out;
+    }
+};
+
+/**
+ * formatter specialization for float.
+ *
+ * Supports the following format types:
+ * - 'f' or 'F': fixed-point notation, e.g., 3.140000
+ * - 'e' or 'E': scientific notation, e.g., 3.140000e+00
+ * - 'g' or 'G': general notation (uses shortest representation)
+ * - unspecified: defaults to general notation
+ */
+template <>
+struct formatter<float> {
+    enum class FormatType { General, Fixed, Exp, ExpUpper };
+    FormatType M_type = FormatType::General;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'f' || *it == 'F') {
+                M_type = FormatType::Fixed;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'e') {
+                M_type = FormatType::Exp;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'E') {
+                M_type = FormatType::ExpUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'g' || *it == 'G') {
+                M_type = FormatType::General;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(float val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        if (M_type == FormatType::Exp) {
+            out = __format_detail::float_to_sci(out, static_cast<double>(val), false);
+        } else if (M_type == FormatType::ExpUpper) {
+            out = __format_detail::float_to_sci(out, static_cast<double>(val), true);
+        } else {
+            out = __format_detail::float_to_dec(out, static_cast<double>(val));
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for double. Same format types as float. */
+template <>
+struct formatter<double> {
+    enum class FormatType { General, Fixed, Exp, ExpUpper };
+    FormatType M_type = FormatType::General;
+
+    constexpr const char* parse(format_parse_context& ctx) {
+        const char* it = ctx.begin();
+        if (it != ctx.end()) {
+            if (*it == 'f' || *it == 'F') {
+                M_type = FormatType::Fixed;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'e') {
+                M_type = FormatType::Exp;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'E') {
+                M_type = FormatType::ExpUpper;
+                ctx.advance_to(it + 1);
+            } else if (*it == 'g' || *it == 'G') {
+                M_type = FormatType::General;
+                ctx.advance_to(it + 1);
+            }
+        }
+        return it;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(double val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        if (M_type == FormatType::Exp) {
+            out = __format_detail::float_to_sci(out, val, false);
+        } else if (M_type == FormatType::ExpUpper) {
+            out = __format_detail::float_to_sci(out, val, true);
+        } else {
+            out = __format_detail::float_to_dec(out, val);
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+/** formatter specialization for std::string. */
+template <>
+struct formatter<std::string> {
+    constexpr const char* parse(format_parse_context& /*ctx*/) {
+        return nullptr;
+    }
+
+    template <typename FormatContext>
+    constexpr typename FormatContext::iterator
+        format(const std::string& val, FormatContext& ctx) const {
+        char* out = ctx.out();
+        for (char c : val) {
+            *out++ = c;
+        }
+        ctx.advance(out);
+        return out;
+    }
+};
+
+// ========================================================================
+// make_format_args
+// ========================================================================
+
+/**
+ * Creates a format_args object from the provided arguments.
+ *
+ * @tparam Args  The types of arguments.
+ * @param args   The arguments to store.
+ * @return A format_args object containing all arguments.
+ *
+ * @note This function applies __arg_storage transformation to each argument,
+ *       handling string literal decay to const char*.
+ */
+template <typename... Args>
+[[nodiscard]]
+format_args<__arg_storage_t<remove_reference_t<Args>>...> make_format_args(Args&&... args) {
+    return format_args<__arg_storage_t<remove_reference_t<Args>>...>{std::forward<Args>(args)...};
+}
+
+// ========================================================================
+// vformat declaration
+// ========================================================================
+
+/**
+ * Formats arguments according to a format string (non-template version).
+ *
+ * @tparam Args  The types of format arguments.
+ * @param fmt   The format string.
+ * @param args  The arguments to format.
+ * @return A string containing the formatted output.
+ */
+template <typename... Args>
+[[nodiscard]]
+string vformat(const char* fmt, const format_args<Args...>& args);
+
+// ========================================================================
+// format
+// ========================================================================
+
+/**
+ * Formats arguments according to a format string.
+ *
+ * @tparam Args  The types of format arguments.
+ * @param fmt   The format string.
+ * @param args  The arguments to format.
+ * @return A string containing the formatted output.
+ *
+ * @note Format string syntax:
+ *       - Ordinary characters (except { and }) are copied unchanged.
+ *       - {{ is replaced with { (escape sequence).
+ *       - }} is replaced with } (escape sequence).
+ *       - {I} or {I:format} is a replacement field for argument I (0-indexed).
+ *       - {} is auto-indexed, incrementing from 0.
+ *
+ * @example
+ *   std::format("Hello {}!", "world")  // "Hello world!"
+ *   std::format("{1} {0}", "first", "second")  // "second first"
+ *   std::format("{{hello}}")  // "{hello}"
+ */
+template <typename... Args>
+[[nodiscard]]
+string format(const char* fmt, Args&&... args) {
+    return vformat(fmt, make_format_args(args...));
+}
+
+// ========================================================================
+// format_to
+// ========================================================================
+
+/**
+ * Formats arguments directly into an output range.
+ *
+ * @tparam OutputIt  Output iterator type.
+ * @tparam Args       The types of format arguments.
+ * @param it          Output iterator to write to.
+ * @param fmt         The format string.
+ * @param args        The arguments to format.
+ * @return Iterator pointing to the position after the last character written.
+ *
+ * @note This function first formats into a temporary string, then copies
+ *       to the output range. For better performance with OutputIt ranges,
+ *       consider using the vformat overload directly.
+ */
+template <typename OutputIt, typename... Args>
+OutputIt format_to(OutputIt it, const char* fmt, Args&&... args) {
+    string result = vformat(fmt, make_format_args(args...));
+    for (char c : result) {
+        *it++ = c;
+    }
+    return it;
+}
+
+// ========================================================================
+// Internal formatting helpers
+// ========================================================================
+
+namespace __format_detail {
+
+/**
+ * Implementation helper for formatting a specific argument by index.
+ *
+ * @tparam I      The total number of elements in this node.
+ * @tparam Head   The type of the first argument.
+ * @tparam Tail   The types of remaining arguments.
+ * @param out     Output buffer pointer.
+ * @param idx     Index of the argument to format.
+ * @param args    The format_args object.
+ * @param spec    Format specification string.
+ * @param spec_len Length of the format specification.
+ * @return Iterator pointing past the last character written.
+ *
+ * @note For idx == 0, formats Head directly. Otherwise, casts to the
+ *       base class (which drops Head) and recurses with idx-1.
+ */
+template <size_t I, typename Head, typename... Tail>
+char* format_arg_by_idx_impl(char* out, size_t idx,
+                              const format_args<Head, Tail...>& args,
+                              const char* spec, size_t spec_len) {
+    if (idx == 0) {
+        auto& val = args.template get<0>();
+        using T  = __arg_storage_t<decay_t<decltype(val)>>;
+        formatter<T> f;
+        format_parse_context pctx(spec, spec_len);
+        f.parse(pctx);
+        format_context fctx(out);
+        return f.format(val, fctx);
+    } else if constexpr (I == 1) {
+        // Only 2 elements: recurse to 2-element overload via base class.
+        return format_arg_by_idx_impl<I - 1>(out, idx - 1,
+            *static_cast<const format_args<Tail...>*>(&args), spec, spec_len);
+    } else if constexpr (I > 1) {
+        // Recurse to next level via base class (drops Head).
+        return format_arg_by_idx_impl<I - 1>(out, idx - 1,
+            *static_cast<const format_args<Tail...>*>(&args), spec, spec_len);
+    } else {
+        return out;  // out of range
+    }
+}
+
+/** Base case for single-element format_args. */
+template <typename Head>
+char* format_arg_by_idx_impl(char* out, size_t idx,
+                              const format_args<Head>& args,
+                              const char* spec, size_t spec_len) {
+    if (idx == 0) {
+        auto& val = args.template get<0>();
+        using T  = __arg_storage_t<decay_t<decltype(val)>>;
+        formatter<T> f;
+        format_parse_context pctx(spec, spec_len);
+        f.parse(pctx);
+        format_context fctx(out);
+        return f.format(val, fctx);
+    }
+    return out;  // out of range
+}
+
+/**
+ * Overload for 2-element format_args.
+ *
+ * @note This separate overload is needed because the base class (format_args<Tail>)
+ *       has only 1 element, so the recursive cast approach doesn't work for 2 elements.
+ */
+template <typename Head, typename Tail>
+char* format_arg_by_idx_impl(char* out, size_t idx,
+                              const format_args<Head, Tail>& args,
+                              const char* spec, size_t spec_len) {
+    if (idx == 0) {
+        auto& val = args.template get<0>();
+        using T  = __arg_storage_t<decay_t<decltype(val)>>;
+        formatter<T> f;
+        format_parse_context pctx(spec, spec_len);
+        f.parse(pctx);
+        format_context fctx(out);
+        return f.format(val, fctx);
+    } else {
+        // idx == 1, get from base class (format_args<Tail>).
+        auto& val = args.template get<1>();
+        using T  = __arg_storage_t<decay_t<decltype(val)>>;
+        formatter<T> f;
+        format_parse_context pctx(spec, spec_len);
+        f.parse(pctx);
+        format_context fctx(out);
+        return f.format(val, fctx);
+    }
+}
+
+/**
+ * Top-level dispatcher for argument formatting.
+ *
+ * @tparam Args  The types of all format arguments.
+ * @param out    Output buffer pointer.
+ * @param idx    Index of the argument to format.
+ * @param args   The format_args object.
+ * @param spec   Format specification string.
+ * @param spec_len Length of the format specification.
+ * @return Iterator pointing past the last character written.
+ */
+template <typename... Args>
+char* format_arg_by_idx(char* out, size_t idx,
+                        const format_args<Args...>& args,
+                        const char* spec, size_t spec_len) {
+    if constexpr (sizeof...(Args) == 0) {
+        return out;
+    } else {
+        return format_arg_by_idx_impl<sizeof...(Args) - 1>(out, idx, args, spec, spec_len);
+    }
+}
+
+}  // namespace __format_detail
+
+// ========================================================================
+// vformat implementation
+// ========================================================================
+
+/**
+ * Formats arguments according to a format string.
+ *
+ * @tparam Args  The types of format arguments.
+ * @param fmt   The format string.
+ * @param args  The arguments to format.
+ * @return A string containing the formatted output.
+ *
+ * @note The format string is parsed left-to-right. Characters other than
+ *       '{' and '}' are copied to the output. When '{' is encountered,
+ *       it may be followed by an optional argument index, a ':' for format
+ *       specifiers, and must be closed by '}'. The sequence '{{' produces
+ *       a literal '{' and '}}' produces a literal '}'.
+ *
+ * Escape sequences:
+ *   {{  -> {
+ *   }}  -> }
+ *
+ * Replacement field syntax:
+ *   { [argument-index] [ : format-spec ] }
+ *
+ * @example
+ *   vformat("Hello {}!", make_format_args("world"))
+ *   // Returns "Hello world!"
+ */
+template <typename... Args>
+[[nodiscard]]
+string vformat(const char* fmt, const format_args<Args...>& args) {
+    string result;
+    result.reserve(64);
+
+    const char* p = fmt;
+    unsigned next_arg_idx = 0;
+
+    while (*p) {
+        if (*p == '{') {
+            const char* brace_start = p;
+            p++;
+
+            // Handle escaped '{' -> output literal '{'.
+            if (*p == '{') {
+                result.push_back('{');
+                p++;
+                continue;
+            }
+
+            // Parse argument index (0-based).
+            unsigned idx = 0;
+            bool has_idx = false;
+            if (*p >= '0' && *p <= '9') {
+                has_idx = true;
+                while (*p >= '0' && *p <= '9') {
+                    idx = idx * 10 + static_cast<unsigned>(*p - '0');
+                    p++;
+                }
+            }
+
+            // Parse format specification after ':'.
+            const char* spec = "";
+            size_t spec_len = 0;
+            if (*p == ':') {
+                const char* spec_start = p + 1;
+                int depth = 1;
+                // Skip nested braces in format spec (e.g., {:{}}).
+                while (*p && depth > 0) {
+                    if (*p == '{')
+                        depth++;
+                    else if (*p == '}')
+                        depth--;
+                    if (depth > 0)
+                        p++;
+                }
+                spec = spec_start;
+                spec_len = static_cast<size_t>(p - spec_start);
+            }
+
+            // Find closing '}' for the replacement field.
+            while (*p && *p != '}') {
+                p++;
+            }
+            if (*p != '}') {
+                // Unmatched '{' - output as-is.
+                result.append(brace_start,
+                              static_cast<size_t>(p - brace_start));
+                break;
+            }
+            p++;
+
+            // Assign argument index: auto-increment or use explicit value.
+            if (!has_idx) {
+                idx = next_arg_idx++;
+            } else {
+                next_arg_idx = idx + 1;
+            }
+
+            // Bounds check.
+            if (idx >= sizeof...(Args)) {
+                result.push_back('?');
+                continue;
+            }
+
+            // Format the argument into a temporary buffer, then append.
+            char buf[256] = {};
+            __format_detail::format_arg_by_idx(buf, idx, args, spec, spec_len);
+            result.append(buf, strlen(buf));
+        } else if (*p == '}') {
+            // Handle escaped '}' -> output literal '}'.
+            if (p[1] == '}') {
+                result.push_back('}');
+                p += 2;
+            } else {
+                // Standalone '}' - output as-is (non-standard but permissive).
+                result.push_back('}');
+                p++;
+            }
+        } else {
+            result.push_back(*p);
+            p++;
+        }
+    }
+
+    return result;
+}
+
+}  // namespace std
