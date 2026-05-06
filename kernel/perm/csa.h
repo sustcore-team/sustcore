@@ -35,7 +35,7 @@ namespace perm::csa {
     // SLOT_REMOVE, SLOT_SHARE位都将被清除 用于防止槽位的二次分发
     constexpr b64 SLOT_SHARE  = 0x8;
     constexpr b64 BITMAP_SIZE =
-        (CSPACE_SIZE * SLOT_BITS + 63) / 64;  // 向上取整为b64的数量
+        (cap::CSPACE_SIZE * SLOT_BITS + 63) / 64;  // 向上取整为b64的数量
 
     // 得到位图偏移
     inline size_t bitmap_offset(size_t group_idx) {

@@ -13,12 +13,11 @@
 #include <perm/permission.h>
 #include <sus/defer.h>
 #include <sus/raii.h>
+
 #include <cstddef>
 
 PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, PayloadType type)
-    : basic_permissions(basic),
-      permission_bitmap(nullptr),
-      type(type) {
+    : basic_permissions(basic), permission_bitmap(nullptr), type(type) {
     if (is_inline(type)) {
         if (bitmap != nullptr) {
             loggers::CAPABILITY::WARN(
@@ -29,7 +28,7 @@ PermissionBits::PermissionBits(b64 basic, const b64 *bitmap, PayloadType type)
         return;
     }
     const size_t bitmap_size = to_bitmap_size(type);
-    assert (bitmap_size > 0);
+    assert(bitmap_size > 0);
     permission_bitmap = new b64[bitmap_size];
     if (bitmap != nullptr) {
         memcpy(permission_bitmap, bitmap, bitmap_size * sizeof(b64));
@@ -55,6 +54,10 @@ PermissionBits::PermissionBits(PermissionBits &&other)
     other.permission_bitmap = nullptr;
 }
 
+PermissionBits::PermissionBits(const PermissionBits &other)
+    : PermissionBits(other.basic_permissions, other.permission_bitmap,
+                     other.type) {}
+
 bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     if (this->type != other.type) {
         return false;
@@ -68,15 +71,18 @@ bool PermissionBits::imply(const PermissionBits &other) const noexcept {
     return complete_imply(other);
 }
 
-bool PermissionBits::complete_imply(const PermissionBits &other) const noexcept {
+bool PermissionBits::complete_imply(
+    const PermissionBits &other) const noexcept {
     if (!BITS_IMPLIES(this->basic_permissions, other.basic_permissions)) {
         return false;
     }
 
     // 之后再比较 permission_bitmap
     const size_t bitmap_size = to_bitmap_size(this->type);
-    assert (bitmap_size > 0);
-    if (this->permission_bitmap == nullptr || other.permission_bitmap == nullptr) {
+    assert(bitmap_size > 0);
+    if (this->permission_bitmap == nullptr ||
+        other.permission_bitmap == nullptr)
+    {
         // 如果类型需要权限位图, 但其中一个权限对象的位图为nullptr,
         // 则视为不满足权限要求
         return false;
@@ -108,7 +114,7 @@ Result<void> PermissionBits::downgrade(const PermissionBits &new_perm) {
     }
 
     const size_t bitmap_size = to_bitmap_size(this->type);
-    assert (bitmap_size > 0);
+    assert(bitmap_size > 0);
     assert(this->permission_bitmap != nullptr);
     assert(new_perm.permission_bitmap != nullptr);
     // 复制权限位图
@@ -117,24 +123,17 @@ Result<void> PermissionBits::downgrade(const PermissionBits &new_perm) {
     return {};
 }
 
-PermissionBits PermissionBits::clone() const {
-    return PermissionBits(this->basic_permissions,
-                          this->permission_bitmap, this->type);
-}
-
 PermissionBits PermissionBits::allperm(PayloadType type) {
     return PermissionBits(AllPermTag{}, type);
 }
 
 PermissionBits::PermissionBits(AllPermTag, PayloadType type)
-    : basic_permissions(~0ULL),
-      permission_bitmap(nullptr),
-      type(type) {
+    : basic_permissions(~0ULL), permission_bitmap(nullptr), type(type) {
     if (is_inline(type)) {
         return;
     }
     size_t bitmap_size = to_bitmap_size(type);
-    assert (bitmap_size > 0);
+    assert(bitmap_size > 0);
     permission_bitmap = new b64[bitmap_size];
     memset(permission_bitmap, 0xFF, bitmap_size * sizeof(b64));
 }

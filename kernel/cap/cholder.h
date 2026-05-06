@@ -17,148 +17,140 @@
 #include <sustcore/capability.h>
 #include <sustcore/errcode.h>
 
-// 能力发送记录
-struct SendRecord {
-public:
-    struct SenderInfo {
+namespace cap {
+    // 能力发送记录
+    struct SendRecord {
+    public:
+        struct SenderInfo {
+            size_t sender_id;
+            CapIdx cap_idx;
+        };
+
+    private:
+        size_t _timestamp       = 0;
+        SenderInfo _sender_info = {};
+        size_t _target_id       = 0;
+
+    public:
+        constexpr SendRecord() = default;
+        constexpr SendRecord(size_t timestamp, SenderInfo sender_info,
+                             size_t target_id)
+            : _timestamp(timestamp),
+              _sender_info(sender_info),
+              _target_id(target_id) {}
+        [[nodiscard]]
+        size_t target_id() const {
+            return _target_id;
+        }
+        [[nodiscard]]
+        size_t sender_id() const {
+            return _sender_info.sender_id;
+        }
+        [[nodiscard]]
+        CapIdx cap_idx() const {
+            return _sender_info.cap_idx;
+        }
+        [[nodiscard]]
+        size_t timestamp() const {
+            return _timestamp;
+        }
+    };
+
+    // 能力接收凭证
+    struct ReceiveToken {
         size_t sender_id;
-        CapIdx cap_idx;
+        size_t record_idx;
+        size_t timestamp;
     };
 
-private:
-    size_t _timestamp       = 0;
-    SenderInfo _sender_info = {};
-    size_t _target_id       = 0;
+    // 能够持有能力的对象称为能力持有者 (Capability Holder)
+    // 例如, Process就是一种典型的能力持有者.
+    // 又如, VFS也是一种能力持有者, 因为它持有着文件系统的能力 (如根目录的能力).
+    class CHolder {
+    private:
+        CSpace _space;
+        size_t _id;
+        // send record queue, 用于记录该能力持有者发送过的能力
+        constexpr static size_t SENDRECORDS = 64;
+        SendRecord _send_records[SENDRECORDS];
+        size_t _send_record_idx = 0;
 
-public:
-    constexpr SendRecord() = default;
-    constexpr SendRecord(size_t timestamp, SenderInfo sender_info,
-                         size_t target_id)
-        : _timestamp(timestamp),
-          _sender_info(sender_info),
-          _target_id(target_id) {}
-    [[nodiscard]]
-    size_t target_id() const {
-        return _target_id;
-    }
-    [[nodiscard]]
-    size_t sender_id() const {
-        return _sender_info.sender_id;
-    }
-    [[nodiscard]]
-    CapIdx cap_idx() const {
-        return _sender_info.cap_idx;
-    }
-    [[nodiscard]]
-    size_t timestamp() const {
-        return _timestamp;
-    }
-};
+    public:
+        CHolder(size_t _id);
+        ~CHolder();
 
-// 能力接收凭证
-struct ReceiveToken {
-    size_t sender_id;
-    size_t record_idx;
-    size_t timestamp;
-};
-
-// 能够持有能力的对象称为能力持有者 (Capability Holder)
-// 例如, Process就是一种典型的能力持有者.
-// 又如, VFS也是一种能力持有者, 因为它持有着文件系统的能力 (如根目录的能力).
-class CHolder {
-private:
-    CSpace _space;
-    CapIdx _csa_idx = capidx::make(0, 1);  // 指向自身CSpace访问器(最大)的能力索引
-    size_t cholder_id;
-    // send record queue, 用于记录该能力持有者发送过的能力
-    constexpr static size_t SENDRECORDS = 64;
-    SendRecord _send_records[SENDRECORDS];
-    size_t _send_record_idx = 0;
-public:
-    CHolder(size_t cholder_id);
-    ~CHolder();
-
-    [[nodiscard]]
-    constexpr size_t id() const {
-        return cholder_id;
-    }
-
-    [[nodiscard]]
-    constexpr const CSpace &space() const {
-        return _space;
-    }
-    [[nodiscard]]
-    constexpr CSpace &space() {
-        return _space;
-    }
-
-    [[nodiscard]]
-    Result<Capability *> access(CapIdx idx) {
-        if (!capidx::valid(idx)) {
-            return {unexpect, ErrCode::TYPE_NOT_MATCHED};
+        [[nodiscard]]
+        constexpr size_t id() const {
+            return _id;
         }
 
-        return _space.get(idx);
-    }
+        [[nodiscard]]
+        constexpr const CSpace &space() const {
+            return _space;
+        }
+        [[nodiscard]]
+        constexpr CSpace &space() {
+            return _space;
+        }
 
-    [[nodiscard]]
-    Result<Capability *> csa() {
-        return access(_csa_idx);
+        [[nodiscard]]
+        Result<Capability *> access(CapIdx idx) {
+            if (!cap::valid(idx)) {
+                return {unexpect, ErrCode::TYPE_NOT_MATCHED};
+            }
+
+            return _space.get(idx);
+        }
+
+        [[nodiscard]]
+        Result<ReceiveToken> send_capability(size_t target_id, CapIdx cap_idx);
+        // 尝试从send record queue中查找记录
+        // 如果找到一条合法的记录, 则返回对应的能力索引, 并将其从记录中移除
+        // 否则, 返回一个错误
+        [[nodiscard]]
+        Result<CapIdx> try_receive(size_t receiver_id, ReceiveToken token);
     };
 
-    [[nodiscard]]
-    constexpr CapIdx csa_idx() const {
-        return _csa_idx;
-    }
-
-    [[nodiscard]]
-    Result<ReceiveToken> send_capability(size_t target_id, CapIdx cap_idx);
-    // 尝试从send record queue中查找记录
-    // 如果找到一条合法的记录, 则返回对应的能力索引, 并将其从记录中移除
-    // 否则, 返回一个错误
-    [[nodiscard]]
-    Result<CapIdx> try_receive(size_t receiver_id, ReceiveToken token);
-};
-
-class CHolderManager {
-private:
-    size_t __cholder_id = 0;
-    constexpr size_t __id_alloc() {
-        return __cholder_id++;
-    }
-    util::LinkedMap<size_t, CHolder *> _holders;
-    size_t _timestamp = 1;  // 用于记录发送记录的时间戳, 每次发送能力时递增
-public:
-    CHolderManager() = default;
-
-    [[nodiscard]]
-    Result<CHolder *> get_holder(size_t id) const {
-        return _holders.get(id)
-            .transform_error(always(ErrCode::OUT_OF_BOUNDARY))
-            .transform(
-                std::mem_fn(&std::reference_wrapper<CHolder *const>::get));
-    }
-
-    template <typename... Args>
-    Result<CHolder *> create_holder(Args &&...args) {
-        size_t id   = __id_alloc();
-        auto holder = new CHolder(id, std::forward<Args>(args)...);
-        _holders.put(id, holder);
-        return holder;
-    }
-
-    Result<void> remove_holder(size_t id) {
-        if (!_holders.contains(id)) {
-            return {unexpect, ErrCode::OUT_OF_BOUNDARY};
+    class CHolderManager {
+    private:
+        size_t __cur_id = 0;
+        constexpr size_t _new_id() {
+            return __cur_id++;
         }
-        auto holder = _holders.get(id).value();
-        delete holder;
-        _holders.remove(id);
-        void_return();
-    }
+        util::LinkedMap<size_t, CHolder *> _holders;
+        size_t _timestamp = 1;  // 用于记录发送记录的时间戳, 每次发送能力时递增
+    public:
+        CHolderManager() = default;
 
-    [[nodiscard]]
-    size_t timestamp() {
-        return _timestamp++;
-    }
-};
+        [[nodiscard]]
+        Result<CHolder *> get_holder(size_t _id) const {
+            return _holders.get(_id)
+                .transform_error(always(ErrCode::OUT_OF_BOUNDARY))
+                .transform(
+                    std::mem_fn(&std::reference_wrapper<CHolder *const>::get));
+        }
+
+        template <typename... Args>
+        Result<CHolder *> create_holder(Args &&...args) {
+            size_t _id  = _new_id();
+            auto holder = new CHolder(_id, std::forward<Args>(args)...);
+            _holders.put(_id, holder);
+            return holder;
+        }
+
+        Result<void> remove_holder(size_t _id) {
+            if (!_holders.contains(_id)) {
+                return {unexpect, ErrCode::OUT_OF_BOUNDARY};
+            }
+            auto holder = _holders.get(_id).value();
+            delete holder;
+            _holders.remove(_id);
+            void_return();
+        }
+
+        [[nodiscard]]
+        size_t timestamp() {
+            return _timestamp++;
+        }
+    };
+}  // namespace cap

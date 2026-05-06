@@ -59,7 +59,7 @@ namespace env {
     private:
         TaskMemoryManager *_tmm;
         VFS *_vfs;
-        CHolderManager *_chman;
+        cap::CHolderManager *_chman;
         MemInfo _meminfo;
         schd::Scheduler *_scheduler;
         TaskManager *_tm;

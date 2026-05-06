@@ -54,7 +54,7 @@ struct PermissionBits {
     ~PermissionBits();
 
     PermissionBits(PermissionBits &&other);
-    PermissionBits(const PermissionBits &other) = delete;
+    PermissionBits(const PermissionBits &other);
 
     // permission bits不允许被赋值
     PermissionBits &operator=(PermissionBits &&)      = delete;
@@ -110,8 +110,6 @@ struct PermissionBits {
         }
     }
 
-    // 复制权限
-    PermissionBits clone() const;
     static PermissionBits allperm(PayloadType type);
 
 protected:

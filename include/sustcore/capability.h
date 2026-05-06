@@ -44,23 +44,10 @@ constexpr const char *to_string(PayloadType type) {
     }
 }
 
-// CSpace中的CGroup数量
-constexpr size_t CSPACE_SIZE    = 1024;
-// SendSpace中的CGroup数量
-constexpr size_t SENDSPACE_SIZE = 32;
-
-// CGroup中的槽位数
-// 每个槽位都存放着一个Capability
-constexpr size_t CGROUP_SLOTS = 64;
-
-// 每个CSpace中都有若干个CGroup, 每个CGroup又有若干个Capability
-// 因此CSpace的容量为:
-constexpr size_t CSPACE_CAPACITY = CSPACE_SIZE * CGROUP_SLOTS;
-
 using CapIdx  = b64;
 using RecvIdx = b64;
 
-namespace capidx {
+namespace cap {
     template <b64 mask>
     consteval b64 CALC_MASK_SHIFT() {
         static_assert(mask != 0, "Mask cannot be zero");
@@ -77,12 +64,38 @@ namespace capidx {
     constexpr CapIdx error = 0xFFFFFFFFFFFFFFFF;
 
     constexpr b64 MASK_VALID  = 0x8000000000000000;
-    constexpr b64 MASK_SLOT   = 0x0000000000FFFFFF;
+    constexpr b64 MASK_SLOT   = 0x00000000000000FF;
     constexpr b64 SLOT_SHIFT  = CALC_MASK_SHIFT<MASK_SLOT>();
-    constexpr b64 MASK_GROUP  = 0x0000FFFFFF000000;
+    constexpr b64 MASK_GROUP  = 0x00000000000FFF00;
     constexpr b64 GROUP_SHIFT = CALC_MASK_SHIFT<MASK_GROUP>();
     constexpr b64 MASK_RSVD =
         0xFFFFFFFFFFFFFFFF & ~(MASK_VALID | MASK_SLOT | MASK_GROUP);
+
+    // 计算掩码的位宽（从最低有效位到最高有效位的位数）
+    template <b64 mask>
+    consteval b64 CALC_MASK_WIDTH() {
+        static_assert(mask != 0, "Mask cannot be zero");
+        // 先移除最低位之前的零位
+        b64 low = CALC_MASK_SHIFT<mask>();
+        b64 m   = mask >> low;
+        // 计算剩余部分的位数
+        b64 width = 0;
+        while (m != 0) {
+            m >>= 1;
+            ++width;
+        }
+        return width;
+    }
+
+    // CSpace中的CGroup数量 (由 MASK_GROUP 的位宽决定)
+    constexpr size_t CSPACE_SIZE = 1ULL << CALC_MASK_WIDTH<MASK_GROUP>();
+    // CGroup中的槽位数 (由 MASK_SLOT 的位宽决定)
+    // 每个槽位都存放着一个 Capability
+    constexpr size_t CGROUP_SLOTS = 1ULL << CALC_MASK_WIDTH<MASK_SLOT>();
+
+    // 每个CSpace中都有若干个CGroup, 每个CGroup又有若干个Capability
+    // 因此CSpace的容量为:
+    constexpr size_t CSPACE_CAPACITY = CSPACE_SIZE * CGROUP_SLOTS;
 
     constexpr bool valid(CapIdx idx) {
         return (idx & MASK_VALID) != 0 && (idx & MASK_RSVD) == 0;
@@ -100,6 +113,6 @@ namespace capidx {
     constexpr b64 slot(CapIdx idx) {
         return (idx & MASK_SLOT) >> SLOT_SHIFT;
     }
-}  // namespace capidx
+}  // namespace cap
 
 static_assert(sizeof(CapIdx) == sizeof(b64), "CapIdx must be 64 bits in size");
