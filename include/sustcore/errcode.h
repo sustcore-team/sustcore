@@ -35,6 +35,7 @@ enum class ErrCode : int {
     PAYLOAD_ERROR            = CAP_ERROR | 0x0005,
     CREATION_FAILED          = CAP_ERROR | 0x0006,
     INVALID_TOKEN            = CAP_ERROR | 0x0007,
+    NO_FREE_SLOT             = CAP_ERROR | 0x0008,
     // fs errors
     FS_ERROR                 = 0x02'0000,
     ENTRY_NOT_FOUND          = FS_ERROR | 0x0001,

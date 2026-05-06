@@ -107,6 +107,21 @@ namespace cap {
         PermissionBits perm() const {
             return _perm;
         }
+
+        [[nodiscard]]
+        Capability *clone() const {
+            return new Capability(*this);
+        }
+
+        [[nodiscard]]
+        Result<void> downgrade(const PermissionBits &new_perm) {
+            return _perm.downgrade(new_perm);
+        }
+
+        [[nodiscard]]
+        bool imply(const PermissionBits &other) const noexcept {
+            return _perm.imply(other);
+        }
     };
 
     class CGroup {
@@ -138,6 +153,10 @@ namespace cap {
             }
             caps[slot(idx)] = cap;
             void_return();
+        }
+
+        Result<void> remove(CapIdx idx) {
+            return set(idx, nullptr);
         }
     };
 
@@ -178,6 +197,29 @@ namespace cap {
                 groups[group(idx)] = new CGroup();
             }
             return groups[group(idx)]->set(idx, cap);
+        }
+
+        Result<void> remove(CapIdx idx) {
+            return set(idx, nullptr);
+        }
+
+        [[nodiscard]]
+        Result<CapIdx> lookup_freeslot() const {
+            for (size_t i = 0; i < CSPACE_SIZE; i++) {
+                if (groups[i] == nullptr) {
+                    // 该组还未分配, 整组都是空闲的
+                    return make(i, 0);
+                } else {
+                    // 该组已经分配, 需要检查组内的每个槽位
+                    for (size_t j = 0; j < CGROUP_SLOTS; j++) {
+                        if (groups[i]->get(make(i, j)) == nullptr) {
+                            // 该槽位空闲
+                            return make(i, j);
+                        }
+                    }
+                }
+            }
+            unexpect_return(ErrCode::NO_FREE_SLOT);
         }
     };
 }  // namespace cap

@@ -43,8 +43,8 @@ namespace cap {
             .sender_id = _id, .record_idx = record_idx, .timestamp = timestamp};
     }
 
-    Result<CapIdx> CHolder::try_receive(size_t receiver_id,
-                                        ReceiveToken token) {
+    Result<CapIdx> CHolder::lookup_record(size_t receiver_id,
+                                          ReceiveToken token) {
         // 测试token本身是否合法
         if (token.sender_id != _id) {
             unexpect_return(ErrCode::INVALID_TOKEN);
@@ -73,12 +73,34 @@ namespace cap {
         }
 
         // token有效, timestamp与sender_id都匹配, 记录中的cap_idx也合法
-        CapIdx cap_idx = record.cap_idx();
+        return record.cap_idx();
+    }
 
-        // 将记录从发送记录中移除
-        SendRecord &_record = _send_records[token.record_idx];
-        _record             = SendRecord();
+    Result<void> CHolder::remove_record(size_t receiver_id,
+                                        ReceiveToken token) {
+        auto record_res = lookup_record(receiver_id, token);
+        propagate(record_res);
+        const size_t record_idx   = token.record_idx;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+        _send_records[record_idx] = SendRecord();
+        void_return();
+    }
 
-        return cap_idx;
+    // 由接收方调用, 尝试接收能力. 成功则返回void, 失败则返回错误码
+    [[nodiscard]]
+    Result<void> CHolder::try_receive(CapIdx target_idx, size_t sender_id,
+                             ReceiveToken token)
+    {
+        auto record_res = lookup_record(sender_id, token);
+        propagate(record_res);
+        CapIdx cap_idx = record_res.value();
+
+        // 将能力复制到目标槽位
+        auto set_res = set(target_idx, _space.get(cap_idx));
+        propagate(set_res);
+
+        // 移除发送记录
+        auto remove_res = remove_record(sender_id, token);
+        propagate(remove_res);
     }
 }  // namespace cap

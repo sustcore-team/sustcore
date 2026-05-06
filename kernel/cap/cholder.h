@@ -14,6 +14,7 @@
 #include <cap/capability.h>
 #include <sus/map.h>
 #include <sus/queue.h>
+#include <sus/raii.h>
 #include <sustcore/capability.h>
 #include <sustcore/errcode.h>
 
@@ -104,11 +105,88 @@ namespace cap {
 
         [[nodiscard]]
         Result<ReceiveToken> send_capability(size_t target_id, CapIdx cap_idx);
-        // 尝试从send record queue中查找记录
-        // 如果找到一条合法的记录, 则返回对应的能力索引, 并将其从记录中移除
-        // 否则, 返回一个错误
+
+    private:
         [[nodiscard]]
-        Result<CapIdx> try_receive(size_t receiver_id, ReceiveToken token);
+        Result<void> set(CapIdx idx, Capability *cap) {
+            if (!cap::valid(idx)) {
+                return {unexpect, ErrCode::TYPE_NOT_MATCHED};
+            }
+            _space.set(idx, cap);
+            void_return();
+        }
+
+        Result<void> remove(CapIdx idx) {
+            return set(idx, nullptr);
+        }
+
+        // 查看发送记录, 获取对应的能力索引
+        [[nodiscard]]
+        Result<CapIdx> lookup_record(size_t receiver_id, ReceiveToken token);
+
+        // 移除发送记录, 只能在成功lookup_record之后调用
+        [[nodiscard]]
+        Result<void> remove_record(size_t receiver_id, ReceiveToken token);
+    public:
+        [[nodiscard]]
+        Result<CapIdx> lookup_freeslot() {
+            return _space.lookup_freeslot();
+        }
+
+        // 由接收方调用, 尝试接收能力. 成功则返回void, 失败则返回错误码
+        [[nodiscard]]
+        Result<void> try_receive(CapIdx target_idx, size_t sender_id, ReceiveToken token);
+
+        [[nodiscard]]
+        Result<void> create(CapIdx idx, Capability *cap) {
+            return set(idx, cap);
+        }
+
+        // clone 与 migrate 都仅限于 CSpace 内部使用
+        // 跨 CHolder 的能力传递由 send_capability 和 try_receive 来完成
+
+        [[nodiscard]]
+        Result<void> clone(CapIdx target_idx, CapIdx src_idx) {
+            auto cap_res = access(src_idx);
+            propagate(cap_res);
+            auto set_res = set(target_idx, cap_res.value()->clone());
+            propagate(set_res);
+            void_return();
+        }
+
+        [[nodiscard]]
+        Result<void> migrate(CapIdx target_idx, CapIdx src_idx) {
+            auto cap_res = access(src_idx);
+            propagate(cap_res);
+            auto set_res = set(target_idx, cap_res.value());
+            propagate(set_res);
+            // 移除原有能力
+            auto remove_res = remove(src_idx);
+            propagate(remove_res);
+
+            void_return();
+        }
+
+        [[nodiscard]]
+        Result<void> derive(CapIdx target_idx, CapIdx src_idx, PermissionBits &&new_perm) {
+            auto clone_res = clone(target_idx, src_idx);
+            propagate(clone_res);
+
+            // 自动回收cloned能力, 以防止权限降级失败后出现泄露
+            util::Guard clone_guard([this, target_idx] {
+                 auto remove_res = remove(target_idx);
+                 assert(remove_res.has_value());
+            });
+
+            auto cap_res = access(target_idx);
+            assert (cap_res.has_value());
+            auto cap = cap_res.value();
+            auto downgrade_res = cap->downgrade(new_perm);
+            propagate(downgrade_res);
+
+            clone_guard.release();
+            void_return();
+        }
     };
 
     class CHolderManager {
