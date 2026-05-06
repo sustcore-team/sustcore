@@ -103,6 +103,12 @@ namespace cap {
             return _payload;
         }
 
+        template <typename T>
+        [[nodiscard]]
+        T *payload_as() const {
+            return _payload->as<T>();
+        }
+
         [[nodiscard]]
         PermissionBits perm() const {
             return _perm;
@@ -121,6 +127,38 @@ namespace cap {
         [[nodiscard]]
         bool imply(const PermissionBits &other) const noexcept {
             return _perm.imply(other);
+        }
+    };
+
+    template <typename PayloadType>
+    class CapObj {
+    protected:
+        Capability *_cap;
+        PayloadType *_obj;
+
+        CapObj(util::nonnull<Capability *> cap)
+            : _cap(cap), _obj(_cap->payload_as<PayloadType>()) {
+            assert(_obj != nullptr);
+        }
+
+        [[nodiscard]]
+        bool implies(const PermissionBits &perm) const noexcept {
+            return _cap->imply(perm);
+        }
+
+        [[nodiscard]]
+        bool imply(b64 basic_permission) const noexcept {
+            return _cap->perm().basic_imply(basic_permission);
+        }
+    public:
+        [[nodiscard]]
+        Capability *cap() const {
+            return _cap;
+        }
+
+        [[nodiscard]]
+        PayloadType *obj() const {
+            return _obj;
         }
     };
 

@@ -15,162 +15,52 @@
 #include <kio.h>
 #include <mem/alloc.h>
 #include <mem/slub.h>
-#include <object/shared.h>
 #include <perm/intobj.h>
 #include <sustcore/capability.h>
 
-class IntObjOperator;
-class SharedIntObjOperator;
+namespace cap {
+    struct IntPayload : public _PayloadHelper<PayloadType::INTOBJ> {
+        int value;
+        explicit IntPayload(int v) : value(v) {}
+    };
 
-class IntObject : public _PayloadHelper<IntObject> {
-public:
-    static constexpr PayloadType IDENTIFIER = PayloadType::INTOBJ;
-    friend class IntObjOperator;
-    using Operation = IntObjOperator;
-
-private:
-    int value;
-
-public:
-    constexpr IntObject(int v) : value(v) {}
-    ~IntObject() = default;
-protected:
-    int _read() const {
-        return value;
-    }
-    void _write(int v) {
-        value = v;
-    }
-    void _increase() {
-        value++;
-    }
-    void _decrease() {
-        value--;
-    }
-};
-
-class SharedIntObjectManager;
-
-class SharedIntObject : public SharedObject<SharedIntObject> {
-public:
-    static constexpr PayloadType IDENTIFIER = PayloadType::SINTOBJ;
-    friend class SharedIntObjOperator;
-    friend class SharedIntObjectManager;
-    using Operation = SharedIntObjOperator;
-
-private:
-    int value;
-    bool discarded = false;
-
-public:
-    constexpr SharedIntObject(int v) : value(v) {}
-    virtual ~SharedIntObject() = default;
-
-    virtual void on_death() {
-        discarded = true;
-    }
-
-protected:
-    int _read() const {
-        return value;
-    }
-    void _write(int v) {
-        value = v;
-    }
-    void _increase() {
-        value++;
-    }
-    void _decrease() {
-        value--;
-    }
-};
-
-class SharedIntObjectManager {
-protected:
-    util::ArrayList<SharedIntObject *> objects;
-
-public:
-    constexpr SharedIntObjectManager() : objects() {}
-    ~SharedIntObjectManager() {
-        for (SharedIntObject *obj : objects) {
-            assert(obj->discarded == false);
-            delete obj;
-        }
-    }
-
-    void GC() {
-        for (auto &obj : objects) {
-            if (obj->discarded) {
-                delete obj;
-                obj = nullptr;
+    class IntObj : public CapObj<IntPayload> {
+    public:
+        using CapObj<IntPayload>::CapObj;
+        
+        Result<int> read() {
+            using namespace perm::intobj;
+            if (!imply(READ)) {
+                unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
             }
+            return _obj->value;
         }
 
-        auto it = objects.find(nullptr);
-        while (it != objects.end()) {
-            objects.erase(it);
-            it = objects.find(nullptr);
+        Result<void> write(int new_value) {
+            using namespace perm::intobj;
+            if (!imply(WRITE)) {
+                unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+            }
+            _obj->value = new_value;
+            void_return();
         }
-    }
 
-    template <typename... Args>
-    SharedIntObject *create(Args... args) {
-        SharedIntObject *obj = new SharedIntObject(args...);
-        objects.push_back(obj);
-        return obj;
-    }
+        Result<void> increase() {
+            using namespace perm::intobj;
+            if (!imply(perm::sintobj::INCREASE)) {
+                unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+            }
+            _obj->value++;
+            void_return();
+        }
 
-    constexpr size_t object_count() const {
-        return objects.size();
-    }
-};
-
-using SharedIntObjectAccessor = SharedObjectAccessor<SharedIntObject>;
-
-class IntObjOperator {
-protected:
-    Capability *_cap;
-    IntObject *_obj;
-
-    template <b64 perm>
-    bool imply() const {
-        return _cap->perm().basic_imply(perm);
-    }
-
-public:
-    constexpr IntObjOperator(Capability *cap)
-        : _cap(cap), _obj(cap->payload<IntObject>()) {}
-    ~IntObjOperator() = default;
-
-    void *operator new(size_t size) = delete;
-    void operator delete(void *ptr) = delete;
-
-    Result<int> read() const;
-    Result<void> write(int v);
-    Result<void> increase();
-    Result<void> decrease();
-};
-
-class SharedIntObjOperator {
-protected:
-    Capability *_cap;
-    SharedIntObjectAccessor *_acc;
-    SharedIntObject *_obj;
-    template <b64 perm>
-    bool imply() const {
-        return _cap->perm().basic_imply(perm);
-    }
-
-public:
-    constexpr SharedIntObjOperator(Capability *cap)
-        : _cap(cap), _acc(cap->payload<SharedIntObjectAccessor>()), _obj(_acc->obj()) {}
-    ~SharedIntObjOperator() = default;
-
-    void *operator new(size_t size) = delete;
-    void operator delete(void *ptr) = delete;
-
-    Result<int> read() const;
-    Result<void> write(int v);
-    Result<void> increase();
-    Result<void> decrease();
-};
+        Result<void> decrease() {
+            using namespace perm::intobj;
+            if (!imply(perm::sintobj::DECREASE)) {
+                unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+            }
+            _obj->value--;
+            void_return();
+        }
+    };
+}  // namespace cap
