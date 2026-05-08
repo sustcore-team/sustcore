@@ -18,7 +18,6 @@
 #include <kio.h>
 #include <mem/kaddr.h>
 #include <mem/vma.h>
-#include <object/csa.h>
 #include <object/vfile.h>
 #include <sustcore/addr.h>
 

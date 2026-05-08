@@ -11,8 +11,9 @@
 
 #pragma once
 
+#include <cap/capability.h>
 #include <device/block.h>
-#include <object/shared.h>
+#include <sus/list.h>
 #include <sus/map.h>
 #include <sus/owner.h>
 #include <sus/path.h>
@@ -24,6 +25,7 @@
 class VFsDriver;
 class VSuperblock;
 class VINode;
+class VFile;
 class DEntry;
 
 class VFsDriver : public util::refc<VFsDriver> {
@@ -81,10 +83,10 @@ public:
     Result<void> tidy_up();
 };
 
-class VINode : public SharedObject<VINode> {
+class VINode : public util::refc<VINode> {
 public:
     static constexpr PayloadType IDENTIFIER = PayloadType::VFILE;
-    virtual void on_death() override {}
+    void on_death() {}
     constexpr bool closable() const {
         return !alive();
     }
@@ -110,6 +112,45 @@ public:
         : _inode(inode), _fsd(&fsd), _vsb(&vsb) {}
     constexpr virtual ~VINode() {
         delete _inode;
+    }
+};
+
+class VFile : public cap::_PayloadHelper<PayloadType::VFILE> {
+private:
+    VINode *_vind;
+    bool _discarded = false;
+
+public:
+    explicit VFile(VINode *vind) : _vind(vind) {
+        assert(_vind != nullptr);
+        _vind->keep();
+    }
+
+    ~VFile() override {
+        if (!_discarded && _vind != nullptr) {
+            _vind->release();
+        }
+    }
+
+    void destruct() override {
+        if (_discarded) {
+            return;
+        }
+        if (_vind != nullptr) {
+            _vind->release();
+            _vind = nullptr;
+        }
+        _discarded = true;
+    }
+
+    [[nodiscard]]
+    VINode *vind() const {
+        return _vind;
+    }
+
+    [[nodiscard]]
+    bool discarded() const {
+        return _discarded;
     }
 };
 
@@ -143,26 +184,16 @@ public:
 
 enum class MountFlags { NONE = 0 };
 
-class VFileAccessor : public SharedObjectAccessor<VINode> {
-public:
-    using Base                              = SharedObjectAccessor<VINode>;
-    using Payload                           = Base::Payload;
-    static constexpr PayloadType IDENTIFIER = Base::IDENTIFIER;
-
-public:
-    constexpr VFileAccessor(VINode *vind) : Base(vind) {}
-    virtual ~VFileAccessor() {}
-};
-
 class VFS {
 private:
     util::LinkedMap<std::string, util::owner<VFsDriver *>> fs_table;
     util::LinkedMap<util::Path, util::owner<VSuperblock *>> mount_table;
     util::LinkedMap<util::Path, util::owner<DEntry *>> dentry_cache;
+    util::ArrayList<VFile *> open_files;
 
 public:
     VFS()  = default;
-    ~VFS() = default;
+    ~VFS();
 
     VFS(const VFS &)            = delete;
     VFS &operator=(const VFS &) = delete;
@@ -178,8 +209,8 @@ public:
                        const char *options);
     Result<void> umount(const char *mountpoint);
     // 打开文件
-    // 此处将会返回一个VFileAccessor, 其生命周期与Capability绑定
-    Result<util::owner<VFileAccessor *>> open(const char *filepath);
+    // 此处将会返回一个VFile payload, 其最终回收由VFS tidy_up负责
+    Result<VFile *> open(const char *filepath);
 
     // 整理dentry_cache
     Result<void> tidy_up();

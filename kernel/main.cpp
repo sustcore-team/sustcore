@@ -25,8 +25,6 @@
 #include <mem/kaddr.h>
 #include <mem/slub.h>
 #include <mem/vma.h>
-#include <object/csa.h>
-#include <perm/csa.h>
 #include <perm/permission.h>
 #include <sus/baseio.h>
 #include <sus/defer.h>
@@ -220,7 +218,7 @@ extern "C" void post_init(void) {
         meminfo.lowvm, meminfo.uppm - meminfo.lowpm, PageMan::RWX::NONE, true,
         false);
 
-    e.chman(key::main()) = new CHolderManager();
+    e.chman(key::main()) = new cap::CHolderManager();
 
     auto init_res = init_vfs();
     if (!init_res.has_value()) {

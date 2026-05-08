@@ -37,6 +37,12 @@ Result<IFile *> IINode::as_file() {
     }
 }
 
+VFS::~VFS() {
+    for (auto *file : open_files) {
+        delete file;
+    }
+}
+
 Result<void> VFS::register_fs(util::owner<IFsDriver *> &&driver) {
     const char *fs_name = driver->name();
     if (fs_table.contains(fs_name)) {
@@ -126,7 +132,7 @@ Result<void> VFS::umount(const char *mountpoint) {
     return ret;
 }
 
-Result<util::owner<VFileAccessor *>> VFS::open(const char *filepath) {
+Result<VFile *> VFS::open(const char *filepath) {
     util::Path path = util::Path::from(filepath).normalize();
 
     // try update dentry cache
@@ -137,10 +143,25 @@ Result<util::owner<VFileAccessor *>> VFS::open(const char *filepath) {
     auto get_res = dentry_cache.get(path);
     assert(get_res.has_value());
     VINode *vind = get_res.value().get()->vind();
-    return util::owner(new VFileAccessor(vind));
+    auto *file = new VFile(vind);
+    if (file == nullptr) {
+        unexpect_return(ErrCode::OUT_OF_MEMORY);
+    }
+    open_files.push_back(file);
+    return file;
 }
 
 Result<void> VFS::tidy_up() {
+    for (auto it = open_files.begin(); it != open_files.end();) {
+        VFile *file = *it;
+        if (!file->discarded()) {
+            ++it;
+            continue;
+        }
+        delete file;
+        it = open_files.erase(it);
+    }
+
     // 遍历 dentry_cache，记录可以删除的 dentry
     util::ArrayList<util::Path> closable_list;
     for (const auto &entry : dentry_cache) {
