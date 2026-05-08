@@ -100,11 +100,11 @@ namespace env {
         }
 
         [[nodiscard]]
-        CHolderManager *chman() const {
+        cap::CHolderManager *chman() const {
             return _chman;
         }
         [[nodiscard]]
-        CHolderManager *&chman(key::chman) {
+        cap::CHolderManager *&chman(key::chman) {
             return _chman;
         }
 

@@ -15,7 +15,7 @@
 #include <mem/alloc.h>
 #include <mem/slub.h>
 #include <mem/vma.h>
-#include <object/csa.h>
+#include <perm/permission.h>
 #include <schd/schdbase.h>
 #include <sus/defer.h>
 #include <sus/nonnull.h>
@@ -228,14 +228,19 @@ Result<void> TaskManager::preload(const char *path, TaskSpec &spec,
     auto *vfs     = env::inst().vfs();
     auto open_res = vfs->open(path);
     propagate(open_res);
-    util::owner<VFileAccessor *> file_acc = open_res.value();
+    VFile *file = open_res.value();
 
     // 加载到CHolder中
-    auto csa_res = holder->csa();
-    propagate(csa_res);
-    CSAOperator csa_op(csa_res.value());
-    auto insert_res = csa_op.insert_from<VFileAccessor>(file_acc);
-    propagate(insert_res);
+    auto slot_res = holder->internal_lookup_freeslot();
+    if (!slot_res.has_value()) {
+        file->destruct();
+        propagate_return(slot_res);
+    }
+    auto insert_res = holder->internal_insert(slot_res.value(), file);
+    if (!insert_res.has_value()) {
+        file->destruct();
+        propagate_return(insert_res);
+    }
 
     // 设置spec参数
     spec.holder = holder;
@@ -243,7 +248,7 @@ Result<void> TaskManager::preload(const char *path, TaskSpec &spec,
 
     // 设置prm参数
     prm.src_path       = path;
-    prm.image_file_cap = insert_res.value();
+    prm.image_file_cap = slot_res.value();
     void_return();
 }
 

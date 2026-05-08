@@ -12,6 +12,7 @@
 #include <env.h>
 #include <kio.h>
 #include <mem/alloc.h>
+#include <object/vfile.h>
 #include <symbols.h>
 #include <test/fs.h>
 #include <vfs/tarfs.h>
@@ -42,18 +43,16 @@ namespace test::fs {
             auto open_res = vfs->open("/license");
             tassert(open_res.has_value(), "应能成功打开 /license 文件");
 
-            VFileAccessor* acc = open_res.value();
-            VINode* vind       = acc->obj();
-            auto file_res      = vind->inode()->as_file();
-            tassert(file_res.has_value(), "VINode 应能被视为 IFile");
+            auto* cap = new cap::Capability(
+                open_res.value(), PermissionBits::allperm(PayloadType::VFILE));
+            VFileOperator fop(cap);
 
-            IFile* file            = file_res.value();
-            auto file_size_res     = file->size();
+            auto file_size_res = fop.size();
             tassert(file_size_res.has_value() && file_size_res.value() > 0,
                     "license 文件大小应大于 0");
 
             uint8_t head[32] = {0};
-            auto read_res    = file->read(0, head, sizeof(head));
+            auto read_res    = fop.read(0, head, sizeof(head));
             tassert(read_res.has_value() && read_res.value() > 0,
                     "应能成功读取 license 文件前缀");
 
@@ -63,8 +62,8 @@ namespace test::fs {
             }
             tassert(non_zero, "读取到的文件内容不应全为 0");
 
-            delete open_res.value();
-            tassert(true, "应能成功关闭 /license 访问器");
+            delete cap;
+            tassert(true, "应能成功关闭 /license 文件能力");
 
             auto tidy_res = vfs->tidy_up();
             tassert(tidy_res.has_value(), "tidy_up 应成功整理 dentry/inode 缓存");
@@ -97,14 +96,19 @@ namespace test::fs {
             auto open_res2 = vfs->open("/license");
             tassert(open_res2.has_value(), "第二次打开 /license 应成功");
 
+            auto* cap1 = new cap::Capability(
+                open_res.value(), PermissionBits::allperm(PayloadType::VFILE));
+            auto* cap2 = new cap::Capability(
+                open_res2.value(), PermissionBits::allperm(PayloadType::VFILE));
+
             action("文件仍在打开时卸载, 应返回 BUSY");
             auto busy_umount = vfs->umount("/");
             tassert(!busy_umount.has_value() &&
                         busy_umount.error() == ErrCode::BUSY,
                     "有文件打开时卸载应被拒绝 (BUSY)");
 
-            delete open_res2.value();
-            tassert(true, "应能成功关闭第二个 /license 访问器");
+            delete cap2;
+            tassert(true, "应能成功关闭第二个 /license 文件能力");
 
             action("仍有一个访问器打开时再次卸载, 仍应 BUSY");
             busy_umount = vfs->umount("/");
@@ -112,8 +116,8 @@ namespace test::fs {
                         busy_umount.error() == ErrCode::BUSY,
                     "仍有文件打开时卸载应被拒绝 (BUSY)");
 
-            delete open_res.value();
-            tassert(true, "应能成功关闭第一个 /license 访问器");
+            delete cap1;
+            tassert(true, "应能成功关闭第一个 /license 文件能力");
 
             auto tidy_res = vfs->tidy_up();
             tassert(tidy_res.has_value(), "tidy_up 应成功整理 dentry/inode 缓存");

@@ -9,6 +9,7 @@
  *
  */
 
+#include <sus/nonnull.h>
 #include <sus/owner.h>
 #include <sus/path.h>
 #include <sus/raii.h>
@@ -34,6 +35,12 @@ Result<IFile *> IINode::as_file() {
         return file;
     } else {
         unexpect_return(ErrCode::INVALID_PARAM);
+    }
+}
+
+VFS::~VFS() {
+    for (auto *file : open_files) {
+        delete file;
     }
 }
 
@@ -126,7 +133,7 @@ Result<void> VFS::umount(const char *mountpoint) {
     return ret;
 }
 
-Result<util::owner<VFileAccessor *>> VFS::open(const char *filepath) {
+Result<VFile *> VFS::open(const char *filepath) {
     util::Path path = util::Path::from(filepath).normalize();
 
     // try update dentry cache
@@ -136,11 +143,26 @@ Result<util::owner<VFileAccessor *>> VFS::open(const char *filepath) {
     // get virtual inode from dentry
     auto get_res = dentry_cache.get(path);
     assert(get_res.has_value());
-    VINode *vind = get_res.value().get()->vind();
-    return util::owner(new VFileAccessor(vind));
+    util::nonnull<VINode *> vind = get_res.value().get()->vind();
+    auto *file = new VFile(vind);
+    if (file == nullptr) {
+        unexpect_return(ErrCode::OUT_OF_MEMORY);
+    }
+    open_files.push_back(file);
+    return file;
 }
 
 Result<void> VFS::tidy_up() {
+    for (auto it = open_files.begin(); it != open_files.end();) {
+        VFile *file = *it;
+        if (!file->discarded()) {
+            ++it;
+            continue;
+        }
+        delete file;
+        it = open_files.erase(it);
+    }
+
     // 遍历 dentry_cache，记录可以删除的 dentry
     util::ArrayList<util::Path> closable_list;
     for (const auto &entry : dentry_cache) {
@@ -236,7 +258,7 @@ Result<void> VFS::update_root(const util::Path &mnt_path) {
     propagate(root_res);
     VINode *root_vind = root_res.value();
     util::owner<DEntry *> root_de =
-        util::owner(new DEntry(mnt_path, root_vind, nullptr));
+        util::owner(new DEntry(mnt_path, util::nnullforce(root_vind), nullptr));
     if (!root_de) {
         unexpect_return(ErrCode::OUT_OF_MEMORY);
     }
@@ -312,7 +334,7 @@ Result<void> VFS::update_dentry(const util::Path &path) {
         walkpath = walkpath / entry;
         walkpath = walkpath.normalize();
         util::owner<DEntry *> nxtde =
-            util::owner(new DEntry(walkpath, curnd, parde));
+            util::owner(new DEntry(walkpath, util::nnullforce(curnd), parde));
         parde = nxtde.get();
 
         // update dentry cache

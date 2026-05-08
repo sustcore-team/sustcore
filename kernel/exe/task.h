@@ -45,7 +45,7 @@ struct TaskSpec
     util::owner<TaskMemoryManager *> tmm;
     // 进程Capability Holder
     // 进程文件能力已经存放在该CHolder中了
-    CHolder * holder;
+    cap::CHolder * holder;
     // 入口点
     VirAddr entrypoint;
 };

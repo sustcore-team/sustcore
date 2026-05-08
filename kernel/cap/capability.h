@@ -47,6 +47,10 @@ namespace cap {
         [[nodiscard]]
         PayloadType type_id() const override = 0;
 
+        virtual void destruct() {
+            delete this;
+        }
+
         void keep() {
             _refcount++;
         }
@@ -55,15 +59,20 @@ namespace cap {
             assert(_refcount > 0);
             _refcount--;
             if (_refcount == 0) {
-                delete this;
+                destruct();
             }
+        }
+
+        [[nodiscard]]
+        size_t ref_count() const {
+            return _refcount;
         }
     };
 
     template <PayloadType _IDENTIFIER>
     class _PayloadHelper : public Payload {
     public:
-        constexpr static PayloadType IDENTIFIER = IDENTIFIER;
+        constexpr static PayloadType IDENTIFIER = _IDENTIFIER;
         [[nodiscard]]
         PayloadType type_id() const override {
             return IDENTIFIER;
@@ -110,7 +119,7 @@ namespace cap {
         }
 
         [[nodiscard]]
-        PermissionBits perm() const {
+        const PermissionBits &perm() const {
             return _perm;
         }
 
@@ -193,6 +202,13 @@ namespace cap {
             void_return();
         }
 
+        [[nodiscard]]
+        Capability *take(CapIdx idx) {
+            Capability *cap = caps[slot(idx)];
+            caps[slot(idx)] = nullptr;
+            return cap;
+        }
+
         Result<void> remove(CapIdx idx) {
             return set(idx, nullptr);
         }
@@ -239,6 +255,33 @@ namespace cap {
 
         Result<void> remove(CapIdx idx) {
             return set(idx, nullptr);
+        }
+
+        [[nodiscard]]
+        Capability *take(CapIdx idx) {
+            CGroup *grp = groups[group(idx)];
+            if (grp == nullptr) {
+                return nullptr;
+            }
+            return grp->take(idx);
+        }
+
+        Result<void> move(CapIdx target_idx, CapIdx src_idx) {
+            if (target_idx == src_idx) {
+                void_return();
+            }
+
+            Capability *cap = get(src_idx);
+            if (cap == nullptr) {
+                unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+            }
+
+            auto set_res = set(target_idx, cap);
+            propagate(set_res);
+
+            Capability *removed_cap = take(src_idx);
+            assert(removed_cap == cap);
+            void_return();
         }
 
         [[nodiscard]]

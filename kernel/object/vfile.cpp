@@ -20,7 +20,7 @@ Result<size_t> VFileOperator::read(off_t offset, void *buf, size_t len) {
         return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     // 调用VFS的read接口
-    return env::inst().vfs()->read(_file, offset, buf, len);
+    return env::inst().vfs()->read(_vind, offset, buf, len);
 }
 
 Result<size_t> VFileOperator::write(off_t offset, const void *buf, size_t len) {
@@ -30,7 +30,7 @@ Result<size_t> VFileOperator::write(off_t offset, const void *buf, size_t len) {
         return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     // 调用VFS的write接口
-    return env::inst().vfs()->write(_file, offset, buf, len);
+    return env::inst().vfs()->write(_vind, offset, buf, len);
 }
 
 Result<size_t> VFileOperator::size() {
@@ -40,7 +40,7 @@ Result<size_t> VFileOperator::size() {
         return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     // 调用VFS的size接口
-    return env::inst().vfs()->size(_file);
+    return env::inst().vfs()->size(_vind);
 }
 
 Result<void> VFileOperator::sync() {
@@ -50,5 +50,5 @@ Result<void> VFileOperator::sync() {
         return {unexpect, ErrCode::INSUFFICIENT_PERMISSIONS};
     }
     // 调用VFS的sync接口
-    return env::inst().vfs()->sync(_file);
+    return env::inst().vfs()->sync(_vind);
 }

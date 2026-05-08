@@ -64,7 +64,7 @@ struct PCB : public util::tree_base::TreeBase<PCB> {
 
     // resources
     util::owner<TaskMemoryManager *> tmm;
-    CHolder *cholder;
+    cap::CHolder *cholder;
 
     // initialization information
     VirAddr entrypoint;

@@ -13,26 +13,23 @@
 
 #include <vfs/vfs.h>
 
-// VFileAccessor(vfs/vfs.h) 是 Capability 所持有的对象
-// 其在销毁时将会释放对 VFile 对象的引用计数
-// 而 VFile 对象的生命周期由 VFS 控制
-// VFileAccessor 的生命周期由 CHolder 控制
-// 如此, VFileAccessor 作为 Payload 的生命周期就与 Capability 的生命周期绑定
-// 避免让 Capability 系统本身考虑 SharedObject 的生命周期, 以简化 Capability
-// 系统的设计
 class VFileOperator {
 protected:
-    Capability *_cap;
-    VFileAccessor *_acc;
-    VINode *_file;
+    cap::Capability *_cap;
+    VFile *_file;
+    VINode *_vind;
     template <b64 perm>
     bool imply() const {
         return _cap->perm().basic_imply(perm);
     }
 
 public:
-    constexpr VFileOperator(Capability *cap)
-        : _cap(cap), _acc(cap->payload<VFileAccessor>()), _file(_acc->obj()) {}
+    explicit VFileOperator(cap::Capability *cap)
+        : _cap(cap), _file(cap->payload_as<VFile>()), _vind(nullptr) {
+        assert(_file != nullptr);
+        _vind = _file->vind();
+        assert(_vind != nullptr);
+    }
     ~VFileOperator() = default;
 
     void *operator new(size_t size) = delete;

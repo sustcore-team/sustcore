@@ -11,19 +11,24 @@
 
 #pragma once
 
+#include <cap/capability.h>
 #include <device/block.h>
-#include <object/shared.h>
+#include <kio.h>
+#include <sus/list.h>
 #include <sus/map.h>
+#include <sus/nonnull.h>
 #include <sus/owner.h>
 #include <sus/path.h>
 #include <sustcore/errcode.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
+
 #include <string>
 
 class VFsDriver;
 class VSuperblock;
 class VINode;
+class VFile;
 class DEntry;
 
 class VFsDriver : public util::refc<VFsDriver> {
@@ -81,10 +86,10 @@ public:
     Result<void> tidy_up();
 };
 
-class VINode : public SharedObject<VINode> {
+class VINode : public util::refc<VINode> {
 public:
     static constexpr PayloadType IDENTIFIER = PayloadType::VFILE;
-    virtual void on_death() override {}
+    void on_death() {}
     constexpr bool closable() const {
         return !alive();
     }
@@ -113,9 +118,48 @@ public:
     }
 };
 
+class VFile : public cap::_PayloadHelper<PayloadType::VFILE> {
+private:
+    util::nonnull<VINode *> _vind;
+    bool _discarded = false;
+
+public:
+    explicit VFile(util::nonnull<VINode *> vind) : _vind(vind) {
+        _vind->keep();
+    }
+
+    ~VFile() override {
+        if (!_discarded) {
+            loggers::VFS::WARN("VFile destructed without being discarded");
+        }
+
+        _vind->release();
+    }
+
+    void destruct() override {
+        if (_discarded) {
+            loggers::VFS::WARN("VFile destructed multiple times");
+            return;
+        }
+        _discarded = true;
+    }
+
+    [[nodiscard]]
+    util::nonnull<VINode *> vind() const {
+        return _vind;
+    }
+
+    [[nodiscard]]
+    bool discarded() const {
+        return _discarded;
+    }
+};
+
 class DEntry : public util::refc<DEntry> {
 public:
     constexpr void on_death() {}
+
+    [[nodiscard]]
     constexpr bool closable() const {
         return !alive();
     }
@@ -127,42 +171,33 @@ private:
     util::refc_ptr<DEntry> _parent;
 
 public:
-    constexpr DEntry(const util::Path &path, VINode *vind, DEntry *parent)
+    constexpr DEntry(const util::Path &path, util::nonnull<VINode *> vind,
+                     DEntry * parent)
         : _path(path), _vind(vind), _parent(parent) {}
     constexpr virtual ~DEntry() {}
     constexpr const util::Path &path() const {
         return _path;
     }
-    constexpr VINode *vind() const {
-        return _vind.get();
+    constexpr util::nonnull<VINode *> vind() const {
+        return util::nnullforce(_vind.get());
     }
-    constexpr DEntry *parent() const {
+    constexpr DEntry * parent() const {
         return _parent.get();
     }
 };
 
 enum class MountFlags { NONE = 0 };
 
-class VFileAccessor : public SharedObjectAccessor<VINode> {
-public:
-    using Base                              = SharedObjectAccessor<VINode>;
-    using Payload                           = Base::Payload;
-    static constexpr PayloadType IDENTIFIER = Base::IDENTIFIER;
-
-public:
-    constexpr VFileAccessor(VINode *vind) : Base(vind) {}
-    virtual ~VFileAccessor() {}
-};
-
 class VFS {
 private:
     util::LinkedMap<std::string, util::owner<VFsDriver *>> fs_table;
     util::LinkedMap<util::Path, util::owner<VSuperblock *>> mount_table;
     util::LinkedMap<util::Path, util::owner<DEntry *>> dentry_cache;
+    util::ArrayList<VFile *> open_files;
 
 public:
-    VFS()  = default;
-    ~VFS() = default;
+    VFS() = default;
+    ~VFS();
 
     VFS(const VFS &)            = delete;
     VFS &operator=(const VFS &) = delete;
@@ -178,8 +213,8 @@ public:
                        const char *options);
     Result<void> umount(const char *mountpoint);
     // 打开文件
-    // 此处将会返回一个VFileAccessor, 其生命周期与Capability绑定
-    Result<util::owner<VFileAccessor *>> open(const char *filepath);
+    // 此处将会返回一个VFile payload, 其最终回收由VFS tidy_up负责
+    Result<VFile *> open(const char *filepath);
 
     // 整理dentry_cache
     Result<void> tidy_up();
@@ -191,6 +226,7 @@ protected:
     Result<DEntry *> locate(const util::Path &path);
     // 更新dentry_cache, 使其包含指定路径的dentry
     Result<void> update_dentry(const util::Path &path);
+
 public:
     // 读取文件内容到buf中, 返回实际读取的字节数
     Result<size_t> read(VINode *vfile, off_t offset, void *buf,

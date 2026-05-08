@@ -18,6 +18,8 @@
 #include <sustcore/capability.h>
 #include <sustcore/errcode.h>
 
+#include <utility>
+
 namespace cap {
     // 能力发送记录
     struct SendRecord {
@@ -96,29 +98,108 @@ namespace cap {
 
         [[nodiscard]]
         Result<Capability *> access(CapIdx idx) {
-            if (!cap::valid(idx)) {
-                return {unexpect, ErrCode::TYPE_NOT_MATCHED};
-            }
-
-            return _space.get(idx);
+            return internal_lookup(idx);
         }
 
         [[nodiscard]]
-        Result<ReceiveToken> send_capability(size_t target_id, CapIdx cap_idx);
+        Result<CapIdx> internal_lookup_freeslot() {
+            return _space.lookup_freeslot();
+        }
 
-    private:
         [[nodiscard]]
-        Result<void> set(CapIdx idx, Capability *cap) {
+        Result<Capability *> internal_lookup(CapIdx idx);
+
+        [[nodiscard]]
+        Result<void> internal_insert(CapIdx idx, Payload *payload) {
+            assert(payload != nullptr);
+            return internal_insert(idx, payload,
+                                   PermissionBits::allperm(payload->type_id()));
+        }
+
+        [[nodiscard]]
+        Result<void> internal_insert(CapIdx idx, Payload *payload,
+                                     PermissionBits &&perm);
+
+        template <typename PayloadType, typename... Args>
+        [[nodiscard]]
+        Result<void> internal_create(CapIdx idx, Args &&...args) {
             if (!cap::valid(idx)) {
-                return {unexpect, ErrCode::TYPE_NOT_MATCHED};
+                unexpect_return(ErrCode::TYPE_NOT_MATCHED);
             }
-            _space.set(idx, cap);
+            auto *payload = new PayloadType(std::forward<Args>(args)...);
+            if (payload == nullptr) {
+                unexpect_return(ErrCode::OUT_OF_MEMORY);
+            }
+            auto insert_res = internal_insert(idx, payload);
+            if (!insert_res.has_value()) {
+                delete payload;
+                propagate_return(insert_res);
+            }
             void_return();
         }
 
-        Result<void> remove(CapIdx idx) {
-            return set(idx, nullptr);
+        [[nodiscard]]
+        Result<void> internal_remove(CapIdx idx);
+
+        [[nodiscard]]
+        Result<void> internal_clone(CapIdx target_idx, CapIdx src_idx);
+
+        [[nodiscard]]
+        Result<void> internal_migrate(CapIdx target_idx, CapIdx src_idx);
+
+        [[nodiscard]]
+        Result<void> internal_derive(CapIdx target_idx, CapIdx src_idx,
+                                     const PermissionBits &new_perm);
+
+        [[nodiscard]]
+        Result<ReceiveToken> internal_send(CapIdx src_idx, size_t target_id);
+
+        [[nodiscard]]
+        Result<void> internal_recv(CapIdx target_idx, ReceiveToken token);
+
+        template <typename PayloadType, typename... Args>
+        [[nodiscard]]
+        static Result<void> create(CapIdx idx, Args &&...args) {
+            return current().and_then([&](CHolder *holder) {
+                return holder->internal_create<PayloadType>(
+                    idx, std::forward<Args>(args)...);
+            });
         }
+
+        [[nodiscard]]
+        static Result<CapIdx> get_free_slot();
+
+        [[nodiscard]]
+        static Result<Capability *> lookup(CapIdx idx);
+
+        [[nodiscard]]
+        static Result<void> remove(CapIdx idx);
+
+        [[nodiscard]]
+        static Result<void> clone(CapIdx target_idx, CapIdx src_idx);
+
+        [[nodiscard]]
+        static Result<void> migrate(CapIdx target_idx, CapIdx src_idx);
+
+        [[nodiscard]]
+        static Result<void> derive(CapIdx target_idx, CapIdx src_idx,
+                                   const PermissionBits &new_perm);
+
+        [[nodiscard]]
+        static Result<ReceiveToken> send(CapIdx src_idx, size_t target_id);
+
+        [[nodiscard]]
+        static Result<void> recv(CapIdx target_idx, ReceiveToken token);
+
+    private:
+        [[nodiscard]]
+        static Result<CHolder *> current();
+
+        [[nodiscard]]
+        Result<void> set_slot(CapIdx idx, Capability *cap);
+
+        [[nodiscard]]
+        Result<Capability *> take_slot(CapIdx idx);
 
         // 查看发送记录, 获取对应的能力索引
         [[nodiscard]]
@@ -127,66 +208,6 @@ namespace cap {
         // 移除发送记录, 只能在成功lookup_record之后调用
         [[nodiscard]]
         Result<void> remove_record(size_t receiver_id, ReceiveToken token);
-    public:
-        [[nodiscard]]
-        Result<CapIdx> lookup_freeslot() {
-            return _space.lookup_freeslot();
-        }
-
-        // 由接收方调用, 尝试接收能力. 成功则返回void, 失败则返回错误码
-        [[nodiscard]]
-        Result<void> try_receive(CapIdx target_idx, size_t sender_id, ReceiveToken token);
-
-        [[nodiscard]]
-        Result<void> create(CapIdx idx, Capability *cap) {
-            return set(idx, cap);
-        }
-
-        // clone 与 migrate 都仅限于 CSpace 内部使用
-        // 跨 CHolder 的能力传递由 send_capability 和 try_receive 来完成
-
-        [[nodiscard]]
-        Result<void> clone(CapIdx target_idx, CapIdx src_idx) {
-            auto cap_res = access(src_idx);
-            propagate(cap_res);
-            auto set_res = set(target_idx, cap_res.value()->clone());
-            propagate(set_res);
-            void_return();
-        }
-
-        [[nodiscard]]
-        Result<void> migrate(CapIdx target_idx, CapIdx src_idx) {
-            auto cap_res = access(src_idx);
-            propagate(cap_res);
-            auto set_res = set(target_idx, cap_res.value());
-            propagate(set_res);
-            // 移除原有能力
-            auto remove_res = remove(src_idx);
-            propagate(remove_res);
-
-            void_return();
-        }
-
-        [[nodiscard]]
-        Result<void> derive(CapIdx target_idx, CapIdx src_idx, PermissionBits &&new_perm) {
-            auto clone_res = clone(target_idx, src_idx);
-            propagate(clone_res);
-
-            // 自动回收cloned能力, 以防止权限降级失败后出现泄露
-            util::Guard clone_guard([this, target_idx] {
-                 auto remove_res = remove(target_idx);
-                 assert(remove_res.has_value());
-            });
-
-            auto cap_res = access(target_idx);
-            assert (cap_res.has_value());
-            auto cap = cap_res.value();
-            auto downgrade_res = cap->downgrade(new_perm);
-            propagate(downgrade_res);
-
-            clone_guard.release();
-            void_return();
-        }
     };
 
     class CHolderManager {

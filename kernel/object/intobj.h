@@ -26,7 +26,7 @@ namespace cap {
 
     class IntObj : public CapObj<IntPayload> {
     public:
-        using CapObj<IntPayload>::CapObj;
+        explicit IntObj(util::nonnull<Capability *> cap) : CapObj<IntPayload>(cap) {}
         
         Result<int> read() {
             using namespace perm::intobj;
