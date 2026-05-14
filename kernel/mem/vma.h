@@ -12,7 +12,6 @@
 #pragma once
 
 #include <arch/description.h>
-#include <sustcore/addr.h>
 #include <sus/list.h>
 #include <sus/nonnull.h>
 #include <sus/range.h>
@@ -20,8 +19,6 @@
 #include <sustcore/addr.h>
 #include <sustcore/epacks.h>
 #include <sustcore/errcode.h>
-
-using util::range::Range;
 
 class TaskMemoryManager;
 
@@ -36,6 +33,19 @@ struct VMA {
         SHARE_RO  = 7,
         SHARE_RX  = 8,
         SHARE_RWX = 9,
+    };
+
+    enum class Growth : b64 {
+        FIXED       = 0,
+        GROW_UP     = 0b0001,
+        GROW_DOWN   = 0b0010,
+        SHRINK_UP   = 0b0100,
+        SHRINK_DOWN = 0b1000,
+        BIGROW      = GROW_UP | GROW_DOWN,
+        BISHRINK    = SHRINK_UP | SHRINK_DOWN,
+        FLEXUP      = GROW_UP | SHRINK_UP,
+        FLEXDOWN    = GROW_DOWN | SHRINK_DOWN,
+        BIFLEX      = GROW_UP | GROW_DOWN | SHRINK_UP | SHRINK_DOWN,
     };
 
     static constexpr PageMan::RWX seg2rwx(Type type) {
@@ -62,13 +72,6 @@ struct VMA {
         }
     }
 
-    static constexpr bool growable(Type type) {
-        switch (type) {
-            case Type::STACK: return true;
-            default:          return false;
-        }
-    }
-
     static constexpr bool cowable(Type type) {
         switch (type) {
             case Type::CODE:
@@ -79,34 +82,34 @@ struct VMA {
         }
     }
 
-    TaskMemoryManager *tm         = nullptr;
-    Type type      = Type::NONE;
-    VirAddr vstart = VirAddr::null;
-    VirAddr vend   = VirAddr::null;
+    Type type             = Type::NONE;
+    Growth growth         = Growth::FIXED;
+    TaskMemoryManager *tm = nullptr;
+    VirArea varea;
     bool loading =
         false;  // 是否正在加载（如ELF加载），用于处理缺页异常时区分是正常访问还是加载过程中访问
     util::ListHead<VMA> list_head = {};
 
     constexpr VMA() = default;
-    constexpr VMA(TaskMemoryManager *tm, Type t, Range<VirAddr> varea)
-        : tm(tm),
-          type(t),
-          vstart(varea.begin),
-          vend(varea.end),
-          list_head({}) {}
-    constexpr VMA(TaskMemoryManager *tm, const VMA &other)
-        : tm(tm),
-          type(other.type),
-          vstart(other.vstart),
-          vend(other.vend),
+    constexpr VMA(TaskMemoryManager *tm, Type t, Growth g, const VirArea &varea)
+        : type(t), growth(g), tm(tm), varea(varea), list_head({}) {}
+    constexpr VMA(TaskMemoryManager *tm, Growth g, const VMA &other)
+        : type(other.type),
+          growth(g),
+          tm(tm),
+          varea(other.varea),
           list_head({}) {}
     constexpr VMA(VMA &&other) = delete;
 
     [[nodiscard]]
     constexpr size_t size() const {
-        return vend - vstart;
+        return varea.size();
     }
 };
+
+static constexpr bool operator&(VMA::Growth lhs, VMA::Growth rhs) {
+    return (static_cast<b64>(lhs) & static_cast<b64>(rhs)) != 0;
+}
 
 constexpr const char *to_string(VMA::Type type) {
     switch (type) {
@@ -129,30 +132,26 @@ private:
     util::IntrusiveList<VMA> vma_list;
     PhyAddr _pgd;
     PageMan _pman;
-    VirAddr _heap_start = VirAddr::null;
-    VirAddr _brk        = VirAddr::null;
 
-    // a fast path to the heap vma
-    // only a fast path
-    // the real vma is stored in vma list
-    VMA *_heap_vma      = nullptr;
+    Result<VMA *> __check_vma(const util::nonnull<VMA *> &vma) {
+        if (vma->tm != this) {
+            return std::unexpected(ErrCode::INVALID_PARAM);
+        }
+        return vma.get();
+    }
+
 public:
     TaskMemoryManager(PhyAddr _pgd);
     ~TaskMemoryManager();
 
-    Result<util::nonnull<VMA *>> add_vma(VMA::Type type, VirAddr vstart,
-                                         VirAddr vend);
-    Result<util::nonnull<VMA *>> clone_vma(TaskMemoryManager &other, VirAddr vma_addr);
+    Result<util::nonnull<VMA *>> add_vma(VMA::Type type, VMA::Growth growth,const VirArea &varea);
     Result<util::nonnull<VMA *>> locate(VirAddr vaddr);
-    Result<util::nonnull<VMA *>> locate_range(VirAddr vaddr, size_t size);
-    Result<void> remove_vma(VirAddr vma_addr);
-    Result<void> init_heap(VirAddr heap_start);
-    unsigned long set_brk(VirAddr new_brk);
+    Result<util::nonnull<VMA *>> locate_range(const VirArea &varea);
 
-    [[nodiscard]]
-    constexpr VirAddr brk() const {
-        return _brk;
-    }
+    Result<util::nonnull<VMA *>> clone_vma(util::nonnull<VMA *> vma,
+                                           TaskMemoryManager &dst);
+    Result<void> remove_vma(util::nonnull<VMA *> vma);
+    Result<VirArea> grow_vma(util::nonnull<VMA *> vma, const VirArea &varea);
 
     [[nodiscard]]
     constexpr const util::IntrusiveList<VMA> &vmas() const {

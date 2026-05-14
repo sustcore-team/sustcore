@@ -48,4 +48,6 @@ struct TaskSpec
     cap::CHolder * holder;
     // 入口点
     VirAddr entrypoint;
+    // 堆的起始地址
+    VirAddr heap_vaddr;
 };

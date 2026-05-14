@@ -30,4 +30,4 @@
 #define SYS_UNSTABLE_BASE            (0xFFC0'0000)
 #define SYS_WRITE_SERIAL             (SYS_UNSTABLE_BASE + 0x01)
 #define SYS_CREATE_PROCESS           (SYS_UNSTABLE_BASE + 0x02)
-#define SYS_BRK                      (SYS_UNSTABLE_BASE + 0x03)
+#define SYS_GROW_VMA                 (SYS_UNSTABLE_BASE + 0x03)

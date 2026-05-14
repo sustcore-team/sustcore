@@ -122,23 +122,29 @@ namespace syscall {
                                load_res.value()->pid);
     }
 
-    unsigned long sys_brk(unsigned long new_brk) {
-        TaskMemoryManager *tmm = env::inst().tmm();
-        if (tmm == nullptr) {
-            return 0;
+    VirArea sys_grow_vma(VirAddr vaddr, VirArea new_area) {
+        auto tmm = env::inst().tmm();
+        auto locate_res = tmm->locate(vaddr);
+        if (!locate_res.has_value()) {
+            loggers::SYSCALL::ERROR("无法找到包含地址 %p 的 VMA: err=%d",
+                                    vaddr.addr(), locate_res.error());
+            return {};
         }
-        return tmm->set_brk(VirAddr(new_brk));
+        auto vma = locate_res.value();
+        auto grow_res = tmm->grow_vma(vma, new_area);
+        if (!grow_res.has_value()) {
+            loggers::SYSCALL::ERROR("无法增长 VMA: err=%d", grow_res.error());
+            return vma->varea;
+        }
+        return grow_res.value();
     }
 
     RetPack entrance(const ArgPack &args) {
         b64 arg0 = args.args[0];
         b64 arg1 = args.args[1];
         b64 arg2 = args.args[2];
-        b64 arg3 = args.args[3];
-        b64 arg4 = args.args[4];
 
         b64 sysno  = args.syscall_number;
-        b64 capidx = args.capidx;
 
         b64 ret0 = 0, ret1 = 0;
 
@@ -156,9 +162,12 @@ namespace syscall {
                 ret0 = ret1 = 0;
                 break;
             }
-            case SYS_BRK: {
-                ret0 = sys_brk(arg0);
-                ret1 = 0;
+            case SYS_GROW_VMA: {
+                auto vaddr = (VirAddr)arg0;
+                auto new_area = VirArea((VirAddr)arg1, (VirAddr)arg2);
+                auto ret_area = sys_grow_vma(vaddr, new_area);
+                ret0 = ret_area.begin.arith();
+                ret1 = ret_area.end.arith();
                 break;
             }
             default: {

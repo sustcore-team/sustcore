@@ -12,6 +12,7 @@
 #pragma once
 
 #include <sus/types.h>
+#include <sus/range.h>
 
 #include <cassert>
 #include <compare>
@@ -268,3 +269,6 @@ inline static bool is_user_vaddr(VirAddr vaddr) {
            !within_scope(vaddr.arith(), AddrType::KVA) &&
            !within_scope(vaddr.arith(), AddrType::KPA);
 }
+
+using VirArea = util::range::Range<VirAddr>;
+using PhyArea = util::range::Range<PhyAddr>;

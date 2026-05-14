@@ -13,6 +13,7 @@
 
 #include <compare>
 #include <algorithm>
+#include <cstddef>
 
 namespace util::range {
     template <typename T>
@@ -20,11 +21,23 @@ namespace util::range {
         T begin;
         T end;
 
-        Range() = default;
+        constexpr Range() = default;
+        constexpr Range(const Range &other) = default;
+        constexpr Range(Range &&other) = default;
+        constexpr Range &operator=(const Range &other) = default;
+        constexpr Range &operator=(Range &&other) = default;
+        constexpr ~Range() = default;
+
         constexpr Range(T begin, T end) : begin(begin), end(end) {}
+
         [[nodiscard]]
         constexpr bool nullable() const {
             return begin >= end;
+        }
+
+        [[nodiscard]]
+        constexpr size_t size() const {
+            return end - begin;
         }
     };
 

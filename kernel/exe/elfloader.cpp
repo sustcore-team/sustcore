@@ -184,7 +184,8 @@ namespace loader::elf {
 
             // 为该段在TM中添加一个VMA
             VMA::Type vma_type = phdr_to_vma_type(phdr.p_flags);
-            auto add_res = spec.tmm->add_vma(vma_type, segvaddr, segvend);
+            auto add_res = spec.tmm->add_vma(
+                vma_type, VMA::Growth::FIXED, VirArea(segvaddr, segvend));
             if (!add_res.has_value()) {
                 loggers::SUSTCORE::ERROR("无法为段%d添加VMA: %d", i,
                                          add_res.error());
@@ -198,19 +199,21 @@ namespace loader::elf {
         }
 
         VirAddr heap_start = VirAddr(max_pload_end).page_align_up();
-        auto heap_res = spec.tmm->init_heap(heap_start);
+        auto heap_res = spec.tmm->add_vma(VMA::Type::HEAP, VMA::Growth::FLEXUP,
+                                          VirArea(heap_start, heap_start));
         if (!heap_res.has_value()) {
             loggers::SUSTCORE::ERROR("无法初始化堆VMA: %d", heap_res.error());
             propagate_return(heap_res);
         }
+        spec.heap_vaddr = heap_start;
 
         // 输出TM中的VMA信息以供调试
         loggers::SUSTCORE::INFO("ELF加载完成，TM中的VMA列表:");
         for (const auto &vma : spec.tmm->vmas()) {
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 地址: %p~%p, 大小: %u B",
-                to_string(vma.type), vma.vstart.addr(), vma.vend.addr(),
-                vma.size());
+                to_string(vma.type), vma.varea.begin.addr(),
+                vma.varea.end.addr(), vma.size());
         }
 
         auto *origin_tmm   = env::inst().tmm();
@@ -239,23 +242,27 @@ namespace loader::elf {
             vma.loading      = false;
             PageMan::RWX rwx = VMA::seg2rwx(vma.type);
             spec.tmm->pman().modify_range_flags<PageMan::make_mask(0b001111)>(
-                vma.vstart, vma.size(), rwx, true, false);
+                vma.varea.begin, vma.size(), rwx, true, false);
         }
 
         // 输出每个VMA的开头几个字节以供调试
         loggers::SUSTCORE::INFO("每个VMA的前16字节内容:");
         for (const auto &vma : spec.tmm->vmas()) {
+            if (vma.varea.nullable()) {
+                continue;
+            }
+
             // 打开SUM以访问用户空间地址
             ker_paddr::SumGuard sum_guard;
             sum_guard.open();
 
             loggers::SUSTCORE::INFO(
                 "  VMA类型: %s, 起始地址: %p",
-                to_string(vma.type), vma.vstart.addr());
+                to_string(vma.type), vma.varea.begin.addr());
 
             const size_t dump_size = vma.size() < 16 ? vma.size() : 16;
             const unsigned char *data =
-                reinterpret_cast<const unsigned char *>(vma.vstart.addr());
+                reinterpret_cast<const unsigned char *>(vma.varea.begin.addr());
 
             std::string hex_dump;
             for (size_t i = 0; i < dump_size; ++i) {

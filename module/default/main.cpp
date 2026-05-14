@@ -17,7 +17,10 @@ extern "C"
 int kputs(const char *str);
 
 extern "C"
-size_t sys_brk(size_t newbrk);
+size_t brk(size_t newbrk);
+
+extern "C"
+void *sbrk(ptrdiff_t increment);
 
 class Test {
 public:
@@ -30,21 +33,21 @@ Test test_goc;
 
 int kmod_main(void) {
     kputs("Hello from kmod_main!\n");
-    size_t brk = sys_brk(0);
+    size_t heap_base = brk(0);
 
     char buf[256];
-    sprintf(buf, "Current brk: %p\n", (void *)brk);
+    sprintf(buf, "Current brk: %p\n", (void *)heap_base);
     kputs(buf);
 
     // Will causes an error
-    // auto ptr = reinterpret_cast<char *>(brk);
+    // auto ptr = reinterpret_cast<char *>(heap_base);
     // *ptr = 'c';
 
-    size_t brk2 = sys_brk(brk + 28);
+    auto ptr = reinterpret_cast<char *>(sbrk(28));
+    size_t brk2 = brk(0);
     sprintf(buf, "Current brk: %p\n", (void *)brk2);
     kputs(buf);
 
-    auto ptr = reinterpret_cast<char *>(brk);
     for (int i = 0 ; i < 26 ; i ++)
     {
         *(ptr + i) = 'A' + i;
@@ -54,13 +57,13 @@ int kmod_main(void) {
     kputs(ptr);
 
     // will not cause an error
-    auto ptr2 = reinterpret_cast<char *>(brk2);
+    auto ptr2 = reinterpret_cast<char *>(brk2 - 1);
     *ptr2 = 'c';
 
     kputs("This message should be displayed\n");
 
     // will cause an error
-    auto ptr3 = reinterpret_cast<char *>(brk + 4096);
+    auto ptr3 = reinterpret_cast<char *>(heap_base + 4096);
     *ptr3 = 'c';
 
     kputs("This message shouldn't be displayed\n");

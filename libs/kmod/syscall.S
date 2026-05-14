@@ -18,9 +18,14 @@ create_process:
     ecall
     ret
 
-    .global sys_brk
-    .type sys_brk, @function
-sys_brk:
+    .global sys_grow_vma
+    .type sys_grow_vma, @function
+sys_grow_vma:
+    /* a0 = heap_base, a1 = new_brk */
+    mv a2, a1
+    mv a1, a0
     li a7, 0xFFC00003
     ecall
+    /* kernel returns a0 = area.begin, a1 = area.end */
+    mv a0, a1
     ret

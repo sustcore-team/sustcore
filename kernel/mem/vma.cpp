@@ -9,7 +9,6 @@
  *
  */
 
-#include <sustcore/addr.h>
 #include <mem/gfp.h>
 #include <mem/kaddr.h>
 #include <mem/vma.h>
@@ -19,7 +18,24 @@
 #include <sustcore/addr.h>
 #include <sustcore/errcode.h>
 
-TaskMemoryManager::TaskMemoryManager(PhyAddr _pgd) : vma_list(), _pgd(_pgd), _pman(_pgd) {
+namespace {
+    bool valid_user_area(const VirArea &varea) {
+        return varea.begin <= varea.end && is_user_vaddr(varea.begin) &&
+               is_user_vaddr(varea.end);
+    }
+
+    VirArea page_inner_area(const VirArea &varea) {
+        VirAddr begin = varea.begin.page_align_up();
+        VirAddr end   = varea.end.page_align_down();
+        if (begin >= end) {
+            return VirArea(begin, begin);
+        }
+        return VirArea(begin, end);
+    }
+}  // namespace
+
+TaskMemoryManager::TaskMemoryManager(PhyAddr _pgd)
+    : vma_list(), _pgd(_pgd), _pman(_pgd) {
     PageMan::make_root(_pgd);
     ker_paddr::mapping_kernel_areas(_pman);
 }
@@ -32,115 +48,120 @@ TaskMemoryManager::~TaskMemoryManager() {
     // TODO: 释放所有内存占用与页表
 }
 
-Result<util::nonnull<VMA *>> TaskMemoryManager::add_vma(VMA::Type type, VirAddr vma_start,
-                                         VirAddr vma_end) {
-    VMA *vma = new VMA(this, type, Range(VirAddr(vma_start), VirAddr(vma_end)));
+Result<util::nonnull<VMA *>> TaskMemoryManager::add_vma(VMA::Type type,
+                                                        VMA::Growth growth,
+                                                        const VirArea &varea) {
+    if (!valid_user_area(varea)) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    if (!varea.nullable() && locate_range(varea).has_value()) {
+        unexpect_return(ErrCode::BUSY);
+    }
+
+    VMA *vma = new VMA(this, type, growth, varea);
     vma_list.push_back(*vma);
     return util::nonnull(*vma);
 }
 
-Result<util::nonnull<VMA *>> TaskMemoryManager::clone_vma(TaskMemoryManager &other, VirAddr vma_addr) {
-    auto locate_res = locate(vma_addr);
-    if (!locate_res.has_value()) {
-        unexpect_return(locate_res.error());
-    }
-    VMA *vma     = locate_res.value();
-    VMA *new_vma = new VMA(&other, *vma);
-    other.vma_list.push_back(*new_vma);
-    return util::nonnull(*vma);
+Result<util::nonnull<VMA *>> TaskMemoryManager::clone_vma(
+    util::nonnull<VMA *> vma, TaskMemoryManager &dst) {
+    return __check_vma(vma).and_then([&dst](VMA *vma) {
+        return dst.add_vma(vma->type, vma->growth, vma->varea);
+    });
 }
 
 Result<util::nonnull<VMA *>> TaskMemoryManager::locate(VirAddr vaddr) {
     for (auto &vma : vma_list) {
-        Range<VirAddr> vma_range(vma.vstart, vma.vend);
-        if (within(vma_range, vaddr)) {
+        if (within(vma.varea, vaddr) ||
+            (vma.varea.size() == 0 && vma.varea.begin == vaddr))
+        {
             return util::nonnull(vma);
         }
     }
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);
 }
 
-Result<util::nonnull<VMA *>> TaskMemoryManager::locate_range(VirAddr vaddr, size_t size) {
+Result<util::nonnull<VMA *>> TaskMemoryManager::locate_range(
+    const VirArea &varea) {
     for (auto &vma : vma_list) {
-        Range<VirAddr> vma_range(vma.vstart, vma.vend);
-        Range<VirAddr> query_range(vaddr, vaddr + size);
-        if (is_intersecting(vma_range, query_range)) {
+        if (is_intersecting(vma.varea, varea)) {
             return util::nonnull(vma);
         }
     }
     unexpect_return(ErrCode::ENTRY_NOT_FOUND);
 }
 
-Result<void> TaskMemoryManager::remove_vma(VirAddr vma_addr) {
-    auto locate_res = locate(vma_addr);
-    if (!locate_res.has_value()) {
-        unexpect_return(locate_res.error());
-    }
-    VMA *vma = locate_res.value();
-    vma_list.remove(*vma);
-    delete util::owner(vma);
-    void_return();
+Result<void> TaskMemoryManager::remove_vma(util::nonnull<VMA *> vma) {
+    return __check_vma(vma).and_then([this](VMA *vma) {
+        vma_list.remove(*vma);
+        delete util::owner(vma);
+        void_return();
+    });
 }
 
-Result<void> TaskMemoryManager::init_heap(VirAddr heap_start) {
-    if (_heap_vma != nullptr) {
+Result<VirArea> TaskMemoryManager::grow_vma(util::nonnull<VMA *> vma,
+                                            const VirArea &varea) {
+    auto check_res = __check_vma(vma);
+    if (!check_res.has_value()) {
+        propagate_return(check_res);
+    }
+
+    VMA *target = check_res.value();
+    if (!valid_user_area(varea)) {
         unexpect_return(ErrCode::INVALID_PARAM);
     }
-    if (!is_user_vaddr(heap_start)) {
+
+    VirArea old_area = target->varea;
+    if (varea == old_area) {
+        return old_area;
+    }
+
+    bool grow_up   = varea.begin == old_area.begin && varea.end > old_area.end;
+    bool shrink_up = varea.begin == old_area.begin && varea.end < old_area.end;
+    bool grow_down = varea.end == old_area.end && varea.begin < old_area.begin;
+    bool shrink_down =
+        varea.end == old_area.end && varea.begin > old_area.begin;
+
+    if (grow_up && !(target->growth & VMA::Growth::GROW_UP)) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (shrink_up && !(target->growth & VMA::Growth::SHRINK_UP)) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (grow_down && !(target->growth & VMA::Growth::GROW_DOWN)) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (shrink_down && !(target->growth & VMA::Growth::SHRINK_DOWN)) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (!grow_up && !shrink_up && !grow_down && !shrink_down) {
         unexpect_return(ErrCode::INVALID_PARAM);
     }
 
-    VirAddr heap_vstart = heap_start.page_align_up();
-    auto add_res = add_vma(VMA::Type::HEAP, heap_vstart, heap_vstart);
-    if (!add_res.has_value()) {
-        propagate_return(add_res);
-    }
-
-    _heap_start = heap_start;
-    _brk        = heap_start;
-    _heap_vma   = add_res.value();
-    void_return();
-}
-
-unsigned long TaskMemoryManager::set_brk(VirAddr new_brk) {
-    if (_heap_vma == nullptr) {
-        return 0;
-    }
-    if (new_brk == VirAddr::null) {
-        return _brk.arith();
-    }
-    if (new_brk < _heap_start || !is_user_vaddr(new_brk)) {
-        return _brk.arith();
-    }
-    if (new_brk.arith() > MAX_ADDR - (PAGESIZE - 1)) {
-        return _brk.arith();
-    }
-
-    VirAddr new_vend = new_brk.page_align_up();
-    if (new_vend < _heap_vma->vstart) {
-        new_vend = _heap_vma->vstart;
-    }
-
-    Range<VirAddr> heap_range(_heap_vma->vstart, new_vend);
-    for (auto &vma : vma_list) {
-        if (&vma == _heap_vma) {
-            continue;
-        }
-        Range<VirAddr> vma_range(vma.vstart, vma.vend);
-        if (is_intersecting(vma_range, heap_range)) {
-            return _brk.arith();
+    if (!varea.nullable()) {
+        for (auto &other : vma_list) {
+            if (&other != target && is_intersecting(other.varea, varea)) {
+                unexpect_return(ErrCode::BUSY);
+            }
         }
     }
 
-    VirAddr old_vend = _heap_vma->vend;
-    if (new_vend < old_vend) {
-        _pman.unmap_range(new_vend, old_vend - new_vend);
-        _pman.flush_tlb();
+    if (shrink_up) {
+        VirArea unmap_area = page_inner_area(VirArea(varea.end, old_area.end));
+        if (!unmap_area.nullable()) {
+            _pman.unmap_range(unmap_area.begin, unmap_area.size());
+        }
+    } else if (shrink_down) {
+        VirArea unmap_area =
+            page_inner_area(VirArea(old_area.begin, varea.begin));
+        if (!unmap_area.nullable()) {
+            _pman.unmap_range(unmap_area.begin, unmap_area.size());
+        }
     }
 
-    _heap_vma->vend = new_vend;
-    _brk            = new_brk;
-    return _brk.arith();
+    target->varea = varea;
+    _pman.flush_tlb();
+    return target->varea;
 }
 
 bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
@@ -149,8 +170,9 @@ bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
         e.access_address.addr(), _pgd.addr(), _pman.get_root().addr());
     auto locate_res = locate(e.access_address);
     if (!locate_res.has_value()) {
-        loggers::PAGING::ERROR("TM::on_np: 地址不在任何 VMA 中: %p, err=%d",
-                               e.access_address.addr(), locate_res.error());
+        loggers::PAGING::ERROR(
+            "TM::on_np: 地址不在任何 VMA 中: addr = %p, err=%d",
+            e.access_address.addr(), locate_res.error());
         return false;
     }
     VMA *vma = locate_res.value();

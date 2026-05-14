@@ -22,6 +22,7 @@
 #include <sus/raii.h>
 #include <sustcore/addr.h>
 #include <sustcore/errcode.h>
+#include <task/startup.h>
 #include <task/task.h>
 #include <task/task_struct.h>
 
@@ -76,9 +77,9 @@ Result<void> TaskManager::init_pcb(util::nonnull<PCB *> pcb,
     void_return();
 }
 
-Result<void> TaskManager::construct_thread(util::nonnull<PCB *> pcb,
-                                           void *entrypoint, void *stack_top,
-                                           schd::ClassType schd_class) {
+Result<util::nonnull<TCB *>> TaskManager::construct_thread(
+    util::nonnull<PCB *> pcb, void *entrypoint, void *stack_top,
+    schd::ClassType schd_class) {
     util::nonnull<TCB *> tcb = alloc_tcb();
     auto tcb_guard = util::Guard([this, tcb]() { tcb_pool.free(tcb); });
     auto init_res  = init_tcb(tcb, pcb);
@@ -100,18 +101,26 @@ Result<void> TaskManager::construct_thread(util::nonnull<PCB *> pcb,
     // 将线程加入进程的线程列表
     pcb->threads.push_back(*tcb);
     tcb_guard.release();  // 线程已成功构造，释放TCB的自动释放机制
-    void_return();
+    return tcb;
 }
 
-Result<void> TaskManager::construct_main_thread(util::nonnull<PCB *> pcb,
-                                                schd::ClassType schd_class) {
+Result<util::nonnull<TCB *>> TaskManager::construct_main_thread(
+    util::nonnull<PCB *> pcb, schd::ClassType schd_class,
+    const task::StartupInfo &startup_info) {
     // 为主线程分配初始栈空间, 并将其加入Task Memory的VMA中
     // 此处无需通过GFP分配物理页, 由缺页中断自动处理即可
-    auto vma_res =
-        pcb->tmm->add_vma(VMA::Type::STACK, USER_STACK_BOTTOM, USER_STACK_TOP);
+    auto vma_res = pcb->tmm->add_vma(
+        VMA::Type::STACK, VMA::Growth::GROW_DOWN,
+        VirArea(USER_STACK_BOTTOM, USER_STACK_TOP));
+    propagate(vma_res);
 
-    return construct_thread(pcb, pcb->entrypoint.addr(), USER_STACK_TOP.addr(),
-                            schd_class);
+    auto con_res = construct_thread(pcb, pcb->entrypoint.addr(),
+                                    USER_STACK_TOP.addr(), schd_class);
+    propagate(con_res);
+    util::nonnull<TCB *> tcb = con_res.value();
+    tcb->context()->write_startup(startup_info);
+
+    return tcb;
 }
 
 Result<void> TaskManager::terminate_tcb(util::nonnull<TCB *> tcb) {
@@ -157,7 +166,12 @@ Result<util::nonnull<PCB *>> TaskManager::create_init_task(
         propagate_return(init_res);
     }
 
-    auto main_thread_res = construct_main_thread(pcb, INIT_SCHED_CLASS);
+    task::StartupInfo startup_info{
+        .heap_vaddr  = spec.heap_vaddr,
+        .stack_vaddr = USER_STACK_BOTTOM,
+        .entrypoint  = spec.entrypoint,
+    };
+    auto main_thread_res = construct_main_thread(pcb, INIT_SCHED_CLASS, startup_info);
     if (!main_thread_res.has_value()) {
         loggers::SUSTCORE::ERROR("构造主线程失败! 错误码: %s",
                                  to_cstring(main_thread_res.error()));
@@ -180,7 +194,12 @@ Result<util::nonnull<PCB *>> TaskManager::create_task(
         propagate_return(init_res);
     }
 
-    auto main_thread_res = construct_main_thread(pcb, schd_class);
+    task::StartupInfo startup_info{
+        .heap_vaddr  = spec.heap_vaddr,
+        .stack_vaddr = USER_STACK_BOTTOM,
+        .entrypoint  = spec.entrypoint,
+    };
+    auto main_thread_res = construct_main_thread(pcb, schd_class, startup_info);
     if (!main_thread_res.has_value()) {
         loggers::SUSTCORE::ERROR("构造主线程失败! 错误码: %s",
                                  to_cstring(main_thread_res.error()));

@@ -19,8 +19,7 @@
 #include <sus/nonnull.h>
 #include <task/task_struct.h>
 
-class TaskManager
-{
+class TaskManager {
 private:
     size_t __tid_alloc = 1;
     size_t __pid_alloc = 1;
@@ -44,21 +43,30 @@ private:
         return util::nnullforce(pcb_pool.alloc());
     }
 
-    Result<void> init_tcb(util::nonnull<TCB *> tcb, util::nonnull<PCB *> task/* ... args*/);
-    Result<void> init_ctx(util::nonnull<TCB *> tcb, void *entrypoint, void *stack_top);
-    Result<void> init_pcb(util::nonnull<PCB *> pcb, TaskSpec spec/* ... args*/);
+    Result<void> init_tcb(util::nonnull<TCB *> tcb,
+                          util::nonnull<PCB *> task /* ... args*/);
+    Result<void> init_ctx(util::nonnull<TCB *> tcb, void *entrypoint,
+                          void *stack_top);
+    Result<void> init_pcb(util::nonnull<PCB *> pcb,
+                          TaskSpec spec /* ... args*/);
 
-    Result<void> construct_thread(util::nonnull<PCB *> pcb, void *entrypoint, void *stack_top, schd::ClassType schd_class);
-    Result<void> construct_main_thread(util::nonnull<PCB *> pcb, schd::ClassType schd_class);
+    Result<util::nonnull<TCB *>> construct_thread(util::nonnull<PCB *> pcb, void *entrypoint,
+                                   void *stack_top, schd::ClassType schd_class);
+    Result<util::nonnull<TCB *>> construct_main_thread(util::nonnull<PCB *> pcb,
+                                        schd::ClassType schd_class,
+                                        const task::StartupInfo &startup_info);
 
     Result<void> terminate_tcb(util::nonnull<TCB *> tcb);
     Result<void> terminate_pcb(util::nonnull<PCB *> pcb);
 
     Result<void> preload(const char *path, TaskSpec &spec, LoadPrm &prm);
-public:
-    Result<util::nonnull<PCB *>> create_init_task(TaskSpec spec/* ... args*/);
-    Result<util::nonnull<PCB *>> create_task(TaskSpec spec, schd::ClassType schd_class/* ... args*/);
 
-    Result<util::nonnull<PCB *>> load_elf(const char *path, schd::ClassType schd_class);
+public:
+    Result<util::nonnull<PCB *>> create_init_task(TaskSpec spec /* ... args*/);
+    Result<util::nonnull<PCB *>> create_task(
+        TaskSpec spec, schd::ClassType schd_class /* ... args*/);
+
+    Result<util::nonnull<PCB *>> load_elf(const char *path,
+                                          schd::ClassType schd_class);
     Result<util::nonnull<PCB *>> load_init(const char *path);
 };

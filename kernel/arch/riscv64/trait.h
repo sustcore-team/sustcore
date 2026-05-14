@@ -15,6 +15,7 @@
 #include <arch/trait.h>
 #include <sus/types.h>
 #include <syscall/syscall.h>
+#include <task/startup.h>
 
 // 该功能必须通过宏来实现, 以保证其一定会内联到原代码片段中
 #define RELOAD_SP() asm volatile("la sp, boot_stack_top\n");
@@ -103,6 +104,10 @@ struct Riscv64Context {
         syscall::ArgPack pack{};
         read_args(pack);
         return pack;
+    }
+
+    constexpr void write_startup(const task::StartupInfo &info) {
+        regs[A0_BASE]     = info.heap_vaddr.arith();
     }
 };
 
