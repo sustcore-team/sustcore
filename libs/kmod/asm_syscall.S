@@ -29,3 +29,92 @@ sys_grow_vma:
     /* kernel returns a0 = area.begin, a1 = area.end */
     mv a0, a1
     ret
+
+    .global sys_cap_clone
+    .type sys_cap_clone, @function
+sys_cap_clone:
+    /* a0 = src cap slot, a1 = target cap slot */
+    mv a6, a0
+    mv a0, a1
+    li a7, 0xFFFF000E
+    ecall
+    ret
+
+    .global sys_cap_downgrade
+    .type sys_cap_downgrade, @function
+sys_cap_downgrade:
+    /* a0 = cap slot, a1 = new permission bits */
+    mv a6, a0
+    mv a0, a1
+    li a7, 0xFFFF000F
+    ecall
+    ret
+
+    .global sys_cap_derive
+    .type sys_cap_derive, @function
+sys_cap_derive:
+    /* a0 = src cap slot, a1 = target cap slot, a2 = new permission bits */
+    mv a6, a0
+    mv a0, a1
+    mv a1, a2
+    li a7, 0xFFFF0010
+    ecall
+    ret
+
+    .global sys_cap_send
+    .type sys_cap_send, @function
+sys_cap_send:
+    /* a0 = src cap slot, a1 = target holder id, a2 = token out ptr */
+    mv a6, a0
+    mv a0, a1
+    mv a1, a2
+    li a7, 0xFFFF0011
+    ecall
+    ret
+
+    .global sys_cap_recv
+    .type sys_cap_recv, @function
+sys_cap_recv:
+    /* a0 = target cap slot, a1 = token in ptr */
+    mv a6, a0
+    mv a0, a1
+    li a7, 0xFFFF0012
+    ecall
+    ret
+
+    .global sys_create_notification
+    .type sys_create_notification, @function
+sys_create_notification:
+    /* a0 = target cap slot */
+    mv a6, a0
+    li a7, 0xFFFF000D
+    ecall
+    ret
+
+    .global sys_signal_notification
+    .type sys_signal_notification, @function
+sys_signal_notification:
+    /* a0 = target cap slot */
+    mv a6, a0
+    li a7, 0xFFFF000A
+    ecall
+    ret
+
+    .global sys_unsignal_notification
+    .type sys_unsignal_notification, @function
+sys_unsignal_notification:
+    /* a0 = target cap slot */
+    mv a6, a0
+    li a7, 0xFFFF000B
+    ecall
+    ret
+
+    .global sys_wait_notification
+    .type sys_wait_notification, @function
+sys_wait_notification:
+    /* a0 = target cap slot, a1 = idx */
+    mv a6, a0
+    mv a0, a1
+    li a7, 0xFFFF000C
+    ecall
+    ret

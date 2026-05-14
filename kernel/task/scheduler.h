@@ -122,6 +122,9 @@ namespace schd {
         // 任务出队/阻塞
         Result<void> dequeue(util::nonnull<TCB *> tcb);
 
+        Result<void> block_current(WaitReasonId reason);
+        bool wakeup_waiting(TCB *tcb);
+
         // 唤醒新创建的任务并检查是否需要抢占当前任务
         bool wakeup_new(TCB *new_tcb);
 

@@ -67,6 +67,7 @@ namespace schd::rr {
             meta.state      = ThreadState::RUNNING;
             auto entity    = as_entity_rr(meta);
             entity->slice_cnt = TIME_SLICES;
+            rq->rr_list.pop_front();
             this->cursched = &meta;
             return this->asunit(meta);
         }

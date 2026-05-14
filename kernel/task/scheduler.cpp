@@ -14,6 +14,7 @@
 #include <mem/vma.h>
 #include <sus/nonnull.h>
 #include <task/scheduler.h>
+#include <task/wait.h>
 
 namespace key {
     using namespace env::key;
@@ -130,22 +131,24 @@ namespace schd {
         _curtcb->basic_entity
             .template flags_reset<SchedMeta::FLAGS_NEED_RESCHED>();
 
-        // 如果需要重新调度, 则将当前线程放回就绪队列
-        auto schd_res = schd(_curtcb->schd_class);
-        if (!schd_res.has_value()) {
-            loggers::SUSTCORE::ERROR("未知的调度类! 错误码: %s",
-                                     to_cstring(schd_res.error()));
-            panic("调度器崩溃!");
-        }
-        auto schdclass = schd_res.value();
-        auto put_prev_res =
-            schdclass->put_prev(rq(), util::nnullforce(_curtcb));
-        if (!put_prev_res.has_value()) {
-            loggers::SUSTCORE::ERROR(
-                "调度器处理put_prev失败! 错误码: %s 对应调度类: %s",
-                to_cstring(put_prev_res.error()),
-                to_cstring(_curtcb->schd_class));
-            panic("调度器崩溃!");
+        // 如果当前线程仍然可运行, 将其放回就绪队列; 等待线程不再入队。
+        if (_curtcb->basic_entity.state != ThreadState::WAITING) {
+            auto schd_res = schd(_curtcb->schd_class);
+            if (!schd_res.has_value()) {
+                loggers::SUSTCORE::ERROR("未知的调度类! 错误码: %s",
+                                         to_cstring(schd_res.error()));
+                panic("调度器崩溃!");
+            }
+            auto schdclass = schd_res.value();
+            auto put_prev_res =
+                schdclass->put_prev(rq(), util::nnullforce(_curtcb));
+            if (!put_prev_res.has_value()) {
+                loggers::SUSTCORE::ERROR(
+                    "调度器处理put_prev失败! 错误码: %s 对应调度类: %s",
+                    to_cstring(put_prev_res.error()),
+                    to_cstring(_curtcb->schd_class));
+                panic("调度器崩溃!");
+            }
         }
 
         // 选择下一个要运行的线程
@@ -175,6 +178,34 @@ namespace schd {
         }
 
         return schd_res.value()->dequeue(rq(), tcb);
+    }
+
+    Result<void> Scheduler::block_current(WaitReasonId reason) {
+        if (_curtcb == nullptr) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        if (_curtcb->schd_class == ClassType::IDLE) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+
+        auto enqueue_res = task::wait::WaitReasonManager::inst().enqueue(
+            reason, _curtcb);
+        propagate(enqueue_res);
+
+        _curtcb->basic_entity
+            .template flags_set<SchedMeta::FLAGS_NEED_RESCHED>();
+        schedule();
+        void_return();
+    }
+
+    bool Scheduler::wakeup_waiting(TCB *tcb) {
+        if (tcb == nullptr ||
+            tcb->basic_entity.state != ThreadState::WAITING)
+        {
+            return false;
+        }
+        tcb->basic_entity.state = ThreadState::EMPTY;
+        return wakeup(tcb);
     }
 
     void Scheduler::yield() {

@@ -23,7 +23,8 @@ enum class ThreadState {
     INITIALIZATION = 1,
     READY          = 2,
     RUNNING        = 3,
-    YIELD          = 4
+    YIELD          = 4,
+    WAITING        = 5
 };
 
 constexpr const char *to_string(ThreadState state) {
@@ -33,6 +34,7 @@ constexpr const char *to_string(ThreadState state) {
         case ThreadState::READY:          return "READY";
         case ThreadState::RUNNING:        return "RUNNING";
         case ThreadState::YIELD:          return "YIELD";
+        case ThreadState::WAITING:        return "WAITING";
         default:                          return "UNKNOWN";
     }
 }

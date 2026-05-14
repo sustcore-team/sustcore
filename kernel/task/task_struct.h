@@ -24,6 +24,7 @@
 
 using tid_t = size_t;
 using pid_t = size_t;
+using WaitReasonId = size_t;
 
 struct TCB;
 struct PCB;
@@ -52,6 +53,10 @@ struct TCB {
     schd::ClassType schd_class;
     schd::SchedMeta basic_entity;
     schd::rr::Entity rr_entity;
+
+    // wait data
+    WaitReasonId wait_reason;
+    util::ListHead<TCB> wait_head;
 };
 
 // PCB are arranged as a tree

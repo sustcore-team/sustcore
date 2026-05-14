@@ -9,9 +9,12 @@
  *
  */
 
-#include <logger.h>
+#include <cap/cholder.h>
 #include <env.h>
+#include <logger.h>
 #include <mem/kaddr.h>
+#include <object/notif.h>
+#include <perm/permission.h>
 #include <schd/schdbase.h>
 #include <sus/owner.h>
 #include <sustcore/addr.h>
@@ -72,13 +75,13 @@ namespace syscall {
     private:
         UBuffer _ubuf;
         int _len;
+
     public:
         UString(VirAddr uaddr, size_t maxlen) : _ubuf(uaddr, maxlen) {
             sync_from_user();
         }
 
-        ~UString() {
-        }
+        ~UString() {}
 
         UString &sync_from_user() {
             _ubuf.sync_from_user();
@@ -123,14 +126,14 @@ namespace syscall {
     }
 
     VirArea sys_grow_vma(VirAddr vaddr, VirArea new_area) {
-        auto tmm = env::inst().tmm();
+        auto tmm        = env::inst().tmm();
         auto locate_res = tmm->locate(vaddr);
         if (!locate_res.has_value()) {
             loggers::SYSCALL::ERROR("无法找到包含地址 %p 的 VMA: err=%d",
                                     vaddr.addr(), locate_res.error());
             return {};
         }
-        auto vma = locate_res.value();
+        auto vma      = locate_res.value();
         auto grow_res = tmm->grow_vma(vma, new_area);
         if (!grow_res.has_value()) {
             loggers::SYSCALL::ERROR("无法增长 VMA: err=%d", grow_res.error());
@@ -139,19 +142,140 @@ namespace syscall {
         return grow_res.value();
     }
 
+    Result<cap::NotificationObject> notif_object(CapIdx capidx) {
+        auto cap_res = cap::CHolder::lookup(capidx);
+        propagate(cap_res);
+        auto *cap = cap_res.value();
+        if (cap->payload()->type_id() != PayloadType::NOTIF) {
+            unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+        }
+        return cap::NotificationObject(util::nnullforce(cap));
+    }
+
+    // TODO: allow syscall to directly return an result,
+    // and when returning an error, let the return value to be -errcode,
+    // and automatically log the error in the syscall_entrance function,
+    // to avoid repetitive error handling code in each syscall handler.
+    bool wait_notification(CapIdx capidx, size_t idx) {
+        auto notif_res = notif_object(capidx).and_then(
+            [idx](cap::NotificationObject obj) { return obj.wait(idx); });
+        if (!notif_res.has_value()) {
+            loggers::SYSCALL::ERROR("等待notification失败: err=%d",
+                                    notif_res.error());
+            return false;
+        }
+        return notif_res.value();
+    }
+
+    bool set_notification(CapIdx capidx, size_t idx, bool state) {
+        auto set_res = notif_object(capidx).and_then(
+            [idx, state](cap::NotificationObject obj) { return obj.set(idx, state); });
+        if (!set_res.has_value()) {
+            loggers::SYSCALL::ERROR("设置notification失败: err=%d",
+                                    set_res.error());
+            return false;
+        }
+        return set_res.value();
+    }
+
+    bool check_notification(CapIdx capidx, size_t idx) {
+        auto query_res = notif_object(capidx).and_then(
+            [idx](cap::NotificationObject obj) { return obj.query(idx); });
+        if (!query_res.has_value()) {
+            loggers::SYSCALL::ERROR("查询notification失败: err=%d",
+                                    query_res.error());
+            return false;
+        }
+        return query_res.value();
+    }
+
+    bool create_notification(CapIdx capidx) {
+        auto create_res = cap::CHolder::create<cap::NotificationPayload>(capidx);
+        if (!create_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建notification失败: err=%d",
+                                    create_res.error());
+            return false;
+        }
+        return true;
+    }
+
+    bool cap_clone(CapIdx src, CapIdx target) {
+        auto clone_res = cap::CHolder::clone(target, src);
+        if (!clone_res.has_value()) {
+            loggers::SYSCALL::ERROR("clone capability失败: err=%d",
+                                    clone_res.error());
+            return false;
+        }
+        return true;
+    }
+
+    bool cap_downgrade(CapIdx idx, b64 new_perm) {
+        auto downgrade_res = cap::CHolder::downgrade(idx, new_perm);
+        if (!downgrade_res.has_value()) {
+            loggers::SYSCALL::ERROR("downgrade capability失败: err=%d",
+                                    downgrade_res.error());
+            return false;
+        }
+        return true;
+    }
+
+    bool cap_derive(CapIdx src, CapIdx target, b64 new_perm) {
+        auto derive_res = cap::CHolder::derive(target, src, new_perm);
+        if (!derive_res.has_value()) {
+            loggers::SYSCALL::ERROR("derive capability失败: err=%d",
+                                    derive_res.error());
+            return false;
+        }
+        return true;
+    }
+
+    bool cap_send(CapIdx src, size_t target_holder, VirAddr token_uaddr) {
+        auto send_res = cap::CHolder::send(src, target_holder);
+        if (!send_res.has_value()) {
+            loggers::SYSCALL::ERROR("send capability失败: err=%d",
+                                    send_res.error());
+            return false;
+        }
+
+        // ReceiveToken has three machine words, so return it through user memory
+        // instead of extending the generic RetPack.
+        UBuffer token_buf(token_uaddr, sizeof(cap::ReceiveToken));
+        memcpy(token_buf.kbuf(), &send_res.value(), sizeof(cap::ReceiveToken));
+        token_buf.sync_to_user();
+        return true;
+    }
+
+    bool cap_recv(CapIdx target, VirAddr token_uaddr) {
+        UBuffer token_buf(token_uaddr, sizeof(cap::ReceiveToken));
+        token_buf.sync_from_user();
+
+        cap::ReceiveToken token{};
+        memcpy(&token, token_buf.kbuf(), sizeof(token));
+        auto recv_res = cap::CHolder::recv(target, token);
+        if (!recv_res.has_value()) {
+            loggers::SYSCALL::ERROR("recv capability失败: err=%d",
+                                    recv_res.error());
+            return false;
+        }
+        return true;
+    }
+
     RetPack entrance(const ArgPack &args) {
         b64 arg0 = args.args[0];
         b64 arg1 = args.args[1];
         b64 arg2 = args.args[2];
 
         b64 sysno  = args.syscall_number;
+        b64 capidx = args.capidx;
 
         b64 ret0 = 0, ret1 = 0;
 
         bool processed = true;
 
-        // 根据syscall number分发
+        // capidx (a6) is the primary capability slot for capability syscalls;
+        // args[] carry operation-specific values.
         switch (sysno) {
+            // Basic process / memory syscalls.
             case SYS_WRITE_SERIAL: {
                 write_serial(UString((VirAddr)arg0, arg1), arg1);
                 ret0 = ret1 = 0;
@@ -163,11 +287,65 @@ namespace syscall {
                 break;
             }
             case SYS_GROW_VMA: {
-                auto vaddr = (VirAddr)arg0;
+                auto vaddr    = (VirAddr)arg0;
                 auto new_area = VirArea((VirAddr)arg1, (VirAddr)arg2);
                 auto ret_area = sys_grow_vma(vaddr, new_area);
-                ret0 = ret_area.begin.arith();
-                ret1 = ret_area.end.arith();
+                ret0          = ret_area.begin.arith();
+                ret1          = ret_area.end.arith();
+                break;
+            }
+
+            // Notification object operations.
+            case SYS_WAIT_NOTIFICATION: {
+                ret0 = wait_notification(capidx, arg0);
+                ret1 = 0;
+                break;
+            }
+            case SYS_SIGNAL_NOTIFICATION: {
+                ret0 = set_notification(capidx, arg0, true);
+                ret1 = 0;
+                break;
+            }
+            case SYS_UNSIGNAL_NOTIFICATION: {
+                ret0 = set_notification(capidx, arg0, false);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CHECK_NOTIFICATION: {
+                ret0 = check_notification(capidx, arg0);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CREATE_NOTIFICATION: {
+                ret0 = create_notification(capidx);
+                ret1 = 0;
+                break;
+            }
+
+            // Generic capability operations.
+            case SYS_CAP_CLONE: {
+                ret0 = cap_clone(capidx, arg0);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CAP_DOWNGRADE: {
+                ret0 = cap_downgrade(capidx, arg0);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CAP_DERIVE: {
+                ret0 = cap_derive(capidx, arg0, arg1);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CAP_SEND: {
+                ret0 = cap_send(capidx, arg0, VirAddr(arg1));
+                ret1 = 0;
+                break;
+            }
+            case SYS_CAP_RECV: {
+                ret0 = cap_recv(capidx, VirAddr(arg0));
+                ret1 = 0;
                 break;
             }
             default: {

@@ -40,6 +40,8 @@ Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
     tcb->tid       = alloc_tid();
     tcb->task      = task;
     tcb->list_head = {};
+    tcb->wait_reason = 0;
+    tcb->wait_head = {};
 
     // ask for a kstack for this thread
     Result<PhyAddr> gfp_res = GFP::get_free_page(TCB::KSTACK_PAGES);

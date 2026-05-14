@@ -11,36 +11,9 @@
 
 #include <logger.h>
 #include <object/mutex.h>
+#include <device/int.h>
 
 namespace cap {
-    class InterruptGuard {
-    private:
-        bool entered      = false;
-        bool prev_enabled = false;
-
-    public:
-        InterruptGuard() = default;
-
-        bool enter() {
-            if (entered) {
-                return false;
-            }
-            prev_enabled = Riscv64Interrupt::enabled();
-            Riscv64Interrupt::cli();
-            entered = true;
-            return true;
-        }
-
-        void leave() {
-            if (entered) {
-                if (prev_enabled) {
-                    Riscv64Interrupt::sti();
-                }
-                entered = false;
-            }
-        }
-    };
-
     Result<bool> MutexObject::lock() {
         using namespace perm::mutex;
         if (!imply(USE)) {

@@ -19,12 +19,12 @@
 // 载荷类型
 enum class PayloadType : b64 {
     NONE            = 0,
-    // objects
-    CSPACE_ACCESSOR = 0x001,
-    INTOBJ          = 0x002,
-    SINTOBJ         = 0x003,
-    VFILE           = 0x004,
-    MUTEX           = 0x005
+    // object
+    INTOBJ          = 0x001,
+    SINTOBJ         = 0x002,
+    VFILE           = 0x003,
+    NOTIF           = 0x004,
+    MUTEX           = 0x005,
 };
 
 constexpr bool operator&(PayloadType a, PayloadType b) {
@@ -34,7 +34,6 @@ constexpr bool operator&(PayloadType a, PayloadType b) {
 constexpr const char *to_string(PayloadType type) {
     switch (type) {
         case PayloadType::NONE:            return "NONE";
-        case PayloadType::CSPACE_ACCESSOR: return "CSPACE_ACCESSOR";
         case PayloadType::INTOBJ:          return "INTOBJ";
         case PayloadType::SINTOBJ:         return "SINTOBJ";
         case PayloadType::VFILE:           return "VFILE";

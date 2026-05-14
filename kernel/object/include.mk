@@ -1,1 +1,1 @@
-sources += intobj.cpp vfile.cpp
+sources += intobj.cpp vfile.cpp notif.cpp

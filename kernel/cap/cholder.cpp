@@ -165,6 +165,13 @@ namespace cap {
         void_return();
     }
 
+    Result<void> CHolder::internal_downgrade(CapIdx idx, b64 new_perm) {
+        auto cap_res = internal_lookup(idx);
+        propagate(cap_res);
+
+        return cap_res.value()->downgrade(new_perm);
+    }
+
     Result<ReceiveToken> CHolder::internal_send(CapIdx src_idx,
                                                 size_t target_id) {
         // make sure it's a valid capability index
@@ -315,6 +322,12 @@ namespace cap {
                                  b64 new_perm) {
         return current().and_then([&](CHolder *holder) {
             return holder->internal_derive(target_idx, src_idx, new_perm);
+        });
+    }
+
+    Result<void> CHolder::downgrade(CapIdx idx, b64 new_perm) {
+        return current().and_then([=](CHolder *holder) {
+            return holder->internal_downgrade(idx, new_perm);
         });
     }
 

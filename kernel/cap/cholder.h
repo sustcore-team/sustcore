@@ -150,6 +150,9 @@ namespace cap {
                                      b64 new_perm);
 
         [[nodiscard]]
+        Result<void> internal_downgrade(CapIdx idx, b64 new_perm);
+
+        [[nodiscard]]
         Result<ReceiveToken> internal_send(CapIdx src_idx, size_t target_id);
 
         [[nodiscard]]
@@ -182,6 +185,9 @@ namespace cap {
         [[nodiscard]]
         static Result<void> derive(CapIdx target_idx, CapIdx src_idx,
                                    b64 new_perm);
+
+        [[nodiscard]]
+        static Result<void> downgrade(CapIdx idx, b64 new_perm);
 
         [[nodiscard]]
         static Result<ReceiveToken> send(CapIdx src_idx, size_t target_id);
