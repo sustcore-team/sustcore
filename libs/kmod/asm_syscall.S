@@ -9,10 +9,13 @@ kwrites:
     ecall
     ret
 
+    .global sys_create_process
+    .type   sys_create_process, @function
     .global create_process
     .type   create_process, @function
+sys_create_process:
 create_process:
-    /* a0 = path */
+    /* a0 = path, a1 = initial caps, a2 = initial caps size */
     /* 创建并唤醒一个用户进程 */
     li a7, 0xFFC00002
     ecall
@@ -28,22 +31,6 @@ sys_grow_vma:
     ecall
     /* kernel returns a0 = area.begin, a1 = area.end */
     mv a0, a1
-    ret
-
-    .global sys_tmp_write
-    .type sys_tmp_write, @function
-sys_tmp_write:
-    /* a0 = idx, a1 = value */
-    li a7, 0xFFC00004
-    ecall
-    ret
-
-    .global sys_tmp_read
-    .type sys_tmp_read, @function
-sys_tmp_read:
-    /* a0 = idx */
-    li a7, 0xFFC00005
-    ecall
     ret
 
     .global sys_wait_notification
@@ -117,24 +104,22 @@ sys_cap_derive:
     ecall
     ret
 
-    .global sys_cap_send
-    .type sys_cap_send, @function
-sys_cap_send:
-    /* a0 = src cap slot, a1 = target pid, a2 = token out ptr */
+    .global lookup_cap
+    .type lookup_cap, @function
+lookup_cap:
+    /* a0 = cap slot, a1 = CapInfo out ptr */
     mv a6, a0
     mv a0, a1
-    mv a1, a2
     li a7, 0xFFFF0011
     ecall
     ret
 
-    .global sys_cap_recv
-    .type sys_cap_recv, @function
-sys_cap_recv:
-    /* a0 = target cap slot, a1 = token in ptr */
+    .global sys_getpid
+    .type sys_getpid, @function
+sys_getpid:
+    /* a0 = pcb cap slot */
     mv a6, a0
-    mv a0, a1
-    li a7, 0xFFFF0012
+    li a7, 0xFFFF0005
     ecall
     ret
 

@@ -184,47 +184,6 @@ namespace test::cap {
         }
     };
 
-    class CaseSendReceive : public TestCase {
-    public:
-        CaseSendReceive() : TestCase("send/recv 跨 CHolder 移动能力") {}
-
-        void _run(void *env [[maybe_unused]]) const noexcept override {
-            auto sender_res   = new_holder();
-            auto receiver_res = new_holder();
-            tassert(sender_res.has_value() && receiver_res.has_value(),
-                    "创建发送方与接收方 CHolder");
-            auto *sender   = sender_res.value();
-            auto *receiver = receiver_res.value();
-
-            auto src_res = sender->internal_lookup_freeslot();
-            tassert(src_res.has_value(), "分配发送槽位");
-            CapIdx src = src_res.value();
-            auto create_res =
-                sender->internal_create<kcap::IntPayload>(src, 20260426);
-            tassert(create_res.has_value(), "创建待发送能力");
-
-            auto token_res = sender->internal_send(src, receiver->id());
-            tassert(token_res.has_value(), "生成接收 token");
-
-            auto dst_res = receiver->internal_lookup_freeslot();
-            tassert(dst_res.has_value(), "分配接收槽位");
-            CapIdx dst    = dst_res.value();
-            auto recv_res = receiver->internal_recv(dst, token_res.value());
-            tassert(recv_res.has_value(), "接收成功");
-
-            auto src_lookup = sender->internal_lookup(src);
-            tassert(!src_lookup.has_value() &&
-                        src_lookup.error() == ErrCode::OUT_OF_BOUNDARY,
-                    "发送方源槽位已清空");
-
-            kcap::IntObj recv_op(
-                util::nnullforce(receiver->internal_lookup(dst).value()));
-            auto read_res = recv_op.read();
-            tassert(read_res.has_value() && read_res.value() == 20260426,
-                    "接收方读值正确");
-        }
-    };
-
     class CasePayloadDestruct : public TestCase {
     public:
         CasePayloadDestruct() : TestCase("payload 最后引用释放时 destruct") {}
@@ -264,7 +223,6 @@ namespace test::cap {
         cases.push_back(new CaseSharedPayloadClone());
         cases.push_back(new CaseDowngradeAndDerive());
         cases.push_back(new CaseMigrate());
-        cases.push_back(new CaseSendReceive());
         cases.push_back(new CasePayloadDestruct());
 
         framework.add_category(

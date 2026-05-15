@@ -14,6 +14,7 @@
 #include <logger.h>
 #include <mem/kaddr.h>
 #include <object/notif.h>
+#include <object/task.h>
 #include <perm/permission.h>
 #include <schd/schdbase.h>
 #include <sus/owner.h>
@@ -112,19 +113,78 @@ namespace syscall {
 
     constexpr size_t MAX_SYSCALL_PATH = 256;
 
-    size_t create_process(const UString &path) {
+    CapIdx create_process(const UString &path, VirAddr caps_uaddr,
+                          size_t caps_sz) {
+        // Create children process
+        auto current_holder_res = cap::CHolder::current();
+        if (!current_holder_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 当前CSpace不可用");
+            return cap::error;
+        }
+        cap::CHolder *current_holder = current_holder_res.value();
+
+        // load children ELF
         auto load_res =
             env::inst().tm()->load_elf(path.kbuf(), schd::ClassType::RR);
         if (!load_res.has_value()) {
             loggers::SYSCALL::ERROR("创建进程失败: path=%s, 错误码: %s",
                                     path.kbuf(), to_cstring(load_res.error()));
-            return 0;
+            return cap::error;
         }
+        // create a guard to automatically clean up the loaded PCB object if any error occurs later,
+        auto pcb_guard = util::Guard([&]() {
+            if (load_res.has_value()) {
+                auto pcb = load_res.value();
+                loggers::SYSCALL::INFO("清理已加载的PCB对象: pid=%d", pcb->pid);
+                // TODO: 调用 task manager 的接口来删除 PCB 对象
+                // env::inst().tm().remove_pcb(pcb->pid);
+            }
+        });
 
         auto pcb = load_res.value();
+        auto child_pcb_cap_res = pcb->cholder->internal_lookup(pcb->pcb_cap);
+        if (!child_pcb_cap_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 子进程PCB能力不可用 err=%d",
+                                    child_pcb_cap_res.error());
+            return cap::error;
+        }
+
+        cap::PCBObject child_pcb_obj(
+            util::nnullforce(child_pcb_cap_res.value()));
+
+        if (caps_sz != 0) {
+            UBuffer caps_buf(caps_uaddr, caps_sz * sizeof(CapIdx));
+            caps_buf.sync_from_user();
+            auto *caps = reinterpret_cast<CapIdx *>(caps_buf.kbuf());
+            for (size_t i = 0; i < caps_sz; ++i) {
+                auto insert_res = child_pcb_obj.cap_insert(caps[i], *current_holder);
+                if (!insert_res.has_value()) {
+                    loggers::SYSCALL::ERROR(
+                        "创建进程失败: 初始能力插入失败 idx=%d err=%d", i,
+                        insert_res.error());
+                    return cap::error;
+                }
+            }
+        }
+
+        auto ret_slot_res = current_holder->internal_lookup_freeslot();
+        if (!ret_slot_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 调用者无空闲能力槽 err=%d",
+                                    ret_slot_res.error());
+            return cap::error;
+        }
+        auto ret_insert_res = current_holder->internal_insert(
+            ret_slot_res.value(), child_pcb_cap_res.value()->payload(),
+            child_pcb_cap_res.value()->perm());
+        if (!ret_insert_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 返回PCB能力插入失败 err=%d",
+                                    ret_insert_res.error());
+            return cap::error;
+        }
+
         loggers::SYSCALL::INFO("创建进程成功: path=%s, pid=%d", path.kbuf(),
                                pcb->pid);
-        return pcb->pid;
+        return ret_slot_res.value();
     }
 
     VirArea sys_grow_vma(VirAddr vaddr, VirArea new_area) {
@@ -231,63 +291,42 @@ namespace syscall {
         return true;
     }
 
-    bool cap_send(CapIdx src, size_t target_pid, VirAddr token_uaddr) {
-        auto *tm = env::inst().tm();
-        if (tm == nullptr) {
-            loggers::SYSCALL::ERROR("TaskManager未初始化");
-            return false;
-        }
-        auto holder_id_res = tm->lookup_holder_id(target_pid);
-        if (!holder_id_res.has_value()) {
-            loggers::SYSCALL::ERROR("send capability失败: 未找到pid=%d",
-                                    target_pid);
-            return false;
-        }
-        auto send_res = cap::CHolder::send(src, holder_id_res.value());
-        if (!send_res.has_value()) {
-            loggers::SYSCALL::ERROR("send capability失败: err=%d",
-                                    send_res.error());
-            return false;
-        }
-        // ReceiveToken has three machine words, so return it through user memory
-        // instead of extending the generic RetPack.
-        UBuffer token_buf(token_uaddr, sizeof(cap::ReceiveToken));
-        memcpy(token_buf.kbuf(), &send_res.value(), sizeof(cap::ReceiveToken));
-        token_buf.sync_to_user();
-        return true;
-    }
-
-    bool cap_recv(CapIdx target, VirAddr token_uaddr) {
-        UBuffer token_buf(token_uaddr, sizeof(cap::ReceiveToken));
-        token_buf.sync_from_user();
-
-        cap::ReceiveToken token{};
-        memcpy(&token, token_buf.kbuf(), sizeof(token));
-        auto recv_res = cap::CHolder::recv(target, token);
-        if (!recv_res.has_value()) {
-            loggers::SYSCALL::ERROR("recv capability失败: err=%d",
-                                    recv_res.error());
-            return false;
-        }
-        return true;
-    }
-
-    constexpr size_t TMP_SLOTS = 8;
-    static b64 tmp[TMP_SLOTS] = {};
-
-    bool tmp_write(size_t idx, b64 value) {
-        if (idx >= TMP_SLOTS) {
-            return false;
-        }
-        tmp[idx] = value;
-        return true;
-    }
-
-    b64 tmp_read(size_t idx) {
-        if (idx >= TMP_SLOTS) {
+    size_t get_pid(CapIdx pcb_cap) {
+        auto cap_res = cap::CHolder::lookup(pcb_cap);
+        if (!cap_res.has_value()) {
+            loggers::SYSCALL::ERROR("get_pid失败: err=%d", cap_res.error());
             return 0;
         }
-        return tmp[idx];
+        if (cap_res.value()->payload()->type_id() != PayloadType::PCB) {
+            loggers::SYSCALL::ERROR("get_pid失败: 类型不匹配");
+            return 0;
+        }
+        auto pid_res =
+            cap::PCBObject(util::nnullforce(cap_res.value())).get_pid();
+        if (!pid_res.has_value()) {
+            loggers::SYSCALL::ERROR("get_pid失败: err=%d", pid_res.error());
+            return 0;
+        }
+        return pid_res.value();
+    }
+
+    bool lookup_cap(CapIdx idx, VirAddr info_uaddr) {
+        if (!info_uaddr.nonnull()) {
+            return false;
+        }
+        auto cap_res = cap::CHolder::lookup(idx);
+        if (!cap_res.has_value()) {
+            loggers::SYSCALL::ERROR("lookup_cap失败: err=%d", cap_res.error());
+            return false;
+        }
+        CapInfo info{
+            .type        = cap_res.value()->payload()->type_id(),
+            .permissions = cap_res.value()->perm(),
+        };
+        UBuffer info_buf(info_uaddr, sizeof(info));
+        memcpy(info_buf.kbuf(), &info, sizeof(info));
+        info_buf.sync_to_user();
+        return true;
     }
 
     RetPack entrance(const ArgPack &args) {
@@ -312,7 +351,8 @@ namespace syscall {
                 break;
             }
             case SYS_CREATE_PROCESS: {
-                ret0 = create_process(UString((VirAddr)arg0, MAX_SYSCALL_PATH));
+                ret0 = create_process(UString((VirAddr)arg0, MAX_SYSCALL_PATH),
+                                      VirAddr(arg1), arg2);
                 ret1 = 0;
                 break;
             }
@@ -324,13 +364,8 @@ namespace syscall {
                 ret1          = ret_area.end.arith();
                 break;
             }
-            case SYS_TMP_WRITE: {
-                ret0 = tmp_write(arg0, arg1);
-                ret1 = 0;
-                break;
-            }
-            case SYS_TMP_READ: {
-                ret0 = tmp_read(arg0);
+            case SYS_GETPID: {
+                ret0 = get_pid(capidx);
                 ret1 = 0;
                 break;
             }
@@ -378,13 +413,8 @@ namespace syscall {
                 ret1 = 0;
                 break;
             }
-            case SYS_CAP_SEND: {
-                ret0 = cap_send(capidx, arg0, VirAddr(arg1));
-                ret1 = 0;
-                break;
-            }
-            case SYS_CAP_RECV: {
-                ret0 = cap_recv(capidx, VirAddr(arg0));
+            case SYS_LOOKUP_CAP: {
+                ret0 = lookup_cap(capidx, VirAddr(arg0));
                 ret1 = 0;
                 break;
             }

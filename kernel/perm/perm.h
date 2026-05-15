@@ -20,3 +20,8 @@ namespace perm::basic {
     constexpr b64 MIGRATE = 0x0004;
     constexpr b64 SPLIT   = 0x0008;
 }  // namespace perm::basic
+
+namespace perm::pcb {
+    constexpr b64 GETPID     = 0x01'0000;
+    constexpr b64 CAP_INSERT = 0x02'0000;
+}  // namespace perm::pcb

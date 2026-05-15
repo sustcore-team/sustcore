@@ -25,6 +25,8 @@ enum class PayloadType : b64 {
     VFILE           = 0x003,
     NOTIF           = 0x004,
     MUTEX           = 0x005,
+    PCB             = 0x006,
+    TCB             = 0x007,
 };
 
 constexpr bool operator&(PayloadType a, PayloadType b) {
@@ -37,13 +39,21 @@ constexpr const char *to_string(PayloadType type) {
         case PayloadType::INTOBJ:          return "INTOBJ";
         case PayloadType::SINTOBJ:         return "SINTOBJ";
         case PayloadType::VFILE:           return "VFILE";
+        case PayloadType::NOTIF:           return "NOTIF";
         case PayloadType::MUTEX:           return "MUTEX";
+        case PayloadType::PCB:             return "PCB";
+        case PayloadType::TCB:             return "TCB";
         default:                           return "UNKNOWN";
     }
 }
 
 using CapIdx  = b64;
 using RecvIdx = b64;
+
+struct CapInfo {
+    PayloadType type;
+    b64 permissions;
+};
 
 namespace cap {
     template <b64 mask>

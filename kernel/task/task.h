@@ -56,7 +56,7 @@ private:
                                    void *stack_top, schd::ClassType schd_class);
     Result<util::nonnull<TCB *>> construct_main_thread(util::nonnull<PCB *> pcb,
                                         schd::ClassType schd_class,
-                                        const task::StartupInfo &startup_info);
+                                        task::StartupInfo startup_info);
 
     Result<void> terminate_tcb(util::nonnull<TCB *> tcb);
     Result<void> terminate_pcb(util::nonnull<PCB *> pcb);

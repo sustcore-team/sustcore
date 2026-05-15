@@ -486,7 +486,7 @@ namespace slub {
                 case 1024: return FixedSizeAllocator<1024>::malloc();
                 case 2048: return FixedSizeAllocator<2048>::malloc();
                 default:
-                    loggers::SLUB::ERROR("不支持的对象大小: %zu", rsz);
+                    loggers::SLUB::ERROR("不支持的对象大小: %d", rsz);
                     return nullptr;
             }
         }
@@ -508,7 +508,7 @@ namespace slub {
                     case 512:  FixedSizeAllocator<512>::free(ptr); return;
                     case 1024: FixedSizeAllocator<1024>::free(ptr); return;
                     case 2048: FixedSizeAllocator<2048>::free(ptr); return;
-                    default:   loggers::SLUB::ERROR("不支持的对象大小: %zu", rsz); return;
+                    default:   loggers::SLUB::ERROR("不支持的对象大小: %d", rsz); return;
                 }
             }
         }

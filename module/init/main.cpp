@@ -10,16 +10,17 @@
  */
 
 #include <cstddef>
+#include <sustcore/capability.h>
 
 extern "C" {
 int kputs(const char *str);
 void cpu_idle();
-size_t create_process(const char *path);
+CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz);
 }
 
 int kmod_main() {
     kputs("Here is init module!\n");
-    create_process("/initrd/test1.mod");
+    sys_create_process("/initrd/test1.mod", nullptr, 0);
     kputs("It shouldn't be printed!\n");
     cpu_idle();
     return 0;

@@ -12,6 +12,7 @@
 #pragma once
 
 #include <sustcore/addr.h>
+#include <sustcore/capability.h>
 
 namespace task
 {
@@ -23,5 +24,7 @@ namespace task
         VirAddr heap_vaddr;  // 堆的起始地址
         VirAddr stack_vaddr; // 栈的起始地址
         VirAddr entrypoint;  // 入口点地址
+        CapIdx pcb_cap;      // 自身PCB能力
+        CapIdx main_tcb_cap; // 主线程TCB能力
     };
 }

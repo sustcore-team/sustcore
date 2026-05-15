@@ -13,25 +13,20 @@
 #include <cstdint>
 #include <sustcore/capability.h>
 
-struct ReceiveToken {
-    size_t sender_id;
-    size_t record_idx;
-    size_t timestamp;
-};
+extern CapIdx __pcb_cap;
+extern CapIdx __main_tcb_cap;
 
 extern "C" {
 void kwrites(const char *str, size_t len);
 size_t sys_grow_vma(size_t heap_base, size_t newbrk);
-size_t create_process(const char *path);
-
-bool sys_tmp_write(size_t idx, uint64_t value);
-uint64_t sys_tmp_read(size_t idx);
+CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz);
+CapIdx create_process(const char *path, CapIdx *caps, size_t caps_sz);
 
 bool sys_cap_clone(CapIdx src, CapIdx target);
 bool sys_cap_downgrade(CapIdx idx, uint64_t new_perm);
 bool sys_cap_derive(CapIdx src, CapIdx target, uint64_t new_perm);
-bool sys_cap_send(CapIdx src, size_t target_pid, ReceiveToken *token);
-bool sys_cap_recv(CapIdx target, ReceiveToken *token);
+bool lookup_cap(CapIdx idx, CapInfo *info);
+size_t sys_getpid(CapIdx pcb_cap);
 
 bool sys_create_notification(CapIdx target);
 bool sys_signal_notification(CapIdx capidx, size_t idx);

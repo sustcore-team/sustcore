@@ -73,4 +73,6 @@ struct PCB : public util::tree_base::TreeBase<PCB> {
 
     // initialization information
     VirAddr entrypoint;
+    CapIdx pcb_cap;
+    CapIdx main_tcb_cap;
 };

@@ -10,6 +10,9 @@
  */
 
 #include <cstddef>
+#include <sustcore/capability.h>
 
 extern size_t __heap_base;
 extern size_t __current_brk;
+extern CapIdx __pcb_cap;
+extern CapIdx __main_tcb_cap;

@@ -12,6 +12,7 @@
 // cpp setup入口点
 
 #include <prm.h>
+#include <sustcore/capability.h>
 
 #include <cstddef>
 #include <cstring>
@@ -27,6 +28,8 @@ extern _fini_func __fini_array_start[0], __fini_array_end[0];
 
 size_t __heap_base;
 size_t __current_brk;
+CapIdx __pcb_cap;
+CapIdx __main_tcb_cap;
 
 namespace kmod {
     void init(void) {
@@ -49,9 +52,12 @@ namespace kmod {
 
 void kmod_main(void);
 
-extern "C" void _cpp_setup(size_t heap_vaddr) {
+extern "C" void _cpp_setup(size_t heap_vaddr, CapIdx pcb_cap,
+                           CapIdx main_tcb_cap) {
     __heap_base   = heap_vaddr;
     __current_brk = heap_vaddr;
+    __pcb_cap     = pcb_cap;
+    __main_tcb_cap = main_tcb_cap;
 
     kmod::init();
     kmod_main();

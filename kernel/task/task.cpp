@@ -15,6 +15,7 @@
 #include <mem/alloc.h>
 #include <mem/slub.h>
 #include <mem/vma.h>
+#include <object/task.h>
 #include <perm/permission.h>
 #include <schd/schdbase.h>
 #include <sus/defer.h>
@@ -33,6 +34,18 @@ namespace key {
         task() = default;
     };
 }  // namespace key
+
+static Result<CapIdx> insert_pcb_cap(PCB *pcb) {
+    if (pcb == nullptr || pcb->cholder == nullptr) {
+        unexpect_return(ErrCode::NULLPTR);
+    }
+    auto slot_res = pcb->cholder->internal_lookup_freeslot();
+    propagate(slot_res);
+    auto create_res =
+        pcb->cholder->internal_create<cap::PCBPayload>(slot_res.value(), pcb);
+    propagate(create_res);
+    return slot_res.value();
+}
 
 Result<void> TaskManager::init_tcb(util::nonnull<TCB *> tcb,
                                    util::nonnull<PCB *> task /* ... args*/) {
@@ -76,6 +89,8 @@ Result<void> TaskManager::init_pcb(util::nonnull<PCB *> pcb,
     pcb->tmm        = spec.tmm;
     pcb->cholder    = spec.holder;
     pcb->entrypoint = spec.entrypoint;
+    pcb->pcb_cap    = cap::null;
+    pcb->main_tcb_cap = cap::null;
     void_return();
 }
 
@@ -108,7 +123,7 @@ Result<util::nonnull<TCB *>> TaskManager::construct_thread(
 
 Result<util::nonnull<TCB *>> TaskManager::construct_main_thread(
     util::nonnull<PCB *> pcb, schd::ClassType schd_class,
-    const task::StartupInfo &startup_info) {
+    task::StartupInfo startup_info) {
     // 为主线程分配初始栈空间, 并将其加入Task Memory的VMA中
     // 此处无需通过GFP分配物理页, 由缺页中断自动处理即可
     auto vma_res = pcb->tmm->add_vma(
@@ -120,6 +135,16 @@ Result<util::nonnull<TCB *>> TaskManager::construct_main_thread(
                                     USER_STACK_TOP.addr(), schd_class);
     propagate(con_res);
     util::nonnull<TCB *> tcb = con_res.value();
+
+    auto tcb_cap_slot_res = pcb->cholder->internal_lookup_freeslot();
+    propagate(tcb_cap_slot_res);
+    auto tcb_cap_res = pcb->cholder->internal_create<cap::TCBPayload>(
+        tcb_cap_slot_res.value(), tcb.get());
+    propagate(tcb_cap_res);
+
+    pcb->main_tcb_cap      = tcb_cap_slot_res.value();
+    startup_info.pcb_cap   = pcb->pcb_cap;
+    startup_info.main_tcb_cap = pcb->main_tcb_cap;
     tcb->context()->write_startup(startup_info);
 
     return tcb;
@@ -170,10 +195,16 @@ Result<util::nonnull<PCB *>> TaskManager::create_init_task(
         propagate_return(init_res);
     }
 
+    auto pcb_cap_res = insert_pcb_cap(pcb);
+    propagate(pcb_cap_res);
+    pcb->pcb_cap = pcb_cap_res.value();
+
     task::StartupInfo startup_info{
         .heap_vaddr  = spec.heap_vaddr,
         .stack_vaddr = USER_STACK_BOTTOM,
         .entrypoint  = spec.entrypoint,
+        .pcb_cap     = pcb->pcb_cap,
+        .main_tcb_cap = cap::null,
     };
     auto main_thread_res = construct_main_thread(pcb, INIT_SCHED_CLASS, startup_info);
     if (!main_thread_res.has_value()) {
@@ -199,10 +230,16 @@ Result<util::nonnull<PCB *>> TaskManager::create_task(
         propagate_return(init_res);
     }
 
+    auto pcb_cap_res = insert_pcb_cap(pcb);
+    propagate(pcb_cap_res);
+    pcb->pcb_cap = pcb_cap_res.value();
+
     task::StartupInfo startup_info{
         .heap_vaddr  = spec.heap_vaddr,
         .stack_vaddr = USER_STACK_BOTTOM,
         .entrypoint  = spec.entrypoint,
+        .pcb_cap     = pcb->pcb_cap,
+        .main_tcb_cap = cap::null,
     };
     auto main_thread_res = construct_main_thread(pcb, schd_class, startup_info);
     if (!main_thread_res.has_value()) {

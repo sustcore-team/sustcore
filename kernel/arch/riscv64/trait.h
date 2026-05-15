@@ -108,6 +108,8 @@ struct Riscv64Context {
 
     constexpr void write_startup(const task::StartupInfo &info) {
         regs[A0_BASE]     = info.heap_vaddr.arith();
+        regs[A0_BASE + 1] = info.pcb_cap;
+        regs[A0_BASE + 2] = info.main_tcb_cap;
     }
 };
 
