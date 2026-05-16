@@ -192,7 +192,7 @@ namespace task {
         util::nonnull<PCB *> pcb, void *entrypoint, void *stack_top,
         schd::ClassType schd_class) {
         util::nonnull<TCB *> tcb = alloc_tcb();
-        auto tcb_guard           = util::Guard([tcb]() { delete tcb.get(); });
+        auto tcb_guard = util::Guard([this, tcb]() { (void)recycle_tcb(tcb); });
         auto init_res            = init_tcb(tcb, pcb);
         if (!init_res.has_value()) {
             loggers::SUSTCORE::ERROR("初始化TCB失败! 错误码: %s",
@@ -229,6 +229,7 @@ namespace task {
                                         USER_STACK_TOP.addr(), schd_class);
         propagate(con_res);
         util::nonnull<TCB *> tcb = con_res.value();
+        auto tcb_guard = util::Guard([this, tcb]() { (void)recycle_tcb(tcb); });
 
         auto tcb_cap_slot_res = pcb->cholder->internal_lookup_freeslot();
         propagate(tcb_cap_slot_res);
@@ -241,6 +242,7 @@ namespace task {
         startup_info.main_tcb_cap = pcb->main_tcb_cap;
         tcb->context()->write_startup(startup_info);
 
+        tcb_guard.release();
         return tcb;
     }
 
@@ -301,26 +303,38 @@ namespace task {
         return tcb;
     }
 
-    Result<void> TaskManager::terminate_tcb(util::nonnull<TCB *> tcb) {
+    Result<void> TaskManager::recycle_tcb(util::nonnull<TCB *> tcb) {
+        loggers::TASK::INFO("回收线程 %d (PID: %d)", tcb->tid,
+                                  tcb->task != nullptr ? tcb->task->pid : -1);
         PCB *pcb = tcb->task;
         if (pcb != nullptr) {
             pcb->threads.remove(*tcb);
         }
-        // free the kstack
-        GFP::put_page(tcb->kstack_phy - TCB::KSTACK_SIZE, TCB::KSTACK_PAGES);
+
+        if (tcb->kstack_phy.nonnull()) {
+            GFP::put_page(tcb->kstack_phy - TCB::KSTACK_SIZE,
+                          TCB::KSTACK_PAGES);
+        }
+        tcb->task       = nullptr;
+        tcb->kstack_phy = PhyAddr::null;
+        tcb->kstack_top = nullptr;
         delete tcb.get();
         void_return();
+    }
+
+    Result<void> TaskManager::terminate_tcb(util::nonnull<TCB *> tcb) {
+        return recycle_tcb(tcb);
     }
 
     Result<void> TaskManager::terminate_pcb(util::nonnull<PCB *> pcb) {
         // terminate all threads in this process
         while (!pcb->threads.empty()) {
             TCB *tcb      = &pcb->threads.front();
+            tid_t tid     = tcb->tid;
             auto term_res = terminate_tcb(util::nnullforce(tcb));
             if (!term_res.has_value()) {
                 loggers::SUSTCORE::ERROR("终止线程 %d 失败! 错误码: %s",
-                                         tcb->tid,
-                                         to_cstring(term_res.error()));
+                                         tid, to_cstring(term_res.error()));
                 propagate_return(term_res);
             }
         }
@@ -628,7 +642,8 @@ namespace task {
         child_pcb->main_tcb_cap = parent_pcb->main_tcb_cap;
 
         util::nonnull<TCB *> child_tcb = alloc_tcb();
-        auto tcb_guard = util::Guard([child_tcb]() { delete child_tcb.get(); });
+        auto tcb_guard =
+            util::Guard([this, child_tcb]() { (void)recycle_tcb(child_tcb); });
         auto init_tcb_res = init_tcb(child_tcb, child_pcb);
         propagate(init_tcb_res);
 
@@ -671,6 +686,57 @@ namespace task {
         return result;
     }
 
+    Result<CapIdx> TaskManager::create_thread_current(VirAddr entry,
+                                                      VirAddr stack_addr,
+                                                      size_t stack_size) {
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        if (current_tcb == nullptr || current_tcb->task == nullptr) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        PCB *pcb = current_tcb->task;
+        if (pcb->tmm == nullptr || pcb->cholder == nullptr ||
+            !entry.nonnull() || !stack_addr.nonnull() || stack_size == 0)
+        {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        if (current_tcb->schd_class == schd::ClassType::IDLE) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+
+        addr_t stack_base = stack_addr.arith();
+        if (stack_base > MAX_ADDR - stack_size) {
+            unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+        }
+        VirAddr stack_top(stack_base + stack_size);
+        VirArea stack_area(stack_addr, stack_top);
+        auto range_res = pcb->tmm->locate_range(stack_area);
+        propagate(range_res);
+
+        auto con_res = construct_thread(util::nnullforce(pcb), entry.addr(),
+                                        stack_top.addr(),
+                                        current_tcb->schd_class);
+        propagate(con_res);
+        util::nonnull<TCB *> tcb = con_res.value();
+        auto tcb_guard = util::Guard([this, tcb]() { (void)recycle_tcb(tcb); });
+
+        auto slot_res = pcb->cholder->internal_lookup_freeslot();
+        propagate(slot_res);
+        auto cap_res = pcb->cholder->internal_create<cap::TCBPayload>(
+            slot_res.value(), tcb.get());
+        propagate(cap_res);
+        auto cap_guard = util::Guard([pcb, slot = slot_res.value()]() {
+            (void)pcb->cholder->internal_remove(slot);
+        });
+
+        if (!schd::Scheduler::inst().wakeup_new(tcb.get())) {
+            unexpect_return(ErrCode::CREATION_FAILED);
+        }
+
+        cap_guard.release();
+        tcb_guard.release();
+        return slot_res.value();
+    }
+
     Result<void> TaskManager::exec_current(const char *path,
                                            const CapIdx *reserved_caps,
                                            size_t reserved_count) {
@@ -711,7 +777,7 @@ namespace task {
         // 避免内存泄漏或资源泄漏
         auto image_guard = util::Guard([&]() {
             if (preload_res.has_value()) {
-                pcb->cholder->internal_remove(preload_res.value());
+                (void)pcb->cholder->internal_remove(preload_res.value());
             }
         });
 
@@ -734,9 +800,8 @@ namespace task {
             if (tcb == current_tcb) {
                 continue;
             }
-            GFP::put_page(tcb->kstack_phy - TCB::KSTACK_SIZE,
-                          TCB::KSTACK_PAGES);
-            delete tcb;
+            auto recycle_res = recycle_tcb(util::nnullforce(tcb));
+            propagate(recycle_res);
         }
         pcb->main_tcb_cap = cap::null;
 

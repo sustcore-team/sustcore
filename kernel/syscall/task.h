@@ -24,7 +24,9 @@ namespace syscall {
     };
 
     CapIdx create_process(const UString &path, VirAddr caps_uaddr,
-                          size_t caps_sz);
+                          size_t caps_sz, size_t sched_class);
+    CapIdx create_thread(VirAddr entry, VirAddr stack_addr,
+                         size_t stack_size);
     ForkRet fork();
     bool execve(const UString &path, VirAddr reserved_uaddr,
                 size_t reserved_sz);

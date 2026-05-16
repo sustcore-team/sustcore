@@ -31,7 +31,7 @@ arg-basic :=  q=$(q) build-mode=$(build-mode) architecture=$(architecture) \
 -include $(path-script)/config.mk
 
 library-components := sbi basecpp kmod libfdt
-module-components := default init test1 test2 test_fork test_execve
+module-components := default init test1 test2 test_fork test_execve test_thread
 
 library-component-makefile.sbi := $(path-e)/libs/sbi/Makefile
 library-component-makefile.basecpp := $(path-e)/libs/basecpp/Makefile
@@ -44,6 +44,7 @@ module-component-makefile.test1 := $(path-e)/module/test1/Makefile
 module-component-makefile.test2 := $(path-e)/module/test2/Makefile
 module-component-makefile.test_fork := $(path-e)/module/test_fork/Makefile
 module-component-makefile.test_execve := $(path-e)/module/test_execve/Makefile
+module-component-makefile.test_thread := $(path-e)/module/test_thread/Makefile
 
 build-libs:
 	$(q)$(MAKE) -f $(library-component-makefile.sbi) $(arg-basic) build
@@ -68,6 +69,7 @@ build-mods: build-libs
 	$(q)$(MAKE) -f $(module-component-makefile.test2) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_fork) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_execve) $(arg-basic) build
+	$(q)$(MAKE) -f $(module-component-makefile.test_thread) $(arg-basic) build
 	$(q)echo "All modules built successfully."
 
 make-initrd:

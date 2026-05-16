@@ -49,7 +49,18 @@ namespace task {
          * @note 返回的对象通过 `new` 分配, 调用者负责在合适时机释放或移交所有权.
          */
         util::nonnull<TCB *> alloc_tcb() {
-            return util::nnullforce(new TCB());
+            TCB *tcb         = new TCB();
+            tcb->tid         = 0;
+            tcb->task        = nullptr;
+            tcb->list_head   = {};
+            tcb->kstack_top  = nullptr;
+            tcb->kstack_phy  = PhyAddr::null;
+            tcb->schd_class  = schd::ClassType::BOT;
+            tcb->basic_entity = {};
+            tcb->rr_entity   = {};
+            tcb->wait_reason = 0;
+            tcb->wait_head   = {};
+            return util::nnullforce(tcb);
         }
 
         /**
@@ -72,6 +83,7 @@ namespace task {
          */
         Result<void> init_tcb(util::nonnull<TCB *> tcb,
                       util::nonnull<PCB *> task /* ... args*/);
+        Result<void> recycle_tcb(util::nonnull<TCB *> tcb);
         /**
          * @brief 初始化任务上下文寄存器与栈, 使 TCB 可用于首次调度.
          *
@@ -221,6 +233,18 @@ namespace task {
          * @note fork 操作可能涉及写时复制与资源共享, 调用者需注意并发与内存一致性问题.
          */
         Result<ForkResult> fork_current();
+
+        /**
+         * @brief 为当前进程创建一个线程, 线程入口与栈由参数指定.
+         * 
+         * @param entry 线程入口地址.
+         * @param stack_addr 线程栈地址.
+         * @param stack_size 线程栈大小.
+         * @return Result<CapIdx> 返回新线程的 TCB 能力索引.
+         */
+        Result<CapIdx> create_thread_current(VirAddr entry,
+                                             VirAddr stack_addr,
+                                             size_t stack_size);
         /**
          * @brief 用指定ELF替换当前进程镜像, 并保留指定能力。
          *

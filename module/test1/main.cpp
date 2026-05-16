@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <kmod/syscall.h>
+#include <sustcore/capability.h>
 
 constexpr CapIdx kNotifCap = cap::make(0, 3);
 
@@ -19,7 +20,7 @@ int kmod_main() {
 
     CapIdx initial_caps[] = {kNotifCap};
     CapIdx test2_pcb =
-        sys_create_process("/initrd/test2.mod", initial_caps, 1);
+        sys_create_process("/initrd/test2.mod", (CapIdx *)initial_caps, 1, 3);
     if (test2_pcb == cap::error) {
         printf("test1: create test2 failed\n");
         while (true) {}

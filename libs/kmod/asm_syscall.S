@@ -19,13 +19,18 @@ sys_exit:
 
     .global sys_create_process
     .type   sys_create_process, @function
-    .global create_process
-    .type   create_process, @function
 sys_create_process:
-create_process:
-    /* a0 = path, a1 = initial caps, a2 = initial caps size */
+    /* a0 = path, a1 = initial caps, a2 = initial caps size, a3 = sched class */
     /* 创建并唤醒一个用户进程 */
     li a7, 0xFFC00002
+    ecall
+    ret
+
+    .global sys_create_thread
+    .type   sys_create_thread, @function
+sys_create_thread:
+    /* a0 = entry, a1 = stack_addr, a2 = stack_size */
+    li a7, 0xFFFF0006
     ecall
     ret
 

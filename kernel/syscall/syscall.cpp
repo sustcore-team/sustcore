@@ -49,6 +49,7 @@ namespace syscall {
         b64 arg0 = args.args[0];
         b64 arg1 = args.args[1];
         b64 arg2 = args.args[2];
+        b64 arg3 = args.args[3];
 
         b64 sysno  = args.syscall_number;
         b64 capidx = args.capidx;
@@ -68,7 +69,12 @@ namespace syscall {
             }
             case SYS_CREATE_PROCESS: {
                 ret0 = create_process(UString((VirAddr)arg0, MAX_SYSCALL_PATH),
-                                      VirAddr(arg1), arg2);
+                                      VirAddr(arg1), arg2, arg3);
+                ret1 = 0;
+                break;
+            }
+            case SYS_CREATE_THREAD: {
+                ret0 = create_thread(VirAddr(arg0), VirAddr(arg1), arg2);
                 ret1 = 0;
                 break;
             }

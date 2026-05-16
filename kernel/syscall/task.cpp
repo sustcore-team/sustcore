@@ -21,8 +21,28 @@
 #include <task/task.h>
 
 namespace syscall {
+    static Result<schd::ClassType> parse_user_sched_class(size_t value) {
+        switch (static_cast<schd::ClassType>(value)) {
+            case schd::ClassType::RR:
+            case schd::ClassType::FCFS:
+            case schd::ClassType::IDLE:
+                return static_cast<schd::ClassType>(value);
+            default: unexpect_return(ErrCode::INVALID_PARAM);
+        }
+    }
+
     CapIdx create_process(const UString &path, VirAddr caps_uaddr,
-                          size_t caps_sz) {
+                          size_t caps_sz, size_t sched_class) {
+        loggers::SYSCALL::INFO("创建进程: path=%s, caps_uaddr=%p, caps_sz=%u, sched_class=%u",
+                               path.kbuf(), caps_uaddr.addr(), caps_sz, sched_class);
+
+        auto sched_res = parse_user_sched_class(sched_class);
+        if (!sched_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 无效调度类=%u",
+                                    sched_class);
+            return cap::error;
+        }
+
         // 1) 获取当前 CSpace 作为能力来源
         auto current_holder_res = cap::CHolder::current();
         if (!current_holder_res.has_value()) {
@@ -33,7 +53,7 @@ namespace syscall {
 
         // 2) 加载子进程 ELF，并设置失败清理守卫
         auto load_res =
-            task::TaskManager::inst().load_elf(path.kbuf(), schd::ClassType::RR);
+            task::TaskManager::inst().load_elf(path.kbuf(), sched_res.value());
         if (!load_res.has_value()) {
             loggers::SYSCALL::ERROR("创建进程失败: path=%s, 错误码: %s",
                                     path.kbuf(), to_cstring(load_res.error()));
@@ -96,6 +116,19 @@ namespace syscall {
                                pcb->pid);
         pcb_guard.release();
         return ret_slot_res.value();
+    }
+
+    CapIdx create_thread(VirAddr entry, VirAddr stack_addr,
+                         size_t stack_size) {
+        auto thread_res = task::TaskManager::inst().create_thread_current(
+            entry, stack_addr, stack_size);
+        if (!thread_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建线程失败: entry=%p stack=%p size=%u err=%d",
+                                    entry.addr(), stack_addr.addr(),
+                                    stack_size, thread_res.error());
+            return cap::error;
+        }
+        return thread_res.value();
     }
 
     ForkRet fork() {
