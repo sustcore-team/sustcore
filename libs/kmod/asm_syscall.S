@@ -9,6 +9,14 @@ kwrites:
     ecall
     ret
 
+    .global sys_exit
+    .type sys_exit, @function
+sys_exit:
+    li a7, 0xFFFF0001
+    ecall
+1:
+    j 1b
+
     .global sys_create_process
     .type   sys_create_process, @function
     .global create_process
@@ -18,6 +26,13 @@ create_process:
     /* a0 = path, a1 = initial caps, a2 = initial caps size */
     /* 创建并唤醒一个用户进程 */
     li a7, 0xFFC00002
+    ecall
+    ret
+
+    .global sys_fork
+    .type   sys_fork, @function
+sys_fork:
+    li a7, 0xFFFF0004
     ecall
     ret
 
@@ -111,6 +126,15 @@ lookup_cap:
     mv a6, a0
     mv a0, a1
     li a7, 0xFFFF0011
+    ecall
+    ret
+
+    .global sys_cap_remove
+    .type sys_cap_remove, @function
+sys_cap_remove:
+    /* a0 = cap slot */
+    mv a6, a0
+    li a7, 0xFFFF0012
     ecall
     ret
 

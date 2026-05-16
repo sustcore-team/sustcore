@@ -19,6 +19,7 @@ namespace cap {
         task::PCB *pcb;
 
         explicit PCBPayload(task::PCB *pcb) : pcb(pcb) {}
+        void destruct() override;
     };
 
     struct TCBPayload : public _PayloadHelper<PayloadType::TCB> {

@@ -29,6 +29,7 @@ namespace env {
         };
 
         struct tmm : public tags {};
+        struct trap_context : public tags {};
         struct pgd : public unmodifiable {};
         struct meminfo : public tags {};
     }  // namespace key
@@ -49,6 +50,7 @@ namespace env {
     class Environment {
     private:
         TaskMemoryManager *_tmm = nullptr;
+        Context *_trap_context  = nullptr;
         MemInfo _meminfo;
     public:
         constexpr Environment() : _meminfo() {}
@@ -61,6 +63,15 @@ namespace env {
         [[nodiscard]]
         TaskMemoryManager *&tmm(key::tmm) {
             return _tmm;
+        }
+
+        [[nodiscard]]
+        Context *trap_context() const {
+            return _trap_context;
+        }
+        [[nodiscard]]
+        Context *&trap_context(key::trap_context) {
+            return _trap_context;
         }
 
         [[nodiscard]]

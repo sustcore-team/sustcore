@@ -313,6 +313,31 @@ namespace cap {
             }
             unexpect_return(ErrCode::NO_FREE_SLOT);
         }
+
+        template <typename _Fp>
+        void foreach(_Fp f) const {
+            for (size_t i = 0; i < CSPACE_SIZE; i++) {
+                if (groups[i] == nullptr) {
+                    continue;
+                }
+                for (size_t j = 0; j < CGROUP_SLOTS; j++) {
+                    CapIdx idx      = cap::make(i, j);
+                    Capability *cap = groups[i]->get(idx);
+                    if (cap != nullptr) {
+                        f(idx, cap);
+                    }
+                }
+            }
+        }
+
+        void clear() {
+            for (auto &group : groups) {
+                if (group != nullptr) {
+                    delete group;
+                    group = nullptr;
+                }
+            }
+        }
     };
 
     void init_kop();

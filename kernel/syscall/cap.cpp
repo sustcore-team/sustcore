@@ -55,6 +55,9 @@ namespace syscall {
 
         auto cap_res = cap::CHolder::lookup(idx);
         if (!cap_res.has_value()) {
+            if (cap_res.error() == ErrCode::OUT_OF_BOUNDARY) {
+                return false;
+            }
             loggers::SYSCALL::ERROR("lookup_cap失败: err=%d", cap_res.error());
             return false;
         }
@@ -67,6 +70,16 @@ namespace syscall {
         UBuffer info_buf(info_uaddr, sizeof(info));
         memcpy(info_buf.kbuf(), &info, sizeof(info));
         info_buf.sync_to_user();
+        return true;
+    }
+
+    bool cap_remove(CapIdx idx) {
+        auto remove_res = cap::CHolder::remove(idx);
+        if (!remove_res.has_value()) {
+            loggers::SYSCALL::ERROR("cap_remove失败: idx=%p err=%d", idx,
+                                    remove_res.error());
+            return false;
+        }
         return true;
     }
 }  // namespace syscall

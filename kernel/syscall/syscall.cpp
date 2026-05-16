@@ -72,6 +72,17 @@ namespace syscall {
                 ret1 = 0;
                 break;
             }
+            case SYS_FORK: {
+                auto fork_ret = fork();
+                ret0          = fork_ret.child_pcb_cap;
+                ret1          = fork_ret.child_pid;
+                break;
+            }
+            case SYS_EXIT: {
+                exit();
+                ret0 = ret1 = 0;
+                break;
+            }
             case SYS_GROW_VMA: {
                 auto vaddr    = (VirAddr)arg0;
                 auto new_area = VirArea((VirAddr)arg1, (VirAddr)arg2);
@@ -131,6 +142,11 @@ namespace syscall {
             }
             case SYS_LOOKUP_CAP: {
                 ret0 = lookup_cap(capidx, VirAddr(arg0));
+                ret1 = 0;
+                break;
+            }
+            case SYS_CAP_REMOVE: {
+                ret0 = cap_remove(capidx);
                 ret1 = 0;
                 break;
             }

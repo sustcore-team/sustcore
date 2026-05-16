@@ -19,7 +19,7 @@
 #include <cstddef>
 
 template <typename T>
-concept GFPTrait = requires(PhyAddr ptr, size_t page_count) {
+concept RawGFP = requires(PhyAddr ptr, size_t page_count) {
     {
         T::pre_init()
     } -> std::same_as<void>;
@@ -74,4 +74,4 @@ public:
     }
 };
 
-static_assert(GFPTrait<LinearGrowGFP>, "LinearGrowthGFP 不满足 GFPTrait");
+static_assert(RawGFP<LinearGrowGFP>, "LinearGrowthGFP 不满足 RawGFP");

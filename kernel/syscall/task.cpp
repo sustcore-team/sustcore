@@ -94,7 +94,24 @@ namespace syscall {
 
         loggers::SYSCALL::INFO("创建进程成功: path=%s, pid=%d", path.kbuf(),
                                pcb->pid);
+        pcb_guard.release();
         return ret_slot_res.value();
+    }
+
+    ForkRet fork() {
+        auto fork_res = task::TaskManager::inst().fork_current();
+        if (!fork_res.has_value()) {
+            loggers::SYSCALL::ERROR("fork失败: err=%d", fork_res.error());
+            return {cap::error, 0};
+        }
+        return {fork_res.value().child_pcb_cap, fork_res.value().child_pid};
+    }
+
+    void exit() {
+        auto exit_res = task::TaskManager::inst().exit_current();
+        if (!exit_res.has_value()) {
+            loggers::SYSCALL::ERROR("exit失败: err=%d", exit_res.error());
+        }
     }
 
     size_t get_pid(CapIdx pcb_cap) {

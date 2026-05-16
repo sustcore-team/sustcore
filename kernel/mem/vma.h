@@ -140,6 +140,12 @@ private:
         return vma.get();
     }
 
+    void release_vma_pages(const VMA &vma);
+    void put_and_unmap_pages(const VirArea &varea);
+    Result<void> clone_vma_pages_to_cow(const VMA &vma,
+                                        const VirArea &map_area,
+                                        TaskMemoryManager &dst);
+
 public:
     TaskMemoryManager(PhyAddr _pgd);
     ~TaskMemoryManager();
@@ -175,6 +181,9 @@ public:
 
     // On No Present Pages
     bool on_np(const NoPresentEvent &e);
+    // write protection
+    bool on_wp(VirAddr fault_addr);
+    Result<void> clone_to_cow(TaskMemoryManager &dst);
 };
 
 // TODO: 这两个值应当是架构相关的

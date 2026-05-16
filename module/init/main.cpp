@@ -9,19 +9,20 @@
  * 
  */
 
-#include <cstddef>
-#include <sustcore/capability.h>
+#include <kmod/syscall.h>
+#include <cstdio>
 
 extern "C" {
-int kputs(const char *str);
 void cpu_idle();
-CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz);
 }
 
 int kmod_main() {
-    kputs("Here is init module!\n");
-    sys_create_process("/initrd/test1.mod", nullptr, 0);
-    kputs("It shouldn't be printed!\n");
+    printf("Here is init module!\n");
+    CapIdx modidx = sys_create_process("/initrd/test_fork.mod", nullptr, 0);
+    printf("remove module capability %zu\n", modidx);
+    // don't hold its capability index.
+    sys_cap_remove(modidx);
+    printf("进入 cpu_idle()!\n");
     cpu_idle();
     return 0;
 }

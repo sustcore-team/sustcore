@@ -16,15 +16,23 @@
 extern CapIdx __pcb_cap;
 extern CapIdx __main_tcb_cap;
 
+struct ForkRet {
+    CapIdx ret1;
+    size_t ret2;
+};
+
 extern "C" {
 void kwrites(const char *str, size_t len);
+void sys_exit();
 size_t sys_grow_vma(size_t heap_base, size_t newbrk);
 CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz);
 CapIdx create_process(const char *path, CapIdx *caps, size_t caps_sz);
+ForkRet sys_fork();
 
 bool sys_cap_clone(CapIdx src, CapIdx target);
 bool sys_cap_downgrade(CapIdx idx, uint64_t new_perm);
 bool sys_cap_derive(CapIdx src, CapIdx target, uint64_t new_perm);
+bool sys_cap_remove(CapIdx idx);
 bool lookup_cap(CapIdx idx, CapInfo *info);
 size_t sys_getpid(CapIdx pcb_cap);
 

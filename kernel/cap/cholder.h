@@ -89,6 +89,8 @@ namespace cap {
         [[nodiscard]]
         Result<void> internal_remove(CapIdx idx);
 
+        void internal_clear();
+
         [[nodiscard]]
         Result<void> internal_clone(CapIdx target_idx, CapIdx src_idx);
 
@@ -101,6 +103,9 @@ namespace cap {
 
         [[nodiscard]]
         Result<void> internal_downgrade(CapIdx idx, b64 new_perm);
+
+        [[nodiscard]]
+        Result<void> internal_copy_all_to(CHolder &dst) const;
 
         template <typename PayloadType, typename... Args>
         [[nodiscard]]

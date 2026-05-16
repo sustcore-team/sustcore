@@ -18,7 +18,14 @@
 namespace syscall {
     class UString;
 
+    struct ForkRet {
+        CapIdx child_pcb_cap;
+        size_t child_pid;
+    };
+
     CapIdx create_process(const UString &path, VirAddr caps_uaddr,
                           size_t caps_sz);
+    ForkRet fork();
+    void exit();
     size_t get_pid(CapIdx pcb_cap);
 }  // namespace syscall

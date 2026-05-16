@@ -10,6 +10,7 @@
  */
 
 #include <cap/cholder.h>
+#include <env.h>
 #include <exe/elfloader.h>
 #include <logger.h>
 #include <mem/alloc.h>
@@ -91,6 +92,8 @@ namespace task {
                                        TaskSpec spec /* ... args*/) {
         pcb->pid     = alloc_pid();
         pcb->threads = {};
+        pcb->exiting = false;
+        pcb->recycle_queued = false;
 
         // initialize the pcb according to the specification
         pcb->tmm          = spec.tmm;
@@ -158,25 +161,32 @@ namespace task {
     }
 
     Result<void> TaskManager::terminate_tcb(util::nonnull<TCB *> tcb) {
+        PCB *pcb = tcb->task;
+        if (pcb != nullptr) {
+            pcb->threads.remove(*tcb);
+        }
         // free the kstack
-        GFP::put_page(tcb->kstack_phy, TCB::KSTACK_PAGES);
+        GFP::put_page(tcb->kstack_phy - TCB::KSTACK_SIZE, TCB::KSTACK_PAGES);
         delete tcb.get();
         void_return();
     }
 
     Result<void> TaskManager::terminate_pcb(util::nonnull<PCB *> pcb) {
         // terminate all threads in this process
-        for (auto &tcb : pcb->threads) {
-            auto term_res = terminate_tcb(util::nnullforce(&tcb));
+        while (!pcb->threads.empty()) {
+            TCB *tcb = &pcb->threads.front();
+            auto term_res = terminate_tcb(util::nnullforce(tcb));
             if (!term_res.has_value()) {
                 loggers::SUSTCORE::ERROR("终止线程 %d 失败! 错误码: %s",
-                                         tcb.tid, to_cstring(term_res.error()));
+                                         tcb->tid, to_cstring(term_res.error()));
                 propagate_return(term_res);
             }
         }
 
         // free the tmm
+        PhyAddr pgd = pcb->tmm->pgd();
         delete pcb->tmm;
+        GFP::put_page(pgd, 1);
         // ask cholder manager to remove the cholder
         auto &chman = cap::CHolderManager::inst();
         auto rm_res = chman.remove_holder(pcb->cholder->id());
@@ -187,6 +197,62 @@ namespace task {
         delete pcb.get();
 
         void_return();
+    }
+
+    Result<void> TaskManager::exit_current() {
+        TCB *current_tcb = schd::Scheduler::inst().current_tcb();
+        if (current_tcb == nullptr || current_tcb->task == nullptr) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        PCB *pcb = current_tcb->task;
+        if (pcb->exiting) {
+            void_return();
+        }
+        pcb->exiting = true;
+
+        if (pcb->cholder != nullptr) {
+            pcb->cholder->internal_clear();
+        }
+
+        for (auto &tcb : pcb->threads) {
+            if (&tcb != current_tcb &&
+                tcb.basic_entity.state == ThreadState::READY)
+            {
+                auto dequeue_res =
+                    schd::Scheduler::inst().dequeue(util::nnullforce(&tcb));
+                if (!dequeue_res.has_value()) {
+                    loggers::SUSTCORE::ERROR(
+                        "退出进程时移除线程 %d 失败! 错误码: %s", tcb.tid,
+                        to_cstring(dequeue_res.error()));
+                }
+            }
+            tcb.basic_entity.state = ThreadState::WAITING;
+        }
+
+        current_tcb->basic_entity.state = ThreadState::WAITING;
+        current_tcb->basic_entity
+            .template flags_set<schd::SchedMeta::FLAGS_NEED_RESCHED>();
+        schd::Scheduler::inst().schedule();
+        void_return();
+    }
+
+    void TaskManager::enqueue_recycle(PCB *pcb) {
+        if (pcb == nullptr || !pcb->exiting || pcb->recycle_queued) {
+            return;
+        }
+        pcb->recycle_queued = true;
+        _recycle_pcbs.push_back(pcb);
+    }
+
+    void TaskManager::reap_recycled() {
+        while (!_recycle_pcbs.empty()) {
+            PCB *pcb = _recycle_pcbs.front();
+            _recycle_pcbs.pop_front();
+            if (pcb == nullptr) {
+                continue;
+            }
+            terminate_pcb(util::nnullforce(pcb));
+        }
     }
 
     Result<util::nonnull<PCB *>> TaskManager::create_init_task(
@@ -369,6 +435,104 @@ namespace task {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
         return pcb->cholder->id();
+    }
+
+    Result<ForkResult> TaskManager::fork_current() {
+        auto *parent_tcb = schd::Scheduler::inst().current_tcb();
+        auto *parent_ctx = env::inst().trap_context();
+        if (parent_tcb == nullptr || parent_tcb->task == nullptr ||
+            parent_ctx == nullptr)
+        {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        PCB *parent_pcb = parent_tcb->task;
+        if (parent_pcb->tmm == nullptr || parent_pcb->cholder == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+
+        auto ret_slot_res = parent_pcb->cholder->internal_lookup_freeslot();
+        propagate(ret_slot_res);
+        CapIdx ret_slot = ret_slot_res.value();
+
+        auto holder_res = cap::CHolderManager::inst().create_holder();
+        propagate(holder_res);
+        cap::CHolder *child_holder = holder_res.value();
+
+        auto pgd_res = GFP::get_free_page(1);
+        if (!pgd_res.has_value()) {
+            cap::CHolderManager::inst().remove_holder(child_holder->id());
+            propagate_return(pgd_res);
+        }
+        auto child_tmm = util::owner(new TaskMemoryManager(pgd_res.value()));
+
+        auto clone_mem_res = parent_pcb->tmm->clone_to_cow(*child_tmm);
+        if (!clone_mem_res.has_value()) {
+            delete child_tmm;
+            cap::CHolderManager::inst().remove_holder(child_holder->id());
+            propagate_return(clone_mem_res);
+        }
+
+        auto clone_caps_res = parent_pcb->cholder->internal_copy_all_to(*child_holder);
+        if (!clone_caps_res.has_value()) {
+            delete child_tmm;
+            cap::CHolderManager::inst().remove_holder(child_holder->id());
+            propagate_return(clone_caps_res);
+        }
+
+        util::nonnull<PCB *> child_pcb = alloc_pcb();
+        auto pcb_guard = util::Guard([child_pcb]() { delete child_pcb.get(); });
+        TaskSpec spec{child_tmm, child_holder, parent_pcb->entrypoint};
+        auto init_res = init_pcb(child_pcb, spec);
+        if (!init_res.has_value()) {
+            delete child_tmm;
+            cap::CHolderManager::inst().remove_holder(child_holder->id());
+            propagate_return(init_res);
+        }
+        child_pcb->pcb_cap      = ret_slot;
+        child_pcb->main_tcb_cap = parent_pcb->main_tcb_cap;
+
+        util::nonnull<TCB *> child_tcb = alloc_tcb();
+        auto tcb_guard = util::Guard([child_tcb]() { delete child_tcb.get(); });
+        auto init_tcb_res = init_tcb(child_tcb, child_pcb);
+        propagate(init_tcb_res);
+
+        *child_tcb->context() = *parent_ctx;
+        child_tcb->context()->sepc += 4;
+        child_tcb->context()->regs[Context::A0_BASE]     = ret_slot;
+        child_tcb->context()->regs[Context::A0_BASE + 1] = 0;
+        child_tcb->schd_class   = parent_tcb->schd_class;
+        child_tcb->basic_entity = {};
+        child_tcb->rr_entity    = {};
+        child_pcb->threads.push_back(*child_tcb);
+        tcb_guard.release();
+
+        auto *pcb_payload = new cap::PCBPayload(child_pcb.get());
+        if (pcb_payload == nullptr) {
+            unexpect_return(ErrCode::OUT_OF_MEMORY);
+        }
+        auto insert_parent_res = parent_pcb->cholder->internal_insert(
+            ret_slot, pcb_payload, perm::allperm());
+        if (!insert_parent_res.has_value()) {
+            delete pcb_payload;
+            propagate_return(insert_parent_res);
+        }
+        auto insert_child_res =
+            child_holder->internal_insert(ret_slot, pcb_payload, perm::allperm());
+        if (!insert_child_res.has_value()) {
+            auto remove_res = parent_pcb->cholder->internal_remove(ret_slot);
+            assert(remove_res.has_value());
+            propagate_return(insert_child_res);
+        }
+
+        _pid_map.put(child_pcb->pid, child_pcb.get());
+        if (!schd::Scheduler::inst().wakeup_new(child_tcb.get())) {
+            _pid_map.remove(child_pcb->pid);
+            unexpect_return(ErrCode::CREATION_FAILED);
+        }
+
+        ForkResult result{ret_slot, child_pcb->pid};
+        pcb_guard.release();
+        return result;
     }
 
     namespace kop {

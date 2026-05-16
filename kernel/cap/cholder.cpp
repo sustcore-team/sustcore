@@ -107,6 +107,10 @@ namespace cap {
         return set_slot(idx, nullptr);
     }
 
+    void CHolder::internal_clear() {
+        _space.clear();
+    }
+
     Result<void> CHolder::internal_clone(CapIdx target_idx, CapIdx src_idx) {
         if (!cap::valid(target_idx)) {
             unexpect_return(ErrCode::TYPE_NOT_MATCHED);
@@ -175,6 +179,23 @@ namespace cap {
         propagate(cap_res);
 
         return cap_res.value()->downgrade(new_perm);
+    }
+
+    Result<void> CHolder::internal_copy_all_to(CHolder &dst) const {
+        ErrCode err = ErrCode::SUCCESS;
+        _space.foreach([&](CapIdx idx, Capability *cap) {
+            if (err != ErrCode::SUCCESS) {
+                return;
+            }
+            auto insert_res = dst.internal_insert(idx, cap->payload(), cap->perm());
+            if (!insert_res.has_value()) {
+                err = insert_res.error();
+            }
+        });
+        if (err != ErrCode::SUCCESS) {
+            unexpect_return(err);
+        }
+        void_return();
     }
 
     Result<CapIdx> CHolder::get_free_slot() {

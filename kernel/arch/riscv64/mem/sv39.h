@@ -240,6 +240,31 @@ public:
         return pte.d;
     }
 
+    static constexpr bool is_cow(PTE pte) {
+        return pte.rsw & 0b01;
+    }
+
+    static constexpr RWX without_write(RWX rwx) {
+        switch (rwx) {
+            case RWX::RW:  return RWX::RO;
+            case RWX::RWX: return RWX::RX;
+            default:       return rwx;
+        }
+    }
+
+    static void set_cow(PTE *pte, bool cow) {
+        if (pte == nullptr) {
+            return;
+        }
+        pte->rsw = cow ? (pte->rsw | 0b01) : (pte->rsw & ~0b01);
+    }
+
+    static void set_paddr(PTE *pte, PhyAddr paddr) {
+        if (pte != nullptr) {
+            pte->ppn = to_ppn(paddr);
+        }
+    }
+
     // 修改掩码
     using ModifyMask = Riscv64SV39ModifyMask;
 
@@ -428,6 +453,7 @@ public:
         target_pte->g   = g;
         target_pte->a   = 0;
         target_pte->d   = 0;
+        target_pte->rsw = 0;
         loggers::PAGING::DEBUG(
             "成功映射 vaddr = %p 到 paddr = %p, rwx = %d, u = %d, g = %d",
             vaddr.addr(), paddr.addr(), rwx_cast(rwx), u, g);
@@ -506,15 +532,7 @@ public:
         }
 
         QueryResult qres = query_res.value();
-        if (qres.size != PageSize::_4K) {
-            loggers::PAGING::ERROR("unmap_page暂不支持解除大页映射: vaddr=%p",
-                                   vaddr.addr());
-            return;
-        }
-
-        PhyAddr paddr = get_physical_address(*qres.pte);
-        qres.pte->value = 0;
-        GFP::template put_page<Stage>(paddr, 1);
+        qres.pte->value  = 0;
     }
 
     void unmap_range(VirAddr vstart, size_t size) {

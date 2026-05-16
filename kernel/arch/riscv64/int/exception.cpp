@@ -17,10 +17,12 @@
 #include <sus/types.h>
 #include <new>
 #include <task/scheduler.h>
+#include <task/task.h>
 
 extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
                             Riscv64Context *ctx) {
     bool from_umode = !ctx->sstatus.spp;
+    task::TaskManager::inst().reap_recycled();
     if (scause.interrupt) {
         if (scause.cause == 5) {
             Handlers::timer(scause, sepc, stval, ctx);

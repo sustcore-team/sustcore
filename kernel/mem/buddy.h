@@ -356,4 +356,4 @@ void BuddyAllocator::put_page_in_order(const PhyAddr paddr, int order) {
     }
 }
 
-static_assert(GFPTrait<BuddyAllocator>, "Buddy 不满足 GFPTrait");
+static_assert(RawGFP<BuddyAllocator>, "Buddy 不满足 RawGFP");

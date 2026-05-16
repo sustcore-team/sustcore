@@ -276,8 +276,14 @@ namespace handlers::paging {
                 break;
             }
             case FaultCause::WRITE_PROTECT: {
-                loggers::INTERRUPT::ERROR("写保护异常: addr=%p",
-                                          fault_addr.addr());
+                auto *tm = e.tmm();
+                if (tm != nullptr) {
+                    processsed |= tm->on_wp(fault_addr);
+                }
+                if (!processsed) {
+                    loggers::INTERRUPT::ERROR("写保护异常: addr=%p",
+                                              fault_addr.addr());
+                }
                 break;
             }
             case FaultCause::EXECUTE_PROTECT: {
@@ -384,10 +390,12 @@ namespace Handlers {
         bool processed = false;
         switch (scause.cause) {
             case Exceptions::ECALL_U: {
+                env::inst().trap_context(env::key::trap_context()) = ctx;
                 syscall::RetPack ret = syscall::entrance(ctx->read_args());
                 ctx->write_ret(ret);
                 processed = ret.processed;
                 ctx->sepc += 4;  // 跳过 ecall 指令
+                env::inst().trap_context(env::key::trap_context()) = nullptr;
                 break;
             }
             case Exceptions::ILLEGAL_INST:

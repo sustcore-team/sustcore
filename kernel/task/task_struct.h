@@ -68,6 +68,9 @@ namespace task {
     struct PCB : public util::tree_base::TreeBase<PCB> {
         // process info
         pid_t pid;
+        bool exiting;
+        // 是否已被加入回收队列
+        bool recycle_queued;
 
         // the threads in this process
         util::IntrusiveList<TCB, &TCB::list_head> threads;

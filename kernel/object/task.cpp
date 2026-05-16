@@ -3,11 +3,20 @@
  * @brief PCB/TCB capability objects
  */
 
+#include <logger.h>
 #include <object/task.h>
 #include <perm/perm.h>
+#include <task/task.h>
 #include <task/task_struct.h>
 
 namespace cap {
+    // 无人引用的 PCB 对象会被放入 TaskManager 的回收队列中等待销毁
+    void PCBPayload::destruct() {
+        loggers::TASK::INFO("PCBPayload destruct: pid=%d", pcb->pid);
+        task::TaskManager::inst().enqueue_recycle(pcb);
+        delete this;
+    }
+
     Result<size_t> PCBObject::get_pid() const {
         if (!imply(perm::pcb::GETPID)) {
             unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
@@ -22,7 +31,9 @@ namespace cap {
         if (!imply(perm::pcb::CAP_INSERT)) {
             unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
         }
-        if (_obj->pcb == nullptr || _obj->pcb->cholder == nullptr) {
+        if (_obj->pcb == nullptr || _obj->pcb->exiting ||
+            _obj->pcb->cholder == nullptr)
+        {
             unexpect_return(ErrCode::NULLPTR);
         }
 
