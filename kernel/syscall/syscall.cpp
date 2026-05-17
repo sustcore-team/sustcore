@@ -26,7 +26,7 @@
 
 namespace syscall {
     void write_serial(const UString &str, size_t len) {
-        kwrites(str.kbuf(), len);
+        sys_write_serial(str.kbuf(), len);
     }
 
     constexpr size_t MAX_SYSCALL_PATH = 256;
@@ -108,28 +108,28 @@ namespace syscall {
             }
 
             // Notification object operations.
-            case SYS_WAIT_NOTIFICATION: {
+            case SYS_NOTIF_WAIT: {
                 ret0 = wait_notification(capidx, arg0);
                 ret1 = 0;
                 break;
             }
-            case SYS_SIGNAL_NOTIFICATION: {
-                ret0 = signal_notification(capidx, arg0, true);
+            case SYS_NOTIF_SIGNAL: {
+                ret0 = notification_signal(capidx, arg0, true);
                 ret1 = 0;
                 break;
             }
-            case SYS_UNSIGNAL_NOTIFICATION: {
-                ret0 = signal_notification(capidx, arg0, false);
+            case SYS_NOTIF_UNSIGNAL: {
+                ret0 = notification_signal(capidx, arg0, false);
                 ret1 = 0;
                 break;
             }
-            case SYS_CHECK_NOTIFICATION: {
+            case SYS_NOTIF_CHECK: {
                 ret0 = check_notification(capidx, arg0);
                 ret1 = 0;
                 break;
             }
-            case SYS_CREATE_NOTIFICATION: {
-                ret0 = create_notification(capidx);
+            case SYS_NOTIF_CREATE: {
+                ret0 = notification_create(capidx);
                 ret1 = 0;
                 break;
             }
@@ -150,8 +150,8 @@ namespace syscall {
                 ret1 = 0;
                 break;
             }
-            case SYS_LOOKUP_CAP: {
-                ret0 = lookup_cap(capidx, VirAddr(arg0));
+            case SYS_CAP_LOOKUP: {
+                ret0 = sys_cap_lookup(capidx, VirAddr(arg0));
                 ret1 = 0;
                 break;
             }
@@ -160,28 +160,28 @@ namespace syscall {
                 ret1 = 0;
                 break;
             }
-            case SYS_CREATE_ENDPOINT: {
-                ret0 = create_endpoint(capidx);
+            case SYS_ENDPOINT_CREATE: {
+                ret0 = endpoint_create(capidx);
                 ret1 = 0;
                 break;
             }
-            case SYS_SEND_MSG: {
-                ret0 = send_msg(capidx, VirAddr(arg0), true);
+            case SYS_ENDPOINT_SEND: {
+                ret0 = endpoint_send(capidx, VirAddr(arg0), true);
                 ret1 = 0;
                 break;
             }
-            case SYS_RECV_MSG: {
-                auto recv_task = recv_msg_sync(capidx, VirAddr(arg0));
+            case SYS_ENDPOINT_RECV: {
+                auto recv_task = endpoint_recv_sync(capidx, VirAddr(arg0));
                 RetPack ret = co_await recv_task;
                 co_return finish_syscall(ctx, tcb, ret);
             }
-            case SYS_TRY_SEND_MSG: {
-                ret0 = send_msg(capidx, VirAddr(arg0), false);
+            case SYS_ENDPOINT_SEND_ASYNC: {
+                ret0 = endpoint_send(capidx, VirAddr(arg0), false);
                 ret1 = 0;
                 break;
             }
-            case SYS_TRY_RECV_MSG: {
-                ret0 = recv_msg_async(capidx, VirAddr(arg0));
+            case SYS_ENDPOINT_RECV_ASYNC: {
+                ret0 = endpoint_recv_async(capidx, VirAddr(arg0));
                 ret1 = 0;
                 break;
             }

@@ -25,7 +25,7 @@ static void dump_caps(const char *tag) {
         for (size_t slot = 0; slot < kScanSlots; ++slot) {
             CapIdx idx = cap::make(group, slot);
             CapInfo info{};
-            if (!lookup_cap(idx, &info)) {
+            if (!sys_cap_lookup(idx, &info)) {
                 printf("%s: 编号=%p empty\n", tag, (void *)idx);
                 continue;
             }
@@ -51,7 +51,7 @@ int kmod_main() {
     printf("test_fork: 启动时PID=%u pcb_cap=%p\n", sys_getpid(__pcb_cap),
            (void *)__pcb_cap);
 
-    if (!sys_create_notification(kExecNotifCap)) {
+    if (!sys_notif_create(kExecNotifCap)) {
         printf("test_fork: create exec notification failed\n");
         while (true) {
         }
@@ -111,17 +111,17 @@ int kmod_main() {
     }
 
     printf("test_fork: 发送 SYN\n");
-    sys_signal_notification(kExecNotifCap, kSignalSyn);
+    sys_notif_signal(kExecNotifCap, kSignalSyn);
 
-    sys_wait_notification(kExecNotifCap, kSignalSynAck);
+    sys_notif_wait(kExecNotifCap, kSignalSynAck);
     printf("test_fork: 接收 SYN-ACK\n");
-    sys_unsignal_notification(kExecNotifCap, kSignalSynAck);
+    sys_notif_unsignal(kExecNotifCap, kSignalSynAck);
 
     printf("test_fork: 发送 ACK\n");
-    sys_signal_notification(kExecNotifCap, kSignalAck);
+    sys_notif_signal(kExecNotifCap, kSignalAck);
 
     printf("test_fork: 发送 completion signal\n");
-    sys_signal_notification(kCompletionNotifCap, kCompletionSignal);
+    sys_notif_signal(kCompletionNotifCap, kCompletionSignal);
     printf("test_fork: completion signaled\n");
 
     printf("test_fork: %s exit\n", tag);

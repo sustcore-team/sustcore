@@ -50,7 +50,7 @@ namespace syscall {
         return true;
     }
 
-    bool lookup_cap(CapIdx idx, VirAddr info_uaddr) {
+    bool sys_cap_lookup(CapIdx idx, VirAddr info_uaddr) {
         if (!info_uaddr.nonnull()) {
             return false;
         }
@@ -60,7 +60,7 @@ namespace syscall {
             if (cap_res.error() == ErrCode::OUT_OF_BOUNDARY) {
                 return false;
             }
-            loggers::SYSCALL::ERROR("lookup_cap失败: err=%d", cap_res.error());
+            loggers::SYSCALL::ERROR("sys_cap_lookup失败: err=%d", cap_res.error());
             return false;
         }
 

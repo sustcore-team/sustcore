@@ -16,7 +16,7 @@
 
 namespace syscall {
     bool wait_notification(CapIdx capidx, size_t idx);
-    bool signal_notification(CapIdx capidx, size_t idx, bool state);
+    bool notification_signal(CapIdx capidx, size_t idx, bool state);
     bool check_notification(CapIdx capidx, size_t idx);
-    bool create_notification(CapIdx capidx);
+    bool notification_create(CapIdx capidx);
 }  // namespace syscall

@@ -14,7 +14,7 @@
 #include <sus/baseio.h>
 
 int kputs(const char* str);
-int kwrites(const char* str, size_t len);
+int sys_write_serial(const char* str, size_t len);
 int kputchar(char ch);
 char kgetchar();
 int kprintf(const char* fmt, ...);

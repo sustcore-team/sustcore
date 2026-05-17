@@ -19,7 +19,7 @@ namespace syscall {
      * @return true 创建成功
      * @return false 创建失败
      */
-    bool create_endpoint(CapIdx capidx);
+    bool endpoint_create(CapIdx capidx);
     /**
      * @brief 向指定endpoint发送消息
      * 
@@ -29,7 +29,7 @@ namespace syscall {
      * @return true 消息发送成功
      * @return false 消息发送失败
      */
-    bool send_msg(CapIdx endpoint, VirAddr packet, bool blocking);
+    bool endpoint_send(CapIdx endpoint, VirAddr packet, bool blocking);
     /**
      * @brief 从端点处接收信息
      *
@@ -37,7 +37,7 @@ namespace syscall {
      * @param packet 用户态MsgPacket地址, 用于写回接收到的消息.
      * @return RetPack 返回结果, 包含是否成功、是否需要defer、错误码等信息
      */
-    util::cotask<RetPack> recv_msg_sync(CapIdx endpoint, VirAddr packet);
+    util::cotask<RetPack> endpoint_recv_sync(CapIdx endpoint, VirAddr packet);
     /**
      * @brief 从端点处接收信息 (异步版本)
      * 
@@ -46,7 +46,7 @@ namespace syscall {
      * @return true 消息接收成功
      * @return false 消息接收失败
      */
-    bool recv_msg_async(CapIdx endpoint, VirAddr packet);
+    bool endpoint_recv_async(CapIdx endpoint, VirAddr packet);
 
     /**
      * @brief 发起一次同步endpoint调用.

@@ -17,14 +17,14 @@ static void finish_once(const char *who) {
     if (!done) {
         done = true;
         printf("test_thread: %s done x=%u rounds=%u\n", who, x, rounds);
-        sys_signal_notification(kThreadNotifCap, kSignalDone);
+        sys_notif_signal(kThreadNotifCap, kSignalDone);
     }
 }
 
 static void thread_a() {
     while (true) {
-        sys_wait_notification(kThreadNotifCap, kSignalA);
-        sys_unsignal_notification(kThreadNotifCap, kSignalA);
+        sys_notif_wait(kThreadNotifCap, kSignalA);
+        sys_notif_unsignal(kThreadNotifCap, kSignalA);
         if (done) {
             continue;
         }
@@ -37,14 +37,14 @@ static void thread_a() {
             finish_once("A");
             continue;
         }
-        sys_signal_notification(kThreadNotifCap, kSignalB);
+        sys_notif_signal(kThreadNotifCap, kSignalB);
     }
 }
 
 static void thread_b() {
     while (true) {
-        sys_wait_notification(kThreadNotifCap, kSignalB);
-        sys_unsignal_notification(kThreadNotifCap, kSignalB);
+        sys_notif_wait(kThreadNotifCap, kSignalB);
+        sys_notif_unsignal(kThreadNotifCap, kSignalB);
         if (done) {
             continue;
         }
@@ -59,7 +59,7 @@ static void thread_b() {
             finish_once("B");
             continue;
         }
-        sys_signal_notification(kThreadNotifCap, kSignalA);
+        sys_notif_signal(kThreadNotifCap, kSignalA);
     }
 }
 
@@ -75,7 +75,7 @@ static void *alloc_stack() {
 
 int kmod_main() {
     printf("test_thread: start pid=%u\n", sys_getpid(__pcb_cap));
-    if (!sys_create_notification(kThreadNotifCap)) {
+    if (!sys_notif_create(kThreadNotifCap)) {
         printf("test_thread: 创建通知失败!\n");
         while (true) {
         }
@@ -93,9 +93,9 @@ int kmod_main() {
         }
     }
 
-    sys_signal_notification(kThreadNotifCap, kSignalA);
-    sys_wait_notification(kThreadNotifCap, kSignalDone);
-    sys_unsignal_notification(kThreadNotifCap, kSignalDone);
+    sys_notif_signal(kThreadNotifCap, kSignalA);
+    sys_notif_wait(kThreadNotifCap, kSignalDone);
+    sys_notif_unsignal(kThreadNotifCap, kSignalDone);
 
     printf("test_thread: final x=%u rounds=%u\n", x, rounds);
     sys_exit();

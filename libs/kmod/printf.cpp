@@ -19,7 +19,7 @@
 extern "C" {
 int kputs(const char *str) {
     size_t len = strlen(str);
-    kwrites(str, len);
+    sys_write_serial(str, len);
     return len;
 }
 

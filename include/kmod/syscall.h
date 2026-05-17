@@ -29,7 +29,7 @@ struct ForkRet {
 };
 
 extern "C" {
-void kwrites(const char *str, size_t len);
+void sys_write_serial(const char *str, size_t len);
 void sys_exit();
 bool sys_pcb_kill(CapIdx pcb_cap, int exit_code);
 bool sys_pcb_map(CapIdx pcb_cap, CapIdx mem_cap, void *vaddr, uint64_t rwx,
@@ -45,32 +45,32 @@ bool sys_cap_clone(CapIdx src, CapIdx target);
 bool sys_cap_downgrade(CapIdx idx, uint64_t new_perm);
 bool sys_cap_derive(CapIdx src, CapIdx target, uint64_t new_perm);
 bool sys_cap_remove(CapIdx idx);
-bool lookup_cap(CapIdx idx, CapInfo *info);
+bool sys_cap_lookup(CapIdx idx, CapInfo *info);
 size_t sys_getpid(CapIdx pcb_cap);
 
-bool sys_create_notification(CapIdx target);
-bool sys_signal_notification(CapIdx capidx, size_t idx);
-bool sys_unsignal_notification(CapIdx capidx, size_t idx);
-bool sys_check_notification(CapIdx capidx, size_t idx);
-bool sys_wait_notification(CapIdx capidx, size_t idx);
+bool sys_notif_create(CapIdx target);
+bool sys_notif_signal(CapIdx capidx, size_t idx);
+bool sys_notif_unsignal(CapIdx capidx, size_t idx);
+bool sys_notif_check(CapIdx capidx, size_t idx);
+bool sys_notif_wait(CapIdx capidx, size_t idx);
 
-bool sys_create_endpoint(CapIdx target);
+bool sys_endpoint_create(CapIdx target);
 /**
  * @brief 阻塞地向endpoint发送一条MsgPacket描述的消息.
  */
-void sys_send_msg(CapIdx endpoint, MsgPacket *packet);
+void sys_endpoint_send(CapIdx endpoint, MsgPacket *packet);
 /**
  * @brief 阻塞地从endpoint接收一条消息并写回MsgPacket描述的缓冲区.
  */
-void sys_recv_msg(CapIdx endpoint, MsgPacket *packet);
+void sys_endpoint_recv(CapIdx endpoint, MsgPacket *packet);
 /**
  * @brief 非阻塞地向endpoint发送一条消息.
  */
-bool sys_try_send_msg(CapIdx endpoint, MsgPacket *packet);
+bool sys_endpoint_send_async(CapIdx endpoint, MsgPacket *packet);
 /**
  * @brief 非阻塞地从endpoint接收一条消息.
  */
-bool sys_try_recv_msg(CapIdx endpoint, MsgPacket *packet);
+bool sys_endpoint_recv_async(CapIdx endpoint, MsgPacket *packet);
 /**
  * @brief 发起一次同步endpoint调用, 自动携带一次性Reply Capability.
  *

@@ -466,7 +466,7 @@ namespace syscall {
         }
     }  // namespace
 
-    bool create_endpoint(CapIdx capidx) {
+    bool endpoint_create(CapIdx capidx) {
         auto create_res = cap::CHolder::create<cap::EndpointPayload>(capidx);
         if (!create_res.has_value()) {
             loggers::SYSCALL::ERROR("创建endpoint失败: err=%d",
@@ -476,7 +476,7 @@ namespace syscall {
         return true;
     }
 
-    bool send_msg(CapIdx endpoint, VirAddr packet, bool blocking) {
+    bool endpoint_send(CapIdx endpoint, VirAddr packet, bool blocking) {
         auto packet_res = read_packet(packet);
         if (!packet_res.has_value()) {
             loggers::SYSCALL::ERROR("发送endpoint消息失败: packet err=%d",
@@ -505,7 +505,7 @@ namespace syscall {
         return send_res.value();
     }
 
-    bool recv_msg_async(CapIdx endpoint, VirAddr packet) {
+    bool endpoint_recv_async(CapIdx endpoint, VirAddr packet) {
         auto packet_res = read_packet(packet);
         if (!packet_res.has_value()) {
             return false;
@@ -544,7 +544,7 @@ namespace syscall {
         return true;
     }
 
-    util::cotask<syscall::RetPack> recv_msg_sync(CapIdx endpoint,
+    util::cotask<syscall::RetPack> endpoint_recv_sync(CapIdx endpoint,
                                                  VirAddr packet) {
         auto packet_res = read_packet(packet);
         if (!packet_res.has_value()) {

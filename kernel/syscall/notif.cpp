@@ -44,7 +44,7 @@ namespace syscall {
         return notif_res.value();
     }
 
-    bool signal_notification(CapIdx capidx, size_t idx, bool state) {
+    bool notification_signal(CapIdx capidx, size_t idx, bool state) {
         auto set_res = notif_object(capidx).and_then(
             [idx, state](cap::NotificationObject obj) {
                 return obj.set(idx, state);
@@ -68,7 +68,7 @@ namespace syscall {
         return query_res.value();
     }
 
-    bool create_notification(CapIdx capidx) {
+    bool notification_create(CapIdx capidx) {
         auto create_res =
             cap::CHolder::create<cap::NotificationPayload>(capidx);
         if (!create_res.has_value()) {

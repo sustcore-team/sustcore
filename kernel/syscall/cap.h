@@ -18,6 +18,6 @@ namespace syscall {
     bool cap_clone(CapIdx src, CapIdx target);
     bool cap_downgrade(CapIdx idx, b64 new_perm);
     bool cap_derive(CapIdx src, CapIdx target, b64 new_perm);
-    bool lookup_cap(CapIdx idx, VirAddr info_uaddr);
+    bool sys_cap_lookup(CapIdx idx, VirAddr info_uaddr);
     bool cap_remove(CapIdx idx);
 }  // namespace syscall

@@ -20,7 +20,7 @@ static uint64_t recv_u64(CapIdx endpoint, const char *tag) {
         .capsz   = &capsz,
     };
 
-    sys_recv_msg(endpoint, &packet);
+    sys_endpoint_recv(endpoint, &packet);
     if (msgsz != sizeof(value) || capsz != 0) {
         printf("%s: 无效的消息 msgsz=%u capsz=%u\n", tag, msgsz, capsz);
         sys_exit();
@@ -33,14 +33,14 @@ int kmod_main() {
     printf("test-endpoint-master: start\n");
     printf("test-endpoint-master: pid=%u\n", sys_getpid(__pcb_cap));
 
-    if (!sys_create_endpoint(kEndpointCap)) {
+    if (!sys_endpoint_create(kEndpointCap)) {
         printf("test-endpoint-master: 创建端点失败!\n");
         sys_exit();
     }
 
     CapIdx initial_caps[] = {kEndpointCap};
-    CapIdx slave_pcb =
-        sys_create_process("/initrd/test_endpoint_slave.mod", (CapIdx *)initial_caps, 1, 3);
+    CapIdx slave_pcb = sys_create_process("/initrd/test_endpoint_slave.mod",
+                                          (CapIdx *)initial_caps, 1, 3);
     if (slave_pcb == cap::error) {
         printf("test-endpoint-master: 创建 test-endpoint-slave 失败!\n");
         sys_exit();
@@ -60,8 +60,9 @@ int kmod_main() {
             .caplist = nullptr,
             .capsz   = &capsz,
         };
-        printf("test-endpoint-master: 第%u轮 V=0x%016lx C=0x%016lx\n", round, v, c);
-        sys_send_msg(kEndpointCap, &packet);
+        printf("test-endpoint-master: 第%u轮 V=0x%016lx C=0x%016lx\n", round, v,
+               c);
+        sys_endpoint_send(kEndpointCap, &packet);
     }
 
     sys_exit();

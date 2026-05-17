@@ -1,11 +1,13 @@
+#include <sustcore/syscall.h>
+
     .text
-    .global kwrites
-    .type   kwrites, @function
-kwrites:
+    .global sys_write_serial
+    .type   sys_write_serial, @function
+sys_write_serial:
     /* a0 = str, a1 = len */
     /* 将字符串写入串口 */
-    /* 我们调用系统调用 sys_write_serial : 0xFFC0'0001 */
-    li a7, 0xFFC00001
+    /* 我们调用系统调用 sys_write_serial */
+    li a7, SYS_WRITE_SERIAL
     ecall
     ret
 
@@ -15,7 +17,7 @@ sys_exit:
     li a0, 0
     la t0, __pcb_cap
     ld a6, 0(t0)
-    li a7, 0xFFFF0001
+    li a7, SYS_PCB_KILL
     ecall
 1:
     j 1b
@@ -26,7 +28,7 @@ sys_pcb_kill:
     /* a0 = pcb cap slot, a1 = exit code */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0001
+    li a7, SYS_PCB_KILL
     ecall
     ret
 
@@ -35,7 +37,7 @@ sys_pcb_kill:
 sys_create_process:
     /* a0 = path, a1 = initial caps, a2 = initial caps size, a3 = sched class */
     /* 创建并唤醒一个用户进程 */
-    li a7, 0xFFC00002
+    li a7, SYS_CREATE_PROCESS
     ecall
     ret
 
@@ -43,14 +45,14 @@ sys_create_process:
     .type   sys_create_thread, @function
 sys_create_thread:
     /* a0 = entry, a1 = stack_addr, a2 = stack_size */
-    li a7, 0xFFFF0006
+    li a7, SYS_CREATE_THREAD
     ecall
     ret
 
     .global sys_fork
     .type   sys_fork, @function
 sys_fork:
-    li a7, 0xFFFF0004
+    li a7, SYS_FORK
     ecall
     ret
 
@@ -61,47 +63,47 @@ sys_fork:
 sys_execve:
 execve:
     /* a0 = path, a1 = reserved caps, a2 = reserved caps size */
-    li a7, 0xFFFF0013
+    li a7, SYS_EXECVE
     ecall
     ret
 
-    .global sys_wait_notification
-    .type sys_wait_notification, @function
-sys_wait_notification:
+    .global sys_notif_wait
+    .type sys_notif_wait, @function
+sys_notif_wait:
     /* a0 = cap slot, a1 = signal idx */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0008
+    li a7, SYS_NOTIF_WAIT
     ecall
     ret
 
-    .global sys_signal_notification
-    .type sys_signal_notification, @function
-sys_signal_notification:
+    .global sys_notif_signal
+    .type sys_notif_signal, @function
+sys_notif_signal:
     /* a0 = cap slot, a1 = signal idx */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF000A
+    li a7, SYS_NOTIF_SIGNAL
     ecall
     ret
 
-    .global sys_unsignal_notification
-    .type sys_unsignal_notification, @function
-sys_unsignal_notification:
+    .global sys_notif_unsignal
+    .type sys_notif_unsignal, @function
+sys_notif_unsignal:
     /* a0 = cap slot, a1 = signal idx */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF000B
+    li a7, SYS_NOTIF_UNSIGNAL
     ecall
     ret
 
-    .global sys_check_notification
-    .type sys_check_notification, @function
-sys_check_notification:
+    .global sys_notif_check
+    .type sys_notif_check, @function
+sys_notif_check:
     /* a0 = cap slot, a1 = signal idx */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF000C
+    li a7, SYS_NOTIF_CHECK
     ecall
     ret
 
@@ -111,7 +113,7 @@ sys_cap_clone:
     /* a0 = src cap slot, a1 = target cap slot */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF000E
+    li a7, SYS_CAP_CLONE
     ecall
     ret
 
@@ -121,7 +123,7 @@ sys_cap_downgrade:
     /* a0 = cap slot, a1 = new permission bits */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF000F
+    li a7, SYS_CAP_DOWNGRADE
     ecall
     ret
 
@@ -132,17 +134,17 @@ sys_cap_derive:
     mv a6, a0
     mv a0, a1
     mv a1, a2
-    li a7, 0xFFFF0010
+    li a7, SYS_CAP_DERIVE
     ecall
     ret
 
-    .global lookup_cap
-    .type lookup_cap, @function
-lookup_cap:
+    .global sys_cap_lookup
+    .type sys_cap_lookup, @function
+sys_cap_lookup:
     /* a0 = cap slot, a1 = CapInfo out ptr */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0011
+    li a7, SYS_CAP_LOOKUP
     ecall
     ret
 
@@ -151,7 +153,7 @@ lookup_cap:
 sys_cap_remove:
     /* a0 = cap slot */
     mv a6, a0
-    li a7, 0xFFFF0012
+    li a7, SYS_CAP_REMOVE
     ecall
     ret
 
@@ -160,65 +162,65 @@ sys_cap_remove:
 sys_getpid:
     /* a0 = pcb cap slot */
     mv a6, a0
-    li a7, 0xFFFF0005
+    li a7, SYS_GETPID
     ecall
     ret
 
-    .global sys_create_notification
-    .type sys_create_notification, @function
-sys_create_notification:
+    .global sys_notif_create
+    .type sys_notif_create, @function
+sys_notif_create:
     /* a0 = target cap slot */
     mv a6, a0
-    li a7, 0xFFFF000D
+    li a7, SYS_NOTIF_CREATE
     ecall
     ret
 
-    .global sys_create_endpoint
-    .type sys_create_endpoint, @function
-sys_create_endpoint:
+    .global sys_endpoint_create
+    .type sys_endpoint_create, @function
+sys_endpoint_create:
     /* a0 = target cap slot */
     mv a6, a0
-    li a7, 0xFFFF0014
+    li a7, SYS_ENDPOINT_CREATE
     ecall
     ret
 
-    .global sys_send_msg
-    .type sys_send_msg, @function
-sys_send_msg:
+    .global sys_endpoint_send
+    .type sys_endpoint_send, @function
+sys_endpoint_send:
     /* a0 = endpoint, a1 = MsgPacket* */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0015
+    li a7, SYS_ENDPOINT_SEND
     ecall
     ret
 
-    .global sys_recv_msg
-    .type sys_recv_msg, @function
-sys_recv_msg:
+    .global sys_endpoint_recv
+    .type sys_endpoint_recv, @function
+sys_endpoint_recv:
     /* a0 = endpoint, a1 = MsgPacket* */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0016
+    li a7, SYS_ENDPOINT_RECV
     ecall
     ret
 
-    .global sys_try_send_msg
-    .type sys_try_send_msg, @function
-sys_try_send_msg:
+    .global sys_endpoint_send_async
+    .type sys_endpoint_send_async, @function
+sys_endpoint_send_async:
     /* a0 = endpoint, a1 = MsgPacket* */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0017
+    li a7, SYS_ENDPOINT_SEND_ASYNC
     ecall
     ret
 
-    .global sys_try_recv_msg
-    .type sys_try_recv_msg, @function
-sys_try_recv_msg:
+    .global sys_endpoint_recv_async
+    .type sys_endpoint_recv_async, @function
+sys_endpoint_recv_async:
     /* a0 = endpoint, a1 = MsgPacket* */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF0018
+    li a7, SYS_ENDPOINT_RECV_ASYNC
     ecall
     ret
 
@@ -229,7 +231,7 @@ endpoint_call:
     mv a6, a0
     mv a0, a1
     mv a1, a2
-    li a7, 0xFFFF001E
+    li a7, SYS_ENDPOINT_CALL
     ecall
     ret
 
@@ -239,7 +241,7 @@ endpoint_reply:
     /* a0 = reply cap, a1 = reply MsgPacket* */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF001F
+    li a7, SYS_ENDPOINT_REPLY
     ecall
     ret
 
@@ -252,7 +254,7 @@ sys_mem_create:
     mv a1, a2
     mv a2, a3
     mv a3, a4
-    li a7, 0xFFFF0019
+    li a7, SYS_MEM_CREATE
     ecall
     ret
 
@@ -270,7 +272,7 @@ sys_mem_map:
     mv a1, a2
     mv a2, a3
     mv a3, a4
-    li a7, 0xFFFF001A
+    li a7, SYS_PCB_MAP
     ecall
     ret
 
@@ -283,7 +285,7 @@ sys_pcb_map:
     mv a1, a2
     mv a2, a3
     mv a3, a4
-    li a7, 0xFFFF001A
+    li a7, SYS_PCB_MAP
     ecall
     ret
 
@@ -293,7 +295,7 @@ sys_mem_unmap:
     /* a0 = cap slot, a1 = vaddr */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF001B
+    li a7, SYS_MEM_UNMAP
     ecall
     ret
 
@@ -303,7 +305,7 @@ sys_mem_resize:
     /* a0 = cap slot, a1 = newsz */
     mv a6, a0
     mv a0, a1
-    li a7, 0xFFFF001C
+    li a7, SYS_MEM_RESIZE
     ecall
     ret
 
@@ -312,6 +314,6 @@ sys_mem_resize:
 sys_mem_query:
     /* a0 = cap slot */
     mv a6, a0
-    li a7, 0xFFFF001D
+    li a7, SYS_MEM_QUERY
     ecall
     ret

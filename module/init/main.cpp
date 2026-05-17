@@ -22,7 +22,7 @@ constexpr size_t kForkDoneSignal = 0;
 
 int kmod_main() {
     printf("进入 init 模块!\n");
-    if (!sys_create_notification(kForkDoneCap)) {
+    if (!sys_notif_create(kForkDoneCap)) {
         printf("init: 创建fork完成通知失败\n");
         while (true) {
         }
@@ -35,15 +35,16 @@ int kmod_main() {
     // don't hold its capability index.
     sys_cap_remove(modidx);
 
-    sys_wait_notification(kForkDoneCap, kForkDoneSignal);
-    sys_unsignal_notification(kForkDoneCap, kForkDoneSignal);
+    sys_notif_wait(kForkDoneCap, kForkDoneSignal);
+    sys_notif_unsignal(kForkDoneCap, kForkDoneSignal);
     printf("init: 收到test_fork完成通知\n");
 
     modidx = sys_create_process("/initrd/test_thread.mod", nullptr, 0, 3);
     printf("移除test_thread模块能力 %p\n", modidx);
     sys_cap_remove(modidx);
 
-    modidx = sys_create_process("/initrd/test_endpoint_master.mod", nullptr, 0, 3);
+    modidx =
+        sys_create_process("/initrd/test_endpoint_master.mod", nullptr, 0, 3);
     printf("移除test-endpoint-master模块能力 %p\n", modidx);
     sys_cap_remove(modidx);
 
