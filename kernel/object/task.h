@@ -100,6 +100,10 @@ namespace cap {
          */
         Result<void> map(MemoryObject &memory, VirAddr vaddr, PageMan::RWX rwx,
                          MemoryGrowth growth) const;
+        Result<task::PCB *> require_new_thread() const;
+        Result<task::PCB *> require_new_process() const;
+        Result<task::PCB *> require_execute() const;
+        Result<task::PCB *> require_new_process_execute() const;
     };
 
     /**

@@ -60,7 +60,7 @@ int kmod_main() {
     global_value     = 114514;
     char *shared_buf = alloc_page_string("全体目光向我看齐");
 
-    ForkRet ret = sys_fork();
+    ForkRet ret = fork();
     if (ret.ret1 == cap::error) {
         printf("test_fork: fork failed\n");
         while (true) {

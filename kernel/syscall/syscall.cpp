@@ -57,8 +57,8 @@ namespace syscall {
 
         bool processed = true;
 
-        // capidx (a6) is the primary capability slot for capability syscalls;
-        // args[] carry operation-specific values.
+        // capidx (a0) is the primary capability slot; args[] carry
+        // operation-specific values starting at a1.
         switch (sysno) {
             // Basic process / memory syscalls.
             case SYS_WRITE_SERIAL: {
@@ -67,29 +67,38 @@ namespace syscall {
                 break;
             }
             case SYS_CREATE_PROCESS: {
-                ret0 = create_process(UString((VirAddr)arg0, MAX_SYSCALL_PATH),
-                                      VirAddr(arg1), arg2, arg3);
+                ret0 = pcb_create_process(
+                    capidx, UString((VirAddr)arg0, MAX_SYSCALL_PATH),
+                    VirAddr(arg1), arg2, arg3);
                 ret1 = 0;
                 break;
             }
             case SYS_CREATE_THREAD: {
-                ret0 = create_thread(VirAddr(arg0), VirAddr(arg1), arg2);
+                ret0 = pcb_create_thread(capidx, VirAddr(arg0), VirAddr(arg1),
+                                         arg2);
                 ret1 = 0;
                 break;
             }
             case SYS_FORK: {
-                auto fork_ret = fork();
+                auto fork_ret = pcb_fork(capidx);
                 ret0          = fork_ret.child_pcb_cap;
                 ret1          = fork_ret.child_pid;
                 break;
             }
             case SYS_EXECVE: {
-                bool ok = execve(UString((VirAddr)arg0, MAX_SYSCALL_PATH),
-                                 VirAddr(arg1), arg2);
+                bool current_target = pcb_is_current(capidx);
+                bool ok             = pcb_execve(
+                    capidx, UString((VirAddr)arg0, MAX_SYSCALL_PATH),
+                    VirAddr(arg1), arg2);
                 if (ok) {
-                    ret0       = ctx->regs[Context::A0_BASE];
-                    ret1       = ctx->regs[Context::A0_BASE + 1];
-                    ctx->sepc -= 4;
+                    if (current_target) {
+                        ret0       = ctx->regs[Context::A0_BASE];
+                        ret1       = ctx->regs[Context::A0_BASE + 1];
+                        ctx->sepc -= 4;
+                    } else {
+                        ret0 = true;
+                        ret1 = 0;
+                    }
                 } else {
                     ret0 = false;
                     ret1 = 0;

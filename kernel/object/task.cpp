@@ -81,4 +81,44 @@ namespace cap {
         }
         return memory.map_into(*_obj->pcb->tmm, vaddr, rwx, growth);
     }
+
+    Result<task::PCB *> PCBObject::require_new_thread() const {
+        if (!imply(perm::pcb::NEW_THREAD)) {
+            unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+        }
+        if (_obj->pcb == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        return _obj->pcb;
+    }
+
+    Result<task::PCB *> PCBObject::require_new_process() const {
+        if (!imply(perm::pcb::NEW_PROCESS)) {
+            unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+        }
+        if (_obj->pcb == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        return _obj->pcb;
+    }
+
+    Result<task::PCB *> PCBObject::require_execute() const {
+        if (!imply(perm::pcb::EXECUTE)) {
+            unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+        }
+        if (_obj->pcb == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        return _obj->pcb;
+    }
+
+    Result<task::PCB *> PCBObject::require_new_process_execute() const {
+        if (!imply(perm::pcb::NEW_PROCESS | perm::pcb::EXECUTE)) {
+            unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+        }
+        if (_obj->pcb == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        return _obj->pcb;
+    }
 }  // namespace cap

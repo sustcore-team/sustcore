@@ -15,6 +15,41 @@
 #include <cstring>
 
 extern "C" {
+void sys_exit() {
+    sys_pcb_kill(__pcb_cap, 0);
+    while (true) {}
+}
+
+CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz,
+                          size_t sched_class) {
+    return sys_pcb_create_process(__pcb_cap, path, caps, caps_sz, sched_class);
+}
+
+CapIdx sys_create_thread(void (*entry)(), void *stack_addr,
+                         size_t stack_size) {
+    return sys_pcb_create_thread(__pcb_cap, entry, stack_addr, stack_size);
+}
+
+ForkRet fork() {
+    ForkRet ret = sys_pcb_fork(__pcb_cap);
+    if (ret.ret1 != cap::error && ret.ret2 == 0) {
+        __pcb_cap = ret.ret1;
+    }
+    return ret;
+}
+
+bool sys_execve(const char *path, CapIdx *rsvdlst, size_t rsvdsz) {
+    return sys_pcb_execve(__pcb_cap, path, rsvdlst, rsvdsz);
+}
+
+bool execve(const char *path, CapIdx *rsvdlst, size_t rsvdsz) {
+    return sys_execve(path, rsvdlst, rsvdsz);
+}
+
+bool sys_mem_map(CapIdx idx, void *vaddr, uint64_t rwx, uint64_t growth) {
+    return sys_pcb_map(__pcb_cap, idx, vaddr, rwx, growth);
+}
+
 size_t brk(size_t newbrk) {
     if (newbrk == 0) {
         return __current_brk;

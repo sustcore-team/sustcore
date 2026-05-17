@@ -272,6 +272,14 @@ namespace task {
         Result<void> exec_current(const char *path, const CapIdx *reserved_caps,
                                   size_t reserved_count);
         /**
+         * @brief 用指定ELF替换目标 PCB 的进程镜像.
+         *
+         * 目标为当前进程时复用当前 TCB; 目标为其他进程时移除旧线程并重建主线程.
+         */
+        Result<void> exec_pcb(util::nonnull<PCB *> pcb, const char *path,
+                              const CapIdx *reserved_caps,
+                              size_t reserved_count);
+        /**
          * @brief 将已完成的 PCB 加入回收队列, 以便稍后统一回收.
          *
          * @param pcb 要回收的 PCB 指针, 可以为 nullptr 时忽略.

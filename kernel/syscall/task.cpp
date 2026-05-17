@@ -69,10 +69,9 @@ namespace syscall {
      * 该函数只处理 capability transfer 的 CLONE 语义; 对象自身权限检查
      * 仍由对应 CapObj 方法完成. 
      */
-    static Result<void> copy_initial_caps_in_place(cap::CHolder *src_holder,
-                                                   cap::CHolder *dst_holder,
-                                                   VirAddr caps_uaddr,
-                                                   size_t caps_sz) {
+    static Result<void> copy_initial_caps_in_place(
+        cap::CHolder *src_holder, TaskMemoryManager *src_tmm,
+        cap::CHolder *dst_holder, VirAddr caps_uaddr, size_t caps_sz) {
         if (src_holder == nullptr || dst_holder == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
         }
@@ -104,10 +103,9 @@ namespace syscall {
             }
 
             auto *memory = src_cap->payload_as<cap::MemoryPayload>();
-            if (memory != nullptr && !memory->shared &&
-                env::inst().tmm() != nullptr)
+            if (memory != nullptr && !memory->shared && src_tmm != nullptr)
             {
-                auto cow_res = env::inst().tmm()->protect_memory_cow(memory);
+                auto cow_res = src_tmm->protect_memory_cow(memory);
                 if (!cow_res.has_value()) {
                     auto remove_res = dst_holder->internal_remove(idx);
                     assert(remove_res.has_value());
@@ -128,11 +126,33 @@ namespace syscall {
         }
     }
 
-    CapIdx create_process(const UString &path, VirAddr caps_uaddr,
-                          size_t caps_sz, size_t sched_class) {
+    CapIdx pcb_create_process(CapIdx pcb_cap, const UString &path,
+                              VirAddr caps_uaddr, size_t caps_sz,
+                              size_t sched_class) {
         loggers::SYSCALL::INFO(
-            "创建进程: path=%s, caps_uaddr=%p, caps_sz=%u, sched_class=%u",
-            path.kbuf(), caps_uaddr.addr(), caps_sz, sched_class);
+            "创建进程: pcb=%p path=%s, caps_uaddr=%p, caps_sz=%u, "
+            "sched_class=%u",
+            pcb_cap, path.kbuf(), caps_uaddr.addr(), caps_sz, sched_class);
+
+        cap::Capability *pcb_cap_obj = nullptr;
+        auto pcb_res                 = lookup_pcb(pcb_cap, &pcb_cap_obj);
+        if (!pcb_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: PCB lookup失败 err=%d",
+                                    pcb_res.error());
+            return cap::error;
+        }
+        cap::PCBObject pcb_obj(util::nnullforce(pcb_cap_obj));
+        auto parent_res = pcb_obj.require_new_process_execute();
+        if (!parent_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建进程失败: 权限不足 err=%d",
+                                    parent_res.error());
+            return cap::error;
+        }
+        task::PCB *parent_pcb = parent_res.value();
+        if (parent_pcb->cholder == nullptr || parent_pcb->tmm == nullptr) {
+            loggers::SYSCALL::ERROR("创建进程失败: 父PCB状态无效");
+            return cap::error;
+        }
 
         auto sched_res = parse_user_sched_class(sched_class);
         if (!sched_res.has_value()) {
@@ -161,8 +181,10 @@ namespace syscall {
             assert(rm_res.has_value());
         });
 
-        auto copy_res = copy_initial_caps_in_place(current_holder, child_holder,
-                                                   caps_uaddr, caps_sz);
+        auto copy_res =
+            copy_initial_caps_in_place(parent_pcb->cholder,
+                                       parent_pcb->tmm.get(), child_holder,
+                                       caps_uaddr, caps_sz);
         if (!copy_res.has_value()) {
             loggers::SYSCALL::ERROR("创建进程失败: 初始能力原位复制失败 err=%d",
                                     copy_res.error());
@@ -211,7 +233,27 @@ namespace syscall {
         return ret_insert_res.value();
     }
 
-    CapIdx create_thread(VirAddr entry, VirAddr stack_addr, size_t stack_size) {
+    CapIdx pcb_create_thread(CapIdx pcb_cap, VirAddr entry, VirAddr stack_addr,
+                             size_t stack_size) {
+        cap::Capability *cap = nullptr;
+        auto pcb_res         = lookup_pcb(pcb_cap, &cap);
+        if (!pcb_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建线程失败: PCB lookup失败 err=%d",
+                                    pcb_res.error());
+            return cap::error;
+        }
+        cap::PCBObject obj(util::nnullforce(cap));
+        auto target_res = obj.require_new_thread();
+        if (!target_res.has_value()) {
+            loggers::SYSCALL::ERROR("创建线程失败: 权限不足 err=%d",
+                                    target_res.error());
+            return cap::error;
+        }
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        if (current_tcb == nullptr || current_tcb->task != target_res.value()) {
+            loggers::SYSCALL::ERROR("创建线程失败: 目标PCB不是当前进程");
+            return cap::error;
+        }
         auto thread_res = task::TaskManager::inst().create_thread_current(
             entry, stack_addr, stack_size);
         if (!thread_res.has_value()) {
@@ -223,7 +265,26 @@ namespace syscall {
         return thread_res.value();
     }
 
-    ForkRet fork() {
+    ForkRet pcb_fork(CapIdx pcb_cap) {
+        cap::Capability *cap = nullptr;
+        auto pcb_res         = lookup_pcb(pcb_cap, &cap);
+        if (!pcb_res.has_value()) {
+            loggers::SYSCALL::ERROR("fork失败: PCB lookup失败 err=%d",
+                                    pcb_res.error());
+            return {cap::error, 0};
+        }
+        cap::PCBObject obj(util::nnullforce(cap));
+        auto target_res = obj.require_new_process();
+        if (!target_res.has_value()) {
+            loggers::SYSCALL::ERROR("fork失败: 权限不足 err=%d",
+                                    target_res.error());
+            return {cap::error, 0};
+        }
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        if (current_tcb == nullptr || current_tcb->task != target_res.value()) {
+            loggers::SYSCALL::ERROR("fork失败: 目标PCB不是当前进程");
+            return {cap::error, 0};
+        }
         auto fork_res = task::TaskManager::inst().fork_current();
         if (!fork_res.has_value()) {
             loggers::SYSCALL::ERROR("fork失败: err=%d", fork_res.error());
@@ -268,8 +329,22 @@ namespace syscall {
         return map_res.has_value();
     }
 
-    bool execve(const UString &path, VirAddr reserved_uaddr,
-                size_t reserved_sz) {
+    bool pcb_execve(CapIdx pcb_cap, const UString &path, VirAddr reserved_uaddr,
+                    size_t reserved_sz) {
+        cap::Capability *cap = nullptr;
+        auto pcb_res         = lookup_pcb(pcb_cap, &cap);
+        if (!pcb_res.has_value()) {
+            loggers::SYSCALL::ERROR("execve失败: PCB lookup失败 err=%d",
+                                    pcb_res.error());
+            return false;
+        }
+        cap::PCBObject obj(util::nnullforce(cap));
+        auto target_res = obj.require_execute();
+        if (!target_res.has_value()) {
+            loggers::SYSCALL::ERROR("execve失败: 权限不足 err=%d",
+                                    target_res.error());
+            return false;
+        }
         UBuffer reserved_buf(reserved_uaddr, reserved_sz * sizeof(CapIdx));
         CapIdx *reserved = nullptr;
         if (reserved_sz != 0) {
@@ -277,14 +352,25 @@ namespace syscall {
             reserved = reinterpret_cast<CapIdx *>(reserved_buf.kbuf());
         }
 
-        auto exec_res = task::TaskManager::inst().exec_current(
-            path.kbuf(), reserved, reserved_sz);
+        auto exec_res = task::TaskManager::inst().exec_pcb(
+            util::nnullforce(target_res.value()), path.kbuf(), reserved,
+            reserved_sz);
         if (!exec_res.has_value()) {
             loggers::SYSCALL::ERROR("execve失败: path=%s err=%d", path.kbuf(),
                                     exec_res.error());
             return false;
         }
         return true;
+    }
+
+    bool pcb_is_current(CapIdx pcb_cap) {
+        auto pcb_res = lookup_pcb(pcb_cap, nullptr);
+        if (!pcb_res.has_value()) {
+            return false;
+        }
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        return current_tcb != nullptr &&
+               current_tcb->task == pcb_res.value()->pcb;
     }
 
     size_t get_pid(CapIdx pcb_cap) {

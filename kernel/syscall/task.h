@@ -26,10 +26,12 @@ namespace syscall {
         size_t child_pid;
     };
 
-    CapIdx create_process(const UString &path, VirAddr caps_uaddr,
-                          size_t caps_sz, size_t sched_class);
-    CapIdx create_thread(VirAddr entry, VirAddr stack_addr, size_t stack_size);
-    ForkRet fork();
+    CapIdx pcb_create_process(CapIdx pcb_cap, const UString &path,
+                              VirAddr caps_uaddr, size_t caps_sz,
+                              size_t sched_class);
+    CapIdx pcb_create_thread(CapIdx pcb_cap, VirAddr entry, VirAddr stack_addr,
+                             size_t stack_size);
+    ForkRet pcb_fork(CapIdx pcb_cap);
     /**
      * @brief 通过 PCB Capability 杀死进程. 
      *
@@ -54,7 +56,8 @@ namespace syscall {
      */
     bool pcb_map(CapIdx pcb_cap, CapIdx mem_cap, VirAddr vaddr,
                  PageMan::RWX rwx, cap::MemoryGrowth growth);
-    bool execve(const UString &path, VirAddr reserved_uaddr,
-                size_t reserved_sz);
+    bool pcb_execve(CapIdx pcb_cap, const UString &path,
+                    VirAddr reserved_uaddr, size_t reserved_sz);
+    bool pcb_is_current(CapIdx pcb_cap);
     size_t get_pid(CapIdx pcb_cap);
 }  // namespace syscall

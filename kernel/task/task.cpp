@@ -786,9 +786,33 @@ namespace task {
         if (current_tcb == nullptr || current_tcb->task == nullptr) {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
-        PCB *pcb = current_tcb->task;
+        return exec_pcb(util::nnullforce(current_tcb->task), path,
+                        reserved_caps, reserved_count);
+    }
+
+    Result<void> TaskManager::exec_pcb(util::nonnull<PCB *> target,
+                                       const char *path,
+                                       const CapIdx *reserved_caps,
+                                       size_t reserved_count) {
+        PCB *pcb = target.get();
         if (pcb->tmm == nullptr || pcb->cholder == nullptr || path == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
+        }
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        bool target_current =
+            current_tcb != nullptr && current_tcb->task == pcb;
+        schd::ClassType schd_class = schd::ClassType::FCFS;
+        TCB *reuse_tcb             = nullptr;
+        if (target_current) {
+            reuse_tcb   = current_tcb;
+            schd_class  = current_tcb->schd_class;
+        } else if (!pcb->threads.empty()) {
+            schd_class = pcb->threads.front().schd_class;
+            if (schd_class == schd::ClassType::IDLE ||
+                schd_class == schd::ClassType::BOT)
+            {
+                schd_class = schd::ClassType::FCFS;
+            }
         }
 
         // 校验 reserved_caps 是否合法
@@ -839,25 +863,36 @@ namespace task {
         while (!pcb->threads.empty()) {
             TCB *tcb = &pcb->threads.front();
             pcb->threads.pop_front();
-            if (tcb == current_tcb) {
+            if (tcb == reuse_tcb) {
                 continue;
+            }
+            if (tcb->basic_entity.state == ThreadState::READY) {
+                auto dequeue_res =
+                    schd::Scheduler::inst().dequeue(util::nnullforce(tcb));
+                propagate(dequeue_res);
             }
             auto recycle_res = recycle_tcb(util::nnullforce(tcb));
             propagate(recycle_res);
         }
         pcb->main_tcb_cap = cap::null;
 
-        auto populate_res = populate_task(util::nnullforce(pcb), spec,
-                                          current_tcb->schd_class, current_tcb);
+        auto populate_res =
+            populate_task(util::nnullforce(pcb), spec, schd_class, reuse_tcb);
         propagate(populate_res);
-        current_tcb->basic_entity.state = ThreadState::RUNNING;
-        current_tcb->basic_entity.flags = 0;
-        current_tcb->rr_entity          = {};
+        if (target_current) {
+            current_tcb->basic_entity.state = ThreadState::RUNNING;
+            current_tcb->basic_entity.flags = 0;
+            current_tcb->rr_entity          = {};
+        } else if (!schd::Scheduler::inst().wakeup_new(populate_res.value())) {
+            unexpect_return(ErrCode::CREATION_FAILED);
+        }
 
         spec_owned = false;
         spec_guard.release();
 
-        schd::switch_pgd(pcb->tmm);
+        if (target_current) {
+            schd::switch_pgd(pcb->tmm);
+        }
 
         if (old_tmm != nullptr) {
             PhyAddr old_pgd = old_tmm->pgd();

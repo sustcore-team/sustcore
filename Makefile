@@ -3,6 +3,9 @@ config-json := $(firstword $(wildcard config.json) script/config.default.json)
 
 -include ./config.mk
 
+all:
+	$(q)$(MAKE) -s build && $(MAKE) run
+
 image-sectors ?= 262144
 
 architecture ?= riscv64
@@ -16,13 +19,10 @@ include $(path-script)/env/local.mk
 include $(path-script)/helper.mk
 include $(path-script)/tool.mk
 include $(path-script)/util.mk
-include $(path-script)/setup.mk
 include $(path-script)/run.mk
 
 .PHONY: build mount umount image __image stat_code all dbg clean FORCE
 .PHONY: build-libs build-mods build-kernel make-initrd
-
-DEFAULT_GOAL := all
 
 build-mode ?= release
 kernel-flags ?=
@@ -123,9 +123,6 @@ __unload_image:
 stat_code:
 	$(q)$(comments-stat)
 
-all:
-	$(q)$(MAKE) -s build && $(MAKE) run
-
 dbg:
 	$(q)$(MAKE) -s build && $(MAKE) run_dbg
 
@@ -133,3 +130,5 @@ clean:
 	rm -rf $(path-e)/build
 
 build-libs build-mods make-initrd build-kernel build all dbg run run_dbg image __image mount umount: config.mk kernel/logger.h kernel/feature.mk
+
+include $(path-script)/setup.mk

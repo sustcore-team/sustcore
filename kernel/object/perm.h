@@ -97,6 +97,9 @@ namespace perm::pcb {
     constexpr b64 GETPID    = 0x01'0000;
     constexpr b64 KILL      = 0x02'0000;
     constexpr b64 VMCONTEXT = 0x04'0000;
+    constexpr b64 NEW_THREAD  = 0x08'0000;
+    constexpr b64 NEW_PROCESS = 0x10'0000;
+    constexpr b64 EXECUTE     = 0x20'0000;
 }  // namespace perm::pcb
 
 namespace perm::sintobj {

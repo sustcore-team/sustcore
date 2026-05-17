@@ -90,13 +90,13 @@ struct Riscv64Context {
 
     constexpr void read_args(syscall::ArgPack &pack) const {
         pack.syscall_number = regs[A0_BASE + 7];  // a7: syscall number
-        pack.capidx         = regs[A0_BASE + 6];
+        pack.capidx         = regs[A0_BASE + 0];
 
-        pack.args[0] = regs[A0_BASE + 0];
-        pack.args[1] = regs[A0_BASE + 1];
-        pack.args[2] = regs[A0_BASE + 2];
-        pack.args[3] = regs[A0_BASE + 3];
-        pack.args[4] = regs[A0_BASE + 4];
+        pack.args[0] = regs[A0_BASE + 1];
+        pack.args[1] = regs[A0_BASE + 2];
+        pack.args[2] = regs[A0_BASE + 3];
+        pack.args[3] = regs[A0_BASE + 4];
+        pack.args[4] = regs[A0_BASE + 5];
     }
 
     [[nodiscard]]

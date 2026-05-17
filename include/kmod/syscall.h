@@ -34,10 +34,17 @@ void sys_exit();
 bool sys_pcb_kill(CapIdx pcb_cap, int exit_code);
 bool sys_pcb_map(CapIdx pcb_cap, CapIdx mem_cap, void *vaddr, uint64_t rwx,
                  uint64_t growth);
+CapIdx sys_pcb_create_process(CapIdx pcb_cap, const char *path, CapIdx *caps,
+                              size_t caps_sz, size_t sched_class);
 CapIdx sys_create_process(const char *path, CapIdx *caps, size_t caps_sz,
-                             size_t sched_class);
+                          size_t sched_class);
+CapIdx sys_pcb_create_thread(CapIdx pcb_cap, void (*entry)(),
+                             void *stack_addr, size_t stack_size);
 CapIdx sys_create_thread(void (*entry)(), void *stack_addr, size_t stack_size);
-ForkRet sys_fork();
+ForkRet sys_pcb_fork(CapIdx pcb_cap);
+ForkRet fork();
+bool sys_pcb_execve(CapIdx pcb_cap, const char *path, CapIdx *rsvdlst,
+                    size_t rsvdsz);
 bool sys_execve(const char *path, CapIdx *rsvdlst, size_t rsvdsz);
 bool execve(const char *path, CapIdx *rsvdlst, size_t rsvdsz);
 
