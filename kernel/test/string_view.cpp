@@ -85,6 +85,47 @@ namespace test::string_view {
         }
     };
 
+    class CaseNoThrowAccess : public TestCase {
+    public:
+        CaseNoThrowAccess() : TestCase("string_view 无异常接口") {}
+        void _run(void* env [[maybe_unused]]) const noexcept override {
+            std::string_view sv = "Sustcore"sv;
+
+            auto at_ok = sv.at_nt(2);
+            ttest(at_ok.has_value());
+            ttest(at_ok.value() == 's');
+
+            auto at_fail = sv.at_nt(99);
+            ttest(!at_fail);
+            ttest(at_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            char buf[8] = {};
+            auto copied = sv.copy_nt(buf, 4, 4);
+            ttest(copied.has_value());
+            ttest(copied.value() == 4);
+            ttest(std::string_view(static_cast<const char*>(buf),
+                                   static_cast<size_t>(4)) == "core"sv);
+
+            auto copy_fail = sv.copy_nt(buf, 1, 99);
+            ttest(!copy_fail);
+            ttest(copy_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            auto sub = sv.substr_nt(4);
+            ttest(sub.has_value());
+            ttest(sub.value() == "core"sv);
+
+            auto sub_fail = sv.substr_nt(9);
+            ttest(!sub_fail);
+            ttest(sub_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            std::string_view mod = "prefix"sv;
+            ttest(mod.remove_prefix_nt(3).has_value());
+            ttest(mod == "fix"sv);
+            ttest(!mod.remove_suffix_nt(4));
+            ttest(mod == "fix"sv);
+        }
+    };
+
     class CaseFind : public TestCase {
     public:
         CaseFind() : TestCase("查找类方法") {}
@@ -163,6 +204,7 @@ namespace test::string_view {
         cases.push_back(new CaseConstructor());
         cases.push_back(new CaseModifier());
         cases.push_back(new CaseSubstr());
+        cases.push_back(new CaseNoThrowAccess());
         cases.push_back(new CaseFind());
         cases.push_back(new CaseCompare());
         cases.push_back(new CaseIterator());

@@ -13,30 +13,13 @@
 
 #include <bits/exception.h>
 #include <features/sus/errors.h>
-
-#include <type_traits>
-
-/**
- * @brief This function will just print the exception
- * and then halt the system. It will never return.
- * @param s the exception to throw
- */
-extern "C"
-[[noreturn]]
-void __sus_cxa_throw(const std::exception &e);
-
-[[noreturn]]
-inline void __sus_throw(const std::exception &e) {
-    __sus_cxa_throw(e);
-}
-
-[[noreturn]]
-inline void __sus_throw(std::exception &&e) {
-    __sus_cxa_throw(e);
-}
+#include <cassert>
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
-#define _THROW(exception) __sus_throw(exception)
+#define _THROW(exception) panic(#exception)
 #define _TRY
 #define _CATCH(exception) if (0)
+#define EXCEPTION_DEPRECATED [[deprecated("此函数不应被调用!其使用了异常机制, "                                     \
+        "但内核中不应使用该机制!请调用其对应的无异常版本(一般命名为 " \
+        "xxx_nt)!")]]
 // NOLINTEND(cppcoreguidelines-macro-usage)

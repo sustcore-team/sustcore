@@ -158,7 +158,7 @@ namespace std {
             E D_error;
 
             constexpr __storage() : D_dummy() {}
-            ~__storage() = default;
+            constexpr ~__storage() {}
         } D_storage;
 
         bool D_has_value;

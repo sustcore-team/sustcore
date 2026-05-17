@@ -599,14 +599,36 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         constexpr basic_string &assign(const StringViewLike &svl, size_type pos,
                                        size_type count = npos) {
             return assign(_sv_type(svl).substr(pos, count));
         }
 
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        constexpr result_nt<basic_string &> assign_nt(
+            const StringViewLike &svl, size_type pos,
+            size_type count = npos) noexcept {
+            _sv_type sv = svl;
+            auto sub    = sv.substr_nt(pos, count);
+            if (!sub) {
+                return {unexpect, sub.error()};
+            }
+            assign(sub.value().data(), sub.value().size());
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &assign(const basic_string &str, size_type pos,
                                        size_type count = npos) {
             return assign(_sv_type(str).substr(pos, count));
+        }
+
+        constexpr result_nt<basic_string &> assign_nt(
+            const basic_string &str, size_type pos,
+            size_type count = npos) noexcept {
+            return assign_nt(_sv_type(str), pos, count);
         }
 
         template <class InputIt>
@@ -626,6 +648,7 @@ namespace std {
         }
 
         // 访问
+        EXCEPTION_DEPRECATED
         constexpr reference at(size_type pos) {
             if (pos >= size()) {
                 _THROW(out_of_range("basic_string::at: pos out of range"));
@@ -633,11 +656,27 @@ namespace std {
             return data()[pos];
         }
 
+        EXCEPTION_DEPRECATED
         constexpr const_reference at(size_type pos) const {
             if (pos >= size()) {
                 _THROW(out_of_range("basic_string::at: pos out of range"));
             }
             return data()[pos];
+        }
+
+        constexpr result_nt<reference> at_nt(size_type pos) noexcept {
+            if (pos >= size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            return std::ref(data()[pos]);
+        }
+
+        constexpr result_nt<const_reference> at_nt(
+            size_type pos) const noexcept {
+            if (pos >= size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            return std::cref(data()[pos]);
         }
 
         constexpr reference operator[](size_type pos) {
@@ -759,6 +798,7 @@ namespace std {
         }
 
     public:
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index, size_type count,
                                        CharT ch) {
             if (!U_prepare_insert(index, count))
@@ -770,6 +810,17 @@ namespace std {
             return *this;
         }
 
+        constexpr result_nt<basic_string &> insert_nt(size_type index,
+                                                      size_type count,
+                                                      CharT ch) noexcept {
+            if (index > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            insert(index, count, ch);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index, const_pointer s,
                                        size_type count) {
             const_pointer current_data = data();
@@ -786,18 +837,53 @@ namespace std {
             return *this;
         }
 
+        constexpr result_nt<basic_string &> insert_nt(size_type index,
+                                                      const_pointer s,
+                                                      size_type count) noexcept {
+            if (index > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            insert(index, s, count);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index, const_pointer s) {
             return insert(index, s, Traits::length(s));
         }
 
+        constexpr result_nt<basic_string &> insert_nt(size_type index,
+                                                      const_pointer s) noexcept {
+            return insert_nt(index, s, Traits::length(s));
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index,
                                        const basic_string &str) {
             return insert(index, str.data(), str.size());
         }
 
+        constexpr result_nt<basic_string &> insert_nt(
+            size_type index, const basic_string &str) noexcept {
+            return insert_nt(index, str.data(), str.size());
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index, const basic_string &str,
                                        size_type pos, size_type count = npos) {
             return insert(index, _sv_type(str).substr(pos, count));
+        }
+
+        constexpr result_nt<basic_string &> insert_nt(
+            size_type index, const basic_string &str, size_type pos,
+            size_type count = npos) noexcept {
+            if (index > size() || pos > str.size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            size_type rcount =
+                (count == npos || pos + count > str.size()) ? str.size() - pos
+                                                            : count;
+            return insert_nt(index, str.data() + pos, rcount);
         }
 
         constexpr iterator insert(const_iterator pos, CharT ch) {
@@ -829,6 +915,7 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index,
                                        const StringViewLike &svl) {
             _sv_type sv = svl;
@@ -837,16 +924,39 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        constexpr result_nt<basic_string &> insert_nt(
+            size_type index, const StringViewLike &svl) noexcept {
+            _sv_type sv = svl;
+            return insert_nt(index, sv.data(), sv.size());
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         constexpr basic_string &insert(size_type index,
                                        const StringViewLike &svl, size_type pos,
                                        size_type count = npos) {
             return insert(index, _sv_type(svl).substr(pos, count));
         }
 
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        constexpr result_nt<basic_string &> insert_nt(
+            size_type index, const StringViewLike &svl, size_type pos,
+            size_type count = npos) noexcept {
+            _sv_type sv = svl;
+            auto sub    = sv.substr_nt(pos, count);
+            if (!sub) {
+                return {unexpect, sub.error()};
+            }
+            return insert_nt(index, sub.value().data(), sub.value().size());
+        }
+
         // insert_range
         // to be implemented...
 
         // erase
+        EXCEPTION_DEPRECATED
         constexpr basic_string &erase(size_type index = 0,
                                       size_type count = npos) {
             if (index > size()) {
@@ -861,6 +971,15 @@ namespace std {
                          size() - index - count + 1);
             D_size -= count;
             return *this;
+        }
+
+        constexpr result_nt<basic_string &> erase_nt(
+            size_type index = 0, size_type count = npos) noexcept {
+            if (index > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            erase(index, count);
+            return std::ref(*this);
         }
 
         constexpr iterator erase(const_iterator pos) {
@@ -964,6 +1083,7 @@ namespace std {
 
     public:
         // replace
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(size_type pos, size_type count,
                                         const basic_string &str) {
             if (pos > size()) {
@@ -973,6 +1093,16 @@ namespace std {
             return replace(pos, rcount, str.data(), str.size());
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, const basic_string &str) noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(pos, count, str);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last,
                                         const basic_string &str) {
@@ -986,6 +1116,17 @@ namespace std {
             return replace(first - begin(), last - first, str);
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            const_iterator first, const_iterator last,
+            const basic_string &str) noexcept {
+            if (first >= last || first < begin() || last > end()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(first, last, str);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(size_type pos, size_type count,
                                         const basic_string &str,
                                         size_type str_pos,
@@ -994,11 +1135,37 @@ namespace std {
                            _sv_type(str).substr(str_pos, str_count));
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, const basic_string &str,
+            size_type str_pos, size_type str_count = npos) noexcept {
+            if (pos > size() || str_pos > str.size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            size_type rcount = (str_count == npos ||
+                                str_pos + str_count > str.size())
+                                   ? str.size() - str_pos
+                                   : str_count;
+            return replace_nt(pos, count,
+                              basic_string(str.data() + str_pos, rcount));
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(size_type pos, size_type count,
                                         const_pointer s, size_type s_count) {
             return __replace(pos, count, s, s + s_count);
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, const_pointer s,
+            size_type s_count) noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(pos, count, s, s_count);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last, const_pointer s,
                                         size_type s_count) {
@@ -1012,16 +1179,34 @@ namespace std {
             return replace(first - begin(), last - first, s, s_count);
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            const_iterator first, const_iterator last, const_pointer s,
+            size_type s_count) noexcept {
+            if (first >= last || first < begin() || last > end()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(first, last, s, s_count);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(size_type pos, size_type count,
                                         const_pointer s) {
             return replace(pos, count, s, Traits::length(s));
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, const_pointer s) noexcept {
+            return replace_nt(pos, count, s, Traits::length(s));
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last, const_pointer s) {
             return replace(first, last, s, Traits::length(s));
         }
 
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(size_type pos, size_type count,
                                         size_type count2, CharT ch) {
             using cfunc_iter = __constant_function_iterator<value_type>;
@@ -1029,6 +1214,17 @@ namespace std {
             return __replace(pos, count, begin, end);
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, size_type count2,
+            CharT ch) noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(pos, count, count2, ch);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last, size_type count2,
                                         CharT ch) {
@@ -1042,7 +1238,18 @@ namespace std {
             return replace(first - begin(), last - first, count2, ch);
         }
 
+        constexpr result_nt<basic_string &> replace_nt(
+            const_iterator first, const_iterator last, size_type count2,
+            CharT ch) noexcept {
+            if (first >= last || first < begin() || last > end()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(first, last, count2, ch);
+            return std::ref(*this);
+        }
+
         template <class InputIt>
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last, InputIt first2,
                                         InputIt last2) {
@@ -1056,6 +1263,18 @@ namespace std {
             return __replace(first - begin(), last - first, first2, last2);
         }
 
+        template <class InputIt>
+        constexpr result_nt<basic_string &> replace_nt(
+            const_iterator first, const_iterator last, InputIt first2,
+            InputIt last2) noexcept {
+            if (first >= last || first < begin() || last > end()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            replace(first, last, first2, last2);
+            return std::ref(*this);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string &replace(const_iterator first,
                                         const_iterator last,
                                         std::initializer_list<CharT> ilist) {
@@ -1064,6 +1283,7 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         basic_string &replace(size_type pos, size_type count,
                               const StringViewLike &svl) {
             _sv_type sv = svl;
@@ -1072,6 +1292,15 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        result_nt<basic_string &> replace_nt(size_type pos, size_type count,
+                                             const StringViewLike &svl) noexcept {
+            _sv_type sv = svl;
+            return replace_nt(pos, count, sv.data(), sv.size());
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         basic_string &replace(const_iterator first, const_iterator last,
                               const StringViewLike &svl) {
             _sv_type sv = svl;
@@ -1080,19 +1309,54 @@ namespace std {
 
         template <class StringViewLike>
             requires __StringViewLike<StringViewLike>
+        result_nt<basic_string &> replace_nt(
+            const_iterator first, const_iterator last,
+            const StringViewLike &svl) noexcept {
+            _sv_type sv = svl;
+            return replace_nt(first, last, sv.data(), sv.size());
+        }
+
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        EXCEPTION_DEPRECATED
         basic_string &replace(size_type pos, size_type count,
                               const StringViewLike &svl, size_type pos2,
                               size_type count2 = npos) {
             return replace(pos, count, _sv_type(svl).substr(pos2, count2));
         }
 
+        template <class StringViewLike>
+            requires __StringViewLike<StringViewLike>
+        result_nt<basic_string &> replace_nt(
+            size_type pos, size_type count, const StringViewLike &svl,
+            size_type pos2, size_type count2 = npos) noexcept {
+            _sv_type sv = svl;
+            auto sub    = sv.substr_nt(pos2, count2);
+            if (!sub) {
+                return {unexpect, sub.error()};
+            }
+            return replace_nt(pos, count, sub.value().data(),
+                              sub.value().size());
+        }
+
         // replace_with_range
         // to be implemented...
 
         // copy & resize
+        EXCEPTION_DEPRECATED
         size_type copy(pointer dest, size_type count, size_type pos = 0) const {
             if (pos > size()) {
                 _THROW(out_of_range("basic_string::copy: pos out of range"));
+            }
+            size_type rcount = std::min(count, size() - pos);
+            Traits::copy(dest, data() + pos, rcount);
+            return rcount;
+        }
+
+        result_nt<size_type> copy_nt(pointer dest, size_type count,
+                                     size_type pos = 0) const noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
             }
             size_type rcount = std::min(count, size() - pos);
             Traits::copy(dest, data() + pos, rcount);
@@ -1355,13 +1619,37 @@ namespace std {
         }
 
         // substr
+        EXCEPTION_DEPRECATED
         constexpr basic_string substr(size_type pos   = 0,
                                       size_type count = npos) const & {
+            if (pos > size()) {
+                _THROW(out_of_range("basic_string::substr: pos out of range"));
+            }
             return basic_string(*this, pos, count);
         }
 
+        constexpr result_nt<basic_string> substr_nt(
+            size_type pos = 0, size_type count = npos) const & noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            return basic_string(*this, pos, count);
+        }
+
+        EXCEPTION_DEPRECATED
         constexpr basic_string substr(size_type pos   = 0,
                                       size_type count = npos) && {
+            if (pos > size()) {
+                _THROW(out_of_range("basic_string::substr: pos out of range"));
+            }
+            return basic_string(std::move(*this), pos, count);
+        }
+
+        constexpr result_nt<basic_string> substr_nt(
+            size_type pos = 0, size_type count = npos) && noexcept {
+            if (pos > size()) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
             return basic_string(std::move(*this), pos, count);
         }
     };

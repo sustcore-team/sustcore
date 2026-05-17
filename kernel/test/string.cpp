@@ -349,6 +349,60 @@ namespace test::string {
         }
     };
 
+    class CaseNoThrowInterfaces : public TestCase {
+    public:
+        CaseNoThrowInterfaces() : TestCase("String 无异常接口测试") {}
+        void _run(void* env [[maybe_unused]]) const noexcept override {
+            std::string s = "abcdef";
+
+            auto at_ok = s.at_nt(2);
+            ttest(at_ok.has_value());
+            ttest(at_ok.value().get() == 'c');
+            at_ok.value().get() = 'C';
+            ttest(s == "abCdef");
+
+            auto at_fail = s.at_nt(99);
+            ttest(!at_fail);
+            ttest(at_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            char buf[4] = {};
+            auto copied = s.copy_nt(buf, 3, 2);
+            ttest(copied.has_value());
+            ttest(copied.value() == 3);
+            ttest(std::string(buf, 3) == "Cde");
+
+            auto copy_fail = s.copy_nt(buf, 1, 99);
+            ttest(!copy_fail);
+            ttest(copy_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            auto sub = s.substr_nt(2, 3);
+            ttest(sub.has_value());
+            ttest(sub.value() == "Cde");
+            auto sub_fail = s.substr_nt(7);
+            ttest(!sub_fail);
+            ttest(sub_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            std::string edit = "hello";
+            ttest(edit.insert_nt(5, "!").has_value());
+            ttest(edit == "hello!");
+            auto insert_fail = edit.insert_nt(99, "?");
+            ttest(!insert_fail);
+            ttest(edit == "hello!");
+
+            ttest(edit.erase_nt(5, 1).has_value());
+            ttest(edit == "hello");
+            auto erase_fail = edit.erase_nt(99, 1);
+            ttest(!erase_fail);
+            ttest(edit == "hello");
+
+            ttest(edit.replace_nt(1, 3, "ipp").has_value());
+            ttest(edit == "hippo");
+            auto replace_fail = edit.replace_nt(99, 1, "x");
+            ttest(!replace_fail);
+            ttest(edit == "hippo");
+        }
+    };
+
     class CaseAliasing : public TestCase {
     public:
         CaseAliasing() : TestCase("String 别名冲突测试 (Self-referencing)") {}
@@ -380,6 +434,7 @@ namespace test::string {
         cases.push_back(new CaseInsertErase());
         cases.push_back(new CaseSearch());
         cases.push_back(new CaseSubstr());
+        cases.push_back(new CaseNoThrowInterfaces());
         cases.push_back(new CaseAliasing());
 
         framework.add_category(new TestCategory("string", std::move(cases)));

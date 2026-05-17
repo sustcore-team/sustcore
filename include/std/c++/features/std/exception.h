@@ -17,4 +17,5 @@
 #define _THROW(exception) throw exception
 #define _TRY              try
 #define _CATCH(exception) catch (exception)
+#define EXCEPTION_DEPRECATED
 // NOLINTEND(cppcoreguidelines-macro-usage)

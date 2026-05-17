@@ -12,6 +12,7 @@
 #pragma once
 
 #include <nt/errors.h>
+
 #include <algorithm>
 #include <cassert>
 #include <compare>
@@ -125,7 +126,7 @@ namespace std {
         constexpr CharT operator[](size_t pos) const noexcept {
             return M_data[pos];
         }
-        [[nodiscard]]
+        EXCEPTION_DEPRECATED [[nodiscard]]
         constexpr CharT at(size_t pos) const {
             if (pos >= M_size) {
                 _THROW(out_of_range("basic_string_view::at: pos out of range"));
@@ -174,6 +175,7 @@ namespace std {
         }
 
         // modifiers
+        EXCEPTION_DEPRECATED
         constexpr void remove_prefix(size_t n) {
             if (n > M_size) {
                 _THROW(out_of_range(
@@ -192,6 +194,7 @@ namespace std {
             }
             return {};
         }
+        EXCEPTION_DEPRECATED
         constexpr void remove_suffix(size_t n) {
             if (n > M_size) {
                 _THROW(out_of_range(
@@ -200,7 +203,7 @@ namespace std {
                 M_size -= n;
             }
         }
-        constexpr result_nt<void> remove_suffix_nt(size_t n) {
+        constexpr result_nt<void> remove_suffix_nt(size_t n) noexcept {
             if (n > M_size) {
                 return {unexpect, error_type::OUT_OF_RANGE};
             } else {
@@ -214,6 +217,7 @@ namespace std {
         }
 
         // operations
+        EXCEPTION_DEPRECATED
         size_type copy(CharT *dest, size_t count, size_t pos = 0) const {
             if (pos > M_size) {
                 _THROW(
@@ -224,12 +228,33 @@ namespace std {
             traits_type::copy(dest, M_data + pos, rcount);
             return rcount;
         }
+        constexpr result_nt<size_type> copy_nt(CharT *dest, size_t count,
+                                               size_t pos = 0) const noexcept {
+            if (pos > M_size) {
+                return {unexpect, error_type::OUT_OF_RANGE};
+            }
+            size_t rcount =
+                (count == npos || pos + count > M_size) ? M_size - pos : count;
+            traits_type::copy(dest, M_data + pos, rcount);
+            return rcount;
+        }
         [[nodiscard]]
+        EXCEPTION_DEPRECATED
         constexpr basic_string_view substr(size_t pos,
                                            size_t count = npos) const {
             if (pos > M_size) {
                 _THROW(out_of_range(
                     "basic_string_view::substr: pos out of range"));
+            }
+            size_t rcount =
+                (count == npos || pos + count > M_size) ? M_size - pos : count;
+            return basic_string_view(M_data + pos, rcount);
+        }
+        [[nodiscard]]
+        constexpr result_nt<basic_string_view> substr_nt(
+            size_t pos, size_t count = npos) const noexcept {
+            if (pos > M_size) {
+                return {unexpect, error_type::OUT_OF_RANGE};
             }
             size_t rcount =
                 (count == npos || pos + count > M_size) ? M_size - pos : count;

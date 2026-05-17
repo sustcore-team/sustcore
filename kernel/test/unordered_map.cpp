@@ -317,6 +317,77 @@ namespace test::unordered_map {
         }
     };
 
+    class CaseStandardInterfaceSubset : public TestCase {
+    public:
+        CaseStandardInterfaceSubset()
+            : TestCase("UnorderedMap 常用标准接口测试") {}
+
+        void _run(void* env [[maybe_unused]]) const noexcept override {
+            std::unordered_map<int, int> map{{1, 10}, {2, 20}};
+
+            ttest(map.size() == 2);
+            ttest(map.count(1) == 1);
+            ttest(map.count(99) == 0);
+
+            auto at_ok = map.at_nt(1);
+            ttest(at_ok.has_value());
+            ttest(at_ok.value().get() == 10);
+            at_ok.value().get() = 11;
+            ttest(map.find(1)->second == 11);
+
+            auto at_fail = map.at_nt(99);
+            ttest(!at_fail);
+            ttest(at_fail.error() == std::error_type::OUT_OF_RANGE);
+
+            auto emplaced = map.emplace(3, 30);
+            ttest(emplaced.second);
+            ttest(map.find(3)->second == 30);
+
+            auto duplicate = map.try_emplace(3, 300);
+            ttest(!duplicate.second);
+            ttest(map.find(3)->second == 30);
+
+            auto assigned = map.insert_or_assign(3, 333);
+            ttest(!assigned.second);
+            ttest(map.find(3)->second == 333);
+
+            auto range = map.equal_range(2);
+            ttest(range.first != map.end());
+            ttest(range.first->first == 2);
+            ttest(range.second != range.first);
+
+            size_t old_bucket_count = map.bucket_count();
+            ttest(old_bucket_count >= 1);
+            ttest(map.bucket_size(map.bucket(1)) >= 1);
+            ttest(map.load_factor() > 0.0f);
+
+            map.max_load_factor(0.5f);
+            ttest(map.max_load_factor() == 0.5f);
+            map.reserve(32);
+            ttest(map.bucket_count() >= old_bucket_count);
+
+            std::unordered_map<int, int> copy = map;
+            ttest(copy.size() == map.size());
+            ttest(copy.find(3)->second == 333);
+
+            std::unordered_map<int, int> assigned_map;
+            assigned_map = {{7, 70}, {8, 80}};
+            ttest(assigned_map.size() == 2);
+            ttest(assigned_map.find(8)->second == 80);
+
+            assigned_map.swap(copy);
+            ttest(assigned_map.find(3) != assigned_map.end());
+            ttest(copy.find(7) != copy.end());
+
+            auto erase_begin = assigned_map.begin();
+            assigned_map.erase(erase_begin);
+            ttest(assigned_map.size() == map.size() - 1);
+
+            assigned_map.erase(assigned_map.begin(), assigned_map.end());
+            ttest(assigned_map.empty());
+        }
+    };
+
     void collect_tests(TestFramework& framework) {
         auto cases = util::ArrayList<TestCase*>();
         cases.push_back(new CaseDefaultConstruct());
@@ -328,6 +399,7 @@ namespace test::unordered_map {
         cases.push_back(new CaseCollisionHandling());
         cases.push_back(new CaseBulkCrud());
         cases.push_back(new CaseMoveConstruct());
+        cases.push_back(new CaseStandardInterfaceSubset());
 
         framework.add_category(new TestCategory("unordered_map",
                                                 std::move(cases)));
