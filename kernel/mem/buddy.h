@@ -13,99 +13,88 @@
 
 #include <arch/trait.h>
 #include <logger.h>
-#include <sustcore/addr.h>
 #include <mem/gfp_def.h>
+#include <sustcore/addr.h>
+
 #include <cstddef>
-#include <sus/list.h>
-#include <sus/types.h>
-#include <cstdio>
 
 class BuddyAllocator {
 public:
     struct FreeBlock {
-        util::ListHead<FreeBlock> list_head;
-
-        FreeBlock() : list_head({}) {}
+        PhyAddr paddr;
+        size_t order;
+        FreeBlock *prev;
+        FreeBlock *next;
     };
 
-    struct FreeBlockCmp {
-        bool operator()(const FreeBlock &a, const FreeBlock &b) const {
-            return &a < &b;
-        }
-    };
-
-    static constexpr int MAX_BUDDY_ORDER = 15;
+    static constexpr int MAX_BUDDY_ORDER           = 15;
+    static constexpr size_t FREEBLOCK_POOL_SIZE    = 512;
+    static constexpr size_t FREEBLOCK_EXPAND_PAGES = 4;
 
     static void pre_init();
-
     static void post_init();
 
-    /**
-     * @brief 分配多个页
-     *
-     * @param frame_count
-     * @return PhyAddr
-     */
     template <KernelStage Stage = KernelStage::POST_INIT>
     static Result<PhyAddr> get_free_page(size_t frame_count);
 
-    /**
-     * @brief 按order阶数分配
-     *
-     * @param order
-     * @return void*
-     */
     template <KernelStage Stage = KernelStage::POST_INIT>
     static Result<PhyAddr> get_free_pages_in_order(size_t order);
 
-    /**
-     * @brief 释放多个页
-     *
-     * @param paddr
-     * @param frame_count
-     */
     template <KernelStage Stage = KernelStage::POST_INIT>
     static void put_page(PhyAddr paddr, size_t frame_count);
 
-    /**
-     * @brief 按order阶数释放页
-     *
-     * @param paddr
-     * @param order
-     */
     template <KernelStage Stage = KernelStage::POST_INIT>
     static void put_page_in_order(PhyAddr paddr, int order);
 
     template <KernelStage Stage = KernelStage::POST_INIT>
     static void __print_memory_layout() {
-        loggers::BUDDY::DEBUG("Buddy Allocator Memory Layout (Stage: %d):\n", static_cast<int>(Stage));
-        for (int i = 0; i <= MAX_BUDDY_ORDER; i++) {
-            BlockList &list = free_area[i];
-            loggers::BUDDY::DEBUG("Order %d: %d blocks:", i, list.size());
-            for (auto iter = list.begin(); iter != list.end(); ++iter) {
-                PhyAddr paddr = block2pa<Stage>(&*iter);
-                loggers::BUDDY::DEBUG("    Free block at [%p, %p)\n", i, paddr.addr(),
-                             (paddr + (1ul << (i + 12))).addr());
+        loggers::BUDDY::DEBUG("Buddy Allocator Memory Layout (Stage: %d):",
+                              static_cast<int>(Stage));
+        for (int order = 0; order <= MAX_BUDDY_ORDER; ++order) {
+            size_t count = 0;
+            for (FreeBlock *node = free_area[order]; node != nullptr;
+                 node             = node->next)
+            {
+                ++count;
+            }
+
+            loggers::BUDDY::DEBUG("Order %d: %u blocks", order,
+                                  static_cast<unsigned>(count));
+            for (FreeBlock *node = free_area[order]; node != nullptr;
+                 node             = node->next)
+            {
+                loggers::BUDDY::DEBUG("    Free block at [%p, %p)",
+                                      node->paddr.addr(),
+                                      (node->paddr +
+                                       (1ul << (order + 12))).addr());
             }
         }
     }
+
 private:
-    using BlockList = util::OrderedIntrusiveList<FreeBlock, &FreeBlock::list_head, FreeBlockCmp>;
-    static BlockList free_area[MAX_BUDDY_ORDER + 1];
-    /**
-     * @brief 按页数添加一段物理内存范围到Buddy分配器
-     *
-     * @param paddr
-     * @param pages
-     */
+    struct FreeBlockPool {
+        size_t bitmap[8];
+        size_t used;
+        FreeBlockPool *next;
+        FreeBlockPool *prev;
+    };
+
+    static_assert(sizeof(FreeBlockPool) <= sizeof(FreeBlock) * 4,
+                  "FreeBlockPool 头必须位于池头四个块内");
+
+    inline static FreeBlock _buddy_pool0[FREEBLOCK_POOL_SIZE];
+    inline static FreeBlockPool *_pool_head = nullptr;
+    inline static FreeBlockPool *_pool_tail = nullptr;
+    inline static FreeBlock *free_area[MAX_BUDDY_ORDER + 1] = {};
+    inline static bool _post_initialized                    = false;
+
+    static constexpr size_t FREEBLOCK_HEADER_BLOCKS = 4;
+    static constexpr size_t FREEBLOCK_HEADER_BYTES  =
+        sizeof(FreeBlock) * FREEBLOCK_HEADER_BLOCKS;
+
     template <KernelStage Stage>
-    static void add_memory_range(const PhyAddr paddr, const size_t pages);
-    /**
-     * @brief 页数转换为order阶数
-     *
-     * @param count
-     * @return int
-     */
+    static void add_memory_range(PhyAddr paddr, size_t pages);
+
     static constexpr int pages2order(size_t count) {
         switch (count) {
             case 1:  return 0;
@@ -114,116 +103,87 @@ private:
             case 4:  return 2;
             default: {
                 size_t order = 3;
-                while (order <= BuddyAllocator::MAX_BUDDY_ORDER) {
+                while (order <= MAX_BUDDY_ORDER) {
                     if ((1ul << order) >= count) {
                         break;
                     }
-                    order++;
+                    ++order;
                 }
-                return order;
+                return static_cast<int>(order);
             }
         }
     }
 
-    /**
-     * @brief 物理地址转换为FreeBlock指针
-     *
-     * @param paddr
-     * @return FreeBlock*
-     */
-    template <KernelStage Stage>
-    static FreeBlock *pa2block(const PhyAddr paddr) {
-        using StageAddr = _StageAddr<Stage>;
-        return convert<StageAddr>(paddr).template as<FreeBlock>();
+    static constexpr size_t block_size_for_order(size_t order) {
+        return 1ul << (order + 12);
     }
 
-    /**
-     * @brief FreeBlock指针转换为物理地址
-     *
-     * @param block
-     * @return void*
-     */
-    template <KernelStage Stage>
-    static PhyAddr block2pa(FreeBlock *block) {
-        using StageAddr      = _StageAddr<Stage>;
-        StageAddr block_addr = (StageAddr)block;
-        return convert<PhyAddr>(block_addr);
+    static constexpr size_t block_index(size_t used) {
+        return used - FREEBLOCK_HEADER_BLOCKS;
     }
 
-    /**
-     * @brief 按order阶数分配内存块
-     *
-     * @param order
-     * @return void*
-     */
-    template <KernelStage Stage>
-    static Result<PhyAddr> fetch_frame_order(size_t order) {
-        // 寻找第一个非空链表
-        size_t current_order = order;
-        while (current_order <= BuddyAllocator::MAX_BUDDY_ORDER) {
-            BlockList &list = free_area[current_order];
-            if (!list.empty()) {
-                break;
-            }
-            current_order++;
-        }
-
-        if (current_order > BuddyAllocator::MAX_BUDDY_ORDER) {
-            // 无可用内存块
-            loggers::BUDDY::ERROR("无可用内存块");
-            unexpect_return(ErrCode::OUT_OF_MEMORY);
-        }
-
-        // 从链表头部取出一个内存块
-        BlockList &list = free_area[current_order];
-        FreeBlock &node = list.front();
-        PhyAddr paddr   = block2pa<Stage>(&node);
-        list.pop_front();
-
-        // 如果分配的块大于请求的块, 则将剩余部分重新放回链表
-        while (current_order > order) {
-            current_order--;
-
-            umb_t block_size    = 1ul << (current_order + 12);
-            PhyAddr buddy_paddr = paddr + block_size;
-
-            loggers::BUDDY::DEBUG("将 [%p, %p) 分割为 [%p, %p) 和 [%p, %p)",
-                         paddr.addr(), (paddr + (block_size << 1)).addr(),
-                         paddr.addr(), (paddr + block_size).addr(),
-                         buddy_paddr.addr(), (buddy_paddr + block_size).addr());
-
-            put_page<Stage>(buddy_paddr, 1ul << current_order);
-
-            // paddr 保持指向左半部分, 继续下一轮分裂或结束
-        }
-        return paddr;
+    static constexpr size_t bit_index(size_t idx) {
+        return idx / (sizeof(size_t) * 8);
     }
 
-    friend class BuddyListener;
+    static constexpr size_t bit_mask(size_t idx) {
+        return 1ul << (idx % (sizeof(size_t) * 8));
+    }
+
+    static PhyArea pool0_area() noexcept;
+    static FreeBlockPool *pool0_head() noexcept;
+    template <KernelStage Stage>
+    static FreeBlockPool *runtime_pool(PhyAddr paddr) noexcept;
+
+    template <KernelStage Stage>
+    static FreeBlock *runtime_block(PhyAddr paddr) noexcept;
+
+    static void init_pool0() noexcept;
+    template <KernelStage Stage>
+    static void init_pool(FreeBlockPool *pool, PhyAddr pool_paddr) noexcept;
+    static PhyAddr pool_to_pa(const FreeBlockPool *pool) noexcept;
+    static FreeBlock *pool_to_blocks(const FreeBlockPool *pool) noexcept;
+    static void attach_pool(FreeBlockPool *pool) noexcept;
+    static bool pool_needs_expand(const FreeBlockPool *pool) noexcept;
+    template <KernelStage Stage>
+    static Result<void> maybe_expand_pool() noexcept;
+    template <KernelStage Stage>
+    static Result<void> add_new_pool() noexcept;
+
+    template <KernelStage Stage>
+    static Result<FreeBlock *> alloc_freeblock() noexcept;
+    static void free_freeblock(FreeBlock *block) noexcept;
+
+    static void link_block(FreeBlock *node) noexcept;
+    static void unlink_block(FreeBlock *node) noexcept;
+    static FreeBlock *find_buddy_node(FreeBlock *node) noexcept;
+
+    template <KernelStage Stage>
+    static Result<PhyAddr> fetch_frame_order(size_t order);
 };
 
 template <KernelStage Stage>
-void BuddyAllocator::add_memory_range(const PhyAddr paddr, const size_t pages) {
+void BuddyAllocator::add_memory_range(PhyAddr paddr, size_t pages) {
     size_t remain = pages;
     PhyAddr addr  = paddr;
 
     while (remain > 0) {
         size_t order = 0;
-        while (order < BuddyAllocator::MAX_BUDDY_ORDER) {
+        while (order < MAX_BUDDY_ORDER) {
             size_t try_pages = 1UL << (order + 1);
             size_t try_size  = try_pages << 12;
-
             if (try_pages <= remain && addr.aligned(try_size)) {
-                order++;
+                ++order;
             } else {
                 break;
             }
         }
-        put_page_in_order<Stage>(addr, order);
 
-        size_t block_pages  = 1UL << order;
-        addr               += block_pages << 12;
-        remain             -= block_pages;
+        put_page_in_order<Stage>(addr, static_cast<int>(order));
+
+        size_t block_pages = 1ul << order;
+        addr              += block_pages << 12;
+        remain            -= block_pages;
     }
 }
 
@@ -233,36 +193,40 @@ Result<PhyAddr> BuddyAllocator::get_free_page(size_t frame_count) {
         unexpect_return(ErrCode::INVALID_PARAM);
     }
     if (frame_count > (1ul << MAX_BUDDY_ORDER)) {
-        loggers::BUDDY::ERROR("请求的页数 %u 超出最大支持的范围", frame_count);
+        loggers::BUDDY::ERROR("请求的页数 %u 超出最大支持的范围",
+                              static_cast<unsigned>(frame_count));
         unexpect_return(ErrCode::INVALID_PARAM);
     }
 
-    const size_t order  = pages2order(frame_count);
-    auto fetch_res = fetch_frame_order<Stage>(order);
-    if (! fetch_res.has_value()) {
+    auto fetch_res = fetch_frame_order<Stage>(pages2order(frame_count));
+    if (!fetch_res.has_value()) {
         unexpect_return(fetch_res.error());
     }
-    const PhyAddr paddr = fetch_res.value();
 
-    // 归还多余部分
-    const size_t allocated_pages = 1ul << order;
-    if (allocated_pages > frame_count) {
-        const PhyAddr remain_addr = paddr + frame_count * PAGESIZE;
-        const size_t remain_pages = allocated_pages - frame_count;
-
-        add_memory_range<Stage>(remain_addr, remain_pages);
+    PhyAddr paddr = fetch_res.value();
+    size_t order  = static_cast<size_t>(pages2order(frame_count));
+    size_t pages   = 1ul << order;
+    if (pages > frame_count) {
+        add_memory_range<Stage>(paddr + frame_count * PAGESIZE,
+                                pages - frame_count);
     }
 
-    loggers::BUDDY::DEBUG("分配了 %u 页物理内存: [%p, %p)", frame_count, paddr.addr(),
-                 (paddr + frame_count * PAGESIZE).addr());
+    loggers::BUDDY::DEBUG("分配了 %u 页物理内存: [%p, %p)",
+                          static_cast<unsigned>(frame_count), paddr.addr(),
+                          (paddr + frame_count * PAGESIZE).addr());
 
+    auto expand_res = maybe_expand_pool<Stage>();
+    if (!expand_res.has_value()) {
+        unexpect_return(expand_res.error());
+    }
     return paddr;
 }
 
 template <KernelStage Stage>
 Result<PhyAddr> BuddyAllocator::get_free_pages_in_order(size_t order) {
-    if (order > BuddyAllocator::MAX_BUDDY_ORDER) {
-        loggers::BUDDY::ERROR("无可用内存块: order %d 超出范围", order);
+    if (order > MAX_BUDDY_ORDER) {
+        loggers::BUDDY::ERROR("无可用内存块: order %u 超出范围",
+                              static_cast<unsigned>(order));
         unexpect_return(ErrCode::INVALID_PARAM);
     }
     return fetch_frame_order<Stage>(order);
@@ -270,90 +234,97 @@ Result<PhyAddr> BuddyAllocator::get_free_pages_in_order(size_t order) {
 
 template <KernelStage Stage>
 void BuddyAllocator::put_page(PhyAddr paddr, size_t frame_count) {
-    if (!paddr.nonnull() || frame_count == 0)
+    if (!paddr.nonnull() || frame_count == 0) {
         return;
+    }
 
     assert(paddr.aligned<PAGESIZE>());
-
     add_memory_range<Stage>(paddr, frame_count);
 }
 
 template <KernelStage Stage>
-void BuddyAllocator::put_page_in_order(const PhyAddr paddr, int order) {
-    if (!paddr.nonnull())
+void BuddyAllocator::put_page_in_order(PhyAddr paddr, int order) {
+    if (!paddr.nonnull()) {
         return;
-
-    assert (order >= 0);
-    assert (order <= MAX_BUDDY_ORDER);
-    umb_t block_size = 1UL << (order + 12);
-    assert (paddr.aligned(block_size));
-
-    PhyAddr cur_paddr = paddr;
-
-    while (order <= BuddyAllocator::MAX_BUDDY_ORDER) {
-        // 在指定的内存地址 address 上构造一个 Type 类型的对象
-        FreeBlock *block_kva = pa2block<Stage>(cur_paddr);
-        FreeBlock *node = new (block_kva) FreeBlock();
-
-        // 插入到有序链表中
-        BlockList &list = free_area[order];
-
-        // 插入到有序链表中
-        auto inserted_it = list.insert(*node);
-        if (order == BuddyAllocator::MAX_BUDDY_ORDER) {
-            break;
-        }
-
-        // 否则, 尝试合并
-        // 判断当前块是左半边还是右半边
-        umb_t block_size = 1UL << (order + 12);
-        bool is_left = !((cur_paddr.arith() >> (order + 12)) & 1);
-
-        FreeBlock *buddy = nullptr;
-
-        // 左侧
-        if (is_left) {
-            auto next = inserted_it;
-            ++next;
-            // 检查是否存在且物理地址连续
-            if (next != list.end()) {
-                PhyAddr next_pa = block2pa<Stage>(&*next);
-                if (next_pa == cur_paddr + block_size) {
-                    buddy = &*next;
-                }
-            }
-        } else {
-            // 检查是否存在且物理地址连续
-            if (inserted_it != list.begin()) {
-                auto prev = inserted_it;
-                --prev;
-                assert(prev != list.end());
-                PhyAddr prev_pa = block2pa<Stage>(&*prev);
-                if (prev_pa == cur_paddr - block_size) {
-                    buddy = &*prev;
-                }
-            }
-        }
-
-        if (buddy) {
-            PhyAddr buddy_paddr  = block2pa<Stage>(buddy);
-            PhyAddr merged_paddr = is_left ? cur_paddr : cur_paddr - block_size;
-            loggers::BUDDY::DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
-                         cur_paddr.addr(), (cur_paddr + block_size).addr(),
-                         buddy_paddr.addr(), (buddy_paddr + block_size).addr(),
-                         merged_paddr.addr(),
-                         (merged_paddr + block_size * 2).addr());
-
-            // 从链表中移除node和buddy
-            list.remove(*node);
-            list.remove(*buddy);
-
-            cur_paddr = merged_paddr;
-            order++;
-        } else {
-            break;
-        }
     }
+
+    assert(order >= 0);
+    assert(order <= MAX_BUDDY_ORDER);
+    assert(paddr.aligned(block_size_for_order(static_cast<size_t>(order))));
+
+    PhyAddr current_paddr = paddr;
+    int current_order     = order;
+
+    while (current_order <= MAX_BUDDY_ORDER) {
+        auto node_res = alloc_freeblock<Stage>();
+        assert(node_res.has_value());
+        FreeBlock *node = node_res.value();
+        node->paddr     = current_paddr;
+        node->order     = static_cast<size_t>(current_order);
+        node->prev      = nullptr;
+        node->next      = nullptr;
+        link_block(node);
+
+        if (current_order == MAX_BUDDY_ORDER) {
+            break;
+        }
+
+        FreeBlock *buddy = find_buddy_node(node);
+        if (buddy == nullptr) {
+            break;
+        }
+
+        size_t size         = block_size_for_order(static_cast<size_t>(current_order));
+        PhyAddr buddy_paddr = buddy->paddr;
+        PhyAddr merged_paddr = buddy_paddr < current_paddr ? buddy_paddr : current_paddr;
+
+        loggers::BUDDY::DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
+                              current_paddr.addr(), (current_paddr + size).addr(),
+                              buddy_paddr.addr(), (buddy_paddr + size).addr(),
+                              merged_paddr.addr(),
+                              (merged_paddr + size * 2).addr());
+
+        unlink_block(node);
+        unlink_block(buddy);
+        free_freeblock(node);
+        free_freeblock(buddy);
+
+        current_paddr = merged_paddr;
+        ++current_order;
+    }
+}
+
+template <KernelStage Stage>
+Result<PhyAddr> BuddyAllocator::fetch_frame_order(size_t order) {
+    size_t current_order = order;
+    while (current_order <= MAX_BUDDY_ORDER) {
+        if (free_area[current_order] != nullptr) {
+            break;
+        }
+        ++current_order;
+    }
+
+    if (current_order > MAX_BUDDY_ORDER) {
+        loggers::BUDDY::ERROR("无可用内存块");
+        unexpect_return(ErrCode::OUT_OF_MEMORY);
+    }
+
+    FreeBlock *node = free_area[current_order];
+    unlink_block(node);
+    PhyAddr paddr = node->paddr;
+    free_freeblock(node);
+
+    while (current_order > order) {
+        --current_order;
+        size_t size        = block_size_for_order(current_order);
+        PhyAddr buddy_paddr = paddr + size;
+        loggers::BUDDY::DEBUG("将 [%p, %p) 分割为 [%p, %p) 和 [%p, %p)",
+                              paddr.addr(), (paddr + (size << 1)).addr(),
+                              paddr.addr(), (paddr + size).addr(),
+                              buddy_paddr.addr(), (buddy_paddr + size).addr());
+        put_page_in_order<Stage>(buddy_paddr, static_cast<int>(current_order));
+    }
+    return paddr;
 }
 
 static_assert(RawGFP<BuddyAllocator>, "Buddy 不满足 RawGFP");

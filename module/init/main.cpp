@@ -203,23 +203,23 @@ int kmod_main() {
         kmod_fclose(fd);
     }
 
-    fd = kmod_fopen("/initrd/test_thread.mod", "x");
-    if (fd >= 0) {
-        if (spawn_with_root_dir(fd, SCHED_CLASS_RR, root_dir_cap) == cap::error)
-        {
-            printf("init: create test_thread failed\n");
-        }
-        kmod_fclose(fd);
-    }
+    // fd = kmod_fopen("/initrd/test_thread.mod", "x");
+    // if (fd >= 0) {
+    //     if (spawn_with_root_dir(fd, SCHED_CLASS_RR, root_dir_cap) == cap::error)
+    //     {
+    //         printf("init: create test_thread failed\n");
+    //     }
+    //     kmod_fclose(fd);
+    // }
 
-    fd = kmod_fopen("/initrd/test_endpoint_master.mod", "x");
-    if (fd >= 0) {
-        if (spawn_with_root_dir(fd, SCHED_CLASS_RR, root_dir_cap) == cap::error)
-        {
-            printf("init: create test_endpoint_master failed\n");
-        }
-        kmod_fclose(fd);
-    }
+    // fd = kmod_fopen("/initrd/test_endpoint_master.mod", "x");
+    // if (fd >= 0) {
+    //     if (spawn_with_root_dir(fd, SCHED_CLASS_RR, root_dir_cap) == cap::error)
+    //     {
+    //         printf("init: create test_endpoint_master failed\n");
+    //     }
+    //     kmod_fclose(fd);
+    // }
 
     fd = kmod_fopen("/initrd/test_call_service.mod", "x");
     if (fd >= 0) {
