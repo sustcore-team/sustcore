@@ -24,25 +24,10 @@ concept RawGFP = requires(PhyAddr ptr, size_t page_count) {
         T::pre_init()
     } -> std::same_as<void>;
     {
-        T::post_init()
-    } -> std::same_as<void>;
-    {
         T::get_free_page(page_count)
     } -> std::same_as<Result<PhyAddr>>;
     {
-        T::template get_free_page<KernelStage::PRE_INIT>(page_count)
-    } -> std::same_as<Result<PhyAddr>>;
-    {
-        T::template get_free_page<KernelStage::POST_INIT>(page_count)
-    } -> std::same_as<Result<PhyAddr>>;
-    {
         T::put_page(ptr, page_count)
-    } -> std::same_as<void>;
-    {
-        T::template put_page<KernelStage::PRE_INIT>(ptr, page_count)
-    } -> std::same_as<void>;
-    {
-        T::template put_page<KernelStage::POST_INIT>(ptr, page_count)
     } -> std::same_as<void>;
 };
 
@@ -57,8 +42,6 @@ class LinearGrowGFP {
 
 public:
     static void pre_init();
-    static void post_init();
-    template <KernelStage Stage = KernelStage::POST_INIT>
     static Result<PhyAddr> get_free_page(size_t page_count = 1) {
         PhyAddr _bound = curaddr + page_count * PAGESIZE;
         if (_bound > boundary) {
@@ -68,7 +51,6 @@ public:
         curaddr     = _bound;
         return ptr;
     }
-    template <KernelStage Stage = KernelStage::POST_INIT>
     static void put_page(PhyAddr addr, size_t page_count = 1) {
         // 线性增长GFP不支持释放页框, 因此该函数不执行任何操作
     }

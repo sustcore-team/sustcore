@@ -13,16 +13,26 @@
 #include <logger.h>
 #include <sustcore/addr.h>
 
-template<>
-void Riscv64SV39PageMan<KernelStage::PRE_INIT>::init(void) {
-    // SV39页表管理器不需要特殊的前初始化步骤
-    // 但我们可以在这里设置一些全局状态或日志
-    loggers::PAGING::INFO("SV39页表管理器前初始化完成");
+void Riscv64SV39PageMan::init(void) {
+    loggers::PAGING::INFO("SV39页表管理器初始化完成");
 }
 
-template<>
-void Riscv64SV39PageMan<KernelStage::POST_INIT>::init(void) {
-    // SV39页表管理器不需要特殊的后初始化步骤
-    // 但我们可以在这里设置一些全局状态或日志
-    loggers::PAGING::INFO("SV39页表管理器后初始化完成");
+KpaAddr Riscv64SV39PageMan::_convert(PhyAddr paddr) {
+    return convert<KpaAddr>(paddr);
+}
+
+void Riscv64SV39PageMan::make_root(PhyAddr root) {
+    memset(_convert(root).addr(), 0, PAGESIZE);
+}
+
+void Riscv64SV39PageMan::__switch_root(PhyAddr __root) {
+    csr_satp_t new_satp;
+    new_satp.mode = SATPMode::SV39;
+    new_satp.asid = 0;  // TODO: ASID支持
+    new_satp.ppn  = Riscv64SV39PageMan::to_ppn(__root);
+    csr_set_satp(new_satp);
+}
+
+void Riscv64SV39PageMan::flush_tlb() {
+    asm volatile("sfence.vma");
 }

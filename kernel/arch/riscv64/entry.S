@@ -16,7 +16,6 @@
 .extern __hart_context
 
 .extern c_setup
-.extern post_init
 
 .section .text.entry, "ax"
 .globl _start
@@ -45,7 +44,8 @@ _start:
 redive:
     # 设置栈指针
     la sp, boot_stack_top
-    j post_init
+    wfi
+    j redive
 
 .section .bss.stack
 .align 12

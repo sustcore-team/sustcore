@@ -36,19 +36,16 @@ namespace ker_paddr {
     extern Segment data;
     extern Segment bss;
     extern Segment misc;
-    extern Segment kphy_space;
 
     void init();
 
-    template <KernelStage Stage>
-    void map_seg(_PageMan<Stage> &man, const Segment &seg, PageMan::RWX rwx,
+    inline void map_seg(PageMan &man, const Segment &seg, PageMan::RWX rwx,
                  bool u, bool g) {
-        man.template map_range<true>(seg.vstart, seg.pstart, seg.size(), rwx, u,
+        man.map_range<true>(seg.vstart, seg.pstart, seg.size(), rwx, u,
                                      g);
     }
 
-    template <KernelStage Stage>
-    void mapping_kernel_areas(_PageMan<Stage> &man) {
+    inline void mapping_kernel_areas(PageMan &man) {
         // TODO: 专门维持一个内核页表, 其它页表可以直接复用该内核页表,
         // 不需要二次构造
         map_seg(man, text, PageMan::rwx(true, false, true), false, true);
@@ -56,6 +53,5 @@ namespace ker_paddr {
         map_seg(man, data, PageMan::rwx(true, true, false), false, true);
         map_seg(man, bss, PageMan::rwx(true, true, false), false, true);
         map_seg(man, misc, PageMan::rwx(true, false, false), false, true);
-        map_seg(man, kphy_space, PageMan::rwx(true, true, false), false, true);
     }
 }  // namespace ker_paddr

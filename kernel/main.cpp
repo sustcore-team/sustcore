@@ -35,6 +35,7 @@
 #include <sus/types.h>
 #include <sus/units.h>
 #include <sustcore/addr.h>
+#include <symbols.h>
 #include <task/scheduler.h>
 #include <task/task.h>
 #include <task/wait.h>
@@ -325,34 +326,6 @@ namespace key {
     };
 }  // namespace key
 
-void kernel_paging_setup() {
-    [[maybe_unused]]
-    constexpr KernelStage STAGE = KernelStage::PRE_INIT;
-    auto &e                     = env::inst();
-    // 创建内核页表管理器
-    auto gfp_res                = GFP::get_free_page<STAGE>(1);
-    if (!gfp_res.has_value()) {
-        loggers::SUSTCORE::ERROR("无法为内核页表分配物理页");
-        while (true);
-    }
-
-    PhyAddr pgd                               = gfp_res.value();
-    e.main_kernel_pgd(key::main_kernel_pgd()) = pgd;
-    EarlyPageMan::make_root(pgd);
-    EarlyPageMan kernelman(pgd);
-
-    ker_paddr::init();
-    ker_paddr::mapping_kernel_areas(kernelman);
-
-    // 对[0, uppm)进行恒等映射
-    size_t sz = e.meminfo().uppm - e.meminfo().lowpm;
-    kernelman.map_range<true>(e.meminfo().lowvm, e.meminfo().lowpm, sz,
-                              EarlyPageMan::rwx(true, true, true), false, true);
-
-    kernelman.switch_root();
-    kernelman.flush_tlb();
-}
-
 Result<void> init_scheduler() {
     auto kernel_res = task::TaskManager::inst().create_kernel_task();
     if (!kernel_res.has_value()) {
@@ -396,6 +369,160 @@ Result<void> run_pre_bootstrap_tests() {
 
 void init_kop();
 extern void *dtb_ptr;
+void env_setup();
+
+constexpr size_t BOOT_DTB_STORAGE_SIZE = 128 * 1024;
+
+constexpr PhyArea SBI_RECLAIMABLE_AREA =
+    PhyArea(PhyAddr(0x0000000080200000ULL), PhyAddr(0x00000000802C0000ULL));
+constexpr PhyArea SBI_PAGING_AREA =
+    PhyArea(PhyAddr(0x00000000802C0000ULL), PhyAddr(0x0000000080300000ULL));
+
+alignas(PAGESIZE) static unsigned char boot_dtb_storage[BOOT_DTB_STORAGE_SIZE];
+
+void map_kpa_region(PageMan &man, PhyArea parea) {
+    if (parea.nullable()) {
+        return;
+    }
+
+    VirAddr vaddr = VirAddr(convert<KpaAddr>(parea.begin).arith());
+
+    man.map_range<true>(vaddr, parea.begin, parea.size(), PageMan::RWX::RW,
+                        false, true);
+}
+
+extern "C" void post_init(void);
+
+void env_setup() {
+    loggers::SUSTCORE::INFO("开始设置内核环境");
+
+    // construct the env
+    env::construct();
+    auto &e = env::inst();
+
+    loggers::SUSTCORE::INFO("开始复制 FDT 数据到内核");
+    int dtb_size = fdt_totalsize(dtb_ptr);
+    if (dtb_size <= 0) {
+        panic("原始FDT大小非法");
+    }
+
+    auto *static_dtb = reinterpret_cast<void *>(boot_dtb_storage);
+    if (static_cast<size_t>(dtb_size) > BOOT_DTB_STORAGE_SIZE) {
+        panic("原始FDT超过内核静态保留区容量");
+    }
+    memmove(static_dtb, dtb_ptr, static_cast<size_t>(dtb_size));
+    dtb_ptr = static_dtb;
+
+    loggers::SUSTCORE::INFO("初始化 FDT 数据");
+    if (FDTHelper::fdt_init(dtb_ptr) == nullptr) {
+        panic("FDT初始化失败");
+    }
+
+    loggers::SUSTCORE::INFO("开始探测内存区域");
+    auto detect_res = MemoryLayout::detect();
+    if (!detect_res.has_value()) {
+        loggers::SUSTCORE::FATAL("桥接阶段探测内存区域失败!错误码: %s",
+                                 to_cstring(detect_res.error()));
+        while (true);
+    }
+
+    PhyAddr upper_bound = PhyAddr::null;
+    for (int i = 0; i < e.meminfo().region_cnt; i++) {
+        const auto &reg = e.meminfo().regions[i];
+        PhyAddr start   = reg.ptr;
+        PhyAddr end     = start + reg.size;
+
+        loggers::SUSTCORE::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
+                                start.addr(), end.addr(),
+                                static_cast<int>(reg.status));
+        if (upper_bound < end) {
+            upper_bound = end;
+        }
+    }
+    e.meminfo(key::main()).uppm = upper_bound;
+
+    loggers::SUSTCORE::INFO("初始化GFP");
+    GFP::pre_init();
+
+    assert(!SBI_RECLAIMABLE_AREA.nullable());
+    loggers::SUSTCORE::INFO(
+        "桥接阶段回收 SBI 引导区 [%p, %p), 共 %u 页",
+        SBI_RECLAIMABLE_AREA.begin.addr(), SBI_RECLAIMABLE_AREA.end.addr(),
+        static_cast<unsigned>(SBI_RECLAIMABLE_AREA.size() / PAGESIZE));
+    GFP::put_page(SBI_RECLAIMABLE_AREA.begin, SBI_RECLAIMABLE_AREA.size() / PAGESIZE);
+
+    loggers::SUSTCORE::INFO("将内存区域加入到GFP中");
+    for (int i = 0; i < e.meminfo().region_cnt; i++) {
+        const auto &reg = e.meminfo().regions[i];
+        if (reg.status != MemRegion::MemoryStatus::FREE) {
+            continue;
+        }
+
+        PhyAddr start_addr = reg.ptr.page_align_up();
+        PhyAddr end_addr   = (reg.ptr + reg.size).page_align_down();
+        size_t pages       = (end_addr - start_addr) / PAGESIZE;
+        if (pages == 0) {
+            continue;
+        }
+
+        loggers::SUSTCORE::INFO("桥接阶段加入可用内存区域 [%p, %p), 共 %u 页",
+                                start_addr.addr(), end_addr.addr(),
+                                static_cast<unsigned>(pages));
+        RawGFPImpl::put_page(start_addr, pages);
+    }
+
+    // 初始化 ker_paddr 与 PageMan
+    ker_paddr::init();
+    PageMan::init();
+
+    // 重新建立内核页表
+    loggers::SUSTCORE::INFO("重新建立正式内核页表");
+    auto new_pgd_res = GFP::get_free_page(1);
+    if (!new_pgd_res.has_value()) {
+        panic("无法分配新的内核页表根");
+    }
+
+    PhyAddr new_pgd                                     = new_pgd_res.value();
+    env::inst().main_kernel_pgd(key::main_kernel_pgd()) = new_pgd;
+    PageMan::make_root(new_pgd);
+    PageMan kernelman(new_pgd);
+
+    loggers::SUSTCORE::INFO("建立 KVA 映射");
+    ker_paddr::mapping_kernel_areas(kernelman);
+
+    loggers::SUSTCORE::INFO("建立 KPA 映射");
+    // 加入 sbi 可回收区域到 KPA 映射
+    map_kpa_region(kernelman, SBI_RECLAIMABLE_AREA);
+    // 加入可用内存区域到 KPA 映射
+    auto &meminfo = e.meminfo();
+    for (size_t i = 0; i < meminfo.region_cnt; ++i) {
+        const auto &reg = meminfo.regions[i];
+        if (reg.status != MemRegion::MemoryStatus::FREE) {
+            continue;
+        }
+        PhyArea region(reg.ptr.page_align_down(),
+                       (reg.ptr + reg.size).page_align_up());
+        map_kpa_region(kernelman, region);
+    }
+
+    loggers::SUSTCORE::INFO("切换到新内核页表");
+    kernelman.switch_root();
+    kernelman.flush_tlb();
+
+    loggers::SUSTCORE::INFO("回收 SBI 内核页表区");
+    // 加入 sbi 页表区域到 KPA 映射与GFP
+    map_kpa_region(kernelman, SBI_PAGING_AREA);
+    RawGFPImpl::put_page(SBI_PAGING_AREA.begin, SBI_PAGING_AREA.size() / PAGESIZE);
+    
+    // 初始化 Allocator 与内存池
+    loggers::SUSTCORE::INFO("初始化分配器和内核对象池");
+    Allocator::init();
+    init_kop();
+    
+
+    loggers::SUSTCORE::INFO("桥接代码完成! 进入 post-init 阶段");
+    post_init();
+}
 
 void init_device_model() {
     loggers::SUSTCORE::INFO("构建设备模型");
@@ -434,29 +561,8 @@ extern "C" void post_init(void) {
     loggers::SUSTCORE::INFO("已进入 post-init 阶段");
     auto &e = env::inst();
 
-    // 将 pre-init 阶段中初始化的子系统再次初始化, 以适应内核虚拟地址空间
-    GFP::post_init();
-    PageMan::init();
-    Allocator::init();
-
-    // 将 tp 寄存器中的指针更新为内核虚拟地址空间中的环境实例
-    PhyAddr old_tp = convert_pointer(env::hart_ctx);
-    env::hart_ctx  = convert<KvaAddr>(old_tp).as<env::HartContext>();
-
-    // 将低端内存设置为用户态
-    loggers::SUSTCORE::INFO("将低端内存设置为用户态");
-    auto &meminfo = e.meminfo();
-    PageMan kernelman(env::inst().main_kernel_pgd());
-    kernelman.modify_range_flags<PageMan::ModifyMask::U>(
-        meminfo.lowvm, meminfo.uppm - meminfo.lowpm, PageMan::RWX::NONE, true,
-        false);
-    Initialization::promote_dtb_to_kpa();
-
     // 初始化 kernel object pool
-    loggers::SUSTCORE::INFO("初始化内核对象池");
-    init_kop();
-
-    loggers::SUSTCORE::INFO("初始化权限系统");
+    loggers::SUSTCORE::INFO("初始化能力系统");
     cap::CHolderManager::init();
 
     // 初始化中断处理程序
@@ -482,8 +588,6 @@ extern "C" void post_init(void) {
         while (true);
     }
 
-    loggers::SUSTCORE::INFO("测试输出ErrCode::BUSY", to_cstring(ErrCode::BUSY));
-
     auto test_res = run_pre_bootstrap_tests();
     if (!test_res.has_value()) {
         loggers::SUSTCORE::ERROR("前置测试失败! 错误码: %s",
@@ -501,65 +605,6 @@ extern "C" void post_init(void) {
 
 extern "C" void redive(void);
 
-void pre_init() {
-    [[maybe_unused]]
-    constexpr KernelStage STAGE = KernelStage::PRE_INIT;
-    // construct the env
-    env::construct();
-
-    Initialization::pre_init();
-
-    auto &e = env::inst();
-
-    auto detect_res = MemoryLayout::detect();
-    if (!detect_res.has_value()) {
-        loggers::SUSTCORE::FATAL("探测内存区域失败!错误码: %s",
-                                 to_cstring(detect_res.error()));
-        while (true);
-    }
-
-    PhyAddr upper_bound = PhyAddr::null;
-    for (int i = 0; i < e.meminfo().region_cnt; i++) {
-        const auto &reg = e.meminfo().regions[i];
-        PhyAddr start   = reg.ptr;
-        PhyAddr end     = start + reg.size;
-
-        loggers::SUSTCORE::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
-                                start.addr(), end.addr(),
-                                static_cast<int>(reg.status));
-        if (upper_bound < end) {
-            upper_bound = end;
-        }
-    }
-    e.meminfo(key::main()).uppm = upper_bound;
-
-    loggers::SUSTCORE::INFO("初始化GFP");
-    GFP::pre_init();
-
-    loggers::SUSTCORE::INFO("初始化内核地址空间管理器");
-    EarlyPageMan::init();
-
-    kernel_paging_setup();
-
-    // FDTHelper::print_device_tree_detailed();
-
-    // 进入 post-init 阶段
-    // 此阶段内, 内核的所有代码和数据均已映射到内核虚拟地址空间
-    // 将 redive() 函数定位到KvaAddr
-    typedef void (*RediveFuncType)(void);
-    auto redive_paddr  = (PhyAddr)(void *)redive;
-    auto redive_kvaddr = convert<KvaAddr>(redive_paddr);
-    loggers::SUSTCORE::DEBUG("redive函数物理地址: %p, 内核虚拟地址: %p",
-                             redive_paddr.addr(), redive_kvaddr.addr());
-    auto redive_func = (RediveFuncType)redive_kvaddr.addr();
-    loggers::SUSTCORE::DEBUG("跳转到内核虚拟地址空间中的redive函数: %p",
-                             redive_func);
-    redive_func();
-    loggers::SUSTCORE::ERROR("redive函数返回了, 这不应该发生!");
-    while (true);
-}
-
 void kernel_setup() {
-    pre_init();
     while (true);
 }

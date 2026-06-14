@@ -16,9 +16,9 @@ SBI_BASE             = 0x0000000080200000;
 /* [KERNEL_PAGING_BASE, KERNEL_BASE) 这段内存被内核页表占用 */
 /* 启动程序会将这段内存传递给内核以说明内核页表位置 */
 /* 内核应在建立自己的页表后将这段内存回收 */
-KERNEL_PAGING_BASE   = 0x0000000080240000;
+KERNEL_PAGING_BASE   = 0x00000000802E0000;
 /* 内核物理地址基址 */
-KERNEL_PHY_BASE      = 0x0000000080280000;
+KERNEL_PHY_BASE      = 0x0000000080300000;
 
 /* 内核虚拟地址基址与对应的物理地址基址 */
 KERNEL_BASE          = KVA_OFFSET + KERNEL_PHY_BASE;

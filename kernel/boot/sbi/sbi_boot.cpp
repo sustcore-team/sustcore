@@ -22,18 +22,21 @@
 #define _SBI_WRITE(str) _sbi_write(_SBI_STRLEN(str), str)
 
 namespace sbi {
-    _SBI_STRING(SBI_BOOT_MSG)                  = "SBI引导程序启动!\n";
-    _SBI_STRING(SBI_PANIC_MSG)                 = "SBI引导程序发生错误，无法继续执行!\n";
-    _SBI_STRING(SBI_INVALID_KERNEL_SIZE_MSG)   = "错误: 内核大小超过 32MB  限制\n";
-    _SBI_STRING(SBI_INVALID_PAGING_SIZE_MSG)   = "错误: 分页部分小于 64KB 限制\n";
-    _SBI_STRING(SBI_MISALIGNED_PAGING_MSG)     = "错误: 分页部分地址未对齐到4KB\n";
-    _SBI_STRING(SBI_BOUNDARY_MISALIGNED_MSG)   = "错误: 内核末尾地址未对齐到2MB\n";
-    _SBI_STRING(SBI_1G_MISALIGNED_MSG)         = "错误: 1GB 映射地址未对齐\n";
-    _SBI_STRING(SBI_PAGE_ALLOC_OVERFLOW_MSG)   = "错误: SBI 分页保留区耗尽\n";
-    _SBI_STRING(SBI_CHECK_PASS_MSG)            = "SBI引导程序检查通过!\n";
+    _SBI_STRING(SBI_BOOT_MSG) = "SBI引导程序启动!\n";
+    _SBI_STRING(SBI_PANIC_MSG) = "SBI引导程序发生错误，无法继续执行!\n";
+    _SBI_STRING(SBI_INVALID_KERNEL_SIZE_MSG) =
+        "错误: 内核大小超过 32MB  限制\n";
+    _SBI_STRING(SBI_INVALID_PAGING_SIZE_MSG) = "错误: 分页部分小于 64KB 限制\n";
+    _SBI_STRING(SBI_MISALIGNED_PAGING_MSG) = "错误: 分页部分地址未对齐到4KB\n";
+    _SBI_STRING(SBI_BOUNDARY_MISALIGNED_MSG) =
+        "错误: 内核末尾地址未对齐到2MB\n";
+    _SBI_STRING(SBI_1G_MISALIGNED_MSG) = "错误: 1GB 映射地址未对齐\n";
+    _SBI_STRING(SBI_PAGE_ALLOC_OVERFLOW_MSG) = "错误: SBI 分页保留区耗尽\n";
+    _SBI_STRING(SBI_CHECK_PASS_MSG) = "SBI引导程序检查通过!\n";
     _SBI_STRING(SBI_PAGING_SETUP_COMPLETE_MSG) = "SBI分页设置完成!\n";
     _SBI_STRING(SBI_INVALID_DTB_MAGIC_MSG)     = "错误: DTB魔数不正确\n";
-    _SBI_STRING(SBI_INVALID_DTB_SIZE_MSG)      = "错误: DTB大小超过限制\n";
+    _SBI_STRING(SBI_INVALID_DTB_SIZE_MSG) = "错误: DTB大小超过限制\n";
+    _SBI_STRING(SBI_MISALIGNED_KPA_MSG)   = "错误: KPA区域映射失效!\n";
 }  // namespace sbi
 
 namespace sbi {
@@ -58,9 +61,11 @@ namespace sbi {
     static _SBI_DATA addr_t paging_cursor;
     static _SBI_DATA addr_t paging_limit;
     static _SBI_DATA addr_t root_page_table;
-    static _SBI_DATA addr_t kernel_identity_limit;
     static _SBI_DATA addr_t kernel_kva_limit;
-    static _SBI_DATA addr_t kernel_kpa_limit;
+
+    // 将初始 8000'0000 ~ C000'0000 区域 (1GB) 映射到 PA 与 KPA 中
+    static constexpr addr_t PA_START = 0x80000000;
+    static constexpr addr_t PA_LIMIT = 0xC0000000;
 
     _SBI_FUNCTION void page_zero(addr_t pa) {
         auto *page = reinterpret_cast<byte *>(pa);
@@ -96,15 +101,17 @@ namespace sbi {
     }
 
     _SBI_FUNCTION void mapping_in_2m(addr_t root, addr_t va, addr_t pa) {
-        if ((va & PAGING_ALIGNMENT_MASK) != 0 || (pa & PAGING_ALIGNMENT_MASK) != 0) {
+        if ((va & PAGING_ALIGNMENT_MASK) != 0 ||
+            (pa & PAGING_ALIGNMENT_MASK) != 0)
+        {
             _SBI_PANIC(SBI_BOUNDARY_MISALIGNED_MSG);
         }
 
         size_t vpn[3];
         TOVPN(vpn, va);
 
-        auto *l0 = page_table(root);
-        auto *l1 = ensure_next_level(l0, vpn[2]);
+        auto *l0   = page_table(root);
+        auto *l1   = ensure_next_level(l0, vpn[2]);
         l1[vpn[1]] = MAKE_PTE(pa);
     }
 
@@ -116,7 +123,7 @@ namespace sbi {
         size_t vpn[3];
         TOVPN(vpn, va);
 
-        auto *l0 = page_table(root);
+        auto *l0   = page_table(root);
         l0[vpn[2]] = MAKE_PTE(pa);
     }
 
@@ -135,22 +142,15 @@ namespace sbi {
                                             addr_t pa_e) {
         addr_t current = pa_s;
 
-        while (current < pa_e && (current & PAGE_SIZE_1G_MASK) != 0) {
-            mapping_in_2m(root, current, current);
-            mapping_in_2m(root, current + KPA_OFFSET, current);
-            current += PAGE_SIZE_2M;
+        if ((pa_s & PAGE_SIZE_1G_MASK) != 0 || (pa_e & PAGE_SIZE_1G_MASK) != 0)
+        {
+            _SBI_PANIC(SBI_MISALIGNED_KPA_MSG);
         }
 
         while (current + PAGE_SIZE_1G <= pa_e) {
             mapping_in_1g(root, current, current);
             mapping_in_1g(root, current + KPA_OFFSET, current);
             current += PAGE_SIZE_1G;
-        }
-
-        while (current < pa_e) {
-            mapping_in_2m(root, current, current);
-            mapping_in_2m(root, current + KPA_OFFSET, current);
-            current += PAGE_SIZE_2M;
         }
     }
 
@@ -180,6 +180,7 @@ namespace sbi {
             _SBI_PANIC(SBI_MISALIGNED_PAGING_MSG);
         }
 
+        // 设置页表分配起始与终点位置
         paging_cursor = reinterpret_cast<addr_t>(paging_start);
         paging_limit  = reinterpret_cast<addr_t>(paging_end);
 
@@ -210,14 +211,12 @@ namespace sbi {
             _SBI_PANIC(SBI_INVALID_DTB_SIZE_MSG);
         }
 
-        root_page_table = page_alloc();
+        root_page_table  = page_alloc();
+        kernel_kva_limit = kernel_end_arith + KVA_OFFSET;
 
-        kernel_identity_limit = kernel_end_arith;
-        kernel_kva_limit      = kernel_end_arith + KVA_OFFSET;
-        kernel_kpa_limit      = kernel_end_arith + KPA_OFFSET;
-
-        map_identity_and_kpa(root_page_table, aligned_kernel_start,
-                             kernel_identity_limit);
+        // 设置恒等映射与kpa映射
+        map_identity_and_kpa(root_page_table, PA_START, PA_LIMIT);
+        // 映射内核空间到高地址区
         map_range_in_2m(root_page_table, aligned_kernel_start + KVA_OFFSET,
                         kernel_kva_limit, aligned_kernel_start);
 

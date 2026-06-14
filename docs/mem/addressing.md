@@ -59,15 +59,6 @@ KvaAddr kva = convert<KvaAddr>(paddr);
 
 `convert_pointer(ptr)` 会根据指针值所在范围判断其当前地址类型，再转换为 `PhyAddr`。它常用于 linker symbol 或早期环境指针。
 
-## 初始化阶段地址语义
-
-`_StageAddr<Stage>` 根据初始化阶段选择页表或分配器元数据访问地址:
-
-- `PRE_INIT`: `PhyAddr`
-- `POST_INIT`: `KpaAddr`
-
-这使 buddy 和页表代码可以使用同一套模板接口，在不同阶段访问同一物理页上的结构。
-
 ## 用户地址判断
 
 `is_user_vaddr(VirAddr vaddr)` 判断地址是否在通用虚拟地址范围内，且不属于 KVA/KPA 区间。
@@ -91,5 +82,5 @@ is_user_vaddr(varea.begin) && is_user_vaddr(varea.end)
 
 - 不要把 `PhyAddr`、`KpaAddr`、`KvaAddr` 随意转成整数再手动加 offset，优先使用 `convert<>()`。
 - `VirAddr` 是通用虚拟地址，不保证一定是用户地址；判断用户地址需使用 `is_user_vaddr()`。
-- 页表中保存的是物理页号，访问页表页内容时必须先按阶段转换为可访问地址。
+- 页表中保存的是物理页号，访问页表页内容时必须先转换为可访问的 KPA 地址。
 - KPA 与 KVA 都是内核可访问地址，但语义不同: KPA 更强调“物理内存线性映射”，KVA 更强调“内核镜像和高半区虚拟地址”。

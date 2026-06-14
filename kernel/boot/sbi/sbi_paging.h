@@ -17,7 +17,7 @@
 
 namespace sbi {
     extern "C" char s_sbi, s_sbi_paging, e_sbi_paging, ekernel_phys;
-    constexpr size_t MINIMUM_PAGING_SIZE   = 64 * 1024;         // 64KB
+    constexpr size_t MINIMUM_PAGING_SIZE   = 128 * 1024;         // 64KB
     constexpr size_t MAXIMUM_KERNEL_SIZE   = 32 * 1024 * 1024;  // 32MB
     constexpr size_t MAXIMUM_DTB_SIZE      = 2 * 1024 * 1024;   // 2MB
     constexpr size_t PAGE_TABLE_ALIGNMENT  = 4 * 1024;          // 4KB

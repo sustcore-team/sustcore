@@ -7,14 +7,10 @@
 架构描述文件中定义:
 
 ```cpp
-template <KernelStage Stage>
-using _PageMan = Riscv64SV39PageMan<Stage>;
-
-using EarlyPageMan = _PageMan<KernelStage::PRE_INIT>;
-using PageMan      = _PageMan<KernelStage::POST_INIT>;
+using PageMan = Riscv64SV39PageMan;
 ```
 
-早期页表和后期页表使用相同 SV39 逻辑，但访问页表页时使用不同 `_StageAddr<Stage>`。
+当前内核 SV39 管理器统一通过 KPA 线性映射访问页表页。
 
 ## 页大小
 
@@ -84,7 +80,7 @@ struct QueryResult {
 
 `map_page<size>(vaddr, paddr, rwx, u, g)` 按目标页大小建立映射。
 
-如果中间页表不存在，会通过 `GFP::get_free_page<Stage>(1)` 分配新的页表页，并清零。中间节点 PTE 使用 `RWX::P`，叶子 PTE 写入目标物理地址、权限、U/G 位。
+如果中间页表不存在，会通过 `GFP::get_free_page(1)` 分配新的页表页，并清零。中间节点 PTE 使用 `RWX::P`，叶子 PTE 写入目标物理地址、权限、U/G 位。
 
 当前接口在重复映射、有效但 `np` 的异常情况中记录日志并返回，不通过 `Result` 上报错误。因此调用方需要避免重复映射。
 
