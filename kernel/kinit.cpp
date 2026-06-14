@@ -264,6 +264,7 @@ void kinit_runtime_entry() {
     register_timekeeper_log_test();
 #endif
 
+    loggers::SUSTCORE::INFO("开始加载用户 init 进程");
     init_res = load_runtime_init();
     if (!init_res.has_value()) {
         loggers::SUSTCORE::FATAL("kinit 加载用户 init 失败: %s",
