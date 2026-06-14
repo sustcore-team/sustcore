@@ -61,7 +61,7 @@ build-libs:
 	$(q)$(MAKE) -f $(library-component-makefile.sbi) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.basecpp) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.kmod) $(arg-basic) build
-	$(q)$(MAKE) -f $(library-component-makefile.rpc) $(arg-basic) build
+# 	$(q)$(MAKE) -f $(library-component-makefile.rpc) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.libfdt) $(arg-basic) build
 	$(q)echo "All libraries built successfully."
 
