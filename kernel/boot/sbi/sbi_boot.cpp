@@ -14,15 +14,6 @@
 
 #include <cstddef>
 
-namespace sbi {
-    _SBI_PAGING pte_t L0PAGING[PAGE_ENTRIES]
-        __attribute__((aligned(PAGE_SIZE)));
-    _SBI_PAGING pte_t L1_KERNEL_PAGING[PAGE_ENTRIES]
-        __attribute__((aligned(PAGE_SIZE)));
-    _SBI_PAGING pte_t L1_IDENTITY_PAGING[PAGE_ENTRIES]
-        __attribute__((aligned(PAGE_SIZE)));
-}  // namespace sbi
-
 #define _SBI_FUNCTION   SECTION(".sbi_boot.text")
 #define _SBI_DATA       SECTION(".sbi_boot.data")
 #define _SBI_RODATA     SECTION(".sbi_boot.rodata")
@@ -30,27 +21,21 @@ namespace sbi {
 #define _SBI_STRLEN(x)  (sizeof(x) - 1)
 #define _SBI_WRITE(str) _sbi_write(_SBI_STRLEN(str), str)
 
-// messages
 namespace sbi {
-    _SBI_STRING(SBI_BOOT_MSG) = "SBI引导程序启动!\n";
-    _SBI_STRING(SBI_PANIC_MSG) = "SBI引导程序发生错误，无法继续执行!\n";
-    _SBI_STRING(SBI_INVALID_KERNEL_SIZE_MSG) =
-        "错误: 内核大小超过 32MB  限制\n";
-    _SBI_STRING(SBI_INVALID_PAGING_SIZE_MSG) = "错误: 分页部分小于 32KB 限制\n";
-    _SBI_STRING(SBI_MISALIGNED_PAGING_MSG) = "错误: 分页部分地址未对齐到4KB\n";
-    _SBI_STRING(SBI_BOUNDARY_MISALIGNED_MSG) =
-        "错误: 内核末尾地址未对齐到2MB\n";
-    _SBI_STRING(SBI_CROSS_L1_DIRECTORY_MSG) =
-        "错误: 内核跨越了L1页目录边界, 无法使用单级页表映射\n";
-    _SBI_STRING(SBI_IMPOSSIBLE)     = "错误: 这不应该发生\n";
-    _SBI_STRING(SBI_CHECK_PASS_MSG) = "SBI引导程序检查通过!\n";
+    _SBI_STRING(SBI_BOOT_MSG)                  = "SBI引导程序启动!\n";
+    _SBI_STRING(SBI_PANIC_MSG)                 = "SBI引导程序发生错误，无法继续执行!\n";
+    _SBI_STRING(SBI_INVALID_KERNEL_SIZE_MSG)   = "错误: 内核大小超过 32MB  限制\n";
+    _SBI_STRING(SBI_INVALID_PAGING_SIZE_MSG)   = "错误: 分页部分小于 64KB 限制\n";
+    _SBI_STRING(SBI_MISALIGNED_PAGING_MSG)     = "错误: 分页部分地址未对齐到4KB\n";
+    _SBI_STRING(SBI_BOUNDARY_MISALIGNED_MSG)   = "错误: 内核末尾地址未对齐到2MB\n";
+    _SBI_STRING(SBI_1G_MISALIGNED_MSG)         = "错误: 1GB 映射地址未对齐\n";
+    _SBI_STRING(SBI_PAGE_ALLOC_OVERFLOW_MSG)   = "错误: SBI 分页保留区耗尽\n";
+    _SBI_STRING(SBI_CHECK_PASS_MSG)            = "SBI引导程序检查通过!\n";
     _SBI_STRING(SBI_PAGING_SETUP_COMPLETE_MSG) = "SBI分页设置完成!\n";
     _SBI_STRING(SBI_INVALID_DTB_MAGIC_MSG)     = "错误: DTB魔数不正确\n";
-    _SBI_STRING(SBI_INVALID_DTB_SIZE_MSG) = "错误: DTB大小超过限制\n";
+    _SBI_STRING(SBI_INVALID_DTB_SIZE_MSG)      = "错误: DTB大小超过限制\n";
 }  // namespace sbi
 
-// 通过命名空间避免名称冲突
-// 同时严格保证内核程序不会被外部调用
 namespace sbi {
     extern "C" size_t __sbi_boot_hart_id;
     extern "C" addr_t __sbi_dtb_phys;
@@ -58,6 +43,7 @@ namespace sbi {
     static_assert(sizeof(__sbi_dtb_phys) == 8, "类型大小不匹配");
 
     extern "C" _SBI_FUNCTION void _sbi_write(size_t len, const char *buf);
+
     _SBI_FUNCTION void _sbi_panic() {
         _SBI_WRITE(SBI_PANIC_MSG);
         while (true);
@@ -69,91 +55,107 @@ namespace sbi {
         _sbi_panic();  \
     } while (0)
 
-    static _SBI_DATA size_t kva_vpn2;  // 内核虚拟地址的VPN2部分
+    static _SBI_DATA addr_t paging_cursor;
+    static _SBI_DATA addr_t paging_limit;
+    static _SBI_DATA addr_t root_page_table;
+    static _SBI_DATA addr_t kernel_identity_limit;
+    static _SBI_DATA addr_t kernel_kva_limit;
+    static _SBI_DATA addr_t kernel_kpa_limit;
 
-    // 使用一个 L0 页目录 + 两个 L1 页目录来映射内核空间
-    // 总共可覆盖 1GB 内核空间
-    _SBI_FUNCTION void mappings(addr_t pa_s, addr_t pa_e) {
-        if (pa_s & PAGING_ALIGNMENT_MASK) {
-            _SBI_PANIC(SBI_MISALIGNED_PAGING_MSG);
-        }
-
-        if (pa_e & PAGING_ALIGNMENT_MASK) {
-            _SBI_PANIC(SBI_BOUNDARY_MISALIGNED_MSG);
-        }
-
-        // 将 pa_s / pa_e 转换为虚拟地址，并计算其 VPN
-        addr_t va_s = pa_s + KVA_OFFSET;
-        addr_t va_e = pa_e + KVA_OFFSET;
-        size_t vvpns[3], vvpne[3], pvpns[3], pvpne[3];
-        TOVPN(vvpns, va_s);
-        TOVPN(vvpne, va_e);
-        TOVPN(pvpns, pa_s);
-        TOVPN(pvpne, pa_e);
-
-        // 做出以下假设:
-        // 1. vvpns[2] = vvpne[2]，即其在内核虚拟空间中不跨越L1页目录边界
-        if (vvpns[2] != vvpne[2]) {
-            _SBI_PANIC(SBI_CROSS_L1_DIRECTORY_MSG);
-        }
-        kva_vpn2 = vvpns[2];
-        // 以下这件事一定成立: pvpns[2] =
-        // pvpne[2]，即物理地址不跨越L1页目录边界
-        if (pvpns[2] != pvpne[2]) {
-            _SBI_PANIC(SBI_IMPOSSIBLE);
-        }
-        // 设置 L0 页目录项，指向两个 L1 页目录
-        L0PAGING[vvpns[2]] = MAKE_PDE(L1_KERNEL_PAGING);
-        L0PAGING[pvpns[2]] = MAKE_PDE(L1_IDENTITY_PAGING);
-
-        // 以下这件事一定成立: vvpne[1] - vvpns[1] = pvpne[1] - pvpns[1]
-        size_t steps = vvpne[1] - vvpns[1];
-        if (steps != (pvpne[1] - pvpns[1])) {
-            _SBI_PANIC(SBI_IMPOSSIBLE);
-        }
-
-        // 设置 L1 页目录项，设置内核空间虚拟地址与物理地址的映射
-        for (size_t i = 0; i <= steps; i++) {
-            addr_t pa                        = pa_s + i * PAGE_SIZE_2M;
-            L1_KERNEL_PAGING[vvpns[1] + i]   = MAKE_PTE(pa);
-            L1_IDENTITY_PAGING[pvpns[1] + i] = MAKE_PTE(pa);
+    _SBI_FUNCTION void page_zero(addr_t pa) {
+        auto *page = reinterpret_cast<byte *>(pa);
+        for (size_t i = 0; i < PAGE_SIZE; ++i) {
+            page[i] = 0;
         }
     }
 
-    _SBI_FUNCTION void mapping_dtb(addr_t pa_s, addr_t pa_e) {
-        if (pa_s & PAGING_ALIGNMENT_MASK) {
+    _SBI_FUNCTION addr_t page_alloc() {
+        addr_t current = paging_cursor;
+        if ((current & (PAGE_TABLE_ALIGNMENT - 1)) != 0) {
             _SBI_PANIC(SBI_MISALIGNED_PAGING_MSG);
         }
+        if (current + PAGE_SIZE > paging_limit) {
+            _SBI_PANIC(SBI_PAGE_ALLOC_OVERFLOW_MSG);
+        }
+        paging_cursor = current + PAGE_SIZE;
+        page_zero(current);
+        return current;
+    }
 
-        if (pa_e & PAGING_ALIGNMENT_MASK) {
+    _SBI_FUNCTION pte_t *page_table(addr_t pa) {
+        return reinterpret_cast<pte_t *>(pa);
+    }
+
+    _SBI_FUNCTION pte_t *ensure_next_level(pte_t *table, size_t index) {
+        pte_t &entry = table[index];
+        if ((entry & PDE_BASE) == 0) {
+            addr_t next_level = page_alloc();
+            entry             = MAKE_PDE(next_level);
+        }
+        return page_table((entry & PPN_MASK) >> PPN_SHIFT << 12);
+    }
+
+    _SBI_FUNCTION void mapping_in_2m(addr_t root, addr_t va, addr_t pa) {
+        if ((va & PAGING_ALIGNMENT_MASK) != 0 || (pa & PAGING_ALIGNMENT_MASK) != 0) {
             _SBI_PANIC(SBI_BOUNDARY_MISALIGNED_MSG);
         }
 
-        addr_t va_s = pa_s + KVA_OFFSET;
-        addr_t va_e = pa_e + KVA_OFFSET;
-        size_t vvpns[3], vvpne[3];
-        TOVPN(vvpns, va_s);
-        TOVPN(vvpne, va_e);
+        size_t vpn[3];
+        TOVPN(vpn, va);
 
-        if (vvpns[2] != vvpne[2]) {
-            _SBI_PANIC(SBI_CROSS_L1_DIRECTORY_MSG);
+        auto *l0 = page_table(root);
+        auto *l1 = ensure_next_level(l0, vpn[2]);
+        l1[vpn[1]] = MAKE_PTE(pa);
+    }
+
+    _SBI_FUNCTION void mapping_in_1g(addr_t root, addr_t va, addr_t pa) {
+        if ((va & PAGE_SIZE_1G_MASK) != 0 || (pa & PAGE_SIZE_1G_MASK) != 0) {
+            _SBI_PANIC(SBI_1G_MISALIGNED_MSG);
         }
 
-        if (vvpns[2] != kva_vpn2) {
-            _SBI_PANIC(SBI_CROSS_L1_DIRECTORY_MSG);
+        size_t vpn[3];
+        TOVPN(vpn, va);
+
+        auto *l0 = page_table(root);
+        l0[vpn[2]] = MAKE_PTE(pa);
+    }
+
+    _SBI_FUNCTION void map_range_in_2m(addr_t root, addr_t va_s, addr_t va_e,
+                                       addr_t pa_s) {
+        addr_t va = va_s;
+        addr_t pa = pa_s;
+        while (va < va_e) {
+            mapping_in_2m(root, va, pa);
+            va += PAGE_SIZE_2M;
+            pa += PAGE_SIZE_2M;
+        }
+    }
+
+    _SBI_FUNCTION void map_identity_and_kpa(addr_t root, addr_t pa_s,
+                                            addr_t pa_e) {
+        addr_t current = pa_s;
+
+        while (current < pa_e && (current & PAGE_SIZE_1G_MASK) != 0) {
+            mapping_in_2m(root, current, current);
+            mapping_in_2m(root, current + KPA_OFFSET, current);
+            current += PAGE_SIZE_2M;
         }
 
-        size_t steps = vvpne[1] - vvpns[1];
+        while (current + PAGE_SIZE_1G <= pa_e) {
+            mapping_in_1g(root, current, current);
+            mapping_in_1g(root, current + KPA_OFFSET, current);
+            current += PAGE_SIZE_1G;
+        }
 
-        // 设置 L1 页目录项，设置内核空间虚拟地址与物理地址的映射
-        for (size_t i = 0; i <= steps; i++) {
-            addr_t pa                        = pa_s + i * PAGE_SIZE_2M;
-            L1_KERNEL_PAGING[vvpns[1] + i]   = MAKE_PTE(pa);
+        while (current < pa_e) {
+            mapping_in_2m(root, current, current);
+            mapping_in_2m(root, current + KPA_OFFSET, current);
+            current += PAGE_SIZE_2M;
         }
     }
 
     _SBI_FUNCTION size_t calc_satp() {
-        return SATP_SV39_BASE | TO_PPN(L0PAGING);
+        return SATP_SV39_BASE | TO_PPN(root_page_table);
     }
 
     _SBI_FUNCTION qword dtb_byte(size_t offset) {
@@ -163,9 +165,7 @@ namespace sbi {
 #define DTB_BYTE(x)  dtb_byte(x)
 #define DTB_WORD(x)  (DTB_BYTE(x) << 8 | DTB_BYTE((x) + 1))
 #define DTB_DWORD(x) (DTB_WORD(x) << 16 | DTB_WORD((x) + 2))
-#define DTB_QWORD(x) (DTB_DWORD(x) << 32 | DTB_DWORD((x) + 4))
 
-    // 返回值: satp 寄存器的值
     extern "C" _SBI_FUNCTION size_t _sbi_setup() {
         _SBI_WRITE(SBI_BOOT_MSG);
 
@@ -176,6 +176,12 @@ namespace sbi {
         if (paging_size < MINIMUM_PAGING_SIZE) {
             _SBI_PANIC(SBI_INVALID_PAGING_SIZE_MSG);
         }
+        if ((reinterpret_cast<addr_t>(paging_start) & (PAGE_SIZE - 1)) != 0) {
+            _SBI_PANIC(SBI_MISALIGNED_PAGING_MSG);
+        }
+
+        paging_cursor = reinterpret_cast<addr_t>(paging_start);
+        paging_limit  = reinterpret_cast<addr_t>(paging_end);
 
         char *kernel_start = &s_sbi;
         char *kernel_end   = &ekernel_phys;
@@ -186,12 +192,13 @@ namespace sbi {
         }
 
         auto kernel_end_arith = reinterpret_cast<addr_t>(kernel_end);
-        if (kernel_end_arith % PAGING_ALIGNMENT != 0) {
+        if ((kernel_end_arith & PAGING_ALIGNMENT_MASK) != 0) {
             _SBI_PANIC(SBI_BOUNDARY_MISALIGNED_MSG);
         }
 
         auto kernel_start_arith   = reinterpret_cast<addr_t>(kernel_start);
         auto aligned_kernel_start = kernel_start_arith & ~PAGING_ALIGNMENT_MASK;
+
         _SBI_WRITE(SBI_CHECK_PASS_MSG);
 
         dword magic = DTB_DWORD(0);
@@ -203,14 +210,25 @@ namespace sbi {
             _SBI_PANIC(SBI_INVALID_DTB_SIZE_MSG);
         }
 
-        mappings(aligned_kernel_start, kernel_end_arith);
-        _SBI_WRITE(SBI_PAGING_SETUP_COMPLETE_MSG);
+        root_page_table = page_alloc();
+
+        kernel_identity_limit = kernel_end_arith;
+        kernel_kva_limit      = kernel_end_arith + KVA_OFFSET;
+        kernel_kpa_limit      = kernel_end_arith + KPA_OFFSET;
+
+        map_identity_and_kpa(root_page_table, aligned_kernel_start,
+                             kernel_identity_limit);
+        map_range_in_2m(root_page_table, aligned_kernel_start + KVA_OFFSET,
+                        kernel_kva_limit, aligned_kernel_start);
 
         auto aligned_dtb_start = __sbi_dtb_phys & ~PAGING_ALIGNMENT_MASK;
-        auto dtb_end = __sbi_dtb_phys + dtb_size;
-        auto aligned_dtb_end = (dtb_end + PAGING_ALIGNMENT_MASK) & ~PAGING_ALIGNMENT_MASK;
-        mapping_dtb(aligned_dtb_start, aligned_dtb_end);
+        auto dtb_end           = __sbi_dtb_phys + dtb_size;
+        auto aligned_dtb_end =
+            (dtb_end + PAGING_ALIGNMENT_MASK) & ~PAGING_ALIGNMENT_MASK;
+        map_range_in_2m(root_page_table, aligned_dtb_start + KVA_OFFSET,
+                        aligned_dtb_end + KVA_OFFSET, aligned_dtb_start);
 
+        _SBI_WRITE(SBI_PAGING_SETUP_COMPLETE_MSG);
         return calc_satp();
     }
 }  // namespace sbi
