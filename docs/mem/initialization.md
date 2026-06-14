@@ -11,7 +11,7 @@
 3. `MemoryLayout::detect()` 探测物理内存布局。
 4. 遍历 `env::meminfo().regions`，计算 `uppm`。
 5. `GFP::pre_init()` 初始化页框分配器。
-6. `EarlyPageMan::init()` 初始化早期页表管理器。
+6. `PageMan::init()` 初始化页表管理器。
 7. `kernel_paging_setup()` 建立内核页表并切换到高半区。
 8. 跳转到高半区地址的 `redive()`，进入 `post_init()`。
 
@@ -42,7 +42,7 @@ RISC-V 内存探测读取 FDT:
 
 `kernel_paging_setup()` 做三件事:
 
-1. 通过 `GFP::get_free_page<PRE_INIT>(1)` 分配内核页表根。
+1. 通过 `GFP::get_free_page(1)` 分配内核页表根。
 2. 调用 `ker_paddr::init()` 解析内核段地址。
 3. 调用 `ker_paddr::mapping_kernel_areas(kernelman)` 映射内核段。
 
@@ -53,7 +53,7 @@ kernelman.map_range<true>(
     e.meminfo().lowvm,
     e.meminfo().lowpm,
     sz,
-    EarlyPageMan::rwx(true, true, true),
+    PageMan::rwx(true, true, true),
     false,
     true);
 ```
@@ -72,7 +72,7 @@ kernelman.flush_tlb();
 `post_init()` 在内核虚拟地址空间中运行。内存相关步骤:
 
 1. `GFP::post_init()` 迁移或补充页框分配器状态。
-2. `PageMan::init()` 初始化 post-init 页表管理器。
+2. `PageMan::init()` 初始化页表管理器。
 3. `Allocator::init()` 初始化对象分配器。
 4. 把 `env::hart_ctx` 从早期地址转换为内核虚拟地址。
 5. 修改低端内存映射的 `U` 位，使用户态可以访问对应区域。

@@ -12,6 +12,10 @@ _sbi_start:
     csrw satp, zero
     sfence.vma zero, zero
 
+    // 保存 OpenSBI 传入的启动参数, 跨 _sbi_setup 继续传递给 _sbi_post_start
+    mv s0, a0
+    mv s1, a1
+
     // write hart and fdt to global variables
     la t1, __sbi_boot_hart_id
     sd a0, 0(t1)
@@ -29,6 +33,8 @@ _sbi_trampoline:
     csrw satp, a0
     // 刷新 tlb
     sfence.vma zero, zero
+    mv a0, s0
+    mv a1, s1
     la ra, _sbi_post_start
     jr ra
 

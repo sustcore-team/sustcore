@@ -20,6 +20,9 @@
 
 namespace sbi {
     _SBI_STRING(SBI_POST_BOOT_MSG) = "SBI引导程序第二部分启动!\n";
+    _SBI_STRING(SBI_KERNEL_ENTRY_MSG) = "SBI引导程序进入内核入口!\n";
+
+    extern "C" void _start(size_t hart_id, addr_t dtb_ptr);
 
     _SBI_FUNCTION void sbi_writes(const char *str) {
         int len = strlen(str);
@@ -28,8 +31,11 @@ namespace sbi {
         }
     }
 
-    extern "C" _SBI_FUNCTION void _sbi_post_start() {
+    extern "C" _SBI_FUNCTION void _sbi_post_start(size_t hart_id,
+                                                  addr_t dtb_ptr) {
         sbi_writes(SBI_POST_BOOT_MSG);
+        sbi_writes(SBI_KERNEL_ENTRY_MSG);
+        _start(hart_id, dtb_ptr);
         while (true);
     }
 }  // namespace sbi

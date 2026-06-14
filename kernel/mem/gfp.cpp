@@ -39,7 +39,3 @@ void LinearGrowGFP::pre_init() {
     PhyAddr _boundary = baseaddr + max_size;
     boundary          = _boundary.page_align_down();
 }
-
-void LinearGrowGFP::post_init() {
-    // 线性增长GFP不需要在post_init阶段执行任何操作
-}

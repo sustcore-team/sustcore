@@ -144,7 +144,7 @@ COW 路径分两部分。
 
 ## 与 SV39 页表的关系
 
-`PageMan` 是 `Riscv64SV39PageMan<POST_INIT>`。
+`PageMan` 是 `Riscv64SV39PageMan`。
 
 关键能力:
 

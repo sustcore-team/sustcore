@@ -21,7 +21,7 @@ extern "C" {
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *skernel, *ekernel;
+extern char skernel, ekernel;
 
 /**
  * @brief 文本段起始/结束处位置
@@ -29,7 +29,7 @@ extern void *skernel, *ekernel;
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *s_text, *e_text;
+extern char s_text, e_text;
 
 /**
  * @brief IVT起始/结束处位置
@@ -37,7 +37,7 @@ extern void *s_text, *e_text;
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *s_ivt, *e_ivt;
+extern char s_ivt, e_ivt;
 
 /**
  * @brief 只读数据段起始/结束处位置
@@ -45,7 +45,7 @@ extern void *s_ivt, *e_ivt;
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *s_rodata, *e_rodata;
+extern char s_rodata, e_rodata;
 
 /**
  * @brief 数据段起始/结束处位置
@@ -53,7 +53,7 @@ extern void *s_rodata, *e_rodata;
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *s_data, *e_data;
+extern char s_data, e_data;
 
 /**
  * @brief BSS段起始/结束处位置
@@ -61,19 +61,19 @@ extern void *s_data, *e_data;
  * 注意, 该符号指向该位置, 但该符号本身值不为该位置
  *
  */
-extern void *s_bss, *e_bss;
+extern char s_bss, e_bss;
 
 /**
  * @brief 内核剩余部分起始处位置
  *
  */
-extern void *s_misc;
+extern char s_misc;
 
 /**
  * @brief 内核附加文件: initrd 起始/结束处位置
  *
  */
-extern void *s_initrd, *e_initrd;
+extern char s_initrd, e_initrd;
 
 extern char s_sbi_kva;
 

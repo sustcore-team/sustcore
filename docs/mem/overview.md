@@ -35,24 +35,11 @@ TaskMemoryManager
 - 大对象: SLUB 大对象路径或 `Allocator` 大对象路径转交 `GFP`。
 - 用户内存: `MemoryPayload::ensure_page()` 懒分配物理页，随后由 `TaskMemoryManager::on_np()` 映射进页表。
 
-## 初始化阶段
-
-内核把初始化分为两个阶段:
-
-- `PRE_INIT`: 还未稳定进入内核高半区，页框链表/页表节点地址按早期地址语义处理。
-- `POST_INIT`: 已建立内核虚拟地址空间，页框元数据和页表访问使用 KPA/KVA 语义。
-
-`_StageAddr<Stage>` 定义了不同阶段页表和 buddy 元数据访问的地址类型:
-
-- `KernelStage::PRE_INIT`: `PhyAddr`
-- `KernelStage::POST_INIT`: `KpaAddr`
-
 ## 页表模型
 
 当前架构配置为 RISC-V 64 SV39:
 
-- `EarlyPageMan = Riscv64SV39PageMan<PRE_INIT>`
-- `PageMan = Riscv64SV39PageMan<POST_INIT>`
+- `PageMan = Riscv64SV39PageMan`
 
 SV39 页表管理器支持:
 

@@ -24,20 +24,14 @@ namespace ker_paddr {
     Segment data;
     Segment bss;
     Segment misc;
-    Segment kphy_space;
 
-    Segment make_kva_seg(void *_ps, void *_pe) {
-        PhyAddr ps = (PhyAddr)_ps;
-        PhyAddr pe = (PhyAddr)_pe;
-        VirAddr vs = (VirAddr)(ps.arith() + KVA_OFFSET);
-        VirAddr ve = (VirAddr)(pe.arith() + KVA_OFFSET);
-        return Segment(ps, pe, vs, ve);
-    }
+    Segment make_kva_seg(char *_vs, char *_ve) {
+        auto vs = VirAddr(_vs);
+        auto ve = VirAddr(_ve);
+        auto ps = PhyAddr(_vs - KVA_OFFSET);
+        auto pe = PhyAddr(_ve - KVA_OFFSET);
 
-    Segment make_kpa_seg(PhyAddr ps, PhyAddr pe) {
-        VirAddr vs = (VirAddr)(ps.arith() + KPA_OFFSET);
-        VirAddr ve = (VirAddr)(pe.arith() + KPA_OFFSET);
-        return Segment(ps, pe, vs, ve);
+        return {ps, pe, vs, ve};
     }
 
     void init() {
@@ -47,6 +41,5 @@ namespace ker_paddr {
         ker_paddr::data   = make_kva_seg(&s_data, &e_data);
         ker_paddr::bss    = make_kva_seg(&s_bss, &e_bss);
         ker_paddr::misc   = make_kva_seg(&s_misc, &ekernel);
-        ker_paddr::kphy_space = make_kpa_seg(env::inst().meminfo().lowpm, env::inst().meminfo().uppm);
     }
 }  // namespace ker_paddr

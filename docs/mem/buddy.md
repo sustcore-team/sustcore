@@ -57,7 +57,7 @@ MAX_BUDDY_ORDER = 15
 - 初始化外置 `FreeBlock` 池 `_buddy_pool0`。
 - 遍历 `MemRegion[]`。
 - 对每个 FREE 区域执行页对齐。
-- 调用 `add_memory_range<PRE_INIT>()` 加入 buddy。
+- 调用 `add_memory_range()` 加入 buddy。
 - 额外把 `[`&`s_sbi`, `&s_sbi_paging` `)` 对应的物理页加入 buddy，以回收 SBI 引导区。
 
 `post_init()`:

@@ -227,24 +227,6 @@ constexpr AddrT convert(KvaAddr kva) {
     }
 }
 
-enum class KernelStage { PRE_INIT, POST_INIT };
-
-template <KernelStage Stage>
-struct _StageAddrConf;
-
-template <>
-struct _StageAddrConf<KernelStage::PRE_INIT> {
-    using Type = PhyAddr;
-};
-
-template <>
-struct _StageAddrConf<KernelStage::POST_INIT> {
-    using Type = KpaAddr;
-};
-
-template <KernelStage Stage>
-using _StageAddr = typename _StageAddrConf<Stage>::Type;
-
 template <typename T>
 inline static PhyAddr convert_pointer(T *ptr) {
     AddrType types[]       = {AddrType::PA, AddrType::KPA, AddrType::KVA};

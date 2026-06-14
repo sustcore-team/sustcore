@@ -93,23 +93,19 @@ constexpr Riscv64SV39ModifyMask operator|(Riscv64SV39ModifyMask lhs,
                                               static_cast<uint8_t>(rhs));
 }
 
-template <KernelStage Stage>
 class Riscv64SV39PageMan {
 public:
-    using RWX       = Riscv64SV39RWX;
-    using StageAddr = _StageAddr<Stage>;
+    using RWX = Riscv64SV39RWX;
 
     static Result<PhyAddr> new_page(void) {
-        return GFP::get_free_page<Stage>(1);
+        return GFP::get_free_page(1);
     }
 
     // 前初始化与后初始化
     static void init(void);
 
-    // PhyAddr -> StageAddr
-    static StageAddr _convert(PhyAddr paddr) {
-        return convert<StageAddr>(paddr);
-    }
+    // PhyAddr -> KpaAddr
+    static KpaAddr _convert(PhyAddr paddr);
 
     template <typename T>
     static T *_as(PhyAddr paddr) {
@@ -302,9 +298,7 @@ public:
         return from_ppn(root_ppn);
     }
 
-    static void make_root(PhyAddr root) {
-        memset(_convert(root).addr(), 0, PAGESIZE);
-    }
+    static void make_root(PhyAddr root);
 
 private:
     PhyAddr __root;
@@ -649,13 +643,7 @@ public:
     }
 
     // 更换页表根
-    inline static void __switch_root(PhyAddr __root) {
-        csr_satp_t new_satp;
-        new_satp.mode = SATPMode::SV39;
-        new_satp.asid = 0;  // TODO: ASID支持
-        new_satp.ppn  = Riscv64SV39PageMan::to_ppn(__root);
-        csr_set_satp(new_satp);
-    }
+    static void __switch_root(PhyAddr __root);
 
     inline void switch_root() {
         __switch_root(__root);
@@ -667,10 +655,7 @@ public:
     }
 
     // 刷新TLB
-    inline static void flush_tlb() {
-        asm volatile("sfence.vma");
-    }
+    static void flush_tlb();
 };
 
-static_assert(ArchPageManTrait<Riscv64SV39PageMan<KernelStage::PRE_INIT>>);
-static_assert(ArchPageManTrait<Riscv64SV39PageMan<KernelStage::POST_INIT>>);
+static_assert(ArchPageManTrait<Riscv64SV39PageMan>);

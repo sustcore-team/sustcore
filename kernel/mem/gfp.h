@@ -78,22 +78,13 @@ public:
     }
 
     /**
-     * @brief 初始化 post-init 阶段的底层裸页框分配器. 
-     */
-    static void post_init() {
-        RawGFPImpl::post_init();
-    }
-
-    /**
      * @brief 分配连续物理页并初始化引用计数. 
      *
-     * @tparam Stage 当前内核初始化阶段. 
      * @param page_count 需要分配的 4KiB 页数. 
      * @return 成功时返回起始物理地址;失败时返回底层分配器错误. 
      */
-    template <KernelStage Stage = KernelStage::POST_INIT>
     static Result<PhyAddr> get_free_page(size_t page_count = 1) {
-        auto res = RawGFPImpl::template get_free_page<Stage>(page_count);
+        auto res = RawGFPImpl::get_free_page(page_count);
         if (!res.has_value()) {
             unexpect_return(res.error());
         }
@@ -113,17 +104,15 @@ public:
      * 对可跟踪页, 本函数逐页降低引用计数, 仅将引用计数归零的连续页段
      * 归还给 RawGFPImpl. 对不可跟踪页, 直接委托 RawGFPImpl 释放. 
      *
-     * @tparam Stage 当前内核初始化阶段. 
      * @param addr 起始物理地址. 
      * @param page_count 页数. 
      */
-    template <KernelStage Stage = KernelStage::POST_INIT>
     static void put_page(PhyAddr addr, size_t page_count = 1) {
         if (!addr.nonnull()) {
             return;
         }
         if (!tracked(addr, page_count)) {
-            RawGFPImpl::template put_page<Stage>(addr, page_count);
+            RawGFPImpl::put_page(addr, page_count);
             return;
         }
 
@@ -140,14 +129,12 @@ public:
                 }
                 run_len++;
             } else if (run_len != 0) {
-                RawGFPImpl::template put_page<Stage>(
-                    addr + run_start * PAGESIZE, run_len);
+                RawGFPImpl::put_page(addr + run_start * PAGESIZE, run_len);
                 run_len = 0;
             }
         }
         if (run_len != 0) {
-            RawGFPImpl::template put_page<Stage>(addr + run_start * PAGESIZE,
-                                                 run_len);
+            RawGFPImpl::put_page(addr + run_start * PAGESIZE, run_len);
         }
     }
 

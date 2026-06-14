@@ -10,21 +10,17 @@
  */
 
 #include <arch/trait.h>
-#include <boot/sbi/sbi_paging.h>
 #include <env.h>
 #include <logger.h>
 #include <mem/buddy.h>
 #include <sus/logger.h>
 #include <sus/range.h>
-#include <symbols.h>
 
 #include <cstddef>
 #include <cstring>
 
 namespace {
     constexpr size_t FREEBLOCK_BITS_PER_WORD = sizeof(size_t) * 8;
-    constexpr addr_t SBI_RECLAIM_BEGIN       = 0x0000000080200000ULL;
-    constexpr addr_t SBI_RECLAIM_END         = 0x0000000080230000ULL;
 
     [[nodiscard]]
     bool test_bitmap_bit(const size_t *bitmap, size_t idx) noexcept {
@@ -52,7 +48,6 @@ BuddyAllocator::FreeBlockPool *BuddyAllocator::pool0_head() noexcept {
     return reinterpret_cast<FreeBlockPool *>(_buddy_pool0);
 }
 
-template <KernelStage Stage>
 BuddyAllocator::FreeBlockPool *BuddyAllocator::runtime_pool(
     PhyAddr paddr) noexcept {
     if (!paddr.nonnull()) {
@@ -65,14 +60,9 @@ BuddyAllocator::FreeBlockPool *BuddyAllocator::runtime_pool(
             reinterpret_cast<byte *>(_buddy_pool0) + offset);
     }
 
-    if constexpr (Stage == KernelStage::PRE_INIT) {
-        return paddr.as<FreeBlockPool>();
-    } else {
-        return convert<KpaAddr>(paddr).as<FreeBlockPool>();
-    }
+    return convert<KpaAddr>(paddr).as<FreeBlockPool>();
 }
 
-template <KernelStage Stage>
 BuddyAllocator::FreeBlock *BuddyAllocator::runtime_block(
     PhyAddr paddr) noexcept {
     if (!paddr.nonnull()) {
@@ -85,11 +75,7 @@ BuddyAllocator::FreeBlock *BuddyAllocator::runtime_block(
             reinterpret_cast<byte *>(_buddy_pool0) + offset);
     }
 
-    if constexpr (Stage == KernelStage::PRE_INIT) {
-        return paddr.as<FreeBlock>();
-    } else {
-        return convert<KpaAddr>(paddr).as<FreeBlock>();
-    }
+    return convert<KpaAddr>(paddr).as<FreeBlock>();
 }
 
 PhyAddr BuddyAllocator::pool_to_pa(const FreeBlockPool *pool) noexcept {
@@ -101,16 +87,14 @@ BuddyAllocator::FreeBlock *BuddyAllocator::pool_to_blocks(
     return reinterpret_cast<FreeBlock *>(const_cast<FreeBlockPool *>(pool));
 }
 
-template <KernelStage Stage>
-void BuddyAllocator::init_pool(FreeBlockPool *pool,
-                               PhyAddr pool_paddr) noexcept {
+void BuddyAllocator::init_pool(FreeBlockPool *pool, PhyAddr pool_paddr) noexcept {
     memset(pool, 0, FREEBLOCK_HEADER_BYTES);
     pool->used = FREEBLOCK_HEADER_BLOCKS;
     for (size_t i = 0; i < FREEBLOCK_HEADER_BLOCKS; ++i) {
         set_bitmap_bit(pool->bitmap, i);
     }
 
-    auto *blocks = runtime_block<Stage>(pool_paddr);
+    auto *blocks = runtime_block(pool_paddr);
     for (size_t i = FREEBLOCK_HEADER_BLOCKS; i < FREEBLOCK_POOL_SIZE; ++i) {
         blocks[i].paddr = pool_paddr + i * sizeof(FreeBlock);
         blocks[i].order = 0;
@@ -120,7 +104,7 @@ void BuddyAllocator::init_pool(FreeBlockPool *pool,
 }
 
 void BuddyAllocator::init_pool0() noexcept {
-    init_pool<KernelStage::PRE_INIT>(pool0_head(), pool0_area().begin);
+    init_pool(pool0_head(), pool0_area().begin);
     _pool_head = pool0_head();
     _pool_tail = pool0_head();
 }
@@ -140,7 +124,6 @@ bool BuddyAllocator::pool_needs_expand(const FreeBlockPool *pool) noexcept {
     return pool->used * 4 > FREEBLOCK_POOL_SIZE * 3;
 }
 
-template <KernelStage Stage>
 Result<void> BuddyAllocator::maybe_expand_pool() noexcept {
     if (_pool_tail == nullptr || !pool_needs_expand(_pool_tail)) {
         void_return();
@@ -149,27 +132,24 @@ Result<void> BuddyAllocator::maybe_expand_pool() noexcept {
     loggers::BUDDY::DEBUG("FreeBlocks 池开始扩容");
 
     // 超过阈值时至少还有 (128 - 24) 个块可用, 因此扩容过程中不必担心块不够。
-    return add_new_pool<Stage>();
+    return add_new_pool();
 }
 
-template <KernelStage Stage>
 Result<void> BuddyAllocator::add_new_pool() noexcept {
-    auto pool_res = fetch_frame_order<Stage>(
-        pages2order(FREEBLOCK_EXPAND_PAGES));
+    auto pool_res = fetch_frame_order(pages2order(FREEBLOCK_EXPAND_PAGES));
     if (!pool_res.has_value()) {
         propagate_return(pool_res);
     }
 
     PhyAddr pool_paddr = pool_res.value();
-    auto *pool         = runtime_pool<Stage>(pool_paddr);
-    init_pool<Stage>(pool, pool_paddr);
+    auto *pool         = runtime_pool(pool_paddr);
+    init_pool(pool, pool_paddr);
     attach_pool(pool);
     loggers::BUDDY::INFO("追加 FreeBlock 池: [%p, %p)", pool_paddr.addr(),
                          (pool_paddr + FREEBLOCK_EXPAND_PAGES * PAGESIZE).addr());
     void_return();
 }
 
-template <KernelStage Stage>
 Result<BuddyAllocator::FreeBlock *> BuddyAllocator::alloc_freeblock() noexcept {
     for (FreeBlockPool *pool = _pool_head; pool != nullptr; pool = pool->next) {
         if (pool->used >= FREEBLOCK_POOL_SIZE) {
@@ -190,7 +170,7 @@ Result<BuddyAllocator::FreeBlock *> BuddyAllocator::alloc_freeblock() noexcept {
         }
     }
 
-    auto expand_res = add_new_pool<Stage>();
+    auto expand_res = add_new_pool();
     if (!expand_res.has_value()) {
         unexpect_return(expand_res.error());
     }
@@ -305,123 +285,164 @@ void BuddyAllocator::pre_init() {
     for (int order = 0; order <= MAX_BUDDY_ORDER; ++order) {
         free_area[order] = nullptr;
     }
-    _post_initialized = false;
     init_pool0();
+}
 
-    auto &meminfo = env::inst().meminfo();
-    for (size_t i = 0; i < meminfo.region_cnt; ++i) {
-        const MemRegion &region = meminfo.regions[i];
-        if (region.status != MemRegion::MemoryStatus::FREE) {
-            continue;
+void BuddyAllocator::add_memory_range(PhyAddr paddr, size_t pages) {
+    size_t remain = pages;
+    PhyAddr addr  = paddr;
+
+    while (remain > 0) {
+        size_t order = 0;
+        while (order < MAX_BUDDY_ORDER) {
+            size_t try_pages = 1UL << (order + 1);
+            size_t try_size  = try_pages << 12;
+            if (try_pages <= remain && addr.aligned(try_size)) {
+                ++order;
+            } else {
+                break;
+            }
         }
 
-        PhyAddr start_addr = region.ptr.page_align_up();
-        PhyAddr end_addr   = (region.ptr + region.size).page_align_down();
-        size_t pages       = (end_addr - start_addr) / PAGESIZE;
-        if (pages == 0) {
-            continue;
-        }
+        put_page_in_order(addr, static_cast<int>(order));
 
-        loggers::BUDDY::DEBUG("添加可用内存区域 [%p, %p), 共 %u 页",
-                              start_addr.addr(), end_addr.addr(),
-                              static_cast<unsigned>(pages));
-        add_memory_range<KernelStage::PRE_INIT>(start_addr, pages);
-    }
-
-    PhyAddr sbi_begin = PhyAddr(SBI_RECLAIM_BEGIN).page_align_up();
-    PhyAddr sbi_end   = PhyAddr(SBI_RECLAIM_END).page_align_down();
-    if (sbi_begin < sbi_end) {
-        size_t pages = (sbi_end - sbi_begin) / PAGESIZE;
-        loggers::BUDDY::INFO("回收 SBI 引导区 [%p, %p), 共 %u 页",
-                             sbi_begin.addr(), sbi_end.addr(),
-                             static_cast<unsigned>(pages));
-        add_memory_range<KernelStage::PRE_INIT>(sbi_begin, pages);
+        size_t block_pages = 1ul << order;
+        addr              += block_pages << 12;
+        remain            -= block_pages;
     }
 }
 
-void BuddyAllocator::post_init() {
-    if (_post_initialized) {
+Result<PhyAddr> BuddyAllocator::get_free_page(size_t frame_count) {
+    if (frame_count == 0) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    if (frame_count > (1ul << MAX_BUDDY_ORDER)) {
+        loggers::BUDDY::ERROR("请求的页数 %u 超出最大支持的范围",
+                              static_cast<unsigned>(frame_count));
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    auto fetch_res = fetch_frame_order(pages2order(frame_count));
+    if (!fetch_res.has_value()) {
+        unexpect_return(fetch_res.error());
+    }
+
+    PhyAddr paddr = fetch_res.value();
+    size_t order  = static_cast<size_t>(pages2order(frame_count));
+    size_t pages  = 1ul << order;
+    if (pages > frame_count) {
+        add_memory_range(paddr + frame_count * PAGESIZE, pages - frame_count);
+    }
+
+    loggers::BUDDY::DEBUG("分配了 %u 页物理内存: [%p, %p)",
+                          static_cast<unsigned>(frame_count), paddr.addr(),
+                          (paddr + frame_count * PAGESIZE).addr());
+
+    auto expand_res = maybe_expand_pool();
+    if (!expand_res.has_value()) {
+        unexpect_return(expand_res.error());
+    }
+    return paddr;
+}
+
+Result<PhyAddr> BuddyAllocator::get_free_pages_in_order(size_t order) {
+    if (order > MAX_BUDDY_ORDER) {
+        loggers::BUDDY::ERROR("无可用内存块: order %u 超出范围",
+                              static_cast<unsigned>(order));
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    return fetch_frame_order(order);
+}
+
+void BuddyAllocator::put_page(PhyAddr paddr, size_t frame_count) {
+    if (!paddr.nonnull() || frame_count == 0) {
         return;
     }
 
-    for (FreeBlockPool *pool = _pool_head; pool != nullptr;) {
-        PhyAddr pool_pa         = pool_to_pa(pool);
-        PhyAddr next_pa         = pool->next == nullptr
-                                      ? PhyAddr::null
-                                      : convert_pointer(pool->next);
-        PhyAddr prev_pa         = pool->prev == nullptr
-                                      ? PhyAddr::null
-                                      : convert_pointer(pool->prev);
-        FreeBlockPool *next_raw = pool->next;
-
-        FreeBlockPool *pool_new = runtime_pool<KernelStage::POST_INIT>(pool_pa);
-        pool_new->next = runtime_pool<KernelStage::POST_INIT>(next_pa);
-        pool_new->prev = runtime_pool<KernelStage::POST_INIT>(prev_pa);
-
-        for (size_t idx = FREEBLOCK_HEADER_BLOCKS; idx < FREEBLOCK_POOL_SIZE; ++idx) {
-            if (!test_bitmap_bit(pool_new->bitmap, idx)) {
-                continue;
-            }
-
-            PhyAddr block_pa = pool_pa + idx * sizeof(FreeBlock);
-            FreeBlock *block = runtime_block<KernelStage::POST_INIT>(block_pa);
-            PhyAddr block_prev_pa = block->prev == nullptr
-                                        ? PhyAddr::null
-                                        : convert_pointer(block->prev);
-            PhyAddr block_next_pa = block->next == nullptr
-                                        ? PhyAddr::null
-                                        : convert_pointer(block->next);
-
-            block->prev = runtime_block<KernelStage::POST_INIT>(block_prev_pa);
-            block->next = runtime_block<KernelStage::POST_INIT>(block_next_pa);
-        }
-
-        pool = next_raw;
-    }
-
-    for (int order = 0; order <= MAX_BUDDY_ORDER; ++order) {
-        if (free_area[order] == nullptr) {
-            continue;
-        }
-        free_area[order] = runtime_block<KernelStage::POST_INIT>(
-            convert_pointer(free_area[order]));
-    }
-
-    if (_pool_head != nullptr) {
-        _pool_head =
-            runtime_pool<KernelStage::POST_INIT>(convert_pointer(_pool_head));
-    }
-    if (_pool_tail != nullptr) {
-        _pool_tail =
-            runtime_pool<KernelStage::POST_INIT>(convert_pointer(_pool_tail));
-    }
-
-    _post_initialized = true;
-    __print_memory_layout<KernelStage::POST_INIT>();
-    loggers::BUDDY::INFO("BuddyAllocator initialized with external FreeBlock pools.");
+    assert(paddr.aligned<PAGESIZE>());
+    add_memory_range(paddr, frame_count);
 }
 
-template BuddyAllocator::FreeBlockPool *
-BuddyAllocator::runtime_pool<KernelStage::PRE_INIT>(PhyAddr) noexcept;
-template BuddyAllocator::FreeBlockPool *
-BuddyAllocator::runtime_pool<KernelStage::POST_INIT>(PhyAddr) noexcept;
-template BuddyAllocator::FreeBlock *
-BuddyAllocator::runtime_block<KernelStage::PRE_INIT>(PhyAddr) noexcept;
-template BuddyAllocator::FreeBlock *
-BuddyAllocator::runtime_block<KernelStage::POST_INIT>(PhyAddr) noexcept;
-template void BuddyAllocator::init_pool<KernelStage::PRE_INIT>(
-    FreeBlockPool *, PhyAddr) noexcept;
-template void BuddyAllocator::init_pool<KernelStage::POST_INIT>(
-    FreeBlockPool *, PhyAddr) noexcept;
-template Result<void>
-BuddyAllocator::maybe_expand_pool<KernelStage::PRE_INIT>() noexcept;
-template Result<void>
-BuddyAllocator::maybe_expand_pool<KernelStage::POST_INIT>() noexcept;
-template Result<void>
-BuddyAllocator::add_new_pool<KernelStage::PRE_INIT>() noexcept;
-template Result<void>
-BuddyAllocator::add_new_pool<KernelStage::POST_INIT>() noexcept;
-template Result<BuddyAllocator::FreeBlock *>
-BuddyAllocator::alloc_freeblock<KernelStage::PRE_INIT>() noexcept;
-template Result<BuddyAllocator::FreeBlock *>
-BuddyAllocator::alloc_freeblock<KernelStage::POST_INIT>() noexcept;
+void BuddyAllocator::put_page_in_order(PhyAddr paddr, int order) {
+    if (!paddr.nonnull()) {
+        return;
+    }
+
+    assert(order >= 0);
+    assert(order <= MAX_BUDDY_ORDER);
+    assert(paddr.aligned(block_size_for_order(static_cast<size_t>(order))));
+
+    PhyAddr current_paddr = paddr;
+    int current_order     = order;
+
+    while (current_order <= MAX_BUDDY_ORDER) {
+        auto node_res = alloc_freeblock();
+        assert(node_res.has_value());
+        FreeBlock *node = node_res.value();
+        node->paddr     = current_paddr;
+        node->order     = static_cast<size_t>(current_order);
+        node->prev      = nullptr;
+        node->next      = nullptr;
+        link_block(node);
+
+        if (current_order == MAX_BUDDY_ORDER) {
+            break;
+        }
+
+        FreeBlock *buddy = find_buddy_node(node);
+        if (buddy == nullptr) {
+            break;
+        }
+
+        size_t size          = block_size_for_order(static_cast<size_t>(current_order));
+        PhyAddr buddy_paddr  = buddy->paddr;
+        PhyAddr merged_paddr =
+            buddy_paddr < current_paddr ? buddy_paddr : current_paddr;
+
+        loggers::BUDDY::DEBUG("将 [%p, %p) 与 [%p, %p) 合并为 [%p, %p)",
+                              current_paddr.addr(), (current_paddr + size).addr(),
+                              buddy_paddr.addr(), (buddy_paddr + size).addr(),
+                              merged_paddr.addr(),
+                              (merged_paddr + size * 2).addr());
+
+        unlink_block(node);
+        unlink_block(buddy);
+        free_freeblock(node);
+        free_freeblock(buddy);
+
+        current_paddr = merged_paddr;
+        ++current_order;
+    }
+}
+
+Result<PhyAddr> BuddyAllocator::fetch_frame_order(size_t order) {
+    size_t current_order = order;
+    while (current_order <= MAX_BUDDY_ORDER) {
+        if (free_area[current_order] != nullptr) {
+            break;
+        }
+        ++current_order;
+    }
+
+    if (current_order > MAX_BUDDY_ORDER) {
+        loggers::BUDDY::ERROR("无可用内存块");
+        unexpect_return(ErrCode::OUT_OF_MEMORY);
+    }
+
+    FreeBlock *node = free_area[current_order];
+    unlink_block(node);
+    PhyAddr paddr = node->paddr;
+    free_freeblock(node);
+
+    while (current_order > order) {
+        --current_order;
+        size_t size         = block_size_for_order(current_order);
+        PhyAddr buddy_paddr = paddr + size;
+        loggers::BUDDY::DEBUG("将 [%p, %p) 分割为 [%p, %p) 和 [%p, %p)",
+                              paddr.addr(), (paddr + (size << 1)).addr(),
+                              paddr.addr(), (paddr + size).addr(),
+                              buddy_paddr.addr(), (buddy_paddr + size).addr());
+        put_page_in_order(buddy_paddr, static_cast<int>(current_order));
+    }
+    return paddr;
+}
