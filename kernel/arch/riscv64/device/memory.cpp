@@ -140,7 +140,7 @@ Result<void> Riscv64MemoryLayout::detect() {
     // FDT 中的内存区域使用物理地址, linker symbols 是内核高半区虚拟地址.
     // 因此这里必须先转换成物理地址, 否则 kernel/initrd 会被误加入 FREE 区域.
 
-    PhyAddr kernel_start_pa = convert_pointer(&skernel);
+    PhyAddr kernel_start_pa = convert_pointer(&s_sbi_kva);
     PhyAddr kernel_end_pa   = convert_pointer(&ekernel);
     PhyArea kernel_area(kernel_start_pa, kernel_end_pa);
 

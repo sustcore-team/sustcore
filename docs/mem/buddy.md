@@ -18,21 +18,24 @@ GFP
 
 ## 数据结构
 
-每个空闲块开头被 placement-new 成 `FreeBlock`:
+每个空闲块由外置 `FreeBlock` 元数据描述:
 
 ```cpp
 struct FreeBlock {
-    util::ListHead<FreeBlock> list_head;
+    PhyAddr paddr;
+    size_t order;
+    FreeBlock *prev;
+    FreeBlock *next;
 };
 ```
 
-空闲链表:
+每个 order 维护一条按物理地址升序排列的双向链表:
 
 ```cpp
-static BlockList free_area[MAX_BUDDY_ORDER + 1];
+static FreeBlock *free_area[MAX_BUDDY_ORDER + 1];
 ```
 
-其中 `BlockList` 是按地址排序的 `OrderedIntrusiveList`。每个 order 表示大小为:
+每个 order 表示大小为:
 
 ```text
 2^order pages
@@ -50,14 +53,16 @@ MAX_BUDDY_ORDER = 15
 
 `pre_init()`:
 
-- 初始化所有 order 的空闲链表。
+- 初始化所有 order 的空闲链表头。
+- 初始化外置 `FreeBlock` 池 `_buddy_pool0`。
 - 遍历 `MemRegion[]`。
 - 对每个 FREE 区域执行页对齐。
 - 调用 `add_memory_range<PRE_INIT>()` 加入 buddy。
+- 额外把 `[`&`s_sbi`, `&s_sbi_paging` `)` 对应的物理页加入 buddy，以回收 SBI 引导区。
 
 `post_init()`:
 
-- 把链表节点和哨兵指针从 PA 访问语义迁移到 KPA 访问语义。
+- 切换到 post-init 地址语义后重建 `free_area[]` 头指针。
 - 打印迁移后的空闲布局。
 
 ## 添加内存范围
@@ -94,11 +99,28 @@ MAX_BUDDY_ORDER = 15
 
 `put_page_in_order(paddr, order)`:
 
-1. 在释放块起始地址 placement-new `FreeBlock`。
+1. 从 `FreeBlock` 池中分配一个元数据节点。
 2. 插入对应 order 的有序链表。
 3. 判断 buddy 位于左侧还是右侧。
 4. 如果相邻 buddy 块也空闲且地址连续，移除两块并合并成更高 order。
 5. 重复合并直到无法合并或达到最大 order。
+
+## FreeBlock 池
+
+buddy 的元数据不再写回空闲页本身，而是保存在独立的 `FreeBlock` 池中。
+
+- 每个池固定为 `512` 个 `FreeBlock` 槽位。
+- 池头前四个槽位承载 `FreeBlockPool` 头部，因此这四个槽位永久视为已占用。
+- 位图 `bitmap` 中，`1` 表示该槽位已分配给 buddy 元数据使用，`0` 表示空闲。
+- `used` 统计当前池中已占用槽位数量，初始至少为 `4`。
+- 当尾池满足 `used * 4 > FREEBLOCK_POOL_SIZE * 3` 时，buddy 会追加一个新的池。
+- 新池通过 buddy 自身额外申请 `4` 页承载，加入后永不回收。
+
+实现中保留了一条注释说明阈值安全性:
+
+```text
+超过阈值时至少还有 (128 - 24) 个块可用, 因此扩容过程中不必担心块不够。
+```
 
 ## 与 GFP 的关系
 
@@ -121,7 +143,7 @@ MAX_BUDDY_ORDER = 15
 
 ## 注意事项
 
-- buddy 元数据直接存放在空闲物理块中，分配出去后该区域不再是 `FreeBlock`。
+- buddy 元数据存放在独立 `FreeBlock` 池中，不再覆写空闲页内容。
 - 释放的地址必须页对齐，且页数必须与调用方实际持有的范围一致。
 - `put_page()` 本身不检查双重释放；调用方需要保证生命周期正确。
 - 若 `RawGFPImpl` 未切换到 `BuddyAllocator`，这些释放和合并语义不会成为 GFP 的实际行为。

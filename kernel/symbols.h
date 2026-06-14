@@ -74,6 +74,9 @@ extern void *s_misc;
  *
  */
 extern void *s_initrd, *e_initrd;
+
+extern char s_sbi_kva;
+
 #ifdef __cplusplus
 }
 #endif

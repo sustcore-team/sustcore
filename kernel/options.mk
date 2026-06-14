@@ -6,7 +6,7 @@ attachments := initrd.tar.attachment.o
 
 variant.default.target := $(path-kernel)
 variant.default.dir-obj := $(path-objects)/kernel
-variant.default.script-ld := $(component-root)/arch/$(architecture)/kernel.ld
+variant.default.script-ld := $(component-root)/boot/sbi/sbi.ld
 variant.default.libraries := kersbi kerbasecpp fdt
 
 flags-ld := $(flags-kernel-ld) $(flags-common-ld) $(flags-mode-ld)

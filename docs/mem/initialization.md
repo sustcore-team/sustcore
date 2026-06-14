@@ -88,16 +88,17 @@ kernelman.flush_tlb();
 
 `BuddyAllocator::pre_init()` 会:
 
-- placement-new 初始化每个 order 的空闲链表。
+- 初始化每个 order 的空闲链表头。
+- 初始化外置 `FreeBlock` 池 `_buddy_pool0`。
 - 遍历 `MemRegion[]`，把所有 FREE 区域按页对齐后加入 buddy。
+- 额外回收 `[`&`s_sbi`, `&s_sbi_paging` `)` 这段 SBI 引导区，并加入 buddy。
 
 `BuddyAllocator::post_init()` 会:
 
-- 遍历各 order 链表。
-- 把链表哨兵和节点指针从 PA 语义转换为 KPA 语义。
+- 把各 order 链表头切换到 post-init 可访问地址语义。
 - 打印迁移后的 buddy 布局。
 
-这一步很重要，因为 pre-init 时页框元数据直接构造在物理页中；进入高半区后，同一物理页必须通过 KPA/KVA 访问。
+这一步仍然重要，因为动态扩容出来的 `FreeBlock` 池位于物理页中；进入高半区后，需要通过 post-init 地址语义继续访问这些元数据。
 
 ## 初始化顺序约束
 
