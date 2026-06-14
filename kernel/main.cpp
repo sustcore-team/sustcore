@@ -442,7 +442,8 @@ void env_setup() {
         "桥接阶段回收 SBI 引导区 [%p, %p), 共 %u 页",
         SBI_RECLAIMABLE_AREA.begin.addr(), SBI_RECLAIMABLE_AREA.end.addr(),
         static_cast<unsigned>(SBI_RECLAIMABLE_AREA.size() / PAGESIZE));
-    GFP::put_page(SBI_RECLAIMABLE_AREA.begin, SBI_RECLAIMABLE_AREA.size() / PAGESIZE);
+    GFP::put_page(SBI_RECLAIMABLE_AREA.begin,
+                  SBI_RECLAIMABLE_AREA.size() / PAGESIZE);
 
     loggers::SUSTCORE::INFO("将内存区域加入到GFP中");
     for (int i = 0; i < e.meminfo().region_cnt; i++) {
@@ -470,12 +471,12 @@ void env_setup() {
 
     // 重新建立内核页表
     loggers::SUSTCORE::INFO("重新建立正式内核页表");
-    auto new_pgd_res = GFP::get_free_page(1);
-    if (!new_pgd_res.has_value()) {
+    auto gfp_res = GFP::get_free_page(1);
+    if (!gfp_res.has_value()) {
         panic("无法分配新的内核页表根");
     }
 
-    PhyAddr new_pgd                                     = new_pgd_res.value();
+    PhyAddr new_pgd                                     = gfp_res.value();
     env::inst().main_kernel_pgd(key::main_kernel_pgd()) = new_pgd;
     PageMan::make_root(new_pgd);
     PageMan kernelman(new_pgd);
@@ -505,13 +506,13 @@ void env_setup() {
     loggers::SUSTCORE::INFO("回收 SBI 内核页表区");
     // 加入 sbi 页表区域到 KPA 映射与GFP
     map_kpa_region(kernelman, SBI_PAGING_AREA);
-    RawGFPImpl::put_page(SBI_PAGING_AREA.begin, SBI_PAGING_AREA.size() / PAGESIZE);
-    
+    RawGFPImpl::put_page(SBI_PAGING_AREA.begin,
+                         SBI_PAGING_AREA.size() / PAGESIZE);
+
     // 初始化 Allocator 与内存池
     loggers::SUSTCORE::INFO("初始化分配器和内核对象池");
     Allocator::init();
     init_kop();
-    
 
     loggers::SUSTCORE::INFO("桥接代码完成! 进入 post-init 阶段");
     post_init();

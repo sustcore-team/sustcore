@@ -642,6 +642,8 @@ public:
         void_return();
     }
 
+    Result<void> merge_from(Riscv64SV39PageMan &src) noexcept;
+
     // 更换页表根
     static void __switch_root(PhyAddr __root);
 

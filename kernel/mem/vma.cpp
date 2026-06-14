@@ -9,8 +9,8 @@
  *
  */
 
+#include <env.h>
 #include <mem/gfp.h>
-#include <mem/kaddr.h>
 #include <mem/vma.h>
 #include <sus/logger.h>
 #include <sus/owner.h>
@@ -53,9 +53,14 @@ namespace {
 }  // namespace
 
 TaskMemoryManager::TaskMemoryManager(PhyAddr _pgd)
-    : vma_list(), _pgd(_pgd), _pman(_pgd) {
+    : vma_list(), _pgd(_pgd), _pman(_pgd)
+{
     PageMan::make_root(_pgd);
-    ker_paddr::mapping_kernel_areas(_pman);
+    auto kernel_pgd = env::inst().main_kernel_pgd();
+    assert(kernel_pgd.nonnull());
+    PageMan kernel_pman(kernel_pgd);
+    auto merge_res = _pman.merge_from(kernel_pman);
+    assert(merge_res.has_value());
 }
 
 TaskMemoryManager::TaskMemoryManager(ExistingPgdTag, PhyAddr _pgd)
