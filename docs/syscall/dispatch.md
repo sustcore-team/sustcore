@@ -126,13 +126,11 @@ current_tcb->syscall_info.complete(ret);
 
 如果 `wait_context().pending()` 为真:
 
-- 最外层会把最内层 suspended leaf 保存到 `syscall_info.handle`
 - TCB 加入等待队列
 - TCB 状态变为 `WAITING`
 - 设置 `NEED_RESCHED`
 
-唤醒时，等待系统会清理队列元数据，并由调度器在切到该线程前调用
-`resume_deferred_syscall()` 恢复最内层 coroutine。
+唤醒时，等待系统会清理队列元数据，并把线程重新转回可调度状态。当前文档不再假定调度器会在切线程前恢复最内层 coroutine handle。
 
 ## 调度器提交 syscall
 

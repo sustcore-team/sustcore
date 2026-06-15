@@ -19,12 +19,12 @@
 
 每个线程都有独立内核栈:
 
-- `KSTACK_PAGES = 4`
-- `KSTACK_SIZE = 16 KiB`
+- `KSTACK_PAGES = 8`
+- `KSTACK_SIZE = 32 KiB`
 - `kstack_phy`: 内核栈顶对应物理地址记录。
 - `kstack_bottom`: 内核栈顶虚拟地址。
 
-`TCB::context()` 通过 `Context::from_kstack(kstack_bottom)` 得到保存在内核栈上的架构上下文。
+用户线程的 trap 上下文保存在内核栈顶部附近，`TCB::context()` 会从 `kstack_bottom` 推导该上下文；内核线程则直接返回 `kernel_ctx`。
 
 ### 调度信息
 
@@ -48,10 +48,8 @@
 - syscall 号。
 - syscall 返回值。
 - 状态: `NONE` / `EXECUTING` / `COMPLETED`。
-- 可挂起 syscall 的 coroutine handle。
-- 显式 `SyscallContext`。
 
-调度器会在切换线程前恢复挂起 syscall 协程，并在 syscall 完成后把返回值写回 trap context。
+当前 `SyscallInfo` 不再持有 coroutine handle 或显式 syscall 上下文；它只描述寄存器参数、返回值和执行状态。
 
 ## 线程初始化
 
@@ -67,19 +65,10 @@
 2. 设置所属 PCB。
 3. 清空等待、syscall 和链表状态。
 4. 通过 GFP 分配 4 页内核栈。
+4. 通过 GFP 分配 8 页内核栈。
 5. 计算 `kstack_phy` 和 `kstack_bottom`。
 
-### `init_ctx`
-
-`init_ctx(tcb, entrypoint, stack_top, smode)` 会:
-
-1. 清空上下文。
-2. 调用 `Context::setup_regs(smode)`。
-3. 设置 PC 为入口地址。
-4. 设置 SP 为线程栈顶。
-5. 清空调度实体、RR 实体和 syscall 状态。
-
-`smode == false` 用于用户线程，`smode == true` 用于内核线程。
+用户线程上下文由 `build_user_contexts()` 构造: 它会在内核栈中压入用户 trap 上下文，并把内核上下文入口设置为 `new_utask_trampoline`。内核线程上下文由 `build_kernel_context()` 直接构造到 `kernel_ctx`。
 
 ## 用户线程
 
@@ -156,7 +145,7 @@
 - `wake_all(reason)`
 - `has_waiting(reason)`
 
-普通等待线程被唤醒时会调用 `Scheduler::wakeup_waiting()`。带 syscall coroutine handle 的线程会保留 coroutine 元数据，等待调度器在进入线程前恢复协程。
+普通等待线程被唤醒时会调用 `Scheduler::wakeup_waiting()`。当前等待子系统不依赖 TCB 中保存 coroutine handle；被唤醒线程只是从 `WAITING` 重新转回可调度状态。
 
 ## syscall 协程等待
 
@@ -176,17 +165,16 @@
 
 它不直接:
 
-- 写 `syscall_info.handle`
+- 修改 `TCB::SyscallInfo`
 - 将线程加入等待队列
 - 修改线程状态
 
 这些动作由最外层 syscall 路径根据 `wait::cotask::wait_context()`
 统一处理。若 `wait_context().pending()` 为真，则:
 
-1. 保存最内层 coroutine handle
-2. 将 TCB 加入等待队列
-3. 将线程置为 `WAITING`
-4. 设置 `FLAGS_NEED_RESCHED`
+1. 将 TCB 加入等待队列
+2. 将线程置为 `WAITING`
+3. 设置 `FLAGS_NEED_RESCHED`
 
 之后调度器会选择其它线程运行。
 
