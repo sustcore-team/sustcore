@@ -22,3 +22,4 @@ documents/
 compile_commands.json
 .zed/
 config.json
+.sisyphus/

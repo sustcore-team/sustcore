@@ -14,7 +14,7 @@ endif
 
 qemu-memory-args ?= -m size=256m,maxmem=256m
 
-qemu-serial-args ?= -serial stdio 
+qemu-serial-args ?= -nographic
 
 qemu-rtc-args ?= -rtc base=localtime
 
