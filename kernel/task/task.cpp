@@ -364,7 +364,7 @@ namespace task {
         // 内核 idle 线程
         void kthread_idle() {
             while (true) {
-                Riscv64Idle::idle();
+                Idle::idle();
             }
         }
 

@@ -20,7 +20,7 @@
 namespace {
     int serial_write_chunk(const char *data, size_t len, void *) {
         PhyAddr paddr = convert_pointer(data);
-        Serial::serial_write_string(len, paddr.as<char>());
+        EarlySerial::serial_write_string(len, paddr.as<char>());
         return len;
     }
 
@@ -34,19 +34,19 @@ namespace {
 int kputs(const char *str) {
     size_t len        = strlen(str);
     PhyAddr str_paddr = convert_pointer(str);
-    Serial::serial_write_string(len, str_paddr.as<char>());
+    EarlySerial::serial_write_string(len, str_paddr.as<char>());
     return strlen(str);
 }
 
 int sys_write_serial(const char *str, size_t len)
 {
     PhyAddr str_paddr = convert_pointer(str);
-    Serial::serial_write_string(len, str_paddr.as<char>());
+    EarlySerial::serial_write_string(len, str_paddr.as<char>());
     return len;
 }
 
 int kputchar(char ch) {
-    Serial::serial_write_char(ch);
+    EarlySerial::serial_write_char(ch);
     return ch;
 }
 

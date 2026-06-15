@@ -21,13 +21,12 @@
 #include <sus/owner.h>
 #include <sus/tree.h>
 #include <sustcore/addr.h>
-#include <syscall/syscall.h>
 
 #include <cstddef>
 #include <functional>
 
-using tid_t        = size_t;
-using pid_t        = size_t;
+using tid_t = size_t;
+using pid_t = size_t;
 
 namespace task {
     struct TCB;
@@ -35,7 +34,7 @@ namespace task {
 
 namespace wait {
     /// `wd` 是 `wait descriptor` 的缩写, 表示等待子系统分配的描述符编号.
-    using wd_t = size_t;
+    using wd_t               = size_t;
     using WaitPredicate      = std::function<bool(task::TCB *tcb)>;
     using WaitReadyPredicate = std::function<bool()>;
 }  // namespace wait
@@ -135,7 +134,7 @@ namespace task {
         }
 
         void reset_kstack() noexcept {
-            ksp             = (char *)kstack_bottom;
+            ksp = (char *)kstack_bottom;
         }
 
         template <typename T>

@@ -19,15 +19,17 @@
 
 #include <cstddef>
 
+using namespace rv64;
+
 size_t hart_id;
 void *dtb_ptr;
 BootInfoHeader *bootinfo_ptr;
 
-void Riscv64SerialEarlySerial::serial_write_char(char ch) {
+void EarlySerial::serial_write_char(char ch) {
     sbi_dbcn_console_write_byte(ch);
 }
 
-void Riscv64SerialEarlySerial::serial_write_string(size_t len, const char *str) {
+void EarlySerial::serial_write_string(size_t len, const char *str) {
     sbi_dbcn_console_write(len, str);
 }
 
@@ -39,13 +41,13 @@ extern "C" void c_setup(void) {
     while (true);
 }
 
-void Riscv64Initialization::pre_init(void) {}
+void Initialization::pre_init(void) {}
 
-void Riscv64Idle::idle()
+void Idle::idle()
 {
     while(true);
 }
 
-void Riscv64Initialization::post_init(void) 
+void Initialization::post_init(void) 
 {
 }

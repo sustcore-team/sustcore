@@ -14,8 +14,4 @@
 #include <arch/riscv64/trait.h>
 #include <arch/trait.h>
 
-using Serial         = Riscv64SerialEarlySerial;
-using Initialization = Riscv64Initialization;
-using Context        = Riscv64Context;
-using Interrupt      = Riscv64Interrupt;
-using PageMan        = Riscv64SV39PageMan;
+using namespace rv64;

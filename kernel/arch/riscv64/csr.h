@@ -13,8 +13,8 @@
 
 #include <sus/types.h>
 
-typedef umb_t csr_t;
-typedef dword csr32_t;
+using csr_t = umb_t;
+using csr32_t = dword;
 
 /**
  * @brief 设置CSR寄存器

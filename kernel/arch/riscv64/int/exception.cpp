@@ -17,11 +17,14 @@
 #include <logger.h>
 #include <sus/logger.h>
 #include <sus/types.h>
+#include <syscall/syscall.h>
 #include <task/scheduler.h>
 #include <task/task.h>
 #include <task/wait.h>
 
 #include <new>
+
+using namespace rv64;
 
 namespace exception {
 
@@ -88,7 +91,7 @@ namespace exception {
      * @return const char* 特权级名称.
      */
     [[nodiscard]]
-    const char *privilege_name(const Riscv64Context *ctx) noexcept {
+    const char *privilege_name(const Context *ctx) noexcept {
         if (ctx == nullptr) {
             return "未知";
         }
@@ -186,7 +189,7 @@ namespace exception {
     }
 
     void log_trap_context_error(csr_scause_t scause, umb_t sepc, umb_t stval,
-                                const Riscv64Context *ctx) {
+                                const Context *ctx) {
         loggers::EXCEPTION::ERROR(
             "trap: cause=%s(%lu), scause=0x%lx, sepc=0x%lx, stval=0x%lx",
             exception_name(scause.cause), scause.cause, scause.value, sepc,
@@ -301,7 +304,7 @@ namespace exception {
          */
         static void log_paging_fault_error(csr_scause_t scause, umb_t sepc,
                                            umb_t stval,
-                                           const Riscv64Context *ctx,
+                                           const Context *ctx,
                                            FaultCause cause, PageMan &pman) {
             VirAddr fault_addr = VirAddr(stval);
             loggers::EXCEPTION::ERROR(
@@ -325,7 +328,7 @@ namespace exception {
         [[nodiscard]]
         static FaultCause confirm_fault_cause(const csr_scause_t &scause,
                                               const VirAddr &fault_addr,
-                                              const Riscv64Context *ctx,
+                                              const Context *ctx,
                                               PageMan &pman) {
             if (!is_paging_related_exception(scause.cause)) {
                 return FaultCause::UNKNOWN;
@@ -444,7 +447,7 @@ namespace exception {
          */
         [[nodiscard]]
         bool paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
-                          Riscv64Context *ctx) {
+                          Context *ctx) {
             const VirAddr fault_addr = VirAddr(stval);
             const VirAddr fault_page = fault_addr.page_align_down();
             auto &e                  = env::inst();
@@ -641,7 +644,7 @@ namespace exception {
      */
     [[nodiscard]]
     bool illegal_instruction(csr_scause_t scause, umb_t sepc, umb_t stval,
-                             Riscv64Context *ctx) {
+                             Context *ctx) {
         loggers::EXCEPTION::DEBUG(
             "进入非法指令异常处理程序: sepc=0x%016lx, stval=0x%016lx", sepc,
             stval);
@@ -651,7 +654,7 @@ namespace exception {
     }
 
     [[nodiscard]]
-    bool on_ecall_u(umb_t sepc, Riscv64Context *ctx) noexcept {
+    bool on_ecall_u(umb_t sepc, Context *ctx) noexcept {
         env::inst().trap_context(env::key::trap_context()) = ctx;
         auto *current_tcb = schd::Scheduler::inst().current_tcb();
         assert(current_tcb != nullptr);
@@ -684,7 +687,7 @@ namespace exception {
      * @param ctx trap 上下文.
      */
     void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                   Riscv64Context *ctx) {
+                   Context *ctx) {
         bool processed = false;
         switch (scause.cause) {
             case ECALL_U: processed = on_ecall_u(sepc, ctx); break;
@@ -720,7 +723,7 @@ namespace exception {
 
 namespace interrupt {
     void interrupt(csr_scause_t scause, umb_t sepc, umb_t stval,
-                   Riscv64Context *ctx) {
+                   Context *ctx) {
         auto &irq_manager = device::DeviceModel::inst().interrupt();
         auto *cpu = env::hart_ctx != nullptr ? env::hart_ctx->cpu() : nullptr;
         if (cpu == nullptr) {
@@ -760,7 +763,7 @@ namespace interrupt {
 }  // namespace interrupt
 
 extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
-                            Riscv64Context *ctx) {
+                            Context *ctx) {
     if (!scause.interrupt) {
         loggers::EXCEPTION::DEBUG(
             "trap: cause=%llu sepc=%p stval=%p ctx=%p sp(before fault)=%p "
@@ -768,8 +771,7 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
             static_cast<unsigned long long>(scause.cause), (void *)sepc,
             (void *)stval, ctx, (void *)ctx->sp(), (void *)ctx->kstack_sp,
             ctx->sstatus.spp ? "smode" : "umode");
-    }
-    else {
+    } else {
         loggers::INTERRUPT::DEBUG(
             "interrupt: cause=%llu sepc=%p stval=%p ctx=%p sp(before irq)=%p "
             "kstack_sp=%p from_%s",
@@ -787,11 +789,11 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
         // 异常
         exception::exception(scause, sepc, stval, ctx);
     }
-    
-    Riscv64Interrupt::sti();
+
+    Interrupt::sti();
     schd::Scheduler::inst().schedule();
 
-    Riscv64Interrupt::cli();
+    Interrupt::cli();
     if (from_umode) {
         auto *tcb = schd::Scheduler::inst().current_tcb();
         if (tcb != nullptr) {
@@ -804,7 +806,7 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
 
 extern "C" void isr_entry(void);
 
-void Riscv64Interrupt::init(void) {
+void Interrupt::init(void) {
     // 重置 sscratch 寄存器
     csr_set_sscratch(0);
 
@@ -828,13 +830,13 @@ void Riscv64Interrupt::init(void) {
     csr_set_stvec(stvec);
 }
 
-void Riscv64Interrupt::sti() {
+void Interrupt::sti() {
     csr_sstatus_t sstatus = csr_get_sstatus();
     sstatus.sie           = 1;
     csr_set_sstatus(sstatus);
 }
 
-void Riscv64Interrupt::cli() {
+void Interrupt::cli() {
     csr_sstatus_t sstatus = csr_get_sstatus();
     sstatus.sie           = 0;
     csr_set_sstatus(sstatus);

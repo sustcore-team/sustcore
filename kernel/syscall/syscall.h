@@ -13,29 +13,12 @@
 
 #include <sus/nonnull.h>
 #include <sus/types.h>
+#include <syscall/packs.h>
 #include <sustcore/errcode.h>
-
-struct Riscv64Context;
-namespace task {
-    struct TCB;
-}  // namespace task
+#include <arch/description.h>
+#include <task/task_struct.h>
 
 namespace syscall {
-    class UBuffer;
-
-    struct ArgPack {
-        b64 syscall_number;
-        b64 capidx;
-        constexpr static size_t ARGS_SIZE = 6;
-        b64 args[ARGS_SIZE];
-    };
-
-    struct RetPack {
-        bool processed;
-        b64 ret0;
-        b64 ret1;
-    };
-
     const char *name_of(b64 sysno);
 
     /**
@@ -48,7 +31,7 @@ namespace syscall {
      */
     [[nodiscard]]
     RetPack dispatch_sync(util::nonnull<task::TCB *> tcb,
-                          util::nonnull<Riscv64Context *> trap_context,
+                          util::nonnull<Context *> trap_context,
                           const ArgPack &args);
 
     /**
@@ -58,6 +41,6 @@ namespace syscall {
      * @param args 已由架构层解析完成的参数包.
      */
     void handle_user_ecall(util::nonnull<task::TCB *> tcb,
-                           util::nonnull<Riscv64Context *> trap_context,
+                           util::nonnull<Context *> trap_context,
                            const ArgPack &args) noexcept;
 }  // namespace syscall
