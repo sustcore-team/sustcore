@@ -3,6 +3,7 @@
 
 .extern _sbi_setup
 .extern _sbi_post_start
+.extern __sbi_reclaimable_cursor
 
 .global _sbi_start
 .type _sbi_start, @function
@@ -36,6 +37,8 @@ _sbi_paging_setup:
 _sbi_trampoline:
     mv a0, s0
     mv a1, s1
+    la t1, __sbi_reclaimable_cursor
+    ld a2, 0(t1)
     la ra, _sbi_post_start
     jr ra
 
@@ -58,6 +61,10 @@ _sbi_write:
 .section .sbi_boot.data, "aw", @progbits
 .global __sbi_boot_hart_id
 __sbi_boot_hart_id:
+    .quad 0
+
+.global __sbi_reclaimable_cursor
+__sbi_reclaimable_cursor:
     .quad 0
 
 .global __sbi_dtb_phys

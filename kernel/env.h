@@ -15,10 +15,12 @@
 #if defined(__ARCH_riscv64__)
 #include <arch/riscv64/ctxlayout.h>
 #endif
+#include <cstring>
 #include <device/cpu.h>
 #include <device/int.h>
 #include <mem/vma.h>
 #include <schd/schdbase.h>
+#include <sustcore/boot.h>
 #include <task/task_struct.h>
 #include <sustcore/addr.h>
 
@@ -42,28 +44,17 @@ namespace env {
         struct main_kernel_pgd : public tags {};
         struct trap_context : public tags {};
         struct pgd : public unmodifiable {};
-        struct meminfo : public tags {};
+        struct bootinfo : public tags {};
     }  // namespace key
-
-    struct MemInfo {
-        constexpr static size_t MAX_REGIONS = 128;
-        MemRegion regions[MAX_REGIONS];
-        size_t region_cnt = 0;
-        PhyAddr lowpm     = PhyAddr::null;
-        PhyAddr uppm      = PhyAddr::null;
-        VirAddr lowvm     = VirAddr::null;
-
-        constexpr MemInfo() {
-            memset((void *)regions, 0, sizeof(regions));
-        }
-    };
 
     class Environment {
     private:
-        MemInfo _meminfo;
+        alignas(PAGESIZE) byte _bootinfo_storage[128 * 1024] = {};
+        size_t _bootinfo_size                                = 0;
         PhyAddr _main_kernel_pgd = PhyAddr::null;
 
     public:
+        constexpr static size_t MAX_BOOTINFO_SIZE = 128 * 1024;
         constexpr Environment();
 
         // readers
@@ -86,9 +77,17 @@ namespace env {
         PhyAddr pgd() const noexcept;
 
         [[nodiscard]]
-        const MemInfo &meminfo() const;
+        const BootInfoHeader *bootinfo() const noexcept;
         [[nodiscard]]
-        MemInfo &meminfo(key::meminfo);
+        BootInfoHeader *bootinfo(key::bootinfo) noexcept;
+        [[nodiscard]]
+        const byte *bootinfo_storage() const noexcept;
+        [[nodiscard]]
+        byte *bootinfo_storage(key::bootinfo) noexcept;
+        [[nodiscard]]
+        size_t bootinfo_size() const noexcept;
+        [[nodiscard]]
+        size_t &bootinfo_size(key::bootinfo) noexcept;
     };
 
     void construct();
@@ -356,7 +355,7 @@ namespace env {
     static_assert(offsetof(PaddedHartContext, ctx) == 0,
                   "HartContext must be the first field in PaddedHartContext");
 
-    inline constexpr Environment::Environment() : _meminfo() {}
+    inline constexpr Environment::Environment() = default;
 
     inline TaskMemoryManager *Environment::tmm() const noexcept {
         return hart_ctx->tmm();
@@ -386,12 +385,34 @@ namespace env {
         return PageMan::read_root();
     }
 
-    inline const MemInfo &Environment::meminfo() const {
-        return _meminfo;
+    inline const BootInfoHeader *Environment::bootinfo() const noexcept {
+        if (_bootinfo_size == 0) {
+            return nullptr;
+        }
+        return reinterpret_cast<const BootInfoHeader *>(_bootinfo_storage);
     }
 
-    inline MemInfo &Environment::meminfo(key::meminfo) {
-        return _meminfo;
+    inline BootInfoHeader *Environment::bootinfo(key::bootinfo) noexcept {
+        if (_bootinfo_size == 0) {
+            return nullptr;
+        }
+        return reinterpret_cast<BootInfoHeader *>(_bootinfo_storage);
+    }
+
+    inline const byte *Environment::bootinfo_storage() const noexcept {
+        return _bootinfo_storage;
+    }
+
+    inline byte *Environment::bootinfo_storage(key::bootinfo) noexcept {
+        return _bootinfo_storage;
+    }
+
+    inline size_t Environment::bootinfo_size() const noexcept {
+        return _bootinfo_size;
+    }
+
+    inline size_t &Environment::bootinfo_size(key::bootinfo) noexcept {
+        return _bootinfo_size;
     }
 
     /**

@@ -1596,44 +1596,7 @@ namespace fdt {
 
     void FDTProvider::register_memory_regions(
         device::DeviceModel &model) const {
-        if (!_config.root) {
-            return;
-        }
-
-        std::vector<device::MemRegion> regions;
-
-        // 加入所有 device_type = memory 的节点下的区域作为FREE区域
-        for (const auto &[_, node] : _config.root->children) {
-            if (!node_status_enabled(*node) || !is_memory_node(*node)) {
-                continue;
-            }
-            auto reg_it = node->properties.find(REG_PROP);
-            if (reg_it == node->properties.end()) {
-                loggers::DEVICE::WARN("内存节点 /%s 缺少 reg 属性, 已跳过",
-                                      node->name.c_str());
-                continue;
-            }
-            append_as_regions(regions, node_region_cells(*node),
-                              *reg_it->second,
-                              device::MemRegion::MemoryStatus::FREE);
-        }
-
-        // 加入 reserved-memory 下的所有保留区域
-        Node *reserved_memory = _config.get_node_by_path(RESERVED_MEMORY_PATH);
-        if (reserved_memory != nullptr) {
-            for (const auto &[_, child] : reserved_memory->children) {
-                if (!node_status_enabled(*child)) {
-                    loggers::DEVICE::WARN(
-                        "节点 /reserved-memory/%s 缺少 reg 属性, 已跳过",
-                        child->name.c_str());
-                    continue;
-                }
-                append_as_regions(regions, node_region_cells(*child),
-                                  *child->properties.at(REG_PROP),
-                                  device::MemRegion::MemoryStatus::RESERVED);
-            }
-        }
-        model.collect_memory_regions(&regions);
+        (void)model;
     }
 
     void FDTProvider::register_cpus(device::DeviceModel &model) const {

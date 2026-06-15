@@ -17,13 +17,13 @@
 
 #include <cstddef>
 
-class Loongarch64Serial {
+class Loongarch64EarlySerial {
 public:
     static void serial_write_char(char ch);
     static void serial_write_string(size_t len, const char *str);
 };
 
-static_assert(SerialTrait<Loongarch64Serial>);
+static_assert(EarlySerialTrait<Loongarch64EarlySerial>);
 
 class Loongarch64Initialization {
 public:
@@ -32,13 +32,6 @@ public:
 };
 
 static_assert(InitializationTrait<Loongarch64Initialization>);
-
-class Loongarch64MemoryLayout {
-public:
-    static Result<void> detect();
-};
-
-static_assert(MemoryLayoutTrait<Loongarch64MemoryLayout>);
 
 struct Loongarch64Context {
     umb_t _pc = 0;
@@ -98,12 +91,6 @@ struct Loongarch64Interrupt {
 };
 
 static_assert(InterruptTrait<Loongarch64Interrupt>);
-
-struct Loongarch64WPFault {
-    int reserved;
-};
-
-static_assert(WPFaultTrait<Loongarch64WPFault>);
 
 struct Loongarch64Idle {
     static void idle();

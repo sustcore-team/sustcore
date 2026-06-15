@@ -1,11 +1,11 @@
 #include <arch/loongarch64/placeholder.h>
 #include <arch/loongarch64/trait.h>
 
-void Loongarch64Serial::serial_write_char(char ch) {
+void Loongarch64EarlySerial::serial_write_char(char ch) {
     (void)ch;
 }
 
-void Loongarch64Serial::serial_write_string(size_t len, const char *str) {
+void Loongarch64EarlySerial::serial_write_string(size_t len, const char *str) {
     (void)len;
     (void)str;
 }
@@ -13,10 +13,6 @@ void Loongarch64Serial::serial_write_string(size_t len, const char *str) {
 void Loongarch64Initialization::pre_init(void) {}
 
 void Loongarch64Initialization::post_init(void) {}
-
-Result<void> Loongarch64MemoryLayout::detect() {
-    unexpect_return(ErrCode::NOT_SUPPORTED);
-}
 
 void Loongarch64Interrupt::init(void) {}
 

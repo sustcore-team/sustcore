@@ -18,39 +18,21 @@
 #include <syscall/syscall.h>
 #include <task/startup.h>
 
-// 该功能必须通过宏来实现, 以保证其一定会内联到原代码片段中
-#define RELOAD_SP() asm volatile("la sp, boot_stack_top\n");
-
-class Riscv64Serial {
+class Riscv64SerialEarlySerial {
 public:
     static void serial_write_char(char ch);
     static void serial_write_string(size_t len, const char *str);
 };
 
-static_assert(SerialTrait<Riscv64Serial>);
+static_assert(EarlySerialTrait<Riscv64SerialEarlySerial>);
 
 class Riscv64Initialization {
 public:
     static void pre_init(void);
     static void post_init(void);
-    static void promote_dtb_to_kpa(void);
 };
 
 static_assert(InitializationTrait<Riscv64Initialization>);
-
-class Riscv64MemoryLayout {
-public:
-    /**
-     * @brief 检测内存布局
-     *
-     * @param regions 内存区域数组
-     * @param cnt 数组大小
-     * @return 内存区域数量, < 0说明数组大小不足
-     */
-    static Result<void> detect();
-};
-
-static_assert(MemoryLayoutTrait<Riscv64MemoryLayout>);
 
 struct Riscv64Context {
     umb_t regs[CTX_SEPC_SLOT];
@@ -163,11 +145,6 @@ struct Riscv64Interrupt {
 };
 
 static_assert(InterruptTrait<Riscv64Interrupt>);
-
-struct Riscv64WPFault {
-    int reserved;
-};
-static_assert(WPFaultTrait<Riscv64WPFault>);
 
 struct Riscv64Idle {
     static void idle();

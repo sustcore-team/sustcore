@@ -42,6 +42,7 @@ namespace sbi {
 namespace sbi {
     extern "C" size_t __sbi_boot_hart_id;
     extern "C" addr_t __sbi_dtb_phys;
+    extern "C" addr_t __sbi_reclaimable_cursor;
     static_assert(sizeof(__sbi_boot_hart_id) == 8, "类型大小不匹配");
     static_assert(sizeof(__sbi_dtb_phys) == 8, "类型大小不匹配");
 
@@ -58,8 +59,8 @@ namespace sbi {
         _sbi_panic();  \
     } while (0)
 
-    static _SBI_DATA addr_t paging_cursor;
-    static _SBI_DATA addr_t paging_limit;
+    static _SBI_DATA addr_t reclaimable_cursor;
+    static _SBI_DATA addr_t reclaimable_limit;
     static _SBI_DATA addr_t root_page_table;
     static _SBI_DATA addr_t kernel_kva_limit;
 
@@ -75,14 +76,14 @@ namespace sbi {
     }
 
     _SBI_FUNCTION addr_t page_alloc() {
-        addr_t current = paging_cursor;
+        addr_t current = reclaimable_cursor;
         if ((current & (PAGE_TABLE_ALIGNMENT - 1)) != 0) {
             _SBI_PANIC(SBI_MISALIGNED_PAGING_MSG);
         }
-        if (current + PAGE_SIZE > paging_limit) {
+        if (current + PAGE_SIZE > reclaimable_limit) {
             _SBI_PANIC(SBI_PAGE_ALLOC_OVERFLOW_MSG);
         }
-        paging_cursor = current + PAGE_SIZE;
+        reclaimable_cursor = current + PAGE_SIZE;
         page_zero(current);
         return current;
     }
@@ -169,8 +170,8 @@ namespace sbi {
     extern "C" _SBI_FUNCTION size_t _sbi_setup() {
         _SBI_WRITE(SBI_BOOT_MSG);
 
-        char *paging_start = &s_sbi_paging;
-        char *paging_end   = &e_sbi_paging;
+        char *paging_start = &s_sbi_reclaimable;
+        char *paging_end   = &e_sbi_reclaimable;
 
         size_t paging_size = paging_end - paging_start;
         if (paging_size < MINIMUM_PAGING_SIZE) {
@@ -181,8 +182,8 @@ namespace sbi {
         }
 
         // 设置页表分配起始与终点位置
-        paging_cursor = reinterpret_cast<addr_t>(paging_start);
-        paging_limit  = reinterpret_cast<addr_t>(paging_end);
+        reclaimable_cursor = reinterpret_cast<addr_t>(paging_start);
+        reclaimable_limit  = reinterpret_cast<addr_t>(paging_end);
 
         char *kernel_start = &s_sbi;
         char *kernel_end   = &ekernel_phys;
@@ -227,6 +228,7 @@ namespace sbi {
         map_range_in_2m(root_page_table, aligned_dtb_start + KVA_OFFSET,
                         aligned_dtb_end + KVA_OFFSET, aligned_dtb_start);
 
+        __sbi_reclaimable_cursor = reclaimable_cursor;
         _SBI_WRITE(SBI_PAGING_SETUP_COMPLETE_MSG);
         return calc_satp();
     }

@@ -13,10 +13,12 @@
 
 #include <sustcore/addr.h>
 
-#define _SBI_PAGING     SECTION(".sbi_paging")
+#define _SBI_RECLAIMABLE SECTION(".sbi_reclaimable")
 
 namespace sbi {
-    extern "C" char s_sbi, s_sbi_paging, e_sbi_paging, ekernel_phys;
+    extern "C" char s_sbi, s_sbi_kva, s_sbi_reclaimable,
+        s_sbi_reclaimable_kva, e_sbi_reclaimable, e_sbi_reclaimable_kva,
+        ekernel_phys, ekernel;
     constexpr size_t MINIMUM_PAGING_SIZE   = 128 * 1024;         // 64KB
     constexpr size_t MAXIMUM_KERNEL_SIZE   = 32 * 1024 * 1024;  // 32MB
     constexpr size_t MAXIMUM_DTB_SIZE      = 2 * 1024 * 1024;   // 2MB

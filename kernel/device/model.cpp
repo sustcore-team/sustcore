@@ -266,12 +266,7 @@ namespace device {
     }
 
     void KernelProvider::register_device(DeviceModel &model) const {
-        PhyAddr kernel_start = convert_pointer(&s_sbi_kva);
-        PhyAddr kernel_end   = convert_pointer(&ekernel);
-        std::vector<MemRegion> regions;
-        regions.emplace_back(PhyArea(kernel_start, kernel_end),
-                             MemRegion::MemoryStatus::RESERVED);
-        model.collect_memory_regions(&regions);
+        (void)model;
     }
 
     DeviceModel DeviceModel::_INSTANCE;

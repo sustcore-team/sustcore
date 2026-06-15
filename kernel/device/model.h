@@ -41,10 +41,11 @@ namespace device {
         enum class MemoryStatus {
             FREE             = 0,
             RESERVED         = 1,
-            ACPI_RECLAIMABLE = 2,
-            ACPI_NVS         = 3,
-            IOMMU            = 4,
-            BAD_MEMORY       = 5
+            BOOT_RECLAIMABLE = 2,
+            ACPI_RECLAIMABLE = 3,
+            ACPI_NVS         = 4,
+            IOMMU            = 5,
+            BAD_MEMORY       = 6
         };
 
         PhyArea area;

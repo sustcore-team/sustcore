@@ -37,6 +37,7 @@
 #include <sus/types.h>
 #include <sus/units.h>
 #include <sustcore/addr.h>
+#include <sustcore/boot.h>
 #include <symbols.h>
 #include <task/scheduler.h>
 #include <task/task.h>
@@ -46,6 +47,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
+#include <libfdt.h>
 
 env::PaddedHartContext __hart_context[MAX_HARTS] = {};
 
@@ -153,6 +155,29 @@ namespace env {
 }  // namespace env
 
 namespace {
+    [[nodiscard]]
+    device::MemRegion::MemoryStatus to_device_memory_status(
+        MemRegion::MemoryStatus status) noexcept {
+        using BootStatus   = MemRegion::MemoryStatus;
+        using DeviceStatus = device::MemRegion::MemoryStatus;
+
+        switch (status) {
+        case BootStatus::FREE:
+            return DeviceStatus::FREE;
+        case BootStatus::RESERVED:
+            return DeviceStatus::RESERVED;
+        case BootStatus::BOOT_RECLAIMABLE:
+            return DeviceStatus::BOOT_RECLAIMABLE;
+        case BootStatus::ACPI_RECLAIMABLE:
+            return DeviceStatus::ACPI_RECLAIMABLE;
+        case BootStatus::ACPI_NVS:
+            return DeviceStatus::ACPI_NVS;
+        case BootStatus::BAD_MEMORY:
+            return DeviceStatus::BAD_MEMORY;
+        }
+        return DeviceStatus::BAD_MEMORY;
+    }
+
     /**
      * @brief 固定周期触发调度器 tick 的到期动作.
      */
@@ -315,7 +340,7 @@ namespace {
 
 namespace key {
     using namespace env::key;
-    struct main : public tmm, main_kernel_pgd, meminfo {
+    struct main : public tmm, main_kernel_pgd, bootinfo {
     public:
         main() = default;
     };
@@ -364,16 +389,8 @@ Result<void> run_pre_bootstrap_tests() {
 
 void init_kop();
 extern void *dtb_ptr;
+extern BootInfoHeader *bootinfo_ptr;
 void env_setup();
-
-constexpr size_t BOOT_DTB_STORAGE_SIZE = 128 * 1024;
-
-constexpr PhyArea SBI_RECLAIMABLE_AREA =
-    PhyArea(PhyAddr(0x0000000080200000ULL), PhyAddr(0x00000000802C0000ULL));
-constexpr PhyArea SBI_PAGING_AREA =
-    PhyArea(PhyAddr(0x00000000802C0000ULL), PhyAddr(0x0000000080300000ULL));
-
-alignas(PAGESIZE) static unsigned char boot_dtb_storage[BOOT_DTB_STORAGE_SIZE];
 
 void map_kpa_region(PageMan &man, PhyArea parea) {
     if (parea.nullable()) {
@@ -395,61 +412,58 @@ void env_setup() {
     env::construct();
     auto &e = env::inst();
 
-    loggers::SUSTCORE::INFO("开始复制 FDT 数据到内核");
-    int dtb_size = fdt_totalsize(dtb_ptr);
-    if (dtb_size <= 0) {
-        panic("原始FDT大小非法");
+    if (bootinfo_ptr == nullptr) {
+        panic("BootInfo 为空");
     }
 
-    auto *static_dtb = reinterpret_cast<void *>(boot_dtb_storage);
-    if (static_cast<size_t>(dtb_size) > BOOT_DTB_STORAGE_SIZE) {
-        panic("原始FDT超过内核静态保留区容量");
+    if (bootinfo_ptr->info_sz == 0 ||
+        bootinfo_ptr->info_sz > env::Environment::MAX_BOOTINFO_SIZE)
+    {
+        panic("BootInfo 大小非法");
     }
-    memmove(static_dtb, dtb_ptr, static_cast<size_t>(dtb_size));
-    dtb_ptr = static_dtb;
+
+    loggers::SUSTCORE::INFO("复制 BootInfo 到 Environment 静态缓冲区");
+    memmove(e.bootinfo_storage(env::key::bootinfo()),
+            reinterpret_cast<const void *>(bootinfo_ptr), bootinfo_ptr->info_sz);
+    e.bootinfo_size(env::key::bootinfo()) = bootinfo_ptr->info_sz;
+    bootinfo_ptr                          = e.bootinfo(env::key::bootinfo());
+    if (bootinfo_ptr == nullptr) {
+        panic("Environment 中 BootInfo 不可用");
+    }
+
+    dtb_ptr = bootinfo_fdt(bootinfo_ptr);
+
+    loggers::SUSTCORE::INFO("开始读取 BootInfo 内嵌 FDT");
+    int dtb_size = fdt_totalsize(dtb_ptr);
+    if (dtb_size <= 0) {
+        panic("BootInfo 内嵌 FDT 大小非法");
+    }
 
     loggers::SUSTCORE::INFO("初始化 FDT 数据");
     if (FDTHelper::fdt_init(dtb_ptr) == nullptr) {
         panic("FDT初始化失败");
     }
 
-    loggers::SUSTCORE::INFO("开始探测内存区域");
-    auto detect_res = MemoryLayout::detect();
-    if (!detect_res.has_value()) {
-        loggers::SUSTCORE::FATAL("桥接阶段探测内存区域失败!错误码: %s",
-                                 to_cstring(detect_res.error()));
-        while (true);
-    }
-
+    loggers::SUSTCORE::INFO("从 BootInfo 装载内存区域");
     PhyAddr upper_bound = PhyAddr::null;
-    for (int i = 0; i < e.meminfo().region_cnt; i++) {
-        const auto &reg = e.meminfo().regions[i];
-        PhyAddr start   = reg.ptr;
-        PhyAddr end     = start + reg.size;
-
-        loggers::SUSTCORE::INFO("探测到内存区域 %d: [%p, %p) Status: %d", i,
-                                start.addr(), end.addr(),
-                                static_cast<int>(reg.status));
+    for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
+        const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
+        PhyAddr start = reg.ptr;
+        PhyAddr end   = start + reg.size;
+        loggers::SUSTCORE::INFO("BootInfo 内存区域 %u: [%p, %p) Status: %d",
+                                static_cast<unsigned>(i), start.addr(),
+                                end.addr(), static_cast<int>(reg.status));
         if (upper_bound < end) {
             upper_bound = end;
         }
     }
-    e.meminfo(key::main()).uppm = upper_bound;
 
     loggers::SUSTCORE::INFO("初始化GFP");
     GFP::pre_init();
 
-    assert(!SBI_RECLAIMABLE_AREA.nullable());
-    loggers::SUSTCORE::INFO(
-        "桥接阶段回收 SBI 引导区 [%p, %p), 共 %u 页",
-        SBI_RECLAIMABLE_AREA.begin.addr(), SBI_RECLAIMABLE_AREA.end.addr(),
-        static_cast<unsigned>(SBI_RECLAIMABLE_AREA.size() / PAGESIZE));
-    GFP::put_page(SBI_RECLAIMABLE_AREA.begin,
-                  SBI_RECLAIMABLE_AREA.size() / PAGESIZE);
-
     loggers::SUSTCORE::INFO("将内存区域加入到GFP中");
-    for (int i = 0; i < e.meminfo().region_cnt; i++) {
-        const auto &reg = e.meminfo().regions[i];
+    for (size_t i = 0; i < bootinfo_ptr->region_cnt; i++) {
+        const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
         if (reg.status != MemRegion::MemoryStatus::FREE) {
             continue;
         }
@@ -487,13 +501,12 @@ void env_setup() {
     ker_paddr::mapping_kernel_areas(kernelman);
 
     loggers::SUSTCORE::INFO("建立 KPA 映射");
-    // 加入 sbi 可回收区域到 KPA 映射
-    map_kpa_region(kernelman, SBI_RECLAIMABLE_AREA);
-    // 加入可用内存区域到 KPA 映射
-    auto &meminfo = e.meminfo();
-    for (size_t i = 0; i < meminfo.region_cnt; ++i) {
-        const auto &reg = meminfo.regions[i];
-        if (reg.status != MemRegion::MemoryStatus::FREE) {
+    // 加入 bootinfo 中的可回收区域与可用内存区域到 KPA 映射
+    for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
+        const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
+        if (reg.status != MemRegion::MemoryStatus::FREE &&
+            reg.status != MemRegion::MemoryStatus::BOOT_RECLAIMABLE)
+        {
             continue;
         }
         PhyArea region(reg.ptr.page_align_down(),
@@ -505,11 +518,16 @@ void env_setup() {
     kernelman.switch_root();
     kernelman.flush_tlb();
 
-    loggers::SUSTCORE::INFO("回收 SBI 内核页表区");
-    // 加入 sbi 页表区域到 KPA 映射与GFP
-    map_kpa_region(kernelman, SBI_PAGING_AREA);
-    RawGFPImpl::put_page(SBI_PAGING_AREA.begin,
-                         SBI_PAGING_AREA.size() / PAGESIZE);
+    loggers::SUSTCORE::INFO("回收 BootInfo 与 SBI reclaimable 区");
+    for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
+        const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
+        if (reg.status != MemRegion::MemoryStatus::BOOT_RECLAIMABLE) {
+            continue;
+        }
+        PhyArea region(reg.ptr.page_align_down(),
+                       (reg.ptr + reg.size).page_align_up());
+        RawGFPImpl::put_page(region.begin, region.size() / PAGESIZE);
+    }
 
     // 初始化 Allocator 与内存池
     loggers::SUSTCORE::INFO("初始化分配器和内核对象池");
@@ -529,6 +547,18 @@ void init_device_model() {
 
     auto &model = device::DeviceModel::inst();
 
+    std::vector<device::MemRegion> boot_regions;
+    auto *bootinfo = env::inst().bootinfo();
+    assert(bootinfo != nullptr);
+    boot_regions.reserve(bootinfo->region_cnt);
+    for (size_t i = 0; i < bootinfo->region_cnt; ++i) {
+        const auto &reg = bootinfo_regions(bootinfo)[i];
+        boot_regions.push_back(device::MemRegion{
+            .area   = PhyArea(reg.ptr, reg.ptr + reg.size),
+            .status = to_device_memory_status(reg.status),
+        });
+    }
+    model.collect_memory_regions(&boot_regions);
     model.register_provider(
         util::owner<device::DeviceProvider *>(new fdt::FDTProvider(dtb_ptr)));
     model.register_provider(
@@ -555,7 +585,6 @@ void init_device_model() {
 
 extern "C" void post_init(void) {
     loggers::SUSTCORE::INFO("已进入 post-init 阶段");
-    auto &e = env::inst();
 
     // 初始化 kernel object pool
     loggers::SUSTCORE::INFO("初始化能力系统");

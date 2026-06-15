@@ -14,7 +14,7 @@
 #include <arch/loongarch64/trait.h>
 #include <arch/trait.h>
 
-using Serial         = Loongarch64Serial;
+using Serial         = Loongarch64EarlySerial;
 using Initialization = Loongarch64Initialization;
 using MemoryLayout   = Loongarch64MemoryLayout;
 using Context        = Loongarch64Context;

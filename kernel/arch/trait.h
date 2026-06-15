@@ -13,6 +13,7 @@
 
 #include <sus/types.h>
 #include <sustcore/addr.h>
+#include <sustcore/boot.h>
 #include <sustcore/errcode.h>
 
 #include <concepts>
@@ -24,7 +25,7 @@
  * @tparam T 架构串口类
  */
 template <typename T>
-concept SerialTrait = requires(char ch, size_t len, const char *str) {
+concept EarlySerialTrait = requires(char ch, size_t len, const char *str) {
     {
         T::serial_write_char(ch)
     } -> std::same_as<void>;
@@ -52,40 +53,6 @@ concept InitializationTrait = requires() {
     {
         T::post_init()
     } -> std::same_as<void>;
-};
-
-/**
- * @brief 内存区域
- *
- */
-struct MemRegion {
-    /**
-     * @brief 内存状态
-     *
-     */
-    enum class MemoryStatus {
-        FREE             = 0,
-        RESERVED         = 1,
-        ACPI_RECLAIMABLE = 2,
-        ACPI_NVS         = 3,
-        BAD_MEMORY       = 4
-    };
-
-    PhyAddr ptr;
-    size_t size;
-    MemoryStatus status;
-};
-
-/**
- * @brief 架构内存布局 Trait
- *
- * @tparam T 架构内存布局类
- */
-template <typename T>
-concept MemoryLayoutTrait = requires() {
-    {
-        T::detect()
-    } -> std::same_as<Result<void>>;
 };
 
 // 初始化条件
@@ -288,10 +255,6 @@ concept InterruptTrait = requires() {
         T::enabled()
     } -> std::convertible_to<bool>;
 };
-
-// Write-Protection Fault Infomation Trait
-template <typename T>
-concept WPFaultTrait = requires() { true; };
 
 template <typename T>
 concept IdleTrait = requires() {
