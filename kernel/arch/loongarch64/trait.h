@@ -13,7 +13,7 @@
 
 #include <arch/trait.h>
 #include <sus/types.h>
-#include <syscall/syscall.h>
+#include <syscall/packs.h>
 
 #include <cstddef>
 

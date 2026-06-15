@@ -4,35 +4,32 @@
 #include <sustcore/addr.h>
 
 namespace la64 {
-    enum class RWX : umb_t {
-        P    = 0,
-        R    = 1,
-        W    = 2,
-        X    = 4,
-        RO   = R,
-        RW   = R | W,
-        RX   = R | X,
-        RWX  = R | W | X,
-        NONE = 0,
-    };
-
-    enum class ModifyMask : umb_t {
-        NONE = 0,
-        R    = 1,
-        W    = 2,
-        X    = 4,
-        U    = 8,
-        G    = 16,
-        NP   = 32,
-        RWX  = R | W | X,
-        ALL  = R | W | X | U | G | NP,
-    };
 
     class PageMan {
     public:
-        using RWX        = RWX;
-        using ModifyMask = ModifyMask;
+        enum class RWX : umb_t {
+            P    = 0,
+            R    = 1,
+            W    = 2,
+            X    = 4,
+            RO   = R,
+            RW   = R | W,
+            RX   = R | X,
+            RWX  = R | W | X,
+            NONE = 0,
+        };
 
+        enum class ModifyMask : umb_t {
+            NONE = 0,
+            R    = 1,
+            W    = 2,
+            X    = 4,
+            U    = 8,
+            G    = 16,
+            NP   = 32,
+            RWX  = R | W | X,
+            ALL  = R | W | X | U | G | NP,
+        };
         enum class PageSize { _NULL, _4K };
 
         union PTE {
