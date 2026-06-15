@@ -431,12 +431,14 @@ namespace slub {
 
         static bool add_record(void *ptr, size_t rsz) {
             auto *record  = new AllocRecord(ptr, rsz);
+            size_t before = alloc_records.size();
             auto inserted = alloc_records.insert(alloc_records.end(), *record);
+            size_t after  = alloc_records.size();
             if (inserted == alloc_records.end()) {
                 loggers::MEMORY::ERROR(
-                    "无法记录分配: ptr=%p size=%u record=%p prev=%p next=%p",
+                    "无法记录分配: ptr=%p size=%u record=%p (size before=%lu after=%lu)",
                     ptr, static_cast<unsigned int>(rsz), record,
-                    record->list_head.prev, record->list_head.next);
+                    (unsigned long)before, (unsigned long)after);
                 delete record;
                 return false;
             }
@@ -444,16 +446,29 @@ namespace slub {
         }
 
         static AllocRecord *get_record(void *ptr) {
+            size_t checked = 0;
             for (auto &rec : alloc_records) {
+                checked++;
                 if (rec.ptr == ptr) {
                     return &rec;
                 }
+            }
+            size_t sz = alloc_records.size();
+            if (sz != checked) {
+                loggers::MEMORY::INFO("alloc_records size mismatch: expected=%lu iterated=%lu",
+                                      (unsigned long)sz, (unsigned long)checked);
             }
             return nullptr;
         }
 
         static void remove_record(AllocRecord *record) {
+            size_t before = alloc_records.size();
             alloc_records.remove(*record);
+            size_t after = alloc_records.size();
+            if (before == after) {
+                loggers::MEMORY::ERROR("remove_record: record=%p NOT found in list (size=%lu)",
+                                       (void*)record, (unsigned long)before);
+            }
             delete record;
         }
 
@@ -520,10 +535,16 @@ namespace slub {
 
     public:
         static void init() {
-            // 构造AllocRecord的SLUB
+            loggers::MEMORY::INFO("MixedSizeAllocator::init: records=%lu ALLOC_RECORD_SLUB inuse=%lu",
+                                   (unsigned long)alloc_records.size(),
+                                   (unsigned long)ALLOC_RECORD_SLUB.get_stats().objects_inuse);
+            alloc_records.~IntrusiveList();
             new (&alloc_records) util::IntrusiveList<AllocRecord>();
+            ALLOC_RECORD_SLUB.~SlubAllocator();
             new (&ALLOC_RECORD_SLUB) SlubAllocator<AllocRecord>();
             Helper::init();
+            loggers::MEMORY::INFO("MixedSizeAllocator::init done: records=%lu",
+                                   (unsigned long)alloc_records.size());
         }
 
         static void *malloc(size_t sz) {
@@ -534,8 +555,6 @@ namespace slub {
                 loggers::MEMORY::ERROR("无法分配内存!");
                 return nullptr;
             }
-            loggers::MEMORY::DEBUG("分配了 %p, size = %d(实际大小为%d)", ptr,
-                                   sz, rsz);
             if (!add_record(ptr, rsz)) {
                 _free(ptr, rsz);
                 assert(false);
@@ -547,7 +566,8 @@ namespace slub {
         static void free(void *ptr) {
             AllocRecord *record = get_record(ptr);
             if (record == nullptr) {
-                loggers::MEMORY::ERROR("未查询到地址%p分配记录", ptr);
+                loggers::MEMORY::ERROR("未查询到地址%p分配记录 (list size=%lu)",
+                                       ptr, (unsigned long)alloc_records.size());
                 return;
             }
             _free(ptr, record->size);

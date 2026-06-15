@@ -49,13 +49,13 @@ namespace driver {
     bool ExpireActionQueue::empty() const noexcept {
         InterruptGuard guard;
         guard.enter();
-        return _heap.empty();
+        return _heap_size == 0;
     }
 
     size_t ExpireActionQueue::size() const noexcept {
         InterruptGuard guard;
         guard.enter();
-        return _heap.size();
+        return _heap_size;
     }
 
     bool ExpireActionQueue::push(util::owner<ExpireAction *> action) noexcept {
@@ -66,46 +66,53 @@ namespace driver {
 
         InterruptGuard guard;
         guard.enter();
+        if (_heap_size >= MAX_HEAP_ACTIONS) {
+            loggers::DEVICE::ERROR("ExpireActionQueue 溢出: size=%lu max=%lu",
+                                   (unsigned long)_heap_size,
+                                   (unsigned long)MAX_HEAP_ACTIONS);
+            return false;
+        }
         units::time old_root =
-            _heap.empty() ? units::time{} : _heap.front().deadline;
-        _heap.push_back(ExpireActionEntry{
+            _heap_size == 0 ? units::time{} : _heap[0].deadline;
+        _heap[_heap_size++] = ExpireActionEntry{
             .deadline = action->deadline(),
             .action   = std::move(action),
-        });
-        sift_up(_heap.size() - 1);
-        if (_heap.empty()) {
+        };
+        sift_up(_heap_size - 1);
+        if (_heap_size == 0) {
             return false;
         }
         return old_root.to_nanoseconds() == 0 ||
-               _heap.front().deadline.to_nanoseconds() !=
+               _heap[0].deadline.to_nanoseconds() !=
                    old_root.to_nanoseconds();
     }
 
     std::optional<ExpireActionEntry> ExpireActionQueue::peek() const noexcept {
         InterruptGuard guard;
         guard.enter();
-        if (_heap.empty()) {
+        if (_heap_size == 0) {
             return std::nullopt;
         }
-        return make_view_entry(_heap.front());
+        return make_view_entry(_heap[0]);
     }
 
-    std::vector<ExpireActionEntry> ExpireActionQueue::pop_due(units::time now) {
+    PopDueResult ExpireActionQueue::pop_due(units::time now) {
         InterruptGuard guard;
         guard.enter();
 
-        std::vector<ExpireActionEntry> due{};
-        while (!_heap.empty() &&
-               _heap.front().deadline.to_nanoseconds() <= now.to_nanoseconds())
+        PopDueResult result{};
+        while (_heap_size > 0 &&
+               _heap[0].deadline.to_nanoseconds() <= now.to_nanoseconds() &&
+               result.count < MAX_DUE_ACTIONS)
         {
-            due.push_back(std::move(_heap.front()));
-            _heap.front() = std::move(_heap.back());
-            _heap.pop_back();
-            if (!_heap.empty()) {
+            result.entries[result.count++] = std::move(_heap[0]);
+            _heap[0] = std::move(_heap[_heap_size - 1]);
+            _heap_size--;
+            if (_heap_size > 0) {
                 sift_down(0);
             }
         }
-        return due;
+        return result;
     }
 
     void ExpireActionQueue::sift_up(size_t index) noexcept {
@@ -122,7 +129,7 @@ namespace driver {
     }
 
     void ExpireActionQueue::sift_down(size_t index) noexcept {
-        size_t heap_size = _heap.size();
+        size_t heap_size = _heap_size;
         while (true) {
             size_t left     = index * 2 + 1;
             size_t right    = left + 1;
@@ -193,8 +200,9 @@ namespace driver {
         }
 
         units::time now = _source->to_ns(_source->now());
-        auto due        = _queue.pop_due(now);
-        for (auto &entry : due) {
+        auto result = _queue.pop_due(now);
+        for (size_t i = 0; i < result.count; i++) {
+            auto &entry = result.entries[i];
             if (entry.action == nullptr) {
                 continue;
             }

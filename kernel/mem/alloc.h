@@ -14,7 +14,7 @@
 #include <mem/alloc_def.h>
 #include <mem/slub.h>
 
-using Allocator = LinearGrowAllocator;
+using Allocator = slub::MixedSizeAllocator;
 static_assert(AllocatorTrait<Allocator>, "Allocator 不满足 AllocatorTrait");
 
 template <typename ObjType>

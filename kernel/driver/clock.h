@@ -197,12 +197,23 @@ namespace driver {
         bool _canceled = false;
     };
 
+    /// pop_due 一次最多弹出的到期动作数（避免 ISR 内分配堆内存）
+    constexpr size_t MAX_DUE_ACTIONS = 8;
+
     /**
      * @brief 一个到期动作队列条目.
      */
     struct ExpireActionEntry {
         units::time deadline{};
         util::owner<ExpireAction *> action = util::owner<ExpireAction *>(nullptr);
+    };
+
+    /**
+     * @brief pop_due 的返回结果 —— 固定大小数组，不在 ISR 内分配堆内存.
+     */
+    struct PopDueResult {
+        ExpireActionEntry entries[MAX_DUE_ACTIONS]{};
+        size_t count = 0;
     };
 
     /**
@@ -252,9 +263,11 @@ namespace driver {
          * @return std::vector<ExpireActionEntry> 已到期动作集合.
          */
         [[nodiscard]]
-        std::vector<ExpireActionEntry> pop_due(units::time now);
+        PopDueResult pop_due(units::time now);
 
     private:
+        static constexpr size_t MAX_HEAP_ACTIONS = 16;  // 调度 tick + sleep 定时器等
+
         /**
          * @brief 将指定节点向上调整以恢复小根堆性质.
          *
@@ -281,7 +294,8 @@ namespace driver {
         static bool later(const ExpireActionEntry &lhs,
                           const ExpireActionEntry &rhs) noexcept;
 
-        std::vector<ExpireActionEntry> _heap{};
+        ExpireActionEntry _heap[MAX_HEAP_ACTIONS]{};
+        size_t _heap_size = 0;
     };
 
     /**

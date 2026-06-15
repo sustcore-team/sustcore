@@ -185,14 +185,9 @@ namespace {
                 return;
             }
 
-            auto next_deadline = event.now + _period;
-            auto *next_action = new SchedulerTickAction(next_deadline, _period);
-            if (next_action == nullptr) {
-                loggers::SUSTCORE::FATAL("无法分配下一次 SchedulerTickAction");
-                panic("无法分配下一次 SchedulerTickAction");
-            }
-            time_keeper->enqueue(
-                util::owner<device::ExpireAction *>(next_action));
+            set_deadline(event.now + _period);
+            revive();
+            time_keeper->enqueue(util::owner<device::ExpireAction *>(this));
         }
 
     private:
@@ -251,14 +246,12 @@ namespace {
             }
 
             units::time next_interval = _interval * 2;
-            auto *next_action         = new TimeKeeperLogAction(
-                event.now, event.now + next_interval, next_interval);
-            if (next_action == nullptr) {
-                loggers::TIMER::FATAL("无法分配下一次 TimeKeeperLogAction");
-                panic("无法分配下一次 TimeKeeperLogAction");
-            }
+            _lasttime = event.now;
+            _interval = next_interval;
+            set_deadline(event.now + next_interval);
+            revive();
             time_keeper->enqueue(
-                util::owner<device::ExpireAction *>(next_action));
+                util::owner<device::ExpireAction *>(this));
         }
 
     private:

@@ -130,21 +130,28 @@ namespace cap {
           pending_recvs{} {}
 
     EndpointPayload::~EndpointPayload() {
+        while (!pending_sends.empty()) {
+            auto *pending = &pending_sends.front();
+            pending_sends.pop_front();
+            if (pending->message != nullptr) {
+                if (message_is_queued(this, pending->message)) {
+                    messages.remove(*pending->message);
+                }
+                delete pending->message;
+                pending->message = nullptr;
+            }
+            pending->promise.set_cancel_callback({});
+            delete pending;
+        }
         while (!messages.empty()) {
             EndpointMessage *msg = &messages.front();
             messages.pop_front();
             delete msg;
         }
-        while (!pending_sends.empty()) {
-            auto *pending = &pending_sends.front();
-            pending_sends.pop_front();
-            delete pending->message;
-            pending->message = nullptr;
-            delete pending;
-        }
         while (!pending_recvs.empty()) {
             auto *pending = &pending_recvs.front();
             pending_recvs.pop_front();
+            pending->promise.set_cancel_callback({});
             delete pending;
         }
     }
@@ -157,6 +164,7 @@ namespace cap {
         while (!pending_recvs.empty()) {
             auto *pending = &pending_recvs.front();
             pending_recvs.pop_front();
+            pending->promise.set_cancel_callback({});
             delete pending;
         }
     }

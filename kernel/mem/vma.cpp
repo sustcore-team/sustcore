@@ -75,8 +75,9 @@ Result<util::owner<TaskMemoryManager *>> TaskMemoryManager::from_existing_pgd(
 }
 
 TaskMemoryManager::~TaskMemoryManager() {
-    auto &&list = std::move(vma_list);
-    for (VMA &vma : list) {
+    while (!vma_list.empty()) {
+        VMA &vma = vma_list.front();
+        vma_list.pop_front();
         unmap_pages(vma.varea);
         delete util::owner(&vma);
     }
