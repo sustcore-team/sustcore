@@ -123,23 +123,21 @@ class BaseSched
 
 ## 调度流程
 
-`schedule(switch_kernel_context)` 的主流程:
+`schedule()` 的主流程:
 
 1. 获取 current TCB。
-2. 若当前线程有已完成 syscall，提交返回值。
-3. 若未设置 `NEED_RESCHED`，直接返回。
-4. 清除当前线程的 `NEED_RESCHED`。
-5. 若当前线程不是 `WAITING`，且可继续调度，则调用当前调度类 `put_prev()` 放回就绪队列。
-6. 调用 `prepare_next_task()` 选择下一个线程。
-7. 必要时执行 RISC-V 内核上下文切换。
+2. 若线程未设置 `NEED_RESCHED`，直接返回。
+3. 清除当前线程的 `NEED_RESCHED`。
+4. 调用 `prepare_prev_task()` 将当前线程放回对应调度队列或标记为等待。
+5. 调用 `prepare_next_task()` 选择下一个线程，并在选择时切换到候选线程的页表。
+6. 必要时执行 RISC-V 内核上下文切换。
 
-`prepare_next_task()` 会:
+`prepare_next_task()` 会反复:
 
 1. 调用 `pick_next_task()`。
-2. 切换到候选线程地址空间。
-3. 恢复可能挂起的 syscall coroutine。
-4. 检查 syscall 状态是否允许调度。
-5. 如果候选线程再次等待或 syscall 仍未完成，则重新选择。
+2. 调用 `prepare_switch(next)`，提前切换到候选线程的页表并更新当前 PCB/TCB。
+3. 如果候选线程可以直接运行则返回。
+4. 否则给候选线程设置 `NEED_RESCHED` 并继续重试。
 
 ## 抢占检查
 

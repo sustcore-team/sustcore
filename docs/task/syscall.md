@@ -19,8 +19,7 @@ RISC-V 用户态通过 `ecall` 进入内核。当前路径已经拆成:
 通用层负责:
 
 1. `current_tcb->syscall_info.begin(args)`
-2. 保存 `SyscallContext`
-3. 根据 syscall 号选择同步或可挂起分发
+2. 根据 syscall 号执行同步分发
 
 `Riscv64Context::read_args()` 的寄存器约定是:
 
@@ -41,14 +40,12 @@ RISC-V 用户态通过 `ecall` 进入内核。当前路径已经拆成:
 - `syscall_number`
 - `syscall_result`
 - `syscall_state`
-- `handle`
-- `context`
 
 状态机:
 
 - `NONE`: 无 syscall。
-- `EXECUTING`: syscall 正在执行或挂起。
-- `COMPLETED`: syscall 已产生返回值，等待调度器提交到上下文。
+- `EXECUTING`: syscall 正在执行。
+- `COMPLETED`: syscall 已产生返回值，等待 trap 返回路径写回用户上下文。
 
 `begin()` 会清空旧状态并进入 `EXECUTING`。`complete(ret)` 缓存返回值并进入 `COMPLETED`。
 
@@ -62,6 +59,8 @@ RISC-V 用户态通过 `ecall` 进入内核。当前路径已经拆成:
 - `trap_context`
 
 轻量 syscall coroutine 不能依赖动态全局 current task，因此 syscall 层通过 `syscall::set_active_context()` 设置当前上下文。对象方法若需要当前线程，也会优先使用 `syscall::active_context()`。
+
+这套显式上下文主要服务于对象方法和用户缓冲区访问辅助；当前 `TCB::SyscallInfo` 本身不保存 `SyscallContext`。
 
 ## 同步 syscall
 
@@ -79,49 +78,7 @@ RISC-V 用户态通过 `ecall` 进入内核。当前路径已经拆成:
 
 ## 可挂起 syscall
 
-当前可挂起 syscall 包括:
-
-- `SYS_NOTIF_WAIT`
-- `SYS_ENDPOINT_SEND`
-- `SYS_ENDPOINT_RECV`
-- `SYS_ENDPOINT_CALL`
-
-它们走 `dispatch_async(tcb)`，返回 `wait::cotask<void>`。
-
-可挂起 syscall 可能出现三种情况:
-
-1. 立即完成: `syscall_info.completed()` 已为 true。
-2. 进入等待: `wait_context().pending()` 为真，线程被登记到等待队列。
-3. 暂未完成但未等待: 保存 coroutine handle，设置 `NEED_RESCHED`，调度前继续恢复。
-
-等待路径使用 `FutureAwaiter` 挂起 coroutine，并通过 `wait::cotask`
-向外传播 `WaitContext`。真正的线程等待登记由最外层 syscall 路径统一调用
-`register_syscall_wait(...)` 完成。
-
-## 调度器提交返回值
-
-调度器在两个位置处理 syscall 返回值:
-
-- `schedule()` 开头检查当前线程是否有已完成 syscall。
-- `can_schedule_tcb()` 检查候选线程是否有已完成 syscall。
-
-`commit_completed_syscall(tcb)` 会:
-
-1. 调用 `tcb->context()->write_ret(syscall_result)`。
-2. 调用 `syscall_info.reset()`。
-
-如果线程仍在 `EXECUTING` 状态，`can_schedule_tcb()` 会跳过它，避免把未完成 syscall 的线程恢复到用户态。
-
-## 调度前恢复 coroutine
-
-`Scheduler::prepare_next_task()` 选出 next 后会:
-
-1. `switch_to(next)`，切换页表和当前 TCB/PCB。
-2. 调用 `wait::resume_deferred_syscall(next)`。
-3. 若 coroutine 恢复后再次等待，则跳过该线程重新选。
-4. 若 syscall 完成，则提交或允许调度。
-
-`resume_deferred_syscall()` 会重新构造 `SyscallContext`，设置 active context，调用 coroutine handle 的 `resume()`。
+当前仓库中的 syscall 主路径以同步分发为主，`kernel/syscall/syscall.cpp` 中直接调用 `dispatch_sync(...)` 并以 `syscall_info.complete(ret)` 标记完成。等待子系统中的 `FutureAwaiter` / `wait::cotask` 已存在，但 `TCB::SyscallInfo`、调度器和 trap 主路径并没有保存或恢复 coroutine handle。
 
 ## 用户缓冲区访问
 
@@ -144,18 +101,17 @@ syscall 参数中的用户指针不会直接解引用，而是通过:
 
 `handle_trap()` 在处理完用户态 trap 后会:
 
-1. 调用 `Scheduler::schedule()`。
-2. 获取新的 current TCB。
-3. 若新线程是内核线程，调用 `isr_restore_kernel()`。
-4. 否则设置 `sscratch = tcb->kstack_bottom`，让 trap 出口恢复用户线程。
+1. 执行 syscall 或其它异常/中断处理。
+2. 调用 `Scheduler::schedule()`。
+3. 根据是否从 U-Mode 返回，更新 `sscratch = tcb->kstack_bottom`。
+4. trap 汇编出口依据保存的上下文恢复用户线程或内核线程。
 
-因此 syscall 返回、线程切换和用户上下文恢复都在 trap 返回路径中完成闭环。
+因此 syscall 返回值写回、线程切换和用户上下文恢复都在 trap 返回路径中完成闭环。
 
 ## 当前限制
 
 当前 syscall 生命周期仍有一些限制:
 
-- 只有 endpoint send/recv/call 走 coroutine 挂起路径。
 - `UBuffer` 要求缓冲区不能跨 VMA。
 - syscall active context 是单个全局指针，更适合当前单核模型。
-- 异步 syscall 恢复失败时主要通过日志和跳过调度处理，缺少用户态细粒度错误恢复。
+- 若未来重新启用 coroutine 异步 syscall，文档中的调度恢复语义需要与实现再次对齐。

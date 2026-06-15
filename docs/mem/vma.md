@@ -14,10 +14,13 @@
 
 ```cpp
 PageMan::make_root(_pgd);
-ker_paddr::mapping_kernel_areas(_pman);
+PageMan kernel_pman(env::inst().main_kernel_pgd());
+_pman.merge_from(kernel_pman);
 ```
 
-因此每个任务页表默认包含内核高半区映射。用户区映射由 VMA 和缺页处理懒建立。
+因此每个任务页表默认继承主内核页表中的全部内核映射，包括 KVA、KPA 和 MMIO 映射。用户区映射由 VMA 和缺页处理懒建立，且 `merge_from()` 不覆盖目标页表中已有的有效映射。
+
+`TaskMemoryManager::from_existing_pgd()` 用于包装已有页表根，不会主动清零或合并页表内容；内核进程通过它绑定主内核页表。
 
 ## `VMA`
 
@@ -139,3 +142,4 @@ VMA 只管理虚拟区间和页表映射，不拥有物理页。物理页由 `Me
 - COW 不支持大页。
 - VMA 地址合法性要求 begin/end 都是用户地址；调用方应避免传入 KVA/KPA。
 - 缺页处理假设 fault 已由当前任务页表触发，跨地址空间操作需使用用户访问辅助。
+- 新建用户地址空间依赖 `env::inst().main_kernel_pgd()` 已初始化，因此任务管理器初始化必须晚于正式内核页表建立。

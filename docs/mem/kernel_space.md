@@ -21,7 +21,6 @@ struct Segment {
 - `data`
 - `bss`
 - `misc`
-- `kphy_space`
 
 这些段由 linker symbols 构造:
 
@@ -45,14 +44,21 @@ VirAddr ve = pe + KVA_OFFSET;
 
 ## KPA 线性物理映射
 
-`kphy_space` 使用 `make_kpa_seg()` 构造:
+KPA 线性映射不再作为 `ker_paddr::Segment` 维护。正式内核页表建立阶段由 `main.cpp` 中的 `map_kpa_region()` 显式映射物理区间:
 
 ```cpp
-VirAddr vs = ps + KPA_OFFSET;
-VirAddr ve = pe + KPA_OFFSET;
+VirAddr vaddr = VirAddr(convert<KpaAddr>(parea.begin).arith());
+man.map_range<true>(vaddr, parea.begin, parea.size(), PageMan::RWX::RW,
+                    false, true);
 ```
 
-它覆盖 `env::meminfo().lowpm` 到 `env::meminfo().uppm` 的物理内存范围，使内核可以通过 KPA 访问物理页内容。
+当前会映射:
+
+- SBI 可回收区域。
+- 所有 `FREE` 物理内存区域。
+- 切换正式页表后，再映射并回收 SBI 页表保留区。
+
+这些映射使内核可以通过 KPA 访问页表页、普通物理页和线程内核栈页。
 
 ## 映射权限
 
@@ -63,7 +69,6 @@ VirAddr ve = pe + KPA_OFFSET;
 - `data`: `RW-`
 - `bss`: `RW-`
 - `misc`: `R--`
-- `kphy_space`: `RW-`
 
 这些映射都设置:
 
@@ -72,35 +77,23 @@ VirAddr ve = pe + KPA_OFFSET;
 
 `g = true` 表示全局映射，适合所有地址空间共享的内核区域。
 
-## 用户态可访问低端内存
-
-`post_init()` 中会对低端内存映射设置 `U` 位:
-
-```cpp
-kernelman.modify_range_flags<PageMan::ModifyMask::U>(
-    meminfo.lowvm,
-    meminfo.uppm - meminfo.lowpm,
-    PageMan::RWX::NONE,
-    true,
-    false);
-```
-
-这一步使低端映射可被用户态访问。由于它操作的是内核主页表，必须谨慎看待安全边界；后续用户任务仍通过各自 `TaskMemoryManager` 管理 VMA 和页表。
-
 ## 每个任务页表中的内核映射
 
 `TaskMemoryManager` 构造新页表时会:
 
 ```cpp
 PageMan::make_root(_pgd);
-ker_paddr::mapping_kernel_areas(_pman);
+PageMan kernel_pman(env::inst().main_kernel_pgd());
+_pman.merge_from(kernel_pman);
 ```
 
-因此每个任务地址空间都带有内核高半区和 KPA 映射，用户区 VMA 映射则按需建立。
+因此每个任务地址空间都会继承主内核页表中的 KVA、KPA 和 MMIO 映射。用户区 VMA 映射仍按需建立，并且不会覆盖已经存在的内核映射。
+
+主内核页表根保存在 `env::inst().main_kernel_pgd()` 中。内核线程通过 `TaskMemoryManager::from_existing_pgd()` 包装这张主内核页表；用户进程则分配自己的页表根并合并主内核页表内容。
 
 ## 注意事项
 
 - 内核段映射权限应尽量保持最小权限，尤其是 `text` 不应可写。
-- `kphy_space` 是调试和页表/物理页访问的基础，不代表用户可任意访问物理内存。
+- KPA 映射是调试、页表访问和内核栈访问的基础，不代表用户可任意访问物理内存；相关 PTE 的 `u` 位应保持关闭。
 - 新增内核段或修改 linker symbols 后，应同步检查 `ker_paddr::init()` 与映射权限。
-- `mapping_kernel_areas()` 当前每个页表都会重新构造内核映射，源码中已有 TODO 提示未来可复用专门的内核页表。
+- 新增主内核页表映射后，如果用户地址空间也需要在调度或 trap 路径中访问该映射，应确认新建 `TaskMemoryManager` 会通过 `merge_from()` 继承它。

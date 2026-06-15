@@ -59,7 +59,7 @@ PCB 和 TCB 都使用 KOP 对象池，`task::init_kop()` 会初始化 `kop::pcb`
 `preload_into(image_cap, holder, spec, prm)` 会:
 
 1. 分配一个页表根页。
-2. 构造 `TaskMemoryManager`。
+2. 构造 `TaskMemoryManager`，其内部会从 `env::inst().main_kernel_pgd()` 合并主内核页表映射。
 3. 校验 `image_cap` 在 `holder` 中存在，payload 类型是 `VFILE`，并且具备 `perm::vfile::EXEC`。
 4. 把 holder、tmm 和 image file cap 记录到 `TaskSpec` / `LoadPrm`。
 
