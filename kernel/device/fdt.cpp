@@ -9,7 +9,10 @@
  *
  */
 
+#include <arch/description.h>
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/device/fdt_helper.h>
+#endif
 #include <device/fdt.h>
 #include <device/model.h>
 #include <driver/int/clint.h>

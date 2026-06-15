@@ -9,7 +9,10 @@
  *
  */
 
+#include <arch/description.h>
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/csr.h>
+#endif
 #include <driver/clock.h>
 #include <driver/int/base.h>
 #include <logger.h>

@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/riscv64/description.h>
+#include <arch/description.h>
 #include <device/int.h>
 #include <env.h>
 #include <logger.h>

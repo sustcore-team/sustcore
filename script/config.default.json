@@ -1,10 +1,22 @@
 {
 	"mode": "release",
-	"qemu": {
+	"arch": "riscv64",
+	"riscv64": {
+		"qemu": {
+		},
+		"features": [
+		],
+		"logger": {
+		},
+		"logger-disable-all": true
 	},
-	"features": [
-	],
-	"logger": {
-	},
-	"logger-disable-all": true
+	"loongarch64": {
+		"qemu": {
+		},
+		"features": [
+		],
+		"logger": {
+		},
+		"logger-disable-all": true
+	}
 }

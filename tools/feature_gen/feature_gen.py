@@ -35,10 +35,23 @@ def require_macro(value, name):
     return value
 
 
-def emit_feature_makefile(feature_config, config):
-    feature_config = require_object(feature_config, "feature config")
+def require_string(value, name):
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{name} must be a non-empty string")
+    return value
+
+
+def resolve_arch_config(config, override_arch=None):
     config = require_object(config, "config")
-    features = optional_list(config.get("features"), "features")
+    arch = override_arch or require_string(config.get("arch"), "arch")
+    arch_config = require_object(config.get(arch), arch)
+    return arch, arch_config
+
+
+def emit_feature_makefile(feature_config, config, override_arch=None):
+    feature_config = require_object(feature_config, "feature config")
+    arch, arch_config = resolve_arch_config(config, override_arch)
+    features = optional_list(arch_config.get("features"), f"{arch}.features")
 
     for feature in features:
         if not isinstance(feature, str):
@@ -78,10 +91,10 @@ def write_text_if_changed(path, content):
 
 
 def main(argv):
-    if len(argv) > 4:
+    if len(argv) > 5:
         print(
             "usage: feature_gen.py [kernel/feature.json] [kernel/feature.mk] "
-            "[config.json]",
+            "[config.json] [arch]",
             file=sys.stderr,
         )
         return 2
@@ -91,6 +104,7 @@ def main(argv):
     )
     output_path = Path(argv[2]) if len(argv) >= 3 else Path("kernel/feature.mk")
     config_path = Path(argv[3]) if len(argv) >= 4 else default_config_path()
+    override_arch = argv[4] if len(argv) >= 5 else None
 
     try:
         with feature_input_path.open(encoding="utf-8") as fp:
@@ -98,7 +112,7 @@ def main(argv):
         with config_path.open(encoding="utf-8") as fp:
             config = json.load(fp)
         write_text_if_changed(
-            output_path, emit_feature_makefile(feature_config, config)
+            output_path, emit_feature_makefile(feature_config, config, override_arch)
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"feature_gen.py: {exc}", file=sys.stderr)
