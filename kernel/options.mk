@@ -1,13 +1,32 @@
 component-kind := kernel
 component-name := kernel
 component-variants := default
+component-active-variant := $(architecture)
+component-target := $(path-kernel)
+component-objdir := $(path-objects)/kernel
+
+ifeq ($(architecture),loongarch64)
+component-include-mks := $(component-root)/arch/loongarch64/include.mk \
+	$(component-root)/boot/laboot/include.mk
+endif
 
 attachments := initrd.tar.attachment.o
 
+variant.riscv64.target := $(path-kernel)
+variant.riscv64.dir-obj := $(path-objects)/kernel
+variant.riscv64.script-ld := $(component-root)/boot/sbi/sbi.ld
+variant.riscv64.libraries := kersbi kerbasecpp fdt
+
+variant.loongarch64.target := $(path-kernel)
+variant.loongarch64.dir-obj := $(path-objects)/kernel
+variant.loongarch64.script-ld := $(component-root)/boot/laboot/laboot.ld
+variant.loongarch64.libraries :=
+variant.loongarch64.attachments :=
+
 variant.default.target := $(path-kernel)
 variant.default.dir-obj := $(path-objects)/kernel
-variant.default.script-ld := $(component-root)/boot/sbi/sbi.ld
-variant.default.libraries := kersbi kerbasecpp fdt
+variant.default.script-ld := $(component-root)/boot/laboot/laboot.ld
+variant.default.libraries := kerbasecpp fdt
 
 flags-ld := $(flags-kernel-ld) $(flags-common-ld) $(flags-mode-ld)
 
@@ -30,3 +49,7 @@ include-cpp := -I$(path-include) -I$(path-include)/std -I$(path-include)/std/c++
 	-I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
 	-I$(path-third_party)/include/std -I$(component-root) -I$(path-include)/arch
 defs-cpp := -DASSERT_IMPLEMENTED=1 -DUSE_SUSTCORE_FEATURES $(base-feature-defs) $(kernel-feature-defs) $(defs-mode-cpp)
+
+include-asm := -I$(path-include) -I$(path-include)/std \
+	-I$(path-third_party)/include -I$(path-third_party)/include/std \
+	-I$(component-root) -I$(path-include)/arch

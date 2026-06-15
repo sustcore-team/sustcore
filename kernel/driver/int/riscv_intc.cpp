@@ -9,7 +9,10 @@
  *
  */
 
+#include <arch/description.h>
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/csr.h>
+#endif
 #include <driver/int/riscv_intc.h>
 #include <logger.h>
 #include <sus/raii.h>

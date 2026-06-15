@@ -27,12 +27,13 @@ _sbi_start:
 
     // jump to the setup function
     call _sbi_setup
-_sbi_trampoline:
+_sbi_paging_setup:
     // 这里是一个从低地址到高地址的过渡阶段
     // 此处 a0 = satp 应设的值
     csrw satp, a0
     // 刷新 tlb
     sfence.vma zero, zero
+_sbi_trampoline:
     mv a0, s0
     mv a1, s1
     la ra, _sbi_post_start

@@ -33,6 +33,13 @@ def require_string(value, name):
     return value
 
 
+def resolve_arch_config(config, override_arch=None):
+    config = require_object(config, "config")
+    arch = override_arch or require_string(config.get("arch"), "arch")
+    arch_config = require_object(config.get(arch), arch)
+    return arch, arch_config
+
+
 def level_to_enum(level, name):
     level_key = str(level).lower()
     if level_key not in LOGGER_LEVELS:
@@ -44,11 +51,11 @@ def level_to_enum(level, name):
     return LOGGER_LEVELS[level_key]
 
 
-def emit_logger_header(logger_config, config):
+def emit_logger_header(logger_config, config, override_arch=None):
     logger_config = require_object(logger_config, "logger config")
-    config = require_object(config, "config")
-    overrides = require_object(config.get("logger", {}), "logger")
-    disable_all = config.get("logger-disable-all") is True
+    _, arch_config = resolve_arch_config(config, override_arch)
+    overrides = require_object(arch_config.get("logger", {}), "logger")
+    disable_all = arch_config.get("logger-disable-all") is True
 
     unknown_loggers = sorted(set(overrides) - set(logger_config))
     if unknown_loggers:
@@ -110,10 +117,10 @@ def write_text_if_changed(path, content):
 
 
 def main(argv):
-    if len(argv) > 4:
+    if len(argv) > 5:
         print(
             "usage: logger_gen.py [kernel/logger.json] [kernel/logger.h] "
-            "[config.json]",
+            "[config.json] [arch]",
             file=sys.stderr,
         )
         return 2
@@ -123,13 +130,16 @@ def main(argv):
     )
     output_path = Path(argv[2]) if len(argv) >= 3 else Path("kernel/logger.h")
     config_path = Path(argv[3]) if len(argv) >= 4 else default_config_path()
+    override_arch = argv[4] if len(argv) >= 5 else None
 
     try:
         with logger_input_path.open(encoding="utf-8") as fp:
             logger_config = json.load(fp)
         with config_path.open(encoding="utf-8") as fp:
             config = json.load(fp)
-        write_text_if_changed(output_path, emit_logger_header(logger_config, config))
+        write_text_if_changed(
+            output_path, emit_logger_header(logger_config, config, override_arch)
+        )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"logger_gen.py: {exc}", file=sys.stderr)
         return 1

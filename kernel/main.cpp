@@ -9,10 +9,12 @@
  *
  */
 
+#include <arch/description.h>
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/csr.h>
-#include <arch/riscv64/description.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/mem/sv39.h>
+#endif
 #include <arch/trait.h>
 #include <device/fdt.h>
 #include <device/int.h>

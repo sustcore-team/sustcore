@@ -1,1 +1,1 @@
-sources += sv39.cpp
+riscv64-sources += sv39.cpp

@@ -1,14 +1,20 @@
 global-env := ./script/env/global.mk
 config-json := $(firstword $(wildcard config.json) script/config.default.json)
+config-arch := $(shell python3 -c "import json; from pathlib import Path; p=Path('$(config-json)'); print(json.load(p.open()).get('arch','riscv64'))")
 
 -include ./config.mk
+
+architecture ?= $(config-arch)
+config-arch-override :=
+ifeq ($(origin architecture), command line)
+config-arch-override := $(architecture)
+endif
 
 all:
 	$(q)$(MAKE) -s build && $(MAKE) run
 
 image-sectors ?= 262144
 
-architecture ?= riscv64
 mode-boot ?= bios
 
 filesystem ?= ext4
@@ -58,23 +64,29 @@ module-component-makefile.test_file_rw_a := $(path-e)/module/test_file_rw_a/Make
 module-component-makefile.test_file_rw_b := $(path-e)/module/test_file_rw_b/Makefile
 
 build-libs:
+ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(library-component-makefile.sbi) $(arg-basic) build
+endif
 	$(q)$(MAKE) -f $(library-component-makefile.basecpp) $(arg-basic) build
+	$(q)$(MAKE) -f $(library-component-makefile.basecpp) $(arg-basic) build-basecpp-kernel
+ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(library-component-makefile.kmod) $(arg-basic) build
+endif
 # 	$(q)$(MAKE) -f $(library-component-makefile.rpc) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.libfdt) $(arg-basic) build
 	$(q)echo "All libraries built successfully."
 
 config.mk: FORCE $(config-json) tools/config_gen/config_gen.py
-	$(q)python3 tools/config_gen/config_gen.py $(config-json) config.mk
+	$(q)python3 tools/config_gen/config_gen.py $(config-json) config.mk $(config-arch-override)
 
 kernel/logger.h: FORCE $(config-json) kernel/logger.json tools/logger_gen/logger_gen.py
-	$(q)python3 tools/logger_gen/logger_gen.py kernel/logger.json kernel/logger.h $(config-json)
+	$(q)python3 tools/logger_gen/logger_gen.py kernel/logger.json kernel/logger.h $(config-json) $(config-arch-override)
 
 kernel/feature.mk: FORCE $(config-json) kernel/feature.json tools/feature_gen/feature_gen.py
-	$(q)python3 tools/feature_gen/feature_gen.py kernel/feature.json kernel/feature.mk $(config-json)
+	$(q)python3 tools/feature_gen/feature_gen.py kernel/feature.json kernel/feature.mk $(config-json) $(config-arch-override)
 
 build-mods: build-libs
+ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(module-component-makefile.default) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.init) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_endpoint_master) $(arg-basic) build
@@ -89,8 +101,10 @@ build-mods: build-libs
 	$(q)$(MAKE) -f $(module-component-makefile.test_file_rw_a) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_file_rw_b) $(arg-basic) build
 	$(q)echo "All modules built successfully."
+endif
 
 make-initrd:
+ifneq ($(architecture),loongarch64)
 	$(call if_mkdir, $(path-initrd))
 	$(q)$(rm) -rf $(path-initrd)/src
 	$(call if_mkdir, $(path-initrd)/src)
@@ -101,12 +115,19 @@ make-initrd:
 	cp -r ./script/ $(path-initrd)/src/script/
 	cp -r ./tools/ $(path-initrd)/src/tools/
 	$(q)echo "initrd path created"
+endif
 
 build-kernel:
+ifneq ($(architecture),loongarch64)
 	$(q)$(copy) ./LICENSE $(path-initrd)/license
+endif
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) build
 
+ifeq ($(architecture),loongarch64)
+build: build-libs build-kernel
+else
 build: make-initrd build-mods build-kernel
+endif
 
 mount:
 	$(q)$(MAKE) -f $(path-script)/image/Makefile.image global-env=$(global-env) loop=$(loop-b) start-image

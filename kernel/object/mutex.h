@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <arch/riscv64/description.h>
+#include <arch/description.h>
 #include <cap/capability.h>
 #include <object/perm.h>
 

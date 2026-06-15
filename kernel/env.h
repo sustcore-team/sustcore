@@ -11,8 +11,10 @@
 
 #pragma once
 
+#include <arch/description.h>
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/ctxlayout.h>
-#include <arch/riscv64/description.h>
+#endif
 #include <device/cpu.h>
 #include <device/int.h>
 #include <mem/vma.h>

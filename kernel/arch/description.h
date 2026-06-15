@@ -11,4 +11,10 @@
 
 #pragma once
 
+#if defined(__ARCH_riscv64__)
 #include <arch/riscv64/description.h>
+#elif defined(__ARCH_loongarch64__)
+#include <arch/loongarch64/description.h>
+#else
+#error "unsupported architecture"
+#endif
