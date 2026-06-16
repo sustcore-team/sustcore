@@ -12,9 +12,6 @@
 #pragma once
 
 #include <arch/description.h>
-#if defined(__ARCH_riscv64__)
-#include <arch/riscv64/ctxlayout.h>
-#endif
 #include <cstring>
 #include <device/cpu.h>
 #include <device/int.h>
@@ -49,12 +46,12 @@ namespace env {
 
     class Environment {
     private:
-        alignas(PAGESIZE) byte _bootinfo_storage[128 * 1024] = {};
+        alignas(PAGESIZE) byte _bootinfo_storage[::MAX_BOOTINFO_SIZE] = {};
         size_t _bootinfo_size                                = 0;
         PhyAddr _main_kernel_pgd = PhyAddr::null;
 
     public:
-        constexpr static size_t MAX_BOOTINFO_SIZE = 128 * 1024;
+        constexpr static size_t MAX_BOOTINFO_SIZE = ::MAX_BOOTINFO_SIZE;
         constexpr Environment();
 
         // readers

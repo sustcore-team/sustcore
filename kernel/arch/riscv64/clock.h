@@ -1,7 +1,7 @@
 /**
- * @file plic.h
+ * @file clock.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief RISC-V PLIC 兼容转发头
+ * @brief RISC-V 时钟兼容转发头
  * @version alpha-1.0.0
  * @date 2026-06-16
  *
@@ -11,8 +11,4 @@
 
 #pragma once
 
-#include <arch/riscv64/plic.h>
-
-namespace driver {
-    using Plic = riscv::Plic;
-}
+#include <arch/riscv64/device/clock.h>

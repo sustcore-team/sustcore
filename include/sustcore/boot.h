@@ -14,9 +14,9 @@
 #include <sus/types.h>
 #include <sustcore/addr.h>
 
+constexpr size_t MAX_BOOTINFO_SIZE = 128 * 1024;
+
 struct MemRegion {
-    PhyAddr ptr;
-    size_t size;
     enum class MemoryStatus {
         FREE             = 0,
         RESERVED         = 1,
@@ -26,8 +26,11 @@ struct MemRegion {
         BOOT_RECLAIMABLE = 2,
         ACPI_RECLAIMABLE = 3,
         ACPI_NVS         = 4,
-        BAD_MEMORY       = 5
+        IOMMU            = 5,
+        BAD_MEMORY       = 6
     } status;
+
+    PhyArea area;
 };
 
 struct BootInfoHeader {
@@ -39,7 +42,7 @@ struct BootInfoHeader {
     // regions 应该紧紧跟在 BootInfoHeader 之后
     // MemRegion regions[];
     // 跟在 regions 之后的应该是额外的 Boot 信息
-    // FDT Blob;
+    // 由具体架构定义 extra 布局
 };
 
 static inline MemRegion *bootinfo_regions(BootInfoHeader *header) {
@@ -61,10 +64,18 @@ static inline const void *bootinfo_extras(const BootInfoHeader *header) {
     return bootinfo_extras(const_cast<BootInfoHeader *>(header));
 }
 
-static inline void *bootinfo_fdt(BootInfoHeader *header) {
-    return bootinfo_extras(header);
+static inline PhyAddr *bootinfo_fdt_pa(BootInfoHeader *header) {
+    return reinterpret_cast<PhyAddr *>(bootinfo_extras(header));
 }
 
-static inline const void *bootinfo_fdt(const BootInfoHeader *header) {
-    return bootinfo_extras(header);
+static inline const PhyAddr *bootinfo_fdt_pa(const BootInfoHeader *header) {
+    return bootinfo_fdt_pa(const_cast<BootInfoHeader *>(header));
+}
+
+static inline PhyAddr bootinfo_fdt(BootInfoHeader *header) {
+    return *bootinfo_fdt_pa(header);
+}
+
+static inline PhyAddr bootinfo_fdt(const BootInfoHeader *header) {
+    return *bootinfo_fdt_pa(const_cast<BootInfoHeader *>(header));
 }

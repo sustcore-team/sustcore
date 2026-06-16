@@ -3,15 +3,6 @@
 
 using namespace la64;
 
-void EarlySerial::serial_write_char(char ch) {
-    (void)ch;
-}
-
-void EarlySerial::serial_write_string(size_t len, const char *str) {
-    (void)len;
-    (void)str;
-}
-
 void Initialization::pre_init(void) {}
 
 void Initialization::post_init(void) {}

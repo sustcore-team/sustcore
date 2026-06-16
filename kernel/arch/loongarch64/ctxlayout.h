@@ -1,7 +1,7 @@
 /**
- * @file plic.h
+ * @file ctxlayout.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief RISC-V PLIC 兼容转发头
+ * @brief Hart 与 LoongArch 上下文布局常量
  * @version alpha-1.0.0
  * @date 2026-06-16
  *
@@ -11,8 +11,5 @@
 
 #pragma once
 
-#include <arch/riscv64/plic.h>
-
-namespace driver {
-    using Plic = riscv::Plic;
-}
+#define HART_CONTEXT_SIZE 512UL
+#define MAX_HARTS 32UL

@@ -3,10 +3,23 @@
     .section .laboot.text, "ax", @progbits
 
     .extern _laboot_setup
+    .extern _laboot_post_start
+    .extern __laboot_bsp_phys_id
+    .extern __laboot_cmdline_phys
+    .extern __laboot_system_table_phys
 
     .globl _la_start
     .type _la_start, @function
 _la_start:
+    move $s2, $a0
+    move $s3, $a1
+    move $s1, $a2
+    la.abs $t0, __laboot_bsp_phys_id
+    st.d $s2, $t0, 0
+    la.abs $t0, __laboot_cmdline_phys
+    st.d $s3, $t0, 0
+    la.abs $t0, __laboot_system_table_phys
+    st.d $s1, $t0, 0
     la.abs $sp, __la_boot_stack_top
     call _laboot_setup
 
@@ -45,6 +58,22 @@ _la_paging_setup:
     dbar 0
 
 _la_trampoline:
+    ld.d $a0, $s0, LABOOT_SETUP_BOOT_INFO_PTR_OFFSET
+    ld.d $a1, $s0, LABOOT_SETUP_RECLAIMABLE_CURSOR_OFFSET
+    st.d $s2, $a0, 0
+    st.d $zero, $a0, 8
+    st.d $zero, $a0, 16
+    st.d $zero, $a0, 24
+    st.d $zero, $a0, 32
+    st.d $zero, $a0, 40
+    st.d $zero, $a0, 48
+    st.d $zero, $a0, 56
+    st.d $t0, $a0, 64
+    st.d $t1, $a0, 72
+    st.d $s3, $a0, 80
+    st.d $s1, $a0, 88
+    st.d $zero, $a0, 96
+    st.d $zero, $a0, 104
     ld.d $t0, $s0, LABOOT_SETUP_POST_ENTRY_OFFSET
     jr $t0
 

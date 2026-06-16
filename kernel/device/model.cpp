@@ -18,17 +18,17 @@
 
 namespace {
     [[nodiscard]]
-    bool is_empty(device::MemRegion region) {
+    bool is_empty(MemRegion region) {
         return region.area.nullable();
     }
 
     [[nodiscard]]
-    bool mergeable(device::MemRegion lhs, device::MemRegion rhs) {
+    bool mergeable(MemRegion lhs, MemRegion rhs) {
         return lhs.status == rhs.status && rhs.area.begin <= lhs.area.end;
     }
 
     [[nodiscard]]
-    bool region_less(device::MemRegion lhs, device::MemRegion rhs) {
+    bool region_less(MemRegion lhs, MemRegion rhs) {
         if (lhs.area.begin != rhs.area.begin) {
             return lhs.area.begin < rhs.area.begin;
         }
@@ -39,11 +39,11 @@ namespace {
     }
 
     [[nodiscard]]
-    std::vector<device::MemRegion> merge_same_status_regions(
-        std::vector<device::MemRegion> regions) {
+    std::vector<MemRegion> merge_same_status_regions(
+        std::vector<MemRegion> regions) {
         std::ranges::sort(regions, region_less);
 
-        std::vector<device::MemRegion> merged;
+        std::vector<MemRegion> merged;
         merged.reserve(regions.size());
         for (const auto &region : regions) {
             if (is_empty(region)) {
@@ -62,7 +62,7 @@ namespace {
 
     [[nodiscard]]
     std::vector<addr_t> sorted_unique_boundaries(
-        const std::vector<device::MemRegion> &regions) {
+        const std::vector<MemRegion> &regions) {
         std::vector<addr_t> boundaries;
         boundaries.reserve(regions.size() * 2);
         for (const auto &region : regions) {
@@ -193,7 +193,9 @@ namespace device {
 
             for (const auto &fragment : fragments) {
                 trimmed_free_regions.push_back(MemRegion{
-                    .area = fragment, .status = MemRegion::MemoryStatus::FREE});
+                    .status = MemRegion::MemoryStatus::FREE,
+                    .area   = fragment,
+                });
             }
         }
 
@@ -203,9 +205,9 @@ namespace device {
         if (boundaries.size() >= 2) {
             for (size_t i = 0; i + 1 < boundaries.size(); ++i) {
                 MemRegion slice{
+                    .status = MemRegion::MemoryStatus::BAD_MEMORY,
                     .area   = PhyArea(PhyAddr(boundaries[i]),
                                       PhyAddr(boundaries[i + 1])),
-                    .status = MemRegion::MemoryStatus::BAD_MEMORY,
                 };
                 if (slice.area.nullable()) {
                     continue;

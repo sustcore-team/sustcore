@@ -28,9 +28,9 @@ void LinearGrowGFP::pre_init() {
     for (size_t i = 0; i < bootinfo->region_cnt; i++) {
         const auto &region = bootinfo_regions(bootinfo)[i];
         if (region.status == MemRegion::MemoryStatus::FREE) {
-            if (region.size > max_size) {
-                max_size  = region.size;
-                _baseaddr = region.ptr;
+            if (region.area.size() > max_size) {
+                max_size  = region.area.size();
+                _baseaddr = region.area.begin;
             }
         }
     }

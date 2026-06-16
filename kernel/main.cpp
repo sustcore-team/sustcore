@@ -14,6 +14,8 @@
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/mem/sv39.h>
+#elif defined(__ARCH_loongarch64__)
+#include <arch/loongarch64/fdt_helper.h>
 #endif
 #include <arch/trait.h>
 #include <device/fdt.h>
@@ -47,6 +49,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <libfdt.h>
 
 env::PaddedHartContext __hart_context[MAX_HARTS] = {};
@@ -95,15 +98,15 @@ namespace env {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
 
-        ctx->alarm()       = new device::ClintAlarm(clock_source, clock_virq);
-        ctx->time_keeper() = new device::TimeKeeper(clock_source, ctx->alarm());
-        auto enable_timer_res = irqman.enable_irq(clock_virq);
-        if (!enable_timer_res.has_value()) {
-            loggers::SUSTCORE::ERROR("启用 CLINT timer 中断失败!");
-            propagate_return(enable_timer_res);
-        }
-        loggers::SUSTCORE::INFO("hart %u 已初始化 ClintAlarm",
-                                static_cast<unsigned>(ctx->hart_id()));
+        // ctx->alarm()       = new device::ClintAlarm(clock_source, clock_virq);
+        // ctx->time_keeper() = new device::TimeKeeper(clock_source, ctx->alarm());
+        // auto enable_timer_res = irqman.enable_irq(clock_virq);
+        // if (!enable_timer_res.has_value()) {
+        //     loggers::SUSTCORE::ERROR("启用 CLINT timer 中断失败!");
+        //     propagate_return(enable_timer_res);
+        // }
+        // loggers::SUSTCORE::INFO("hart %u 已初始化 ClintAlarm",
+        //                         static_cast<unsigned>(ctx->hart_id()));
         void_return();
     }
 
@@ -156,26 +159,12 @@ namespace env {
 
 namespace {
     [[nodiscard]]
-    device::MemRegion::MemoryStatus to_device_memory_status(
-        MemRegion::MemoryStatus status) noexcept {
-        using BootStatus   = MemRegion::MemoryStatus;
-        using DeviceStatus = device::MemRegion::MemoryStatus;
-
-        switch (status) {
-        case BootStatus::FREE:
-            return DeviceStatus::FREE;
-        case BootStatus::RESERVED:
-            return DeviceStatus::RESERVED;
-        case BootStatus::BOOT_RECLAIMABLE:
-            return DeviceStatus::BOOT_RECLAIMABLE;
-        case BootStatus::ACPI_RECLAIMABLE:
-            return DeviceStatus::ACPI_RECLAIMABLE;
-        case BootStatus::ACPI_NVS:
-            return DeviceStatus::ACPI_NVS;
-        case BootStatus::BAD_MEMORY:
-            return DeviceStatus::BAD_MEMORY;
+    void *bootinfo_fdt_ptr(const BootInfoHeader *bootinfo) noexcept {
+        auto fdt_pa = bootinfo_fdt(bootinfo);
+        if (!fdt_pa.nonnull()) {
+            return nullptr;
         }
-        return DeviceStatus::BAD_MEMORY;
+        return convert<KpaAddr>(fdt_pa).addr();
     }
 
     /**
@@ -431,7 +420,10 @@ void env_setup() {
         panic("Environment 中 BootInfo 不可用");
     }
 
-    dtb_ptr = bootinfo_fdt(bootinfo_ptr);
+    dtb_ptr = bootinfo_fdt_ptr(bootinfo_ptr);
+    if (dtb_ptr == nullptr) {
+        panic("BootInfo FDT 为空");
+    }
 
     loggers::SUSTCORE::INFO("开始读取 BootInfo 内嵌 FDT");
     int dtb_size = fdt_totalsize(dtb_ptr);
@@ -448,8 +440,8 @@ void env_setup() {
     PhyAddr upper_bound = PhyAddr::null;
     for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
         const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
-        PhyAddr start = reg.ptr;
-        PhyAddr end   = start + reg.size;
+        PhyAddr start = reg.area.begin;
+        PhyAddr end   = reg.area.end;
         loggers::SUSTCORE::INFO("BootInfo 内存区域 %u: [%p, %p) Status: %d",
                                 static_cast<unsigned>(i), start.addr(),
                                 end.addr(), static_cast<int>(reg.status));
@@ -468,8 +460,8 @@ void env_setup() {
             continue;
         }
 
-        PhyAddr start_addr = reg.ptr.page_align_up();
-        PhyAddr end_addr   = (reg.ptr + reg.size).page_align_down();
+        PhyAddr start_addr = reg.area.begin.page_align_up();
+        PhyAddr end_addr   = reg.area.end.page_align_down();
         size_t pages       = (end_addr - start_addr) / PAGESIZE;
         if (pages == 0) {
             continue;
@@ -509,8 +501,8 @@ void env_setup() {
         {
             continue;
         }
-        PhyArea region(reg.ptr.page_align_down(),
-                       (reg.ptr + reg.size).page_align_up());
+        PhyArea region(reg.area.begin.page_align_down(),
+                       reg.area.end.page_align_up());
         map_kpa_region(kernelman, region);
     }
 
@@ -518,23 +510,44 @@ void env_setup() {
     kernelman.switch_root();
     kernelman.flush_tlb();
 
+    // 初始化 Allocator 与内存池
+    loggers::SUSTCORE::INFO("初始化分配器和内核对象池");
+    Allocator::init();
+    init_kop();
+
+    loggers::SUSTCORE::INFO("复制 FDT 到 Allocator 管理的内存");
+    void *copied_fdt = Allocator::malloc(static_cast<size_t>(dtb_size));
+    if (copied_fdt == nullptr) {
+        panic("无法复制 FDT");
+    }
+
+    char *__ptr = reinterpret_cast<char *>(copied_fdt);
+    loggers::SUSTCORE::INFO("__ptr = %p", __ptr);
+    *__ptr = 'c';
+    loggers::SUSTCORE::INFO("*__ptr = %c", *__ptr);
+
+    memcpy(copied_fdt, dtb_ptr, static_cast<size_t>(dtb_size));
+    *bootinfo_fdt_pa(bootinfo_ptr) = convert_pointer(copied_fdt);
+    dtb_ptr                        = copied_fdt;
+    if (FDTHelper::fdt_init(dtb_ptr) == nullptr) {
+        panic("复制后 FDT 初始化失败");
+    }
+    loggers::SUSTCORE::INFO("FDT 已迁移到 [%p, %p)", copied_fdt,
+                            static_cast<byte *>(copied_fdt) + dtb_size);
+
     loggers::SUSTCORE::INFO("回收 BootInfo 与 SBI reclaimable 区");
     for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
         const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
         if (reg.status != MemRegion::MemoryStatus::BOOT_RECLAIMABLE) {
             continue;
         }
-        PhyArea region(reg.ptr.page_align_down(),
-                       (reg.ptr + reg.size).page_align_up());
+        PhyArea region(reg.area.begin.page_align_down(),
+                       reg.area.end.page_align_up());
         RawGFPImpl::put_page(region.begin, region.size() / PAGESIZE);
     }
-
-    // 初始化 Allocator 与内存池
-    loggers::SUSTCORE::INFO("初始化分配器和内核对象池");
-    Allocator::init();
-    init_kop();
-
+    
     loggers::SUSTCORE::INFO("桥接代码完成! 进入 post-init 阶段");
+    while (true);
     post_init();
 }
 
@@ -547,15 +560,15 @@ void init_device_model() {
 
     auto &model = device::DeviceModel::inst();
 
-    std::vector<device::MemRegion> boot_regions;
+    std::vector<MemRegion> boot_regions;
     auto *bootinfo = env::inst().bootinfo();
     assert(bootinfo != nullptr);
     boot_regions.reserve(bootinfo->region_cnt);
     for (size_t i = 0; i < bootinfo->region_cnt; ++i) {
         const auto &reg = bootinfo_regions(bootinfo)[i];
-        boot_regions.push_back(device::MemRegion{
-            .area   = PhyArea(reg.ptr, reg.ptr + reg.size),
-            .status = to_device_memory_status(reg.status),
+        boot_regions.push_back(MemRegion{
+            .status = reg.status,
+            .area   = reg.area,
         });
     }
     model.collect_memory_regions(&boot_regions);

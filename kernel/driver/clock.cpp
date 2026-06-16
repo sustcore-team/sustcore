@@ -9,10 +9,6 @@
  *
  */
 
-#include <arch/description.h>
-#if defined(__ARCH_riscv64__)
-#include <arch/riscv64/csr.h>
-#endif
 #include <driver/clock.h>
 #include <driver/int/base.h>
 #include <logger.h>
@@ -34,20 +30,6 @@ namespace driver {
             };
         }
     }  // namespace
-
-    /**
-     * @brief 读取当前 CSR `time` 计数值.
-     */
-    units::tick CSRTimeClockSource::now() const noexcept {
-        return csr_get_time();
-    }
-
-    /**
-     * @brief 返回 CSR `time` 时钟源频率.
-     */
-    units::frequency CSRTimeClockSource::frequency() const noexcept {
-        return _freq;
-    }
 
     bool ExpireActionQueue::empty() const noexcept {
         InterruptGuard guard;

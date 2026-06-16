@@ -20,6 +20,7 @@
 #include <logger.h>
 #include <sus/owner.h>
 #include <sustcore/addr.h>
+#include <sustcore/boot.h>
 #include <sustcore/errcode.h>
 
 #include <vector>
@@ -29,29 +30,6 @@ namespace device {
 }
 
 namespace device {
-    /**
-     * @brief 内存区域
-     *
-     */
-    struct MemRegion {
-        /**
-         * @brief 内存状态
-         *
-         */
-        enum class MemoryStatus {
-            FREE             = 0,
-            RESERVED         = 1,
-            BOOT_RECLAIMABLE = 2,
-            ACPI_RECLAIMABLE = 3,
-            ACPI_NVS         = 4,
-            IOMMU            = 5,
-            BAD_MEMORY       = 6
-        };
-
-        PhyArea area;
-        MemoryStatus status;
-    };
-
     class DeviceProvider {
     public:
         virtual ~DeviceProvider() = default;

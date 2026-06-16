@@ -6,8 +6,13 @@ component-target := $(path-kernel)
 component-objdir := $(path-objects)/kernel
 
 ifeq ($(architecture),loongarch64)
-component-include-mks := $(component-root)/arch/loongarch64/include.mk \
-	$(component-root)/boot/laboot/include.mk
+component-include-mks := $(filter-out \
+	$(component-root)/arch/riscv64/include.mk \
+	$(component-root)/arch/riscv64/device/include.mk \
+	$(component-root)/arch/riscv64/int/include.mk \
+	$(component-root)/arch/riscv64/mem/include.mk \
+	$(component-root)/boot/sbi/include.mk, \
+	$(shell find $(component-root) -name include.mk | sort))
 endif
 
 attachments := initrd.tar.attachment.o
@@ -20,7 +25,7 @@ variant.riscv64.libraries := kersbi kerbasecpp fdt
 variant.loongarch64.target := $(path-kernel)
 variant.loongarch64.dir-obj := $(path-objects)/kernel
 variant.loongarch64.script-ld := $(component-root)/boot/laboot/laboot.ld
-variant.loongarch64.libraries :=
+variant.loongarch64.libraries := kerbasecpp fdt
 variant.loongarch64.attachments :=
 
 variant.default.target := $(path-kernel)

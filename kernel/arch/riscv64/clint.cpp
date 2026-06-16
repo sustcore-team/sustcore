@@ -1,23 +1,21 @@
 /**
  * @file clint.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief CLINT 设备与驱动
+ * @brief RISC-V CLINT 设备与驱动
  * @version alpha-1.0.0
- * @date 2026-05-29
+ * @date 2026-06-16
  *
  * @copyright Copyright (c) 2026
  *
  */
 
-#include <driver/int/clint.h>
+#include <arch/riscv64/clint.h>
 #include <logger.h>
 
-namespace driver {
-    /**
-     * @brief 创建一个 CLINT 设备驱动.
-     */
+namespace riscv {
     Result<util::owner<Clint *>> Clint::create(
-        DevRes res, intc_t identifier, device::cpuid_t hart_id,
+        driver::DriverBase::DevRes res, driver::intc_t identifier,
+        device::cpuid_t hart_id,
         std::vector<device::cpuid_t> target_harts) noexcept {
         if (res.node == nullptr) {
             loggers::INTERRUPT::ERROR("Clint 创建失败: node 为空");
@@ -37,8 +35,7 @@ namespace driver {
         }
         if (device->virq_resources().size() < 2) {
             loggers::INTERRUPT::ERROR(
-                "Clint[%u] 创建失败: virq 资源数量不足 count=%u",
-                identifier,
+                "Clint[%u] 创建失败: virq 资源数量不足 count=%u", identifier,
                 static_cast<unsigned>(device->virq_resources().size()));
             delete device;
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
@@ -52,10 +49,7 @@ namespace driver {
         return util::owner<Clint *>(device);
     }
 
-    /**
-     * @brief 构造一个 CLINT 设备驱动.
-     */
-    Clint::Clint(DevRes res, intc_t identifier,
+    Clint::Clint(driver::DriverBase::DevRes res, driver::intc_t identifier,
                  device::cpuid_t hart_id,
                  std::vector<device::cpuid_t> target_harts) noexcept
         : device::IrqChip(std::move(res)),
@@ -67,30 +61,18 @@ namespace driver {
         return "riscv,clint0";
     }
 
-    /**
-     * @brief 获取设备标识.
-     */
-    intc_t Clint::identifier() const noexcept {
+    driver::intc_t Clint::identifier() const noexcept {
         return _identifier;
     }
 
-    /**
-     * @brief 获取默认 hart.
-     */
     device::cpuid_t Clint::hart_id() const noexcept {
         return _hart_id;
     }
 
-    /**
-     * @brief 获取目标 hart 集合.
-     */
     const std::vector<device::cpuid_t> &Clint::target_harts() const noexcept {
         return _target_harts;
     }
 
-    /**
-     * @brief 判断指定 hart 是否受该 CLINT 覆盖.
-     */
     bool Clint::supports_hart(device::cpuid_t hart_id) const noexcept {
         for (auto target : _target_harts) {
             if (target == hart_id) {
@@ -100,82 +82,57 @@ namespace driver {
         return false;
     }
 
-    /**
-     * @brief 获取 software interrupt 的 virq.
-     */
-    virq_t Clint::software_virq() const noexcept {
+    driver::virq_t Clint::software_virq() const noexcept {
         assert(virq_resources().size() >= 2);
         assert(virq_resources().at(0) != nullptr);
         return virq_resources().at(0)->virq();
     }
 
-    /**
-     * @brief 获取 clock interrupt 的 virq.
-     */
-    virq_t Clint::clock_virq() const noexcept {
+    driver::virq_t Clint::clock_virq() const noexcept {
         assert(virq_resources().size() >= 2);
         assert(virq_resources().at(1) != nullptr);
         return virq_resources().at(1)->virq();
     }
 
-    /**
-     * @brief 使能本地中断.
-     */
-    Result<void> Clint::enable_irq(hwirq_t hw_irq) noexcept {
+    Result<void> Clint::enable_irq(driver::hwirq_t hw_irq) noexcept {
         loggers::INTERRUPT::ERROR("Clint[%u] 不支持 enable hwirq=%u",
                                   identifier(), hw_irq);
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
-    /**
-     * @brief 屏蔽本地中断.
-     */
-    Result<void> Clint::disable_irq(hwirq_t hw_irq) noexcept {
+    Result<void> Clint::disable_irq(driver::hwirq_t hw_irq) noexcept {
         loggers::INTERRUPT::ERROR("Clint[%u] 不支持 disable hwirq=%u",
                                   identifier(), hw_irq);
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
-    /**
-     * @brief 设置中断优先级.
-     */
-    Result<void> Clint::set_priority(hwirq_t hw_irq,
-                                     domain_t prio) noexcept {
+    Result<void> Clint::set_priority(driver::hwirq_t hw_irq,
+                                     driver::domain_t prio) noexcept {
         loggers::INTERRUPT::DEBUG(
-            "Clint[%u] set_priority hwirq=%u prio=%u 不支持",
-            identifier(), hw_irq, prio);
+            "Clint[%u] set_priority hwirq=%u prio=%u 不支持", identifier(),
+            hw_irq, prio);
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
-    /**
-     * @brief 设置中断亲和性.
-     */
-    Result<void> Clint::set_affinity(hwirq_t hw_irq,
-                                     cpu_mask_t mask) noexcept {
+    Result<void> Clint::set_affinity(driver::hwirq_t hw_irq,
+                                     driver::cpu_mask_t mask) noexcept {
         loggers::INTERRUPT::ERROR(
             "Clint[%u] set_affinity hwirq=%u mask=0x%llx 不支持",
-            identifier(), hw_irq,
-            static_cast<unsigned long long>(mask));
+            identifier(), hw_irq, static_cast<unsigned long long>(mask));
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
-    /**
-     * @brief 应答中断.
-     */
-    Result<void> Clint::ack(const IrqEvent &event) noexcept {
+    Result<void> Clint::ack(const driver::IrqEvent &event) noexcept {
         loggers::INTERRUPT::DEBUG("Clint[%u] ack hwirq=%u 不支持",
                                   identifier(), event.hw_irq);
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
-    /**
-     * @brief 设置中断触发方式.
-     */
-    Result<void> Clint::set_trigger(hwirq_t hw_irq,
-                                    device::IrqTrigger trigger) noexcept {
+    Result<void> Clint::set_trigger(driver::hwirq_t hw_irq,
+                                    driver::IrqTrigger trigger) noexcept {
         loggers::INTERRUPT::DEBUG(
-            "Clint[%u] set_trigger hwirq=%u trigger=%d 不支持",
-            identifier(), hw_irq, static_cast<int>(trigger));
+            "Clint[%u] set_trigger hwirq=%u trigger=%d 不支持", identifier(),
+            hw_irq, static_cast<int>(trigger));
         unexpect_return(ErrCode::NOT_SUPPORTED);
     }
-}  // namespace driver
+}  // namespace riscv

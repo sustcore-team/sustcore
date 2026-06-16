@@ -1,1 +1,1 @@
-riscv64-sources += fdt_helper.cpp
+riscv64-sources += fdt_helper.cpp clock.cpp

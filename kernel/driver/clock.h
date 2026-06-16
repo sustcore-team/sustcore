@@ -365,36 +365,4 @@ namespace driver {
         ExpireActionQueue _queue{};
     };
 
-    /**
-     * @brief 基于 RISC-V `time` CSR 的系统时钟源.
-     */
-    class CSRTimeClockSource : public ClockSource {
-    public:
-        /**
-         * @brief 构造 CSR `time` 时钟源.
-         *
-         * @param freq 时钟源频率
-         */
-        explicit CSRTimeClockSource(units::frequency freq) noexcept
-            : _freq(freq) {}
-
-        /**
-         * @brief 读取当前 `time` CSR 计数.
-         *
-         * @return units::tick 当前 tick 计数
-         */
-        [[nodiscard]]
-        units::tick now() const noexcept override;
-
-        /**
-         * @brief 获取 CSR `time` 时钟源频率.
-         *
-         * @return units::frequency 时钟频率
-         */
-        [[nodiscard]]
-        units::frequency frequency() const noexcept override;
-
-    private:
-        units::frequency _freq;
-    };
 }  // namespace device

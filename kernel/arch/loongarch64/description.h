@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <arch/loongarch64/placeholder.h>
 #include <arch/loongarch64/trait.h>
 #include <arch/trait.h>
 

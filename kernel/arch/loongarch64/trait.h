@@ -11,9 +11,11 @@
 
 #pragma once
 
+#include <arch/loongarch64/ctxlayout.h>
 #include <arch/trait.h>
 #include <sus/types.h>
 #include <syscall/packs.h>
+#include <task/startup.h>
 
 #include <cstddef>
 
@@ -37,6 +39,7 @@ namespace la64 {
     struct Context {
         umb_t _pc = 0;
         umb_t _sp = 0;
+        umb_t kstack_sp = 0;
         umb_t regs[32]{};
 
         constexpr umb_t &pc() {

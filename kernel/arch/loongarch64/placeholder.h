@@ -4,6 +4,10 @@
 #include <sustcore/addr.h>
 
 namespace la64 {
+    template <typename T>
+    constexpr umb_t rwx_cast(T rwx) {
+        return static_cast<umb_t>(rwx);
+    }
 
     class PageMan {
     public:
@@ -34,6 +38,7 @@ namespace la64 {
 
         union PTE {
             umb_t value;
+            umb_t rwx;
         };
 
         struct QueryResult {

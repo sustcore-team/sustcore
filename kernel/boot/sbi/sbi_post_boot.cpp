@@ -50,37 +50,36 @@ namespace sbi {
     }
 
     _SBI_FUNCTION bool region_empty(const MemRegion &region) {
-        return region.size == 0;
+        return region.area.nullable();
     }
 
     _SBI_FUNCTION addr_t region_end(const MemRegion &region) {
-        return region.ptr.arith() + region.size;
+        return region.area.end.arith();
     }
 
     _SBI_FUNCTION void append_region(MemRegion *regions, size_t &cnt,
-                                     addr_t begin, addr_t size,
+                                     PhyArea area,
                                      MemRegion::MemoryStatus status) {
-        if (size == 0) {
+        if (area.nullable()) {
             return;
         }
         if (cnt >= MAX_BOOTINFO_REGIONS) {
             post_panic(SBI_BOOTINFO_OVERFLOW_MSG);
         }
         regions[cnt] = MemRegion{
-            .ptr    = PhyAddr(begin),
-            .size   = size,
             .status = status,
+            .area   = area,
         };
         ++cnt;
     }
 
     _SBI_FUNCTION bool region_less(const MemRegion &lhs,
                                    const MemRegion &rhs) {
-        if (lhs.ptr != rhs.ptr) {
-            return lhs.ptr < rhs.ptr;
+        if (lhs.area.begin != rhs.area.begin) {
+            return lhs.area.begin < rhs.area.begin;
         }
-        if (lhs.size != rhs.size) {
-            return lhs.size < rhs.size;
+        if (lhs.area.end != rhs.area.end) {
+            return lhs.area.end < rhs.area.end;
         }
         return static_cast<int>(lhs.status) < static_cast<int>(rhs.status);
     }
@@ -98,7 +97,8 @@ namespace sbi {
     }
 
     _SBI_FUNCTION bool mergeable(const MemRegion &lhs, const MemRegion &rhs) {
-        return lhs.status == rhs.status && region_end(lhs) >= rhs.ptr.arith();
+        return lhs.status == rhs.status &&
+               region_end(lhs) >= rhs.area.begin.arith();
     }
 
     _SBI_FUNCTION size_t merge_regions(MemRegion *regions, size_t cnt) {
@@ -114,7 +114,7 @@ namespace sbi {
             if (dst > 0 && mergeable(regions[dst - 1], regions[i])) {
                 addr_t end = region_end(regions[i]);
                 if (region_end(regions[dst - 1]) < end) {
-                    regions[dst - 1].size = end - regions[dst - 1].ptr.arith();
+                    regions[dst - 1].area.end = PhyAddr(end);
                 }
                 continue;
             }
@@ -180,7 +180,9 @@ namespace sbi {
             size_t size = static_cast<size_t>(read_be(
                 cursor + offset + addr_cells * CELL_SIZE,
                 static_cast<size_t>(size_cells)));
-            append_region(regions, cnt, begin, size, status);
+            append_region(regions, cnt,
+                          PhyArea(PhyAddr(begin), PhyAddr(begin + size)),
+                          status);
         }
     }
 
@@ -225,7 +227,8 @@ namespace sbi {
                                             size_t &final_cnt, addr_t begin,
                                             addr_t end) {
         if (begin < end) {
-            append_region(final_regions, final_cnt, begin, end - begin,
+            append_region(final_regions, final_cnt,
+                          PhyArea(PhyAddr(begin), PhyAddr(end)),
                           MemRegion::MemoryStatus::FREE);
         }
     }
@@ -244,11 +247,11 @@ namespace sbi {
         }
 
         for (size_t i = 0; i < memory_cnt; ++i) {
-            addr_t current = memory_regions[i].ptr.arith();
+            addr_t current = memory_regions[i].area.begin.arith();
             addr_t end     = region_end(memory_regions[i]);
 
             for (size_t j = 0; j < reserved_cnt; ++j) {
-                addr_t reserved_begin = reserved_regions[j].ptr.arith();
+                addr_t reserved_begin = reserved_regions[j].area.begin.arith();
                 addr_t reserved_end   = region_end(reserved_regions[j]);
                 if (reserved_end <= current) {
                     continue;
@@ -283,33 +286,34 @@ namespace sbi {
         if (fdt_check_header(dtb) != 0) {
             post_panic(SBI_INVALID_DTB_MSG);
         }
+        size_t dtb_size = static_cast<size_t>(fdt_totalsize(dtb));
         collect_memory_regions(dtb, memory_regions, memory_cnt);
         collect_reserved_regions(dtb, reserved_regions, reserved_cnt);
+        append_region(reserved_regions, reserved_cnt,
+                      PhyArea(PhyAddr(dtb_ptr), PhyAddr(dtb_ptr + dtb_size)),
+                      MemRegion::MemoryStatus::BOOT_RECLAIMABLE);
         append_region(memory_regions, memory_cnt,
-                      kva_to_pa(&s_sbi_kva),
-                      kva_to_pa(&s_sbi_reclaimable_kva) -
-                          kva_to_pa(&s_sbi_kva),
+                      PhyArea(PhyAddr(kva_to_pa(&s_sbi_kva)),
+                              PhyAddr(kva_to_pa(&s_sbi_reclaimable_kva))),
                       MemRegion::MemoryStatus::FREE);
         append_region(reserved_regions, reserved_cnt,
-                      kva_to_pa(&s_sbi_reclaimable_kva),
-                      kva_to_pa(&e_sbi_reclaimable_kva) -
-                          kva_to_pa(&s_sbi_reclaimable_kva),
+                      PhyArea(PhyAddr(kva_to_pa(&s_sbi_reclaimable_kva)),
+                              PhyAddr(kva_to_pa(&e_sbi_reclaimable_kva))),
                       MemRegion::MemoryStatus::BOOT_RECLAIMABLE);
         append_region(reserved_regions, reserved_cnt,
-                      kva_to_pa(&e_sbi_reclaimable_kva),
-                      kva_to_pa(&ekernel) - kva_to_pa(&e_sbi_reclaimable_kva),
+                      PhyArea(PhyAddr(kva_to_pa(&e_sbi_reclaimable_kva)),
+                              PhyAddr(kva_to_pa(&ekernel))),
                       MemRegion::MemoryStatus::RESERVED);
 
         size_t final_cnt = normalize_boot_regions(
             memory_regions, memory_cnt, reserved_regions, reserved_cnt,
             final_regions);
-        size_t dtb_size = static_cast<size_t>(fdt_totalsize(dtb));
 
         addr_t aligned_cursor = (cursor + PAGE_TABLE_ALIGNMENT - 1) &
                                 ~(PAGE_TABLE_ALIGNMENT - 1);
         size_t info_size = sizeof(BootInfoHeader) +
-                           sizeof(MemRegion) * final_cnt + dtb_size;
-        if (info_size > 128 * 1024) {
+                           sizeof(MemRegion) * final_cnt + sizeof(PhyAddr);
+        if (info_size > MAX_BOOTINFO_SIZE) {
             post_panic(SBI_BOOTINFO_TOO_LARGE_MSG);
         }
         if (aligned_cursor + info_size > kva_to_pa(&e_sbi_reclaimable_kva)) {
@@ -323,7 +327,7 @@ namespace sbi {
         for (size_t i = 0; i < final_cnt; ++i) {
             regions[i] = final_regions[i];
         }
-        memcpy(bootinfo_fdt(header), dtb, dtb_size);
+        *bootinfo_fdt_pa(header) = PhyAddr(dtb_ptr);
         return header;
     }
 

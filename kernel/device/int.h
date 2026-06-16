@@ -12,6 +12,9 @@
 #pragma once
 
 #include <driver/int/base.h>
+#if defined(__ARCH_riscv64__)
+#include <arch/riscv64/device/clock.h>
+#endif
 
 namespace device {
     using driver::DriverBase;
@@ -31,5 +34,7 @@ namespace device {
     template <size_t MAX_HW_IRQ>
     using LinearIrqDomain = driver::LinearIrqDomain<MAX_HW_IRQ>;
     using driver::IrqManager;
-    using driver::ClintAlarm;
+#if defined(__ARCH_riscv64__)
+    using ClintAlarm = riscv::ClintAlarm;
+#endif
 }  // namespace device

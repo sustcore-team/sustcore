@@ -64,13 +64,22 @@ namespace laboot {
     using namespace pre;
     using namespace msg::pre;
 
-    _LABOOT_DATA addr_t paging_cursor = 0;
-    _LABOOT_DATA addr_t paging_limit  = 0;
+    extern "C" [[noreturn]]
+    void _laboot_post_start(addr_t boot_info_ptr, addr_t reclaimable_cursor);
+
+    extern "C" _LABOOT_DATA addr_t __laboot_bsp_phys_id         = 0;
+    extern "C" _LABOOT_DATA addr_t __laboot_cmdline_phys        = 0;
+    extern "C" _LABOOT_DATA addr_t __laboot_system_table_phys   = 0;
+
+    _LABOOT_DATA addr_t reclaimable_cursor = 0;
+    _LABOOT_DATA addr_t reclaimable_limit  = 0;
     _LABOOT_DATA LabootPagingSetup setup{};
+    _LABOOT_DATA LabootInfo boot_info{};
 
-    constexpr addr_t PA_START = 0x00000000;
-    constexpr addr_t PA_LIMIT = 0x40000000;
-
+    constexpr addr_t PA_START         = 0x00000000;
+    constexpr addr_t PA_LIMIT         = 0x40000000;
+    constexpr addr_t KERNEL_PHY_BASE  = 0x00300000;
+    constexpr addr_t KERNEL_VIRT_BASE = 0xffffffff80300000ULL;
     extern "C" _LABOOT_FUNCTION [[noreturn]] void _laboot_panic() {
         serial_puts(LABOOT_PANIC_MSG);
         while (true) {
@@ -91,14 +100,14 @@ namespace laboot {
     }
 
     _LABOOT_FUNCTION addr_t page_alloc() {
-        addr_t current = paging_cursor;
+        addr_t current = reclaimable_cursor;
         if ((current & (PAGE_TABLE_ALIGNMENT - 1)) != 0) {
             LABOOT_PANIC(LABOOT_MISALIGNED_PAGING_MSG);
         }
-        if (current + PAGE_SIZE > paging_limit) {
+        if (current + PAGE_SIZE > reclaimable_limit) {
             LABOOT_PANIC(LABOOT_PAGE_ALLOC_OVERFLOW_MSG);
         }
-        paging_cursor = current + PAGE_SIZE;
+        reclaimable_cursor = current + PAGE_SIZE;
         page_zero(current);
         return current;
     }
@@ -116,7 +125,8 @@ namespace laboot {
         return page_table(entry & PPN_MASK);
     }
 
-    _LABOOT_FUNCTION pte_t *ensure_path(addr_t root, const size_t vpn[PAGE_LEVELS],
+    _LABOOT_FUNCTION pte_t *ensure_path(addr_t root,
+                                        const size_t vpn[PAGE_LEVELS],
                                         size_t stop_level) {
         auto *table = page_table(root);
         for (size_t level = PAGE_LEVELS - 1; level > stop_level; --level) {
@@ -135,20 +145,8 @@ namespace laboot {
         size_t vpn[PAGE_LEVELS];
         LA_TOVPN(vpn, va);
 
-        auto *table     = ensure_path(root, vpn, 1);
-        table[vpn[1]]   = LA_MAKE_PTE(pa);
-    }
-
-    _LABOOT_FUNCTION void mapping_in_1g(addr_t root, addr_t va, addr_t pa) {
-        if ((va & PAGE_SIZE_1G_MASK) != 0 || (pa & PAGE_SIZE_1G_MASK) != 0) {
-            LABOOT_PANIC(LABOOT_1G_MISALIGNED_MSG);
-        }
-
-        size_t vpn[PAGE_LEVELS];
-        LA_TOVPN(vpn, va);
-
-        auto *table     = ensure_path(root, vpn, 2);
-        table[vpn[2]]   = LA_MAKE_PTE(pa);
+        auto *table   = ensure_path(root, vpn, 1);
+        table[vpn[1]] = LA_MAKE_PTE(pa);
     }
 
     _LABOOT_FUNCTION void map_range_in_2m(addr_t root, addr_t va_s, addr_t va_e,
@@ -162,20 +160,51 @@ namespace laboot {
         }
     }
 
+    _LABOOT_FUNCTION void map_kpa_range_in_2m(addr_t root, addr_t pa_s,
+                                              addr_t pa_e) {
+        if (pa_e <= pa_s) {
+            return;
+        }
+
+        addr_t current = pa_s & ~static_cast<addr_t>(PAGING_ALIGNMENT_MASK);
+        addr_t end     = (pa_e + PAGING_ALIGNMENT_MASK) &
+                     ~static_cast<addr_t>(PAGING_ALIGNMENT_MASK);
+        while (current < end) {
+            mapping_in_2m(root, current + KPA_OFFSET, current);
+            current += PAGE_SIZE_2M;
+        }
+    }
+
     _LABOOT_FUNCTION void map_identity_and_kpa(addr_t root, addr_t pa_s,
                                                addr_t pa_e) {
-        addr_t current = pa_s;
-
-        if ((pa_s & PAGE_SIZE_1G_MASK) != 0 || (pa_e & PAGE_SIZE_1G_MASK) != 0)
+        if ((pa_s & PAGING_ALIGNMENT_MASK) != 0 ||
+            (pa_e & PAGING_ALIGNMENT_MASK) != 0)
         {
             LABOOT_PANIC(LABOOT_MISALIGNED_KPA_MSG);
         }
 
-        while (current + PAGE_SIZE_1G <= pa_e) {
-            mapping_in_1g(root, current, current);
-            mapping_in_1g(root, current + LABOOT_KVA_OFFSET, current);
-            current += PAGE_SIZE_1G;
-        }
+        map_range_in_2m(root, pa_s, pa_e, pa_s);
+        map_kpa_range_in_2m(root, pa_s, pa_e);
+    }
+
+    _LABOOT_FUNCTION void init_boot_info(addr_t root_page_table,
+                                         addr_t kernel_start,
+                                         addr_t kernel_end) {
+        boot_info.bsp_phys_id          = __laboot_bsp_phys_id;
+        boot_info.dtb_phys             = 0;
+        boot_info.dtb_virt             = 0;
+        boot_info.hhdm_base            = KPA_OFFSET;
+        boot_info.kernel_phys_base     = KERNEL_PHY_BASE;
+        boot_info.kernel_virt_base     = KERNEL_VIRT_BASE;
+        boot_info.kernel_phys_end      = kernel_end;
+        boot_info.kernel_virt_end      = kernel_end + LABOOT_KVA_OFFSET;
+        boot_info.root_page_table_phys = root_page_table;
+        boot_info.root_page_table_virt = KPA_OFFSET + root_page_table;
+        boot_info.cmdline_phys         = __laboot_cmdline_phys;
+        boot_info.system_table_phys    = __laboot_system_table_phys;
+        boot_info.cmdline_virt         = KPA_OFFSET + boot_info.cmdline_phys;
+        boot_info.system_table_virt    = KPA_OFFSET + boot_info.system_table_phys;
+        (void)kernel_start;
     }
 
     _LABOOT_FUNCTION void setup_switch_context(addr_t root) {
@@ -191,14 +220,17 @@ namespace laboot {
         setup.dmw3            = 0;
         setup.tlbrentry       = reinterpret_cast<addr_t>(&_laboot_tlb_refill);
         setup.crmd_value      = CRMD_PG;
-        setup.post_entry = reinterpret_cast<addr_t>(&_laboot_post_start);
+        setup.post_entry      = reinterpret_cast<addr_t>(&_laboot_post_start);
+        setup.boot_info_ptr   = reinterpret_cast<addr_t>(&boot_info);
+        setup.reclaimable_cursor = reclaimable_cursor;
+        setup.reserved           = 0;
     }
 
     extern "C" _LABOOT_FUNCTION LabootPagingSetup *_laboot_setup() {
         serial_puts(LABOOT_BOOT_MSG);
 
-        char *paging_start = &s_laboot_paging;
-        char *paging_end   = &e_laboot_paging;
+        char *paging_start = &s_laboot_reclaimable;
+        char *paging_end   = &e_laboot_reclaimable;
 
         size_t paging_size = static_cast<size_t>(paging_end - paging_start);
         if (paging_size < MINIMUM_PAGING_SIZE) {
@@ -208,8 +240,8 @@ namespace laboot {
             LABOOT_PANIC(LABOOT_MISALIGNED_PAGING_MSG);
         }
 
-        paging_cursor = reinterpret_cast<addr_t>(paging_start);
-        paging_limit  = reinterpret_cast<addr_t>(paging_end);
+        reclaimable_cursor = reinterpret_cast<addr_t>(paging_start);
+        reclaimable_limit  = reinterpret_cast<addr_t>(paging_end);
 
         char *kernel_start = &s_laboot;
         char *kernel_end   = &ekernel_phys;
@@ -232,8 +264,20 @@ namespace laboot {
         auto root_page_table  = page_alloc();
 
         map_identity_and_kpa(root_page_table, PA_START, PA_LIMIT);
-        map_range_in_2m(root_page_table, aligned_kernel_start + LABOOT_KVA_OFFSET,
+        map_range_in_2m(root_page_table,
+                        aligned_kernel_start + LABOOT_KVA_OFFSET,
                         kernel_kva_limit, aligned_kernel_start);
+
+        init_boot_info(root_page_table, aligned_kernel_start, kernel_end_arith);
+
+        if (boot_info.system_table_phys != 0) {
+            map_kpa_range_in_2m(root_page_table, boot_info.system_table_phys,
+                                boot_info.system_table_phys + PAGE_SIZE);
+        }
+        if (boot_info.cmdline_phys != 0) {
+            map_kpa_range_in_2m(root_page_table, boot_info.cmdline_phys,
+                                boot_info.cmdline_phys + PAGE_SIZE);
+        }
 
         setup_switch_context(root_page_table);
 

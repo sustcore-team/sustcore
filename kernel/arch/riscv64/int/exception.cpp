@@ -10,9 +10,9 @@
  */
 
 #include <arch/riscv64/csr.h>
+#include <arch/riscv64/intc.h>
 #include <arch/riscv64/trait.h>
 #include <device/model.h>
-#include <driver/int/riscv_intc.h>
 #include <env.h>
 #include <logger.h>
 #include <sus/logger.h>
@@ -734,8 +734,8 @@ namespace interrupt {
         // scause.cause = hwirq
         driver::hwirq_t hwirq = scause.cause;
         // 对于时钟中断要做特殊处理:
-        if (hwirq == driver::RiscVIntC::CLOCK_LOCAL_IRQ_S) {
-            hwirq = driver::RiscVIntC::CLOCK_LOCAL_IRQ;
+        if (hwirq == riscv::IntC::CLOCK_LOCAL_IRQ_S) {
+            hwirq = riscv::IntC::CLOCK_LOCAL_IRQ;
         }
 
         auto root_domain_res = irq_manager.get_domain(cpu->local_intc());
@@ -746,13 +746,13 @@ namespace interrupt {
         }
         auto &root_domain = root_domain_res.value().get();
         auto &chip        = root_domain.chip();
-        if (chip.compatible() != driver::RiscVIntC::COMPATIBLE_STRING) {
+        if (chip.compatible() != riscv::IntC::COMPATIBLE_STRING) {
             loggers::INTERRUPT::ERROR(
                 "根中断域的中断控制器不兼容: 期望兼容 %s, 实际兼容 %s",
-                driver::RiscVIntC::COMPATIBLE_STRING, chip.compatible().data());
+                riscv::IntC::COMPATIBLE_STRING, chip.compatible().data());
             return;
         }
-        auto &riscv_intc = static_cast<driver::RiscVIntC &>(chip);
+        auto &riscv_intc = static_cast<riscv::IntC &>(chip);
         auto post_res    = riscv_intc.post(hwirq);
         if (!post_res.has_value()) {
             loggers::INTERRUPT::ERROR("中断分发失败: %s",

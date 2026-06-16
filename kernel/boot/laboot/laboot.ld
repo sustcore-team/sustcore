@@ -40,15 +40,17 @@ SECTIONS
         KEEP(*(.laboot_post .laboot_post.*))
     }
 
-    /* LABOOT 页表内存 */
+    /* LABOOT reclaimable 内存 */
     . = KERNEL_PAGING_BASE;
-    s_laboot_paging = .;
+    s_laboot_reclaimable = .;
+    s_laboot_reclaimable_kva = s_laboot_reclaimable + KVA_OFFSET;
 
-    .laboot_paging : AT(KERNEL_PAGING_BASE) {
-        KEEP(*(.laboot_paging .laboot_paging.*))
+    .laboot_reclaimable : AT(KERNEL_PAGING_BASE) {
+        KEEP(*(.laboot_reclaimable .laboot_reclaimable.*))
     }
     . = KERNEL_PHY_BASE;
-    e_laboot_paging = .;
+    e_laboot_reclaimable = .;
+    e_laboot_reclaimable_kva = e_laboot_reclaimable + KVA_OFFSET;
 
     /* 内核内存 */
     . = KERNEL_BASE;
