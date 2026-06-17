@@ -16,8 +16,7 @@
 namespace syscall {
     struct ArgPack {
         b64 syscall_number;
-        b64 capidx;
-        constexpr static size_t ARGS_SIZE = 6;
+        constexpr static size_t ARGS_SIZE = 7;
         b64 args[ARGS_SIZE];
     };
 

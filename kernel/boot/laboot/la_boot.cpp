@@ -10,6 +10,7 @@
  */
 
 #include <boot/laboot/la_paging.h>
+#include <arch/loongarch64/csrnum.h>
 #include <sus/types.h>
 
 #include <cstddef>
@@ -51,7 +52,7 @@ namespace laboot::msg::pre {
         "错误: LABOOT 2MB 映射边界未对齐\n";
     _LABOOT_STRING(LABOOT_1G_MISALIGNED_MSG) =
         "错误: LABOOT 1GB 映射边界未对齐\n";
-    _LABOOT_STRING(LABOOT_PAGE_ALLOC_OVERFLOW_MSG) =
+    _LABOOT_STRING(LA_PAGE_ALLOC_OVERFLOW_MSG) =
         "错误: LABOOT 分页保留区耗尽\n";
     _LABOOT_STRING(LABOOT_CHECK_PASS_MSG)   = "LABOOT检查通过!\n";
     _LABOOT_STRING(LABOOT_PAGING_READY_MSG) = "LABOOT页表设置完成!\n";
@@ -105,7 +106,7 @@ namespace laboot {
             LABOOT_PANIC(LABOOT_MISALIGNED_PAGING_MSG);
         }
         if (current + PAGE_SIZE > reclaimable_limit) {
-            LABOOT_PANIC(LABOOT_PAGE_ALLOC_OVERFLOW_MSG);
+            LABOOT_PANIC(LA_PAGE_ALLOC_OVERFLOW_MSG);
         }
         reclaimable_cursor = current + PAGE_SIZE;
         page_zero(current);

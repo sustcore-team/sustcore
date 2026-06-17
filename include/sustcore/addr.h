@@ -257,3 +257,21 @@ inline static bool is_user_vaddr(VirAddr vaddr) {
 
 using VirArea = util::range::Range<VirAddr>;
 using PhyArea = util::range::Range<PhyAddr>;
+
+template <typename AddrT>
+inline static util::range::Range<AddrT> page_align_inward(util::range::Range<AddrT> area)
+{
+    return {
+        area.begin.page_align_up(),
+        area.end.page_align_down()
+    };
+}
+
+template <typename AddrT>
+inline static util::range::Range<AddrT> page_align_outward(util::range::Range<AddrT> area)
+{
+    return {
+        area.begin.page_align_down(),
+        area.end.page_align_up()
+    };
+}

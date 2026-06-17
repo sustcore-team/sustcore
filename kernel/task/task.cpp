@@ -11,6 +11,9 @@
 
 #include <cap/cholder.h>
 #include <cap/permission.h>
+#if defined(__ARCH_riscv64__)
+#include <arch/riscv64/callconv.h>
+#endif
 #include <env.h>
 #include <exe/elfloader.h>
 #include <exe/task.h>
@@ -52,7 +55,7 @@ namespace task {
             ctx->setup_regs(false, false, true);
             ctx->pc()      = reinterpret_cast<umb_t>(entrypoint);
             ctx->sp()      = reinterpret_cast<umb_t>(stack_top);
-            ctx->kstack_sp = reinterpret_cast<umb_t>(kstack_top);
+            (void)kstack_top;
         }
 
         void init_kernel_context(Context *ctx, void *entrypoint, void *arg0,
@@ -61,10 +64,9 @@ namespace task {
             assert(ctx != nullptr);
             *ctx = {};
             ctx->setup_regs(true, sie, spie);
-            ctx->sp()                   = reinterpret_cast<umb_t>(stack_top);
-            ctx->regs[Context::RA_BASE] = reinterpret_cast<umb_t>(entrypoint);
-            ctx->regs[Context::S0_BASE] = reinterpret_cast<umb_t>(arg0);
-            ctx->kstack_sp              = reinterpret_cast<umb_t>(stack_top);
+            ctx->sp()      = reinterpret_cast<umb_t>(stack_top);
+            ctx->ra        = reinterpret_cast<umb_t>(entrypoint);
+            ctx->s0        = reinterpret_cast<umb_t>(arg0);
         }
 
         void reset_thread_runtime(util::nonnull<TCB *> tcb) noexcept {
@@ -1273,11 +1275,12 @@ namespace task {
         child_tcb->reset_kstack();
         auto *child_user_ctx       = child_tcb->push<Context>();
         *child_user_ctx                         = *parent_ctx;
-        child_user_ctx->kstack_sp              =
-            reinterpret_cast<umb_t>(child_tcb->kstack_top());
-        child_user_ctx->regs[Context::A0_BASE]  = 0;
-        child_user_ctx->regs[Context::A0_BASE + 1] =
-            static_cast<b64>(ErrCode::SUCCESS);
+        write_ret(*child_user_ctx,
+                  syscall::RetPack{
+                      .processed = true,
+                      .ret0      = 0,
+                      .ret1      = static_cast<b64>(ErrCode::SUCCESS),
+                  });
         init_kernel_context(
             child_tcb->kernel_context_ptr(),
             reinterpret_cast<void *>(&new_utask_trampoline), child_user_ctx,

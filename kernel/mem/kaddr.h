@@ -39,19 +39,22 @@ namespace ker_paddr {
 
     void init();
 
-    inline void map_seg(PageMan &man, const Segment &seg, PageMan::RWX rwx,
-                 bool u, bool g) {
-        man.map_range<true>(seg.vstart, seg.pstart, seg.size(), rwx, u,
-                                     g);
+    inline void map_seg(PageMan &man, const Segment &seg, PageMan::PageFlags flags) {
+        man.map_range<true>(seg.vstart, seg.pstart, seg.size(), flags);
     }
 
     inline void mapping_kernel_areas(PageMan &man) {
         // TODO: 专门维持一个内核页表, 其它页表可以直接复用该内核页表,
         // 不需要二次构造
-        map_seg(man, text, PageMan::rwx(true, false, true), false, true);
-        map_seg(man, rodata, PageMan::rwx(true, false, false), false, true);
-        map_seg(man, data, PageMan::rwx(true, true, false), false, true);
-        map_seg(man, bss, PageMan::rwx(true, true, false), false, true);
-        map_seg(man, misc, PageMan::rwx(true, false, false), false, true);
+        map_seg(man, text, PageMan::page_flags(PageMan::rwx(true, false, true),
+                                               false, true));
+        map_seg(man, rodata,
+                PageMan::page_flags(PageMan::rwx(true, false, false), false, true));
+        map_seg(man, data, PageMan::page_flags(PageMan::rwx(true, true, false),
+                                               false, true));
+        map_seg(man, bss, PageMan::page_flags(PageMan::rwx(true, true, false),
+                                              false, true));
+        map_seg(man, misc, PageMan::page_flags(PageMan::rwx(true, false, false),
+                                               false, true));
     }
 }  // namespace ker_paddr

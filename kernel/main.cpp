@@ -16,13 +16,13 @@
 #include <arch/riscv64/mem/sv39.h>
 #elif defined(__ARCH_loongarch64__)
 #include <arch/loongarch64/fdt_helper.h>
+extern "C" char __la_boot_stack, __la_boot_stack_top;
 #endif
 #include <arch/trait.h>
 #include <device/fdt.h>
 #include <device/int.h>
 #include <device/model.h>
 #include <device/resource.h>
-#include <driver/int/clint.h>
 #include <env.h>
 #include <kinit.h>
 #include <logger.h>
@@ -75,41 +75,6 @@ namespace env {
         _env_initialized = true;
     }
 
-    Result<void> init_clock() {
-        [[maybe_unused]] auto &device_model = device::DeviceModel::inst();
-        [[maybe_unused]] auto &irqman       = device_model.interrupt();
-        [[maybe_unused]] auto &cpus         = device_model.cpus();
-        [[maybe_unused]] auto *ctx          = hart_ctx;
-        assert(ctx != nullptr);
-
-        // 初始化 CLINT 定时器, 供调度器 tick 使用.
-        loggers::SUSTCORE::INFO("初始化 hart Clint Timer%u",
-                                static_cast<unsigned>(hart_ctx->hart_id()));
-        auto *clock_source = cpus._clock_source;
-        if (clock_source == nullptr) {
-            loggers::SUSTCORE::ERROR("全局 ClockSource 不可用!");
-            unexpect_return(ErrCode::NULLPTR);
-        }
-
-        // 获得时钟中断 virq
-        auto clock_virq = device_model.clock_virq();
-        if (clock_virq == 0) {
-            loggers::SUSTCORE::ERROR("DeviceModel 未提供有效 clock_virq");
-            unexpect_return(ErrCode::INVALID_PARAM);
-        }
-
-        // ctx->alarm()       = new device::ClintAlarm(clock_source, clock_virq);
-        // ctx->time_keeper() = new device::TimeKeeper(clock_source, ctx->alarm());
-        // auto enable_timer_res = irqman.enable_irq(clock_virq);
-        // if (!enable_timer_res.has_value()) {
-        //     loggers::SUSTCORE::ERROR("启用 CLINT timer 中断失败!");
-        //     propagate_return(enable_timer_res);
-        // }
-        // loggers::SUSTCORE::INFO("hart %u 已初始化 ClintAlarm",
-        //                         static_cast<unsigned>(ctx->hart_id()));
-        void_return();
-    }
-
     /**
      * @brief 初始化当前 hart 的运行时状态与定时器.
      */
@@ -148,7 +113,7 @@ namespace env {
         }
         ctx->cpu() = cpu;
 
-        auto ret = init_clock();
+        auto ret = Initialization::init_clock();
         if (!ret.has_value()) {
             loggers::SUSTCORE::FATAL("初始化时钟失败: %s",
                                      to_cstring(ret.error()));
@@ -388,8 +353,8 @@ void map_kpa_region(PageMan &man, PhyArea parea) {
 
     VirAddr vaddr = VirAddr(convert<KpaAddr>(parea.begin).arith());
 
-    man.map_range<true>(vaddr, parea.begin, parea.size(), PageMan::RWX::RW,
-                        false, true);
+    man.map_range<true>(vaddr, parea.begin, parea.size(),
+                        PageMan::page_flags(PageMan::RWX::RW, false, true));
 }
 
 extern "C" void post_init(void);
@@ -460,17 +425,14 @@ void env_setup() {
             continue;
         }
 
-        PhyAddr start_addr = reg.area.begin.page_align_up();
-        PhyAddr end_addr   = reg.area.end.page_align_down();
-        size_t pages       = (end_addr - start_addr) / PAGESIZE;
+        size_t pages       = reg.area.size() / PAGESIZE;
         if (pages == 0) {
             continue;
         }
-
         loggers::SUSTCORE::INFO("桥接阶段加入可用内存区域 [%p, %p), 共 %u 页",
-                                start_addr.addr(), end_addr.addr(),
+                                reg.area.begin.addr(), reg.area.end.addr(),
                                 static_cast<unsigned>(pages));
-        RawGFPImpl::put_page(start_addr, pages);
+        RawGFPImpl::put_page(reg.area.begin, pages);
     }
 
     // 初始化 ker_paddr 与 PageMan
@@ -501,10 +463,23 @@ void env_setup() {
         {
             continue;
         }
-        PhyArea region(reg.area.begin.page_align_down(),
-                       reg.area.end.page_align_up());
-        map_kpa_region(kernelman, region);
+
+        size_t pages       = reg.area.size() / PAGESIZE;
+        if (pages == 0) {
+            continue;
+        }
+        loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射", reg.area.begin.addr(), reg.area.end.addr());
+        map_kpa_region(kernelman, reg.area);
     }
+#if defined(__ARCH_loongarch64__)
+    // 额外加入 Early Serial 区域
+    PhyArea area(
+        PhyAddr(0x1F00'0000),
+        PhyAddr(0x2000'0000)
+    );
+    loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射(Early Serial)", area.begin.addr(), area.end.addr());
+    map_kpa_region(kernelman, area);
+#endif
 
     loggers::SUSTCORE::INFO("切换到新内核页表");
     kernelman.switch_root();
@@ -515,11 +490,11 @@ void env_setup() {
     Allocator::init();
     init_kop();
 
-    loggers::SUSTCORE::INFO("复制 FDT 到 Allocator 管理的内存");
     void *copied_fdt = Allocator::malloc(static_cast<size_t>(dtb_size));
     if (copied_fdt == nullptr) {
         panic("无法复制 FDT");
     }
+    loggers::SUSTCORE::INFO("复制 FDT : %p 到 %p 管理的内存", dtb_ptr, copied_fdt);
 
     char *__ptr = reinterpret_cast<char *>(copied_fdt);
     loggers::SUSTCORE::INFO("__ptr = %p", __ptr);
@@ -541,13 +516,20 @@ void env_setup() {
         if (reg.status != MemRegion::MemoryStatus::BOOT_RECLAIMABLE) {
             continue;
         }
-        PhyArea region(reg.area.begin.page_align_down(),
-                       reg.area.end.page_align_up());
-        RawGFPImpl::put_page(region.begin, region.size() / PAGESIZE);
+        size_t pages       = reg.area.size() / PAGESIZE;
+        if (pages == 0) {
+            continue;
+        }
+        loggers::SUSTCORE::INFO("回收 BOOT_RECLAIMABLE 内存区域 [%p, %p), 共 %u 页",
+                                reg.area.begin.addr(), reg.area.end.addr(),
+                                static_cast<unsigned>(pages));
+        RawGFPImpl::put_page(reg.area.begin, pages);
     }
     
     loggers::SUSTCORE::INFO("桥接代码完成! 进入 post-init 阶段");
+#if defined(__ARCH_loongarch64__)
     while (true);
+#endif
     post_init();
 }
 

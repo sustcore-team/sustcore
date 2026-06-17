@@ -10,6 +10,11 @@
  */
 
 #include <logger.h>
+#if defined(__ARCH_riscv64__)
+#include <arch/riscv64/callconv.h>
+#elif defined(__ARCH_loongarch64__)
+#include <arch/loongarch64/callconv.h>
+#endif
 #include <sustcore/addr.h>
 #include <sustcore/syscall.h>
 #include <syscall/cap.h>
@@ -222,14 +227,14 @@ namespace syscall {
                 .ret1      = static_cast<b64>(ErrCode::INVALID_PARAM),
             };
         }
-        b64 arg0   = args.args[0];
-        b64 arg1   = args.args[1];
-        b64 arg2   = args.args[2];
-        b64 arg3   = args.args[3];
-        b64 arg4   = args.args[4];
-        b64 arg5   = args.args[5];
+        b64 capidx = args.args[0];
+        b64 arg0   = args.args[1];
+        b64 arg1   = args.args[2];
+        b64 arg2   = args.args[3];
+        b64 arg3   = args.args[4];
+        b64 arg4   = args.args[5];
+        b64 arg5   = args.args[6];
         b64 sysno  = args.syscall_number;
-        b64 capidx = args.capidx;
 
         RetPack ret{
             .processed = true,
@@ -250,8 +255,9 @@ namespace syscall {
                     ret = result_void_ret("同步进程能力列表", sync_res);
                     break;
                 }
-                UBuffer startup_buf((VirAddr)arg4, arg5);
-                if (arg5 != 0) {
+                b64 startup_blob_size = arg5;
+                UBuffer startup_buf((VirAddr)arg4, startup_blob_size);
+                if (startup_blob_size != 0) {
                     auto startup_sync_res = startup_buf.sync_from_user();
                     if (!startup_sync_res.has_value()) {
                         ret = result_void_ret("同步进程启动缓冲区",
@@ -262,8 +268,10 @@ namespace syscall {
                 ret = result_value_ret(
                     "创建进程",
                     pcb_create_process(capidx, arg0, std::move(caps_buf), arg2,
-                                       arg3, arg5 == 0 ? nullptr : &startup_buf,
-                                       arg5));
+                                       arg3,
+                                       startup_blob_size == 0 ? nullptr
+                                                              : &startup_buf,
+                                       startup_blob_size));
                 break;
             }
             case SYS_CREATE_THREAD: {
@@ -290,8 +298,9 @@ namespace syscall {
                     ret = result_void_ret("同步execve保留能力列表", sync_res);
                     break;
                 }
-                UBuffer startup_buf((VirAddr)arg3, arg4);
-                if (arg4 != 0) {
+                b64 startup_blob_size = arg4;
+                UBuffer startup_buf((VirAddr)arg3, startup_blob_size);
+                if (startup_blob_size != 0) {
                     auto startup_sync_res = startup_buf.sync_from_user();
                     if (!startup_sync_res.has_value()) {
                         ret = result_void_ret("同步execve启动缓冲区",
@@ -302,7 +311,8 @@ namespace syscall {
                 ret = result_bool_ret(
                     "execve",
                     pcb_execve(capidx, arg0, std::move(reserved_buf), arg2,
-                               arg4 == 0 ? nullptr : &startup_buf, arg4));
+                               startup_blob_size == 0 ? nullptr : &startup_buf,
+                               startup_blob_size));
                 break;
             }
             case SYS_VFS_OPENDIR: {
@@ -546,7 +556,7 @@ namespace syscall {
                 break;
             }
         }
-        trap_context->write_ret(ret);
+        write_ret(*trap_context, ret);
         return ret;
     }
 

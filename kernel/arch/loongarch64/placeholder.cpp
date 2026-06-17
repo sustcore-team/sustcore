@@ -1,11 +1,18 @@
 #include <arch/loongarch64/placeholder.h>
 #include <arch/loongarch64/trait.h>
+#include <logger.h>
+#include <sus/logger.h>
 
 using namespace la64;
 
 void Initialization::pre_init(void) {}
 
 void Initialization::post_init(void) {}
+
+Result<void> Initialization::init_clock() {
+    loggers::SUSTCORE::ERROR("LoongArch64 时钟初始化尚未实现");
+    unexpect_return(ErrCode::NOT_SUPPORTED);
+}
 
 void Interrupt::init(void) {}
 
@@ -18,36 +25,3 @@ bool Interrupt::enabled() {
 }
 
 void Idle::idle() {}
-
-void PageMan::set_cow(PTE *, bool) {}
-
-void PageMan::set_paddr(PTE *, PhyAddr) {}
-
-PhyAddr PageMan::read_root() {
-    return PhyAddr::null;
-}
-
-void PageMan::init() {}
-
-void PageMan::make_root(PhyAddr root) {
-    (void)root;
-}
-
-void PageMan::__switch_root(PhyAddr root) {
-    (void)root;
-}
-
-void PageMan::flush_tlb() {}
-
-Result<PageMan::QueryResult> PageMan::query_page(VirAddr) {
-    unexpect_return(ErrCode::NOT_SUPPORTED);
-}
-
-Result<void> PageMan::clone_mapping_from(PageMan &,
-                                               VirAddr) noexcept {
-    unexpect_return(ErrCode::NOT_SUPPORTED);
-}
-
-Result<void> PageMan::merge_from(PageMan &) noexcept {
-    unexpect_return(ErrCode::NOT_SUPPORTED);
-}

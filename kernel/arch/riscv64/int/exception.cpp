@@ -10,6 +10,7 @@
  */
 
 #include <arch/riscv64/csr.h>
+#include <arch/riscv64/callconv.h>
 #include <arch/riscv64/intc.h>
 #include <arch/riscv64/trait.h>
 #include <device/model.h>
@@ -200,16 +201,13 @@ namespace exception {
         }
         loggers::EXCEPTION::ERROR(
             "ctx: ptr=%p, mode=%s, sstatus=0x%lx, sp=0x%lx, ra=0x%lx", ctx,
-            privilege_name(ctx), ctx->sstatus.value,
-            ctx->regs[Context::X1_BASE + 1], ctx->regs[Context::RA_BASE]);
+            privilege_name(ctx), ctx->sstatus.value, ctx->sp(), ctx->ra);
         loggers::EXCEPTION::ERROR(
             "args: a0=0x%lx, a1=0x%lx, a2=0x%lx, a3=0x%lx",
-            ctx->regs[Context::A0_BASE], ctx->regs[Context::A0_BASE + 1],
-            ctx->regs[Context::A0_BASE + 2], ctx->regs[Context::A0_BASE + 3]);
+            ctx->a0, ctx->a1, ctx->a2, ctx->a3);
         loggers::EXCEPTION::ERROR(
             "args: a4=0x%lx, a5=0x%lx, a6=0x%lx, a7=0x%lx",
-            ctx->regs[Context::A0_BASE + 4], ctx->regs[Context::A0_BASE + 5],
-            ctx->regs[Context::A0_BASE + 6], ctx->regs[Context::A0_BASE + 7]);
+            ctx->a4, ctx->a5, ctx->a6, ctx->a7);
     }
 
     namespace paging {
@@ -658,7 +656,7 @@ namespace exception {
         env::inst().trap_context(env::key::trap_context()) = ctx;
         auto *current_tcb = schd::Scheduler::inst().current_tcb();
         assert(current_tcb != nullptr);
-        syscall::ArgPack args = ctx->read_args();
+        syscall::ArgPack args = read_args(*ctx);
         loggers::SYSCALL::DEBUG(
             "系统调用触发: name=%s, no=0x%lx, pid=%lu, tid=%lu",
             syscall::name_of(args.syscall_number), args.syscall_number,
@@ -666,10 +664,10 @@ namespace exception {
             current_tcb->tid);
         loggers::SYSCALL::DEBUG(
             "系统调用参数: capidx=0x%lx, arg0=0x%lx, arg1=0x%lx, arg2=0x%lx",
-            args.capidx, args.args[0], args.args[1], args.args[2]);
+            args.args[0], args.args[1], args.args[2], args.args[3]);
         loggers::SYSCALL::DEBUG(
-            "系统调用参数: arg3=0x%lx, arg4=0x%lx, sepc=0x%lx", args.args[3],
-            args.args[4], sepc);
+            "系统调用参数: arg3=0x%lx, arg4=0x%lx, arg5=0x%lx, sepc=0x%lx",
+            args.args[4], args.args[5], args.args[6], sepc);
 
         ctx->sepc += 4;
         syscall::handle_user_ecall(util::nnullforce(current_tcb),

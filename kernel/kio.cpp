@@ -33,8 +33,7 @@ namespace {
 
 int kputs(const char *str) {
     size_t len        = strlen(str);
-    PhyAddr str_paddr = convert_pointer(str);
-    EarlySerial::serial_write_string(len, str_paddr.as<char>());
+    EarlySerial::serial_write_string(len, str);
     return strlen(str);
 }
 

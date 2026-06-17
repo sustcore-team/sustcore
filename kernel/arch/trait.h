@@ -53,6 +53,9 @@ concept InitializationTrait = requires() {
     {
         T::post_init()
     } -> std::same_as<void>;
+    {
+        T::init_clock()
+    } -> std::same_as<Result<void>>;
 };
 
 // 初始化条件
@@ -136,29 +139,52 @@ concept ArchPageManTrait_PTEInfoReader = requires(typename T::PTE pte) {
     } -> std::convertible_to<bool>;
 };
 
-// 修改掩码
 template <typename T>
-concept ArchPageManTrait_Mask =
-    requires(bool r, bool w, bool x, bool u, bool g, bool np) {
-        std::is_scoped_enum_v<typename T::ModifyMask>;
+concept ArchPageManTrait_PageFlags =
+    requires(typename T::PageFlags flags, typename T::RWX rwx) {
+        typename T::PageFlags;
         {
-            T::make_mask(r, w, x, u, g, np)
-        } -> std::same_as<typename T::ModifyMask>;
+            typename T::PageFlags{rwx, true, false, true}
+        };
         {
-            T::ModifyMask::NONE
-        } -> std::same_as<typename T::ModifyMask>;
+            flags.rwx
+        } -> std::same_as<typename T::RWX &>;
         {
-            T::ModifyMask::RWX
-        } -> std::same_as<typename T::ModifyMask>;
+            flags.u
+        } -> std::convertible_to<bool>;
         {
-            T::ModifyMask::ALL
-        } -> std::same_as<typename T::ModifyMask>;
+            flags.g
+        } -> std::convertible_to<bool>;
+        {
+            flags.p
+        } -> std::convertible_to<bool>;
+    };
+
+// 修改器
+template <typename T>
+concept ArchPageManTrait_Modifier =
+    requires(bool r, bool w, bool x, bool u, bool g, bool p) {
+        std::is_scoped_enum_v<typename T::Modifier>;
+        {
+            T::make_mask(r, w, x, u, g, p)
+        } -> std::same_as<typename T::Modifier>;
+        {
+            T::Modifier::NONE
+        } -> std::same_as<typename T::Modifier>;
+        {
+            T::Modifier::RWX
+        } -> std::same_as<typename T::Modifier>;
+        {
+            T::Modifier::ALL
+        } -> std::same_as<typename T::Modifier>;
     };
 
 // 页表管理器 Trait
 template <typename T>
 concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
-                                    PhyAddr paddr, T::RWX rwx, bool u, bool g) {
+                                    PhyAddr paddr, T::RWX rwx,
+                                    typename T::PageFlags flags,
+                                    T::QueryResult query_res) {
     // 初始化条件
     requires ArchPageManTrait_Initialization<T>;
     // 满足RWX条件
@@ -167,6 +193,8 @@ concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
     requires ArchPageManTrait_PagingStructures<T>;
     // 满足PTE信息读取条件
     requires ArchPageManTrait_PTEInfoReader<T>;
+    // 满足页标志结构条件
+    requires ArchPageManTrait_PageFlags<T>;
     // 获得/构造页表根
     {
         T::read_root()
@@ -184,7 +212,7 @@ concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
     } -> std::same_as<Result<typename T::QueryResult>>;
     // 单页映射
     {
-        root.template map_page<T::PageSize::_4K>(vaddr, paddr, rwx, u, g)
+        root.template map_page<T::PageSize::_4K>(vaddr, paddr, flags)
     } -> std::same_as<void>;
     // 解除单页映射
     {
@@ -192,24 +220,27 @@ concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
     } -> std::same_as<void>;
     // 范围映射
     {
-        root.template map_range<false>(vaddr, paddr, size, rwx, u, g)
+        root.template map_range<false>(vaddr, paddr, size, flags)
     } -> std::same_as<void>;
     {
-        root.template map_range<true>(vaddr, paddr, size, rwx, u, g)
+        root.template map_range<true>(vaddr, paddr, size, flags)
     } -> std::same_as<void>;
     // 解除范围映射
     {
         root.unmap_range(vaddr, size)
     } -> std::same_as<void>;
-    requires ArchPageManTrait_Mask<T>;
+    requires ArchPageManTrait_Modifier<T>;
+    // 修改单个页表项标志
+    {
+        T::template modify_pte<T::Modifier::NONE>(query_res.pte, flags)
+    } -> std::same_as<void>;
     // 修改页面标志
     {
-        root.template modify_flags<T::ModifyMask::NONE>(vaddr, rwx, u, g)
+        root.template modify_flags<T::Modifier::NONE>(vaddr, flags)
     } -> std::same_as<void>;
     // 修改范围页面标志
     {
-        root.template modify_range_flags<T::ModifyMask::NONE>(vaddr, size, rwx,
-                                                              u, g)
+        root.template modify_range_flags<T::Modifier::NONE>(vaddr, size, flags)
     } -> std::same_as<void>;
     // 更换页表根
     {

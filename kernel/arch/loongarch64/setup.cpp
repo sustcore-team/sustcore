@@ -9,8 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/ctxlayout.h>
-#include <arch/loongarch64/placeholder.h>
+#include <arch/loongarch64/mem/pageman.h>
 #include <arch/loongarch64/trait.h>
 #include <env.h>
 #include <logger.h>
@@ -27,6 +26,7 @@ BootInfoHeader *bootinfo_ptr;
 
 extern env::PaddedHartContext __hart_context[MAX_HARTS];
 extern void env_setup();
+extern "C" void c_setup_main(size_t boot_hart_id, BootInfoHeader *bootinfo);
 
 namespace {
     void bind_current_hart(size_t boot_hart_id) {
@@ -41,7 +41,7 @@ namespace {
 }  // namespace
 
 void EarlySerial::serial_write_char(char ch) {
-    *reinterpret_cast<volatile unsigned char *>(0x1fe001e0ULL) =
+    *reinterpret_cast<volatile unsigned char *>(0xFFFF'FFC0'1FE0'01E0ULL) =
         static_cast<unsigned char>(ch);
 }
 
@@ -51,7 +51,7 @@ void EarlySerial::serial_write_string(size_t len, const char *str) {
     }
 }
 
-extern "C" void c_setup(size_t boot_hart_id, BootInfoHeader *bootinfo) {
+extern "C" void c_setup_main(size_t boot_hart_id, BootInfoHeader *bootinfo) {
     bind_current_hart(boot_hart_id);
     bootinfo_ptr = bootinfo;
 

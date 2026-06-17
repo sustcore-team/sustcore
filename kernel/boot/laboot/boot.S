@@ -1,4 +1,5 @@
-#include <boot/laboot/macros.h>
+#include <arch/loongarch64/csrnum.h>
+#include <boot/laboot/bootinfo.h>
 
     .section .laboot.text, "ax", @progbits
 

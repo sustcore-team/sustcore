@@ -11,15 +11,15 @@
 
 #pragma once
 
-#include <boot/laboot/macros.h>
+#include <arch/loongarch64/mem/paging.h>
 #include <sus/types.h>
 #include <sustcore/addr.h>
 
 #define _LABOOT_RECLAIMABLE SECTION(".laboot_reclaimable")
 
-#define LABOOT_PTE_IS_VALID(x) (((x) & LABOOT_PAGE_VALID) != 0)
-#define LABOOT_PTE_IS_LEAF(x)  (((x) & LABOOT_PTE_FLAGS) != 0)
-#define LABOOT_PTE_TO_PA(x)    ((x) & LABOOT_PPN_MASK)
+#define LABOOT_PTE_IS_VALID(x) (((x) & LA_PAGE_VALID) != 0)
+#define LABOOT_PTE_IS_LEAF(x)  (((x) & LA_PTE_FLAGS) != 0)
+#define LABOOT_PTE_TO_PA(x)    ((x) & LA_PPN_MASK)
 
 namespace laboot {
     extern "C" char s_laboot, s_laboot_kva, s_laboot_reclaimable,
@@ -46,21 +46,21 @@ namespace laboot {
 
     constexpr addr_t LABOOT_KVA_OFFSET = KVA_OFFSET;
 
-    constexpr umb_t PAGE_PRESENT  = LABOOT_PAGE_PRESENT;
-    constexpr umb_t PAGE_GLOBAL   = LABOOT_PAGE_GLOBAL;
-    constexpr umb_t PAGE_CACHE_CC = LABOOT_PAGE_CACHE_CC;
-    constexpr umb_t PAGE_MODIFIED = LABOOT_PAGE_MODIFIED;
-    constexpr umb_t PAGE_WRITE    = LABOOT_PAGE_WRITE;
-    constexpr umb_t PAGE_DIRTY    = LABOOT_PAGE_DIRTY;
-    constexpr umb_t PAGE_VALID    = LABOOT_PAGE_VALID;
+    constexpr umb_t PAGE_PRESENT  = LA_PAGE_PRESENT;
+    constexpr umb_t PAGE_GLOBAL   = LA_PAGE_GLOBAL;
+    constexpr umb_t PAGE_CACHE_CC = LA_PAGE_CACHE_CC;
+    constexpr umb_t PAGE_MODIFIED = LA_PAGE_MODIFIED;
+    constexpr umb_t PAGE_WRITE    = LA_PAGE_WRITE;
+    constexpr umb_t PAGE_DIRTY    = LA_PAGE_DIRTY;
+    constexpr umb_t PAGE_VALID    = LA_PAGE_VALID;
 
-    constexpr umb_t PTE_FLAGS = LABOOT_PTE_FLAGS;
+    constexpr umb_t PTE_FLAGS = LA_PTE_FLAGS;
 
     using pte_t = umb_t;
 
     constexpr pte_t PDE_BASE   = 0;
     constexpr pte_t PTE_BASE   = PTE_FLAGS;
-    constexpr umb_t PPN_MASK   = LABOOT_PPN_MASK;
+    constexpr umb_t PPN_MASK   = LA_PPN_MASK;
     constexpr umb_t VPN_MASK   = 0x1FF;
     constexpr umb_t VPN3_SHIFT = 39;
     constexpr umb_t VPN2_SHIFT = 30;

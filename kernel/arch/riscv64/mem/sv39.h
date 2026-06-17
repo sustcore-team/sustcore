@@ -69,32 +69,40 @@ namespace rv64 {
         return rwx_cast(rhs) == lhs;
     }
 
-    enum class SV39ModifyMask : umb_t {
-        // 基本修改掩码
+    enum class SV39Modifier : umb_t {
+        // 基本修改器
         NONE = 0b000000,
         R    = 0b000001,
         W    = 0b000010,
         X    = 0b000100,
         U    = 0b001000,
         G    = 0b010000,
-        NP   = 0b100000,
+        P    = 0b100000,
         // 常用组合
         RWX  = R | W | X,
-        ALL  = R | W | X | U | G | NP,
+        ALL  = R | W | X | U | G | P,
     };
 
-    constexpr bool operator&(SV39ModifyMask lhs, SV39ModifyMask rhs) {
+    constexpr bool operator&(SV39Modifier lhs, SV39Modifier rhs) {
         return (static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs)) != 0;
     }
 
-    constexpr SV39ModifyMask operator|(SV39ModifyMask lhs, SV39ModifyMask rhs) {
-        return static_cast<SV39ModifyMask>(static_cast<uint8_t>(lhs) |
-                                           static_cast<uint8_t>(rhs));
+    constexpr SV39Modifier operator|(SV39Modifier lhs, SV39Modifier rhs) {
+        return static_cast<SV39Modifier>(static_cast<uint8_t>(lhs) |
+                                         static_cast<uint8_t>(rhs));
     }
 
     class SV39PageMan {
     public:
         using RWX = SV39RWX;
+        using Modifier = SV39Modifier;
+
+        struct PageFlags {
+            RWX rwx;
+            bool u;
+            bool g;
+            bool p;
+        };
 
         static Result<PhyAddr> new_page(void) {
             return GFP::get_free_page(1);
@@ -136,6 +144,16 @@ namespace rv64 {
 
         static constexpr bool is_executable(RWX rwx) {
             return rwx & SV39RWX::X;
+        }
+
+        static constexpr PageFlags page_flags(RWX rwx, bool u, bool g,
+                                              bool p = true) {
+            return PageFlags{
+                .rwx = rwx,
+                .u   = u,
+                .g   = g,
+                .p   = p,
+            };
         }
 
         enum class PageSize { _NULL, _4K, _2M, _1G };
@@ -261,28 +279,25 @@ namespace rv64 {
             }
         }
 
-        // 修改掩码
-        using ModifyMask = SV39ModifyMask;
-
-        static constexpr ModifyMask make_mask(bool r, bool w, bool x, bool u,
-                                              bool g, bool np) {
-            ModifyMask mask = ModifyMask::NONE;
+        static constexpr Modifier make_mask(bool r, bool w, bool x, bool u,
+                                            bool g, bool p) {
+            Modifier mask = Modifier::NONE;
             if (r)
-                mask = mask | ModifyMask::R;
+                mask = mask | Modifier::R;
             if (w)
-                mask = mask | ModifyMask::W;
+                mask = mask | Modifier::W;
             if (x)
-                mask = mask | ModifyMask::X;
+                mask = mask | Modifier::X;
             if (u)
-                mask = mask | ModifyMask::U;
+                mask = mask | Modifier::U;
             if (g)
-                mask = mask | ModifyMask::G;
-            if (np)
-                mask = mask | ModifyMask::NP;
+                mask = mask | Modifier::G;
+            if (p)
+                mask = mask | Modifier::P;
             return mask;
         }
 
-        static constexpr ModifyMask make_mask(b64 mask) {
+        static constexpr Modifier make_mask(b64 mask) {
             return make_mask(mask & 0b000001, mask & 0b000010, mask & 0b000100,
                              mask & 0b001000, mask & 0b010000, mask & 0b100000);
         }
@@ -367,7 +382,7 @@ namespace rv64 {
         }
 
         template <PageSize size>
-        void map_page(VirAddr vaddr, PhyAddr paddr, RWX rwx, bool u, bool g) {
+        void map_page(VirAddr vaddr, PhyAddr paddr, PageFlags flags) {
             // 当size为_NULL时, 无法映射任何页, 因此直接返回
             static_assert(size != PageSize::_NULL, "不能映射大小为0的页");
 
@@ -443,20 +458,19 @@ namespace rv64 {
             // 设置目标页表项
             target_pte->ppn = to_ppn(paddr);
             target_pte->v   = true;
-            target_pte->rwx = rwx_cast(rwx);
-            target_pte->u   = u;
-            target_pte->g   = g;
             target_pte->a   = 0;
             target_pte->d   = 0;
             target_pte->rsw = 0;
+            modify_pte<Modifier::ALL>(target_pte, flags);
             loggers::PAGING::DEBUG(
-                "成功映射 vaddr = %p 到 paddr = %p, rwx = %d, u = %d, g = %d",
-                vaddr.addr(), paddr.addr(), rwx_cast(rwx), u, g);
+                "成功映射 vaddr = %p 到 paddr = %p, rwx = %d, u = %d, g = %d, p = %d",
+                vaddr.addr(), paddr.addr(), rwx_cast(flags.rwx), flags.u,
+                flags.g, flags.p);
         }
 
         template <bool use_hugepage>
         void map_range(const VirAddr vstart, const PhyAddr pstart,
-                       size_t range_sz, RWX rwx, bool u, bool g) {
+                       size_t range_sz, PageFlags flags) {
             if constexpr (!use_hugepage) {
                 // 将 vaddr 与 paddr 向下对齐到4K
                 const VirAddr _vs  = vstart.page_align_down();
@@ -469,7 +483,7 @@ namespace rv64 {
                 for (size_t i = 0; i < _cnt; i++) {
                     VirAddr vaddr = _vs + i * PAGESIZE;
                     PhyAddr paddr = _ps + i * PAGESIZE;
-                    map_page<PageSize::_4K>(vaddr, paddr, rwx, u, g);
+                    map_page<PageSize::_4K>(vaddr, paddr, flags);
                 }
             } else {
                 // 将 vaddr 与 paddr 向下对齐到4K
@@ -497,7 +511,7 @@ namespace rv64 {
                         _pa.aligned<sz1g>())
                     {
                         // 使用1G大页映射
-                        map_page<PageSize::_1G>(_va, _pa, rwx, u, g);
+                        map_page<PageSize::_1G>(_va, _pa, flags);
                         _va    += sz1g;
                         _pa    += sz1g;
                         remcnt -= cnt1g;
@@ -505,13 +519,13 @@ namespace rv64 {
                                _pa.aligned<sz2m>())
                     {
                         // 使用2M大页映射
-                        map_page<PageSize::_2M>(_va, _pa, rwx, u, g);
+                        map_page<PageSize::_2M>(_va, _pa, flags);
                         _va    += sz2m;
                         _pa    += sz2m;
                         remcnt -= cnt2m;
                     } else {
                         // 使用4K小页映射
-                        map_page<PageSize::_4K>(_va, _pa, rwx, u, g);
+                        map_page<PageSize::_4K>(_va, _pa, flags);
                         _va    += PAGESIZE;
                         _pa    += PAGESIZE;
                         remcnt -= 1;
@@ -540,19 +554,43 @@ namespace rv64 {
             }
         }
 
-        static constexpr umb_t to_rwx_mask(ModifyMask mask) {
+        static constexpr umb_t to_rwx_mask(Modifier mask) {
             umb_t rwx_m = 0b000;
-            if (mask & ModifyMask::R)
+            if (mask & Modifier::R)
                 rwx_m |= 0b001;
-            if (mask & ModifyMask::W)
+            if (mask & Modifier::W)
                 rwx_m |= 0b010;
-            if (mask & ModifyMask::X)
+            if (mask & Modifier::X)
                 rwx_m |= 0b100;
             return rwx_m;
         }
 
-        template <ModifyMask mask>
-        PageSize __modify_flags(VirAddr vaddr, RWX rwx, bool u, bool g) {
+        template <Modifier modifier>
+        static void modify_pte(PTE *pte, PageFlags flags) {
+            if (pte == nullptr) {
+                return;
+            }
+
+            constexpr umb_t rwx_mask = to_rwx_mask(modifier);
+            if constexpr (rwx_mask != 0b000) {
+                umb_t rwx_bits = rwx_cast(flags.rwx);
+                umb_t old_bits = pte->rwx;
+                umb_t new_bits = (old_bits & ~rwx_mask) | (rwx_bits & rwx_mask);
+                pte->rwx       = new_bits;
+            }
+            if constexpr (modifier & Modifier::U) {
+                pte->u = flags.u;
+            }
+            if constexpr (modifier & Modifier::G) {
+                pte->g = flags.g;
+            }
+            if constexpr (modifier & Modifier::P) {
+                pte->np = !flags.p;
+            }
+        }
+
+        template <Modifier modifier>
+        PageSize __modify_flags(VirAddr vaddr, PageFlags flags) {
             Result<QueryResult> query_res = query_page(vaddr);
             if (!query_res.has_value()) {
                 // 错误, 页面不存在
@@ -560,36 +598,17 @@ namespace rv64 {
             }
             QueryResult qres = query_res.value();
             PTE *pte         = qres.pte;
-
-            constexpr umb_t rwx_mask = to_rwx_mask(mask);
-            if constexpr (rwx_mask != 0b000) {
-                umb_t rwx_bits = rwx_cast(rwx);
-                umb_t old_bits = pte->rwx;
-                // 将 old_bits, rwx_bits 按 rwx_mask 进行修改
-                // 我们考虑按位计算, 那么对于单个位 o(old_bits), n(rwx_bits),
-                // m(rwx_mask) 我们有 f(o, n, 0) = o, f(o, n, 1) = n 因此 f(o,
-                // n, m) = (o & ~m) | (n & m)
-                umb_t new_bits = (old_bits & ~rwx_mask) | (rwx_bits & rwx_mask);
-                pte->rwx       = new_bits;
-            }
-            if constexpr (mask & ModifyMask::U) {
-                pte->u = u;
-            }
-            if constexpr (mask & ModifyMask::G) {
-                pte->g = g;
-            }
-
+            modify_pte<modifier>(pte, flags);
             return qres.size;
         }
 
-        template <ModifyMask mask>
-        void modify_flags(VirAddr vaddr, RWX rwx, bool u, bool g) {
-            __modify_flags<mask>(vaddr, rwx, u, g);
+        template <Modifier modifier>
+        void modify_flags(VirAddr vaddr, PageFlags flags) {
+            __modify_flags<modifier>(vaddr, flags);
         }
 
-        template <ModifyMask mask>
-        void modify_range_flags(VirAddr vstart, size_t size, RWX rwx, bool u,
-                                bool g) {
+        template <Modifier modifier>
+        void modify_range_flags(VirAddr vstart, size_t size, PageFlags flags) {
             // 将 vaddr 向下对齐到4K
             const VirAddr _vs  = vstart.page_align_down();
             // 将 size 向上对齐到4K
@@ -600,7 +619,7 @@ namespace rv64 {
             size_t remcnt      = _cnt;
             VirAddr _va        = _vs;
             while (remcnt > 0) {
-                PageSize size_type = __modify_flags<mask>(_va, rwx, u, g);
+                PageSize size_type = __modify_flags<modifier>(_va, flags);
                 if (size_type == PageSize::_NULL) {
                     // 页面不存在, 无法修改
                     return;
@@ -621,20 +640,19 @@ namespace rv64 {
             auto qres      = query_res.value();
             PTE *src_pte   = qres.pte;
             PhyAddr paddr  = get_physical_address(*src_pte);
-            RWX rwx        = static_cast<RWX>(src_pte->rwx);
-            bool u         = src_pte->u;
-            bool g         = src_pte->g;
             VirAddr mapped = vaddr.page_align_down();
+            PageFlags flags = page_flags(rwx(*src_pte), src_pte->u, src_pte->g,
+                                         is_present(*src_pte));
 
             switch (qres.size) {
                 case PageSize::_1G:
-                    map_page<PageSize::_1G>(mapped, paddr, rwx, u, g);
+                    map_page<PageSize::_1G>(mapped, paddr, flags);
                     break;
                 case PageSize::_2M:
-                    map_page<PageSize::_2M>(mapped, paddr, rwx, u, g);
+                    map_page<PageSize::_2M>(mapped, paddr, flags);
                     break;
                 case PageSize::_4K:
-                    map_page<PageSize::_4K>(mapped, paddr, rwx, u, g);
+                    map_page<PageSize::_4K>(mapped, paddr, flags);
                     break;
                 case PageSize::_NULL:
                 default:              unexpect_return(ErrCode::INVALID_PTE);

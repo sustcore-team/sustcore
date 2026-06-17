@@ -404,7 +404,8 @@ namespace loader::elf {
             vma.loading      = false;
             PageMan::RWX rwx = VMA::seg2rwx(vma.type);
             spec.tmm->pman().modify_range_flags<PageMan::make_mask(0b001111)>(
-                vma.varea.begin, vma.size(), rwx, true, false);
+                vma.varea.begin, vma.size(),
+                PageMan::page_flags(rwx, true, false));
         }
 
         loggers::SUSTCORE::DEBUG("每个VMA的前16字节内容:");

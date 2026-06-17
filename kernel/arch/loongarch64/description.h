@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include <arch/loongarch64/placeholder.h>
 #include <arch/loongarch64/trait.h>
+#include <arch/loongarch64/mem/pageman.h>
 #include <arch/trait.h>
 
 using namespace la64;

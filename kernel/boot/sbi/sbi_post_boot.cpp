@@ -27,6 +27,8 @@ namespace sbi {
     _SBI_STRING(SBI_BOOTINFO_ALLOC_MSG) = "错误: SBI reclaimable 区域不足\n";
     _SBI_STRING(SBI_INVALID_DTB_MSG) = "错误: FDT 无效\n";
     _SBI_STRING(SBI_BOOTINFO_TOO_LARGE_MSG) = "错误: BootInfo 超过 128KB 限制\n";
+    _SBI_STRING(SBI_BOOTINFO_MISALIGNED_REGION_MSG) =
+        "错误: BootInfo 存在未对齐到4KB的内存区域\n";
 
     constexpr size_t MAX_BOOTINFO_REGIONS = 128;
     constexpr size_t CELL_SIZE            = sizeof(fdt32_t);
@@ -55,6 +57,17 @@ namespace sbi {
 
     _SBI_FUNCTION addr_t region_end(const MemRegion &region) {
         return region.area.end.arith();
+    }
+
+    _SBI_FUNCTION bool region_page_aligned(const MemRegion &region) {
+        return region.area.begin.aligned<PAGE_SIZE>() &&
+               region.area.end.aligned<PAGE_SIZE>();
+    }
+
+    _SBI_FUNCTION PhyArea page_aligned_dtb_area(addr_t dtb_ptr,
+                                                size_t dtb_size) {
+        return page_align_outward(
+            PhyArea(PhyAddr(dtb_ptr), PhyAddr(dtb_ptr + dtb_size)));
     }
 
     _SBI_FUNCTION void append_region(MemRegion *regions, size_t &cnt,
@@ -121,6 +134,17 @@ namespace sbi {
             regions[dst++] = regions[i];
         }
         return dst;
+    }
+
+    _SBI_FUNCTION void validate_final_regions(const MemRegion *regions,
+                                              size_t cnt) {
+        for (size_t i = 0; i < cnt; ++i) {
+            if (region_end(regions[i]) < regions[i].area.begin.arith() ||
+                !region_page_aligned(regions[i]))
+            {
+                post_panic(SBI_BOOTINFO_MISALIGNED_REGION_MSG);
+            }
+        }
     }
 
     _SBI_FUNCTION uint64_t read_be(const void *data, size_t cells) {
@@ -290,7 +314,7 @@ namespace sbi {
         collect_memory_regions(dtb, memory_regions, memory_cnt);
         collect_reserved_regions(dtb, reserved_regions, reserved_cnt);
         append_region(reserved_regions, reserved_cnt,
-                      PhyArea(PhyAddr(dtb_ptr), PhyAddr(dtb_ptr + dtb_size)),
+                      page_aligned_dtb_area(dtb_ptr, dtb_size),
                       MemRegion::MemoryStatus::BOOT_RECLAIMABLE);
         append_region(memory_regions, memory_cnt,
                       PhyArea(PhyAddr(kva_to_pa(&s_sbi_kva)),
@@ -308,6 +332,7 @@ namespace sbi {
         size_t final_cnt = normalize_boot_regions(
             memory_regions, memory_cnt, reserved_regions, reserved_cnt,
             final_regions);
+        validate_final_regions(final_regions, final_cnt);
 
         addr_t aligned_cursor = (cursor + PAGE_TABLE_ALIGNMENT - 1) &
                                 ~(PAGE_TABLE_ALIGNMENT - 1);

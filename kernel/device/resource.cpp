@@ -153,7 +153,7 @@ namespace device {
         VirAddr kva_start = from_mmio_addr(aligned.begin);
         kernelman.map_range<false>(
             kva_start, aligned.begin, aligned.end - aligned.begin,
-            PageMan::rwx(true, true, false), false, false);
+            PageMan::page_flags(PageMan::rwx(true, true, false), false, false));
         PageMan::flush_tlb();
 
         auto mapped = KvaAddr(kva_start.arith());

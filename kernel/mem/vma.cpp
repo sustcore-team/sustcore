@@ -277,7 +277,12 @@ Result<void> TaskMemoryManager::protect_memory_cow(cap::MemoryPayload *memory) {
             }
             PageMan::RWX rwx = PageMan::rwx(*qres.pte);
             if (PageMan::is_writable(rwx)) {
-                qres.pte->rwx = rwx_cast(PageMan::without_write(rwx));
+                PageMan::modify_pte<PageMan::Modifier::RWX>(
+                    qres.pte,
+                    PageMan::page_flags(PageMan::without_write(rwx),
+                                        PageMan::is_user_accessible(*qres.pte),
+                                        PageMan::is_global(*qres.pte),
+                                        PageMan::is_present(*qres.pte)));
                 PageMan::set_cow(qres.pte, true);
             }
         }
@@ -377,8 +382,8 @@ bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
     PageMan::RWX map_rwx = cow_page ? PageMan::without_write(rwx) : rwx;
     bool u = !vma->loading;  // 加载过程中按内核页处理, 加载完成后按用户页处理
 
-    _pman.map_page<PageMan::PageSize::_4K>(aligned_vaddr, paddr, map_rwx, u,
-                                           false);
+    _pman.map_page<PageMan::PageSize::_4K>(
+        aligned_vaddr, paddr, PageMan::page_flags(map_rwx, u, false));
     if (cow_page) {
         auto query_res = _pman.query_page(aligned_vaddr);
         if (query_res.has_value()) {
@@ -457,7 +462,11 @@ bool TaskMemoryManager::on_wp(VirAddr fault_addr) {
     }
 
     PageMan::set_paddr(qres.pte, page_res.value());
-    qres.pte->rwx = rwx_cast(vma->rwx);
+    PageMan::modify_pte<PageMan::Modifier::RWX>(
+        qres.pte,
+        PageMan::page_flags(vma->rwx, PageMan::is_user_accessible(*qres.pte),
+                            PageMan::is_global(*qres.pte),
+                            PageMan::is_present(*qres.pte)));
     PageMan::set_cow(qres.pte, false);
     PageMan::flush_tlb();
     loggers::PAGING::INFO("TM::on_wp: resolved cow addr=%p page=%p",
@@ -513,11 +522,19 @@ Result<void> TaskMemoryManager::clone_vma_pages_to_cow(const VMA &vma,
         PageMan::RWX child_rwx = cow_page ? PageMan::without_write(rwx) : rwx;
 
         dst.pman().map_page<PageMan::PageSize::_4K>(
-            vaddr, paddr, child_rwx, PageMan::is_user_accessible(*qres.pte),
-            PageMan::is_global(*qres.pte));
+            vaddr, paddr,
+            PageMan::page_flags(child_rwx,
+                                PageMan::is_user_accessible(*qres.pte),
+                                PageMan::is_global(*qres.pte),
+                                PageMan::is_present(*qres.pte)));
 
         if (cow_page) {
-            qres.pte->rwx = rwx_cast(PageMan::without_write(rwx));
+            PageMan::modify_pte<PageMan::Modifier::RWX>(
+                qres.pte,
+                PageMan::page_flags(PageMan::without_write(rwx),
+                                    PageMan::is_user_accessible(*qres.pte),
+                                    PageMan::is_global(*qres.pte),
+                                    PageMan::is_present(*qres.pte)));
             PageMan::set_cow(qres.pte, true);
 
             auto dst_query_res = dst.pman().query_page(vaddr);
