@@ -14,14 +14,4 @@ Result<void> Initialization::init_clock() {
     unexpect_return(ErrCode::NOT_SUPPORTED);
 }
 
-void Interrupt::init(void) {}
-
-void Interrupt::sti(void) {}
-
-void Interrupt::cli(void) {}
-
-bool Interrupt::enabled() {
-    return false;
-}
-
 void Idle::idle() {}

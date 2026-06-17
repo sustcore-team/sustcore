@@ -25,6 +25,7 @@ extern "C" char __la_boot_stack, __la_boot_stack_top;
 #include <device/resource.h>
 #include <env.h>
 #include <kinit.h>
+#include <libfdt.h>
 #include <logger.h>
 #include <mem/alloc.h>
 #include <mem/gfp.h>
@@ -50,7 +51,6 @@ extern "C" char __la_boot_stack, __la_boot_stack_top;
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#include <libfdt.h>
 
 env::PaddedHartContext __hart_context[MAX_HARTS] = {};
 
@@ -378,7 +378,8 @@ void env_setup() {
 
     loggers::SUSTCORE::INFO("复制 BootInfo 到 Environment 静态缓冲区");
     memmove(e.bootinfo_storage(env::key::bootinfo()),
-            reinterpret_cast<const void *>(bootinfo_ptr), bootinfo_ptr->info_sz);
+            reinterpret_cast<const void *>(bootinfo_ptr),
+            bootinfo_ptr->info_sz);
     e.bootinfo_size(env::key::bootinfo()) = bootinfo_ptr->info_sz;
     bootinfo_ptr                          = e.bootinfo(env::key::bootinfo());
     if (bootinfo_ptr == nullptr) {
@@ -405,8 +406,8 @@ void env_setup() {
     PhyAddr upper_bound = PhyAddr::null;
     for (size_t i = 0; i < bootinfo_ptr->region_cnt; ++i) {
         const auto &reg = bootinfo_regions(bootinfo_ptr)[i];
-        PhyAddr start = reg.area.begin;
-        PhyAddr end   = reg.area.end;
+        PhyAddr start   = reg.area.begin;
+        PhyAddr end     = reg.area.end;
         loggers::SUSTCORE::INFO("BootInfo 内存区域 %u: [%p, %p) Status: %d",
                                 static_cast<unsigned>(i), start.addr(),
                                 end.addr(), static_cast<int>(reg.status));
@@ -425,7 +426,7 @@ void env_setup() {
             continue;
         }
 
-        size_t pages       = reg.area.size() / PAGESIZE;
+        size_t pages = reg.area.size() / PAGESIZE;
         if (pages == 0) {
             continue;
         }
@@ -464,20 +465,19 @@ void env_setup() {
             continue;
         }
 
-        size_t pages       = reg.area.size() / PAGESIZE;
+        size_t pages = reg.area.size() / PAGESIZE;
         if (pages == 0) {
             continue;
         }
-        loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射", reg.area.begin.addr(), reg.area.end.addr());
+        loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射",
+                                reg.area.begin.addr(), reg.area.end.addr());
         map_kpa_region(kernelman, reg.area);
     }
 #if defined(__ARCH_loongarch64__)
     // 额外加入 Early Serial 区域
-    PhyArea area(
-        PhyAddr(0x1F00'0000),
-        PhyAddr(0x2000'0000)
-    );
-    loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射(Early Serial)", area.begin.addr(), area.end.addr());
+    PhyArea area(PhyAddr(0x1F00'0000), PhyAddr(0x2000'0000));
+    loggers::SUSTCORE::INFO("建立 [%p, %p) 区域的 KPA 映射(Early Serial)",
+                            area.begin.addr(), area.end.addr());
     map_kpa_region(kernelman, area);
 #endif
 
@@ -494,7 +494,8 @@ void env_setup() {
     if (copied_fdt == nullptr) {
         panic("无法复制 FDT");
     }
-    loggers::SUSTCORE::INFO("复制 FDT : %p 到 %p 管理的内存", dtb_ptr, copied_fdt);
+    loggers::SUSTCORE::INFO("复制 FDT : %p 到 %p 管理的内存", dtb_ptr,
+                            copied_fdt);
 
     char *__ptr = reinterpret_cast<char *>(copied_fdt);
     loggers::SUSTCORE::INFO("__ptr = %p", __ptr);
@@ -516,20 +517,19 @@ void env_setup() {
         if (reg.status != MemRegion::MemoryStatus::BOOT_RECLAIMABLE) {
             continue;
         }
-        size_t pages       = reg.area.size() / PAGESIZE;
+        size_t pages = reg.area.size() / PAGESIZE;
         if (pages == 0) {
             continue;
         }
-        loggers::SUSTCORE::INFO("回收 BOOT_RECLAIMABLE 内存区域 [%p, %p), 共 %u 页",
-                                reg.area.begin.addr(), reg.area.end.addr(),
-                                static_cast<unsigned>(pages));
+        loggers::SUSTCORE::INFO(
+            "回收 BOOT_RECLAIMABLE 内存区域 [%p, %p), 共 %u 页",
+            reg.area.begin.addr(), reg.area.end.addr(),
+            static_cast<unsigned>(pages));
         RawGFPImpl::put_page(reg.area.begin, pages);
     }
-    
+
     loggers::SUSTCORE::INFO("桥接代码完成! 进入 post-init 阶段");
-#if defined(__ARCH_loongarch64__)
-    while (true);
-#endif
+
     post_init();
 }
 
@@ -586,7 +586,13 @@ extern "C" void post_init(void) {
     cap::CHolderManager::init();
 
     // 初始化中断处理程序
+    loggers::SUSTCORE::INFO("初始化中断处理程序");
     Interrupt::init();
+
+#if defined(__ARCH_loongarch64__)
+    asm volatile("break 0");
+    while (true);
+#endif
 
     loggers::SUSTCORE::INFO("初始化设备树配置");
     init_device_model();
