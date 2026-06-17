@@ -69,6 +69,10 @@ namespace rv64 {
             return _sp;
         }
 
+        constexpr umb_t &kstack_top() {
+            return kstack_sp;
+        }
+
         constexpr umb_t &tp() {
             return _tp;
         }

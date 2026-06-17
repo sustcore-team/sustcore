@@ -14,6 +14,7 @@
 #include <arch/riscv64/clint.h>
 #include <arch/riscv64/clock.h>
 #include <arch/riscv64/device/fdt_helper.h>
+#include <arch/riscv64/device/platform.h>
 #include <arch/riscv64/intc.h>
 #include <arch/riscv64/plic.h>
 #elif defined(__ARCH_loongarch64__)
@@ -1607,6 +1608,44 @@ namespace fdt {
         (void)model;
     }
 
+    void FDTProvider::register_platform(device::DeviceModel &model) const {
+        if (!_config.root) {
+            loggers::DEVICE::WARN("设备树根节点不存在, 无法获取平台信息");
+            return;
+        }
+
+        Node *cpus_node = _config.get_node_by_path(CPUS_PATH);
+        if (cpus_node == nullptr || !node_status_enabled(*cpus_node)) {
+            loggers::DEVICE::WARN(
+                "设备树中缺少 /cpus 节点或其状态不可用, 无法获取平台信息");
+            return;
+        }
+
+        auto freq_prop_it = cpus_node->properties.find(TIMEBASE_FREQ_PROP);
+        if (freq_prop_it == cpus_node->properties.end()) {
+            loggers::DEVICE::WARN(
+                "节点 /cpus 缺少 timebase-frequency 属性, 无法构造平台时钟源");
+            return;
+        }
+
+        auto timebase_freq = freq_prop_it->second->as_integral();
+        if (timebase_freq == 0) {
+            loggers::DEVICE::ERROR(
+                "节点 /cpus 的 timebase-frequency 为 0, 无法创建平台");
+            return;
+        }
+
+#if defined(__ARCH_riscv64__)
+        auto freq = units::frequency::from_hz(timebase_freq);
+        model.set_platform(util::owner<device::Platform *>(
+            new riscv::Riscv64Platform(freq)));
+        loggers::DEVICE::INFO("已创建 Riscv64Platform, timebase-frequency=%lluHz",
+                              static_cast<unsigned long long>(freq.to_hz()));
+#else
+        (void)timebase_freq;
+#endif
+    }
+
     void FDTProvider::register_cpus(device::DeviceModel &model) const {
         auto &cpus = model.cpus();
         _irq_domains.clear();
@@ -1618,7 +1657,7 @@ namespace fdt {
         cpus.cleanup();
         cpus.topology.cleanup();
 
-        // 解析 /cpus 根节点与频率.
+        // 解析 /cpus 根节点.
         if (!_config.root) {
             loggers::DEVICE::WARN("设备树根节点不存在, 无法获取 CPU 信息");
             return;
@@ -1631,26 +1670,17 @@ namespace fdt {
             return;
         }
 
-        auto freq_prop_it = cpus_node->properties.find(TIMEBASE_FREQ_PROP);
-        if (freq_prop_it == cpus_node->properties.end()) {
-            loggers::DEVICE::WARN(
-                "节点 /cpus 缺少 timebase-frequency 属性, CPU 频率保留为 0");
-        } else {
-            auto timebase_freq = freq_prop_it->second->as_integral();
-            if (timebase_freq == 0) {
-                loggers::DEVICE::ERROR(
-                    "节点 /cpus 的 timebase-frequency 为 0, 无法创建 "
-                    "ClockSource");
-            } else {
-                cpus.freq = units::frequency::from_hz(timebase_freq);
-#if defined(__ARCH_riscv64__)
-                cpus._clock_source = new riscv::CSRTimeClockSource(cpus.freq);
-                loggers::DEVICE::INFO(
-                    "已创建 CSRTimeClockSource, freq=%lluHz",
-                    static_cast<unsigned long long>(cpus.freq.to_hz()));
-#endif
-            }
+        auto *platform = model.platform();
+        if (platform == nullptr) {
+            loggers::DEVICE::ERROR("平台对象不可用, 无法构建 CPU 信息");
+            return;
         }
+        auto *clock_source = platform->clock_source();
+        if (clock_source == nullptr) {
+            loggers::DEVICE::ERROR("平台 ClockSource 不可用, 无法构建 CPU 信息");
+            return;
+        }
+        auto cpu_frequency = clock_source->frequency();
 
         std::vector<ParsedCpu> parsed_cpus;
         parsed_cpus.reserve(cpus_node->children.size());
@@ -1723,7 +1753,7 @@ namespace fdt {
             auto cpu_res = device::RiscV64Cpu::Builder()
                                .id(parsed.id)
                                .model(parsed.model)
-                               .frequency(cpus.freq)
+                               .frequency(cpu_frequency)
                                .isa_string(parsed.isa_string)
                                .mmu_type(parsed.mmu_type)
                                .local_intc(static_cast<intc_t>(
@@ -1759,7 +1789,7 @@ namespace fdt {
         cpus.topology = std::move(topology_res.value());
         loggers::DEVICE::INFO(
             "CPU 信息更新完成: freq=%lluHz count=%u topo_cpus=%u",
-            static_cast<unsigned long long>(cpus.freq.to_hz()),
+            static_cast<unsigned long long>(cpu_frequency.to_hz()),
             static_cast<unsigned>(cpus.cpus.size()),
             static_cast<unsigned>(cpus.topology.logical_cpus().size()));
     }
@@ -1892,6 +1922,7 @@ namespace fdt {
 
     void FDTProvider::register_device(device::DeviceModel &model) const {
         register_memory_regions(model);
+        register_platform(model);
         register_cpus(model);
         register_nodes(model);
         register_intcs(model);

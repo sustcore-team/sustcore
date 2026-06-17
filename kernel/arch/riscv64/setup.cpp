@@ -10,9 +10,11 @@
  */
 
 #include <arch/riscv64/csr.h>
+#include <arch/riscv64/device/platform.h>
 #include <arch/riscv64/trait.h>
 #include <device/int.h>
 #include <device/model.h>
+#include <device/platform.h>
 #include <logger.h>
 #include <sbi/sbi.h>
 #include <sus/logger.h>
@@ -40,13 +42,20 @@ extern void env_setup();
 Result<void> Initialization::init_clock() {
     [[maybe_unused]] auto &device_model = device::DeviceModel::inst();
     [[maybe_unused]] auto &irqman       = device_model.interrupt();
-    [[maybe_unused]] auto &cpus         = device_model.cpus();
     [[maybe_unused]] auto *ctx          = env::hart_ctx;
     assert(ctx != nullptr);
 
     loggers::SUSTCORE::INFO("初始化 hart Clint Timer%u",
                             static_cast<unsigned>(ctx->hart_id()));
-    auto *clock_source = cpus._clock_source;
+    auto *platform = device_model.platform();
+    if (platform == nullptr) {
+        loggers::SUSTCORE::ERROR("全局 Platform 不可用!");
+        unexpect_return(ErrCode::NULLPTR);
+    }
+    assert(platform->is<riscv::Riscv64Platform>());
+
+    auto *clock_source =
+        platform->as<riscv::Riscv64Platform>()->clock_source();
     if (clock_source == nullptr) {
         loggers::SUSTCORE::ERROR("全局 ClockSource 不可用!");
         unexpect_return(ErrCode::NULLPTR);

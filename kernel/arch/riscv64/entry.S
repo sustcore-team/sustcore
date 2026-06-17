@@ -51,6 +51,6 @@ redive:
 .section .bss.stack
 .align 12
 boot_stack:
-    .space 4096 * 128  # 128KB 栈空间
+    .space 1024 * 64  # 64KB 栈空间
 .globl boot_stack_top
 boot_stack_top:

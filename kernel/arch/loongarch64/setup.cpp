@@ -52,10 +52,12 @@ void EarlySerial::serial_write_string(size_t len, const char *str) {
 }
 
 extern "C" void c_setup_main(size_t boot_hart_id, BootInfoHeader *bootinfo) {
+    // TODO: figure out how to get the correct hart id
+    boot_hart_id = 0;
     bind_current_hart(boot_hart_id);
     bootinfo_ptr = bootinfo;
 
-    loggers::SUSTCORE::INFO("进入 LoongArch64 内核 C 入口点!");
+    loggers::SUSTCORE::INFO("进入 LoongArch64 内核 C 入口点! hart id: %d", boot_hart_id);
     env_setup();
     while (true) {
     }

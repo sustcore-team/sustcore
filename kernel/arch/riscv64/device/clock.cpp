@@ -11,7 +11,9 @@
 
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/clock.h>
+#include <arch/riscv64/device/platform.h>
 #include <device/model.h>
+#include <device/platform.h>
 #include <logger.h>
 #include <sbi/sbi.h>
 
@@ -35,6 +37,9 @@ namespace riscv {
         : driver::Alarm(clksrc), _clock_virq(clock_virq) {
         _last_recorded_time = _clksrc->to_ns(_clksrc->now());
         assert(device::DeviceModel::initialized());
+        auto *platform = device::DeviceModel::inst().platform();
+        assert(platform != nullptr);
+        assert(platform->is<Riscv64Platform>());
         auto &irqman      = device::DeviceModel::inst().interrupt();
         auto register_res = irqman.register_handler(
             clock_virq, this_call(this, &ClintAlarm::handle_irq));

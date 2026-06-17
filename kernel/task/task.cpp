@@ -53,9 +53,9 @@ namespace task {
             assert(ctx != nullptr);
             *ctx = {};
             ctx->setup_regs(false, false, true);
-            ctx->pc()      = reinterpret_cast<umb_t>(entrypoint);
-            ctx->sp()      = reinterpret_cast<umb_t>(stack_top);
-            (void)kstack_top;
+            ctx->pc()         = reinterpret_cast<umb_t>(entrypoint);
+            ctx->sp()         = reinterpret_cast<umb_t>(stack_top);
+            ctx->kstack_top() = reinterpret_cast<umb_t>(kstack_top);
         }
 
         void init_kernel_context(Context *ctx, void *entrypoint, void *arg0,
@@ -64,29 +64,28 @@ namespace task {
             assert(ctx != nullptr);
             *ctx = {};
             ctx->setup_regs(true, sie, spie);
-            ctx->sp()      = reinterpret_cast<umb_t>(stack_top);
-            ctx->ra        = reinterpret_cast<umb_t>(entrypoint);
-            ctx->s0        = reinterpret_cast<umb_t>(arg0);
+            ctx->sp() = reinterpret_cast<umb_t>(stack_top);
+            ctx->ra   = reinterpret_cast<umb_t>(entrypoint);
+            ctx->s0   = reinterpret_cast<umb_t>(arg0);
         }
 
         void reset_thread_runtime(util::nonnull<TCB *> tcb) noexcept {
-            tcb->basic_entity.state = ThreadState::EMPTY;
+            tcb->basic_entity.state   = ThreadState::EMPTY;
             tcb->basic_entity.rq_head = {};
-            tcb->basic_entity.flags = 0;
-            tcb->rr_entity    = {};
+            tcb->basic_entity.flags   = 0;
+            tcb->rr_entity            = {};
             tcb->syscall_info.reset();
         }
 
         void build_user_contexts(util::nonnull<TCB *> tcb, void *entrypoint,
                                  void *user_stack_top) noexcept {
             tcb->reset_kstack();
-            auto *user_ctx           = tcb->push<Context>();
+            auto *user_ctx = tcb->push<Context>();
             init_user_context(user_ctx, entrypoint, user_stack_top,
                               tcb->kstack_top());
-            init_kernel_context(
-                tcb->kernel_context_ptr(),
-                reinterpret_cast<void *>(&new_utask_trampoline), user_ctx,
-                tcb->kstack_top(), false, true);
+            init_kernel_context(tcb->kernel_context_ptr(),
+                                reinterpret_cast<void *>(&new_utask_trampoline),
+                                user_ctx, tcb->kstack_top(), false, true);
         }
 
         void build_kernel_context(util::nonnull<TCB *> tcb, void *entrypoint,
@@ -285,9 +284,9 @@ namespace task {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
 
-            size_t path_len    = strlen(record.path) + 1;
-            size_t record_size = sizeof(BootstrapRecordHeader) +
-                                 sizeof(CapIdx) + path_len;
+            size_t path_len = strlen(record.path) + 1;
+            size_t record_size =
+                sizeof(BootstrapRecordHeader) + sizeof(CapIdx) + path_len;
             if (offset > blob_size || blob_size - offset < record_size) {
                 unexpect_return(ErrCode::OUT_OF_BOUNDARY);
             }
@@ -305,13 +304,12 @@ namespace task {
             void_return();
         }
 
-        void finalize_bootstrap_record_next(char *blob,
-                                            const std::vector<size_t> &offsets) {
+        void finalize_bootstrap_record_next(
+            char *blob, const std::vector<size_t> &offsets) {
             for (size_t i = 0; i < offsets.size(); ++i) {
                 auto *header = reinterpret_cast<BootstrapRecordHeader *>(
                     blob + offsets[i]);
-                header->next =
-                    i + 1 < offsets.size() ? offsets[i + 1] : 0;
+                header->next = i + 1 < offsets.size() ? offsets[i + 1] : 0;
             }
         }
 
@@ -540,7 +538,8 @@ namespace task {
 
     Result<util::nonnull<TCB *>> TaskManager::setup_user_main_thread(
         util::nonnull<PCB *> pcb, util::nonnull<TCB *> tcb, TaskSpec &spec,
-        task::StartupInfo startup_info, bool link_into_pcb, const char *log_tag) {
+        task::StartupInfo startup_info, bool link_into_pcb,
+        const char *log_tag) {
         if (pcb->cholder == nullptr || pcb->tmm.get() == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
         }
@@ -563,8 +562,7 @@ namespace task {
         loggers::TASK::INFO(
             "创建STACK VMA: pid=%lu area=[%p,%p) mem=%p memsz=%lu mem_off=%lu",
             pcb->pid, USER_STACK_BOTTOM.addr(), USER_STACK_TOP.addr(),
-            stack_mem, static_cast<unsigned long>(MAX_INITIAL_STACK_SIZE),
-            0UL);
+            stack_mem, static_cast<unsigned long>(MAX_INITIAL_STACK_SIZE), 0UL);
 
         auto tcb_cap_res = pcb->cholder->create<cap::TCBPayload>(tcb.get());
         propagate(tcb_cap_res);
@@ -577,9 +575,8 @@ namespace task {
             build_user_stack(*stack_mem, USER_STACK_TOP, startup_info,
                              spec.startup_blob.get(), spec.startup_blob_size);
         propagate(stack_top_res);
-        loggers::TASK::DEBUG(
-            "栈内存分配: pid=%lu 栈内存地址=%p 已分配=%lu",
-            pcb->pid, stack_mem, stack_mem->allocated_size());
+        loggers::TASK::DEBUG("栈内存分配: pid=%lu 栈内存地址=%p 已分配=%lu",
+                             pcb->pid, stack_mem, stack_mem->allocated_size());
         reset_thread_runtime(tcb);
         build_user_contexts(tcb, pcb->entrypoint.addr(),
                             stack_top_res.value().addr());
@@ -645,7 +642,7 @@ namespace task {
             return setup_res.value();
         }
 
-        auto tcb = util::nnullforce(reuse_main_tcb);
+        auto tcb        = util::nnullforce(reuse_main_tcb);
         tcb->task       = pcb;
         tcb->is_kernel  = false;
         tcb->boot_role  = BootThreadRole::NONE;
@@ -776,8 +773,8 @@ namespace task {
                                      to_cstring(tmm_res.error()));
             propagate_return(tmm_res);
         }
-        auto tmm_guard    = delete_guard(tmm_res.value());
-        pcb->tmm          = tmm_res.value();
+        auto tmm_guard  = delete_guard(tmm_res.value());
+        pcb->tmm        = tmm_res.value();
         auto create_res = cap::CHolderManager::inst().create_holder();
         propagate(create_res);
         pcb->cholder      = create_res.value();
@@ -803,8 +800,7 @@ namespace task {
         if (entry == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
         }
-        if (schd_class == schd::ClassType::BOT)
-        {
+        if (schd_class == schd::ClassType::BOT) {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
 
@@ -942,8 +938,8 @@ namespace task {
         return image_cap;
     }
 
-    Result<void> TaskManager::validate_bootstrap_blob(const void *startup_blob,
-                                                      size_t startup_blob_size) {
+    Result<void> TaskManager::validate_bootstrap_blob(
+        const void *startup_blob, size_t startup_blob_size) {
         if (startup_blob_size == 0) {
             void_return();
         }
@@ -951,9 +947,10 @@ namespace task {
             unexpect_return(ErrCode::NULLPTR);
         }
 
-        bool valid = true;
+        bool valid  = true;
         bool walked = bootstrap_foreach_record(
-            startup_blob, startup_blob_size, [&](const BootstrapRecordView &view) {
+            startup_blob, startup_blob_size,
+            [&](const BootstrapRecordView &view) {
                 if (!valid) {
                     return;
                 }
@@ -982,8 +979,8 @@ namespace task {
         const void *startup_blob, size_t startup_blob_size,
         const std::vector<BootstrapCapPathView> &dir_records,
         const std::vector<BootstrapCapPathView> &file_records, TaskSpec &spec) {
-        auto validate_res = validate_bootstrap_blob(startup_blob,
-                                                    startup_blob_size);
+        auto validate_res =
+            validate_bootstrap_blob(startup_blob, startup_blob_size);
         propagate(validate_res);
 
         size_t total_size = startup_blob_size;
@@ -1066,10 +1063,8 @@ namespace task {
                                              TaskSpec &spec, LoadPrm &prm) {
         std::vector<BootstrapCapPathView> dir_records{};
         std::vector<BootstrapCapPathView> file_records{};
-        auto bootstrap_res = build_bootstrap_blob(startup_blob,
-                                                  startup_blob_size,
-                                                  dir_records, file_records,
-                                                  spec);
+        auto bootstrap_res = build_bootstrap_blob(
+            startup_blob, startup_blob_size, dir_records, file_records, spec);
         propagate(bootstrap_res);
 
         auto preload_res = holder == nullptr
@@ -1124,8 +1119,7 @@ namespace task {
         CapIdx image_cap, cap::CHolder *holder, schd::ClassType schd_class,
         const void *startup_blob, size_t startup_blob_size) {
         return load_task_image(image_cap, holder, schd_class, true,
-                               startup_blob,
-                               startup_blob_size);
+                               startup_blob, startup_blob_size);
     }
 
     Result<util::nonnull<PCB *>> TaskManager::load_init(const char *path) {
@@ -1137,18 +1131,18 @@ namespace task {
         if (!create_res.has_value()) {
             unexpect_return(ErrCode::CREATION_FAILED);
         }
-        auto *holder = create_res.value();
+        auto *holder      = create_res.value();
         auto holder_guard = util::Guard([holder]() {
             auto rm_res =
                 cap::CHolderManager::inst().remove_holder(holder->id());
             assert(rm_res.has_value());
         });
-        auto image_res = VFS::inst().open(path, *holder);
+        auto image_res    = VFS::inst().open(path, *holder);
         propagate(image_res);
-        auto root_res = VFS::inst().open_dir(
-            "/", *holder,
-            perm::vdir::READ | perm::vdir::WRITE | perm::vdir::EXEC |
-                perm::basic::CLONE);
+        auto root_res =
+            VFS::inst().open_dir("/", *holder,
+                                 perm::vdir::READ | perm::vdir::WRITE |
+                                     perm::vdir::EXEC | perm::basic::CLONE);
         propagate(root_res);
         std::vector<BootstrapCapPathView> dir_records{};
         std::vector<BootstrapCapPathView> file_records{};
@@ -1162,10 +1156,9 @@ namespace task {
         auto bootstrap_res =
             build_bootstrap_blob(nullptr, 0, dir_records, file_records, spec);
         propagate(bootstrap_res);
-        auto load_spec_res = load_task_spec(image_res.value(), holder,
-                                            spec.startup_blob.get(),
-                                            spec.startup_blob_size, spec,
-                                            load_prm);
+        auto load_spec_res =
+            load_task_spec(image_res.value(), holder, spec.startup_blob.get(),
+                           spec.startup_blob_size, spec, load_prm);
         if (!load_spec_res.has_value()) {
             destroy_unowned_task_memory(spec);
             propagate_return(load_spec_res);
@@ -1273,22 +1266,23 @@ namespace task {
 
         reset_thread_runtime(child_tcb);
         child_tcb->reset_kstack();
-        auto *child_user_ctx       = child_tcb->push<Context>();
-        *child_user_ctx                         = *parent_ctx;
+        auto *child_user_ctx = child_tcb->push<Context>();
+        *child_user_ctx      = *parent_ctx;
+        child_user_ctx->kstack_top() =
+            reinterpret_cast<umb_t>(child_tcb->kstack_top());
         write_ret(*child_user_ctx,
                   syscall::RetPack{
                       .processed = true,
                       .ret0      = 0,
                       .ret1      = static_cast<b64>(ErrCode::SUCCESS),
                   });
-        init_kernel_context(
-            child_tcb->kernel_context_ptr(),
-            reinterpret_cast<void *>(&new_utask_trampoline), child_user_ctx,
-            child_tcb->kstack_top(), false, true);
-        child_tcb->boot_role =
-            parent_tcb->schd_class == schd::ClassType::INIT
-                ? BootThreadRole::NONE
-                : parent_tcb->boot_role;
+        init_kernel_context(child_tcb->kernel_context_ptr(),
+                            reinterpret_cast<void *>(&new_utask_trampoline),
+                            child_user_ctx, child_tcb->kstack_top(), false,
+                            true);
+        child_tcb->boot_role  = parent_tcb->schd_class == schd::ClassType::INIT
+                                    ? BootThreadRole::NONE
+                                    : parent_tcb->boot_role;
         child_tcb->schd_class = parent_tcb->schd_class == schd::ClassType::INIT
                                     ? schd::ClassType::FCFS
                                     : parent_tcb->schd_class;
@@ -1445,12 +1439,12 @@ namespace task {
 
         TaskSpec spec = empty_task_spec();
         LoadPrm load_prm{};
-        auto load_spec_res = load_task_spec(image_cap, pcb->cholder,
-                                            startup_blob,
-                                            startup_blob_size, spec, load_prm);
+        auto load_spec_res =
+            load_task_spec(image_cap, pcb->cholder, startup_blob,
+                           startup_blob_size, spec, load_prm);
         propagate(load_spec_res);
-        bool spec_owned  = true;
-        auto spec_guard  = util::Guard([&]() {
+        bool spec_owned = true;
+        auto spec_guard = util::Guard([&]() {
             if (spec_owned) {
                 destroy_unowned_task_memory(spec);
             }

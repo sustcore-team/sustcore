@@ -502,6 +502,7 @@ namespace fdt {
         void scan_visible_nodes(const Node &root, Fn &&handler) const;
 
         void register_memory_regions(device::DeviceModel &model) const;
+        void register_platform(device::DeviceModel &model) const;
         void register_cpus(device::DeviceModel &model) const;
         void register_nodes(device::DeviceModel &model) const;
         void register_intcs(device::DeviceModel &model) const;

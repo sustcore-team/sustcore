@@ -2,7 +2,7 @@
 #include <arch/loongarch64/ctxlayout.h>
 #include <boot/laboot/bootinfo.h>
 
-    .equ KERNEL_STACK_BYTES, 8 * 1024
+    .equ KERNEL_STACK_BYTES, 1024 * 64
 
     .section .data
     .extern bootinfo_ptr

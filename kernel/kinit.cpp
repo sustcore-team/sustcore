@@ -272,5 +272,6 @@ void kinit_runtime_entry() {
         panic("kinit 加载用户 init 失败");
     }
 
+    loggers::SUSTCORE::INFO("用户 init 进程加载完毕 ; kinit 线程休眠");
     block_kinit_forever();
 }

@@ -268,6 +268,9 @@ concept ContextTrait = requires(T *ctx, void *context) {
     {
         ctx->sp()
     } -> std::same_as<umb_t &>;
+    {
+        ctx->kstack_top()
+    } -> std::same_as<umb_t &>;
 };
 
 // 中断管理器 Trait

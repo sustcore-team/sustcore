@@ -13,6 +13,7 @@
 #if defined(__ARCH_riscv64__)
 #include <arch/riscv64/csr.h>
 #include <arch/riscv64/device/fdt_helper.h>
+#include <arch/riscv64/device/platform.h>
 #include <arch/riscv64/mem/sv39.h>
 #elif defined(__ARCH_loongarch64__)
 #include <arch/loongarch64/fdt_helper.h>
@@ -569,9 +570,18 @@ void init_device_model() {
     }
 
     const auto &cpus = model.cpus();
+    unsigned long long cpu_freq_hz = 0;
+#if defined(__ARCH_riscv64__)
+    auto *platform = model.platform();
+    if (platform != nullptr && platform->is<riscv::Riscv64Platform>()) {
+        cpu_freq_hz = static_cast<unsigned long long>(
+            platform->as<riscv::Riscv64Platform>()->timebase_frequency()
+                .to_hz());
+    }
+#endif
     loggers::SUSTCORE::INFO("CPU 数量: %u, 频率: %llu Hz",
                             static_cast<unsigned>(cpus.cpus.size()),
-                            static_cast<unsigned long long>(cpus.freq.to_hz()));
+                            cpu_freq_hz);
     // cpus.topology.print();
 
     // loggers::SUSTCORE::INFO("设备树详细信息:");
@@ -588,11 +598,6 @@ extern "C" void post_init(void) {
     // 初始化中断处理程序
     loggers::SUSTCORE::INFO("初始化中断处理程序");
     Interrupt::init();
-
-#if defined(__ARCH_loongarch64__)
-    asm volatile("break 0");
-    while (true);
-#endif
 
     loggers::SUSTCORE::INFO("初始化设备树配置");
     init_device_model();

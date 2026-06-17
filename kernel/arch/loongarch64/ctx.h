@@ -53,6 +53,7 @@ namespace la64 {
         umb_t s8;
         umb_t era;
         umb_t estat;
+        umb_t _kstack_top;
 
         constexpr umb_t &pc() {
             return era;
@@ -65,6 +66,11 @@ namespace la64 {
         [[nodiscard]]
         constexpr const umb_t &sp() const {
             return _sp;
+        }
+
+        [[nodiscard]]
+        constexpr umb_t &kstack_top() {
+            return _kstack_top;
         }
 
         constexpr void setup_regs(bool smode, bool sie, bool spie) {

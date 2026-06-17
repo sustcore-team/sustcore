@@ -13,6 +13,7 @@
 
 #include <device/cpu.h>
 #include <device/device.h>
+#include <device/platform.h>
 #include <driver/base.h>
 #include <driver/factory.h>
 #include <driver/int/base.h>
@@ -55,6 +56,11 @@ namespace device {
         [[nodiscard]]
         CpuGroupInfo &cpus() {
             return _cpus;
+        }
+
+        [[nodiscard]]
+        Platform *platform() const noexcept {
+            return _platform.get();
         }
 
         [[nodiscard]]
@@ -128,6 +134,13 @@ namespace device {
             _clock_virq = virq;
         }
 
+        void set_platform(util::owner<Platform *> platform) noexcept {
+            if (_platform.get() != nullptr) {
+                delete _platform.get();
+            }
+            _platform = std::move(platform);
+        }
+
         /**
          * @brief 获取当前系统的 clock virq.
          *
@@ -161,6 +174,10 @@ namespace device {
             }
             _providers.clear();
             cleanup_device_nodes();
+            if (_platform.get() != nullptr) {
+                delete _platform.get();
+                _platform = util::owner<Platform *>(nullptr);
+            }
         }
 
         static DeviceModel &inst();
@@ -201,6 +218,8 @@ namespace device {
         std::vector<DeviceNode *> _non_irq_devices;
         std::vector<MemRegion> _regions;
         CpuGroupInfo _cpus;
+        util::owner<Platform *> _platform =
+            util::owner<Platform *>(nullptr);
         driver::IrqManager _interrupt;
         driver::virq_t _clock_virq = 0;
     };

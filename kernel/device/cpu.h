@@ -400,9 +400,7 @@ namespace device {
      */
     struct CpuGroupInfo {
         std::vector<util::owner<Cpu *>> cpus;
-        units::frequency freq;
         CpuTopology topology{};
-        driver::ClockSource *_clock_source = nullptr;
 
         CpuGroupInfo()                                = default;
         CpuGroupInfo(const CpuGroupInfo &)            = delete;
@@ -415,12 +413,7 @@ namespace device {
          */
         CpuGroupInfo(CpuGroupInfo &&other) noexcept
             : cpus(std::move(other.cpus)),
-              freq(other.freq),
-              topology(std::move(other.topology)),
-              _clock_source(other._clock_source) {
-            other._clock_source = nullptr;
-            other.freq          = units::frequency();
-        }
+              topology(std::move(other.topology)) {}
 
         /**
          * @brief 移动赋值 CPU 组信息.
@@ -431,12 +424,8 @@ namespace device {
         CpuGroupInfo &operator=(CpuGroupInfo &&other) noexcept {
             if (this != &other) {
                 cleanup();
-                cpus          = std::move(other.cpus);
-                freq          = other.freq;
-                topology      = std::move(other.topology);
-                _clock_source = other._clock_source;
-                other._clock_source = nullptr;
-                other.freq          = units::frequency();
+                cpus     = std::move(other.cpus);
+                topology = std::move(other.topology);
             }
             return *this;
         }
@@ -449,18 +438,13 @@ namespace device {
         }
 
         /**
-         * @brief 释放 CPU 对象与所属时钟源.
+         * @brief 释放 CPU 对象.
          */
         void cleanup() noexcept {
             for (auto &cpu : cpus) {
                 delete cpu.get();
             }
             cpus.clear();
-            if (_clock_source != nullptr) {
-                delete _clock_source;
-                _clock_source = nullptr;
-            }
-            freq = units::frequency();
         }
     };
 }  // namespace device

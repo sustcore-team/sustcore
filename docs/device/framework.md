@@ -160,11 +160,11 @@ CPU 抽象在 `kernel/device/cpu.h` 中。
 `DeviceModel::cpus()` 返回 `CpuGroupInfo`，其中包含:
 
 - `cpus`: 当前系统的逻辑 CPU 对象列表
-- `freq`: 公共 timebase 频率
 - `topology`: CPU 拓扑树
-- `_clock_source`: 当前平台构造出的 `ClockSource`
 
-这里的时钟源目前由 FDT 的 `/cpus/timebase-frequency` 派生，具体类型是 `CSRTimeClockSource`。
+平台相关的 timebase 频率与 `ClockSource` 由 `DeviceModel::platform()` 提供。
+在 RISC-V 平台上，具体实现为 `Riscv64Platform`，其时钟源类型为
+`CSRTimeClockSource`。
 
 ### CPU 拓扑
 
