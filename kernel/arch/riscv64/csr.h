@@ -11,29 +11,70 @@
 
 #pragma once
 
+#include <features/attributes.h>
+#include <sus/macros.h>
 #include <sus/types.h>
 
-using csr_t = umb_t;
+using csr_t   = umb_t;
 using csr32_t = dword;
 
 /**
- * @brief 设置CSR寄存器
- *
+ * @brief 写入 CSR 寄存器.
  */
-#define CSR_SET(name, val) asm volatile("csrw " #name ", %0" ::"r"(val));
+#define RV64_CSR_WRITE(csr, val)                                    \
+    ({                                                              \
+        csr_t __v = (val);                                          \
+        asm volatile("csrw " SCSTRINGIFY(csr) ", %0" : : "r"(__v)); \
+    })
 
 /**
- * @brief 获得CSR寄存器值
- *
+ * @brief 读取 CSR 寄存器.
  */
-#define CSR_GET(name, ret) asm volatile("csrr %0, " #name : "=r"(ret));
+#define RV64_CSR_READ(csr)                                      \
+    ({                                                          \
+        csr_t __v;                                              \
+        asm volatile("csrr %0, " SCSTRINGIFY(csr) : "=r"(__v)); \
+        __v;                                                    \
+    })
 
 /**
- * @brief 交换CSR寄存器值
- *
+ * @brief 交换 CSR 寄存器值并返回旧值.
  */
-#define CSR_XCHG(name, val, ret) \
-    asm volatile("csrrw %0, " #name ", %1" : "=r"(ret) : "r"(val));
+#define RV64_CSR_SWAP(csr, val)                           \
+    ({                                                    \
+        csr_t __v = (val);                                \
+        asm volatile("csrrw %0, " SCSTRINGIFY(csr) ", %1" \
+                     : "+r"(__v)                          \
+                     : "r"(__v)                           \
+                     : "memory");                         \
+        __v;                                              \
+    })
+
+/**
+ * @brief 对 CSR 掩码置位.
+ */
+#define RV64_CSR_SET(csr, mask)                             \
+    ({                                                      \
+        csr_t __m = (mask);                                 \
+        asm volatile("csrrs zero, " SCSTRINGIFY(csr) ", %0" \
+                     :                                      \
+                     : "r"(__m)                             \
+                     : "memory");                           \
+    })
+
+/**
+ * @brief 对 CSR 掩码清位.
+ */
+#define RV64_CSR_CLEAR(csr, mask)                           \
+    ({                                                      \
+        csr_t __m = (mask);                                 \
+        asm volatile("csrrc zero, " SCSTRINGIFY(csr) ", %0" \
+                     :                                      \
+                     : "r"(__m)                             \
+                     : "memory");                           \
+    })
+
+#define __OPCSR__ static __ATTR_ALWAYS_INLINE__
 
 // WRPI: (Reserved Writes Preserve Values, Reads Ignore Values)
 // 在读取时应忽略, 并在写入时保留原值的位
@@ -103,8 +144,8 @@ union csr_sstatus_t {
  *
  * @param sstatus SSTATUS寄存器
  */
-static inline void csr_set_sstatus(csr_sstatus_t sstatus) {
-    CSR_SET(sstatus, sstatus.value);
+__OPCSR__ void csr_set_sstatus(csr_sstatus_t sstatus) {
+    RV64_CSR_WRITE(sstatus, sstatus.value);
 }
 
 /**
@@ -112,10 +153,8 @@ static inline void csr_set_sstatus(csr_sstatus_t sstatus) {
  *
  * @return csr_sstatus_t SSTATUS寄存器
  */
-static inline csr_sstatus_t csr_get_sstatus(void) {
-    csr_sstatus_t sstatus;
-    CSR_GET(sstatus, sstatus.value);
-    return sstatus;
+__OPCSR__ csr_sstatus_t csr_get_sstatus() {
+    return {RV64_CSR_READ(sstatus)};
 }
 
 /**
@@ -124,10 +163,8 @@ static inline csr_sstatus_t csr_get_sstatus(void) {
  * @param sstatus 新的SSTATUS寄存器值
  * @return csr_sstatus_t 旧的SSTATUS寄存器值
  */
-static inline csr_sstatus_t csr_xchg_sstatus(csr_sstatus_t sstatus) {
-    csr_sstatus_t old;
-    CSR_XCHG(sstatus, sstatus.value, old.value);
-    return old;
+__OPCSR__ csr_sstatus_t csr_xchg_sstatus(csr_sstatus_t sstatus) {
+    return {RV64_CSR_SWAP(sstatus, sstatus.value)};
 }
 
 /**
@@ -150,8 +187,8 @@ union csr_stvec_t {
  *
  * @param stvec STVEC寄存器
  */
-static inline void csr_set_stvec(csr_stvec_t stvec) {
-    CSR_SET(stvec, stvec.value);
+__OPCSR__ void csr_set_stvec(csr_stvec_t stvec) {
+    RV64_CSR_WRITE(stvec, stvec.value);
 }
 
 /**
@@ -159,10 +196,8 @@ static inline void csr_set_stvec(csr_stvec_t stvec) {
  *
  * @return csr_stvec_t STVEC寄存器
  */
-static inline csr_stvec_t csr_get_stvec(void) {
-    csr_stvec_t stvec;
-    CSR_GET(stvec, stvec.value);
-    return stvec;
+__OPCSR__ csr_stvec_t csr_get_stvec() {
+    return {RV64_CSR_READ(stvec)};
 }
 
 /**
@@ -171,10 +206,8 @@ static inline csr_stvec_t csr_get_stvec(void) {
  * @param stvec 新的STVEC寄存器值
  * @return csr_stvec_t 旧的STVEC寄存器值
  */
-static inline csr_stvec_t csr_xchg_stvec(csr_stvec_t stvec) {
-    csr_stvec_t old;
-    CSR_XCHG(stvec, stvec.value, old.value);
-    return old;
+__OPCSR__ csr_stvec_t csr_xchg_stvec(csr_stvec_t stvec) {
+    return {RV64_CSR_SWAP(stvec, stvec.value)};
 }
 
 // SIE说明哪些中断允许被触发
@@ -232,8 +265,8 @@ union csr_sip_t {
  *
  * @param sie SIE寄存器
  */
-static inline void csr_set_sie(csr_sie_t sie) {
-    CSR_SET(sie, sie.value);
+__OPCSR__ void csr_set_sie(csr_sie_t sie) {
+    RV64_CSR_WRITE(sie, sie.value);
 }
 
 /**
@@ -241,10 +274,8 @@ static inline void csr_set_sie(csr_sie_t sie) {
  *
  * @return csr_sie_t SIE寄存器
  */
-static inline csr_sie_t csr_get_sie(void) {
-    csr_sie_t sie;
-    CSR_GET(sie, sie.value);
-    return sie;
+__OPCSR__ csr_sie_t csr_get_sie() {
+    return {RV64_CSR_READ(sie)};
 }
 
 /**
@@ -253,10 +284,8 @@ static inline csr_sie_t csr_get_sie(void) {
  * @param sie 新的SIE寄存器值
  * @return csr_sie_t 旧的SIE寄存器值
  */
-static inline csr_sie_t csr_xchg_sie(csr_sie_t sie) {
-    csr_sie_t old;
-    CSR_XCHG(sie, sie.value, old.value);
-    return old;
+__OPCSR__ csr_sie_t csr_xchg_sie(csr_sie_t sie) {
+    return {RV64_CSR_SWAP(sie, sie.value)};
 }
 
 /**
@@ -264,8 +293,8 @@ static inline csr_sie_t csr_xchg_sie(csr_sie_t sie) {
  *
  * @param sip SIP寄存器
  */
-static inline void csr_set_sip(csr_sip_t sip) {
-    CSR_SET(sip, sip.value);
+__OPCSR__ void csr_set_sip(csr_sip_t sip) {
+    RV64_CSR_WRITE(sip, sip.value);
 }
 
 /**
@@ -273,10 +302,8 @@ static inline void csr_set_sip(csr_sip_t sip) {
  *
  * @return csr_sip_t SIP寄存器
  */
-static inline csr_sip_t csr_get_sip(void) {
-    csr_sip_t sip;
-    CSR_GET(sip, sip.value);
-    return sip;
+__OPCSR__ csr_sip_t csr_get_sip() {
+    return {RV64_CSR_READ(sip)};
 }
 
 /**
@@ -285,10 +312,8 @@ static inline csr_sip_t csr_get_sip(void) {
  * @param sip 新的SIP寄存器值
  * @return csr_sip_t 旧的SIP寄存器值
  */
-static inline csr_sip_t csr_xchg_sip(csr_sip_t sip) {
-    csr_sip_t old;
-    CSR_XCHG(sip, sip.value, old.value);
-    return old;
+__OPCSR__ csr_sip_t csr_xchg_sip(csr_sip_t sip) {
+    return {RV64_CSR_SWAP(sip, sip.value)};
 }
 
 /**
@@ -315,8 +340,8 @@ union csr_scounteren_t {
  *
  * @param scounteren SCOUNTEREN寄存器
  */
-static inline void csr_set_scounteren(csr_scounteren_t scounteren) {
-    CSR_SET(scounteren, scounteren.value);
+__OPCSR__ void csr_set_scounteren(csr_scounteren_t scounteren) {
+    RV64_CSR_WRITE(scounteren, scounteren.value);
 }
 
 /**
@@ -324,10 +349,8 @@ static inline void csr_set_scounteren(csr_scounteren_t scounteren) {
  *
  * @return csr_scounteren_t SCOUNTEREN寄存器
  */
-static inline csr_scounteren_t csr_get_scounteren(void) {
-    csr_scounteren_t scounteren;
-    CSR_GET(scounteren, scounteren.value);
-    return scounteren;
+__OPCSR__ csr_scounteren_t csr_get_scounteren() {
+    return {static_cast<csr32_t>(RV64_CSR_READ(scounteren))};
 }
 
 /**
@@ -336,11 +359,8 @@ static inline csr_scounteren_t csr_get_scounteren(void) {
  * @param scounteren    新的SCOUNTEREN寄存器值
  * @return csr_scounteren_t 旧的SCOUNTEREN寄存器值
  */
-static inline csr_scounteren_t csr_xchg_scounteren(
-    csr_scounteren_t scounteren) {
-    csr_scounteren_t old;
-    CSR_XCHG(scounteren, scounteren.value, old.value);
-    return old;
+__OPCSR__ csr_scounteren_t csr_xchg_scounteren(csr_scounteren_t scounteren) {
+    return {static_cast<csr32_t>(RV64_CSR_SWAP(scounteren, scounteren.value))};
 }
 
 /**
@@ -349,15 +369,15 @@ static inline csr_scounteren_t csr_xchg_scounteren(
  * Supervisor Scratch Register
  *
  */
-typedef csr_t csr_sscratch_t;
+using csr_sscratch_t = csr_t;
 
 /**
  * @brief 设置SSCRATCH寄存器
  *
  * @param sscratch SSCRATCH寄存器
  */
-static inline void csr_set_sscratch(csr_sscratch_t sscratch) {
-    CSR_SET(sscratch, sscratch);
+__OPCSR__ void csr_set_sscratch(csr_sscratch_t sscratch) {
+    RV64_CSR_WRITE(sscratch, sscratch);
 }
 
 /**
@@ -365,10 +385,8 @@ static inline void csr_set_sscratch(csr_sscratch_t sscratch) {
  *
  * @return csr_sscratch_t SSCRATCH寄存器
  */
-static inline csr_sscratch_t csr_get_sscratch(void) {
-    csr_sscratch_t sscratch;
-    CSR_GET(sscratch, sscratch);
-    return sscratch;
+__OPCSR__ csr_sscratch_t csr_get_sscratch() {
+    return RV64_CSR_READ(sscratch);
 }
 
 /**
@@ -377,10 +395,8 @@ static inline csr_sscratch_t csr_get_sscratch(void) {
  * @param sscratch 新的SSCRATCH寄存器值
  * @return csr_sscratch_t 旧的SSCRATCH寄存器值
  */
-static inline csr_sscratch_t csr_xchg_sscratch(csr_sscratch_t sscratch) {
-    csr_sscratch_t old;
-    CSR_XCHG(sscratch, sscratch, old);
-    return old;
+__OPCSR__ csr_sscratch_t csr_xchg_sscratch(csr_sscratch_t sscratch) {
+    return RV64_CSR_SWAP(sscratch, sscratch);
 }
 
 /**
@@ -389,15 +405,15 @@ static inline csr_sscratch_t csr_xchg_sscratch(csr_sscratch_t sscratch) {
  * Supervisor Exception Program Counter Register
  *
  */
-typedef csr_t csr_sepc_t;
+using csr_sepc_t = csr_t;
 
 /**
  * @brief 设置SEPC寄存器
  *
  * @param sepc SEPC寄存器
  */
-static inline void csr_set_sepc(csr_sepc_t sepc) {
-    CSR_SET(sepc, sepc);
+__OPCSR__ void csr_set_sepc(csr_sepc_t sepc) {
+    RV64_CSR_WRITE(sepc, sepc);
 }
 
 /**
@@ -405,10 +421,8 @@ static inline void csr_set_sepc(csr_sepc_t sepc) {
  *
  * @return csr_sepc_t SEPC寄存器
  */
-static inline csr_sepc_t csr_get_sepc(void) {
-    csr_sepc_t sepc;
-    CSR_GET(sepc, sepc);
-    return sepc;
+__OPCSR__ csr_sepc_t csr_get_sepc() {
+    return RV64_CSR_READ(sepc);
 }
 
 /**
@@ -417,10 +431,8 @@ static inline csr_sepc_t csr_get_sepc(void) {
  * @param sepc 新的SEPC寄存器值
  * @return csr_sepc_t 旧的SEPC寄存器值
  */
-static inline csr_sepc_t csr_xchg_sepc(csr_sepc_t sepc) {
-    csr_sepc_t old;
-    CSR_XCHG(sepc, sepc, old);
-    return old;
+__OPCSR__ csr_sepc_t csr_xchg_sepc(csr_sepc_t sepc) {
+    return RV64_CSR_SWAP(sepc, sepc);
 }
 
 /**
@@ -442,8 +454,8 @@ union csr_scause_t {
  *
  * @param scause SCAUSE寄存器
  */
-static inline void csr_set_scause(csr_scause_t scause) {
-    CSR_SET(scause, scause.value);
+__OPCSR__ void csr_set_scause(csr_scause_t scause) {
+    RV64_CSR_WRITE(scause, scause.value);
 }
 
 /**
@@ -451,10 +463,8 @@ static inline void csr_set_scause(csr_scause_t scause) {
  *
  * @return csr_scause_t SCAUSE寄存器
  */
-static inline csr_scause_t csr_get_scause(void) {
-    csr_scause_t scause;
-    CSR_GET(scause, scause.value);
-    return scause;
+__OPCSR__ csr_scause_t csr_get_scause() {
+    return {RV64_CSR_READ(scause)};
 }
 
 /**
@@ -463,10 +473,8 @@ static inline csr_scause_t csr_get_scause(void) {
  * @param scause 新的SCAUSE寄存器值
  * @return csr_scause_t 旧的SCAUSE寄存器值
  */
-static inline csr_scause_t csr_xchg_scause(csr_scause_t scause) {
-    csr_scause_t old;
-    CSR_XCHG(scause, scause.value, old.value);
-    return old;
+__OPCSR__ csr_scause_t csr_xchg_scause(csr_scause_t scause) {
+    return {RV64_CSR_SWAP(scause, scause.value)};
 }
 
 /**
@@ -475,15 +483,15 @@ static inline csr_scause_t csr_xchg_scause(csr_scause_t scause) {
  * Supervisor Trap Value Register
  *
  */
-typedef csr_t csr_stval_t;
+using csr_stval_t = csr_t;
 
 /**
  * @brief 设置STVAL寄存器
  *
  * @param stval STVAL寄存器
  */
-static inline void csr_set_stval(csr_stval_t stval) {
-    CSR_SET(stval, stval);
+__OPCSR__ void csr_set_stval(csr_stval_t stval) {
+    RV64_CSR_WRITE(stval, stval);
 }
 
 /**
@@ -491,10 +499,8 @@ static inline void csr_set_stval(csr_stval_t stval) {
  *
  * @return csr_stval_t STVAL寄存器
  */
-static inline csr_stval_t csr_get_stval(void) {
-    csr_stval_t stval;
-    CSR_GET(stval, stval);
-    return stval;
+__OPCSR__ csr_stval_t csr_get_stval() {
+    return RV64_CSR_READ(stval);
 }
 
 /**
@@ -503,10 +509,8 @@ static inline csr_stval_t csr_get_stval(void) {
  * @param stval 新的STVAL寄存器值
  * @return csr_stval_t 旧的STVAL寄存器值
  */
-static inline csr_stval_t csr_xchg_stval(csr_stval_t stval) {
-    csr_stval_t old;
-    CSR_XCHG(stval, stval, old);
-    return old;
+__OPCSR__ csr_stval_t csr_xchg_stval(csr_stval_t stval) {
+    return RV64_CSR_SWAP(stval, stval);
 }
 
 /**
@@ -528,9 +532,9 @@ union csr_senvcfg_t {
         umb_t wrpi1 : 24;  // [8:31] WRPI
         umb_t
             pmm : 2;  // [32:33] Pause Mask in M-Mode M-Mode下是否屏蔽PAUSE指令
-        umb_t wrpi2 : 27;    // [34:60]
-        umb_t pbmt : 1;      // [61] PBMTE
-        umb_t wrpi3 : 2;  // [62:63]
+        umb_t wrpi2 : 27;  // [34:60]
+        umb_t pbmt : 1;    // [61] PBMTE
+        umb_t wrpi3 : 2;   // [62:63]
     } PACKED;
 };
 
@@ -539,10 +543,8 @@ union csr_senvcfg_t {
  *
  * @return csr_senvcfg_t SENVCFG寄存器
  */
-static inline csr_senvcfg_t csr_get_senvcfg(void) {
-    csr_senvcfg_t senvcfg;
-    CSR_GET(senvcfg, senvcfg.value);
-    return senvcfg;
+__OPCSR__ csr_senvcfg_t csr_get_senvcfg() {
+    return {RV64_CSR_READ(senvcfg)};
 }
 
 /**
@@ -550,8 +552,8 @@ static inline csr_senvcfg_t csr_get_senvcfg(void) {
  *
  * @param senvcfg SENVCFG寄存器
  */
-static inline void csr_set_senvcfg(csr_senvcfg_t senvcfg) {
-    CSR_SET(senvcfg, senvcfg.value);
+__OPCSR__ void csr_set_senvcfg(csr_senvcfg_t senvcfg) {
+    RV64_CSR_WRITE(senvcfg, senvcfg.value);
 }
 
 /**
@@ -560,10 +562,8 @@ static inline void csr_set_senvcfg(csr_senvcfg_t senvcfg) {
  * @param senvcfg SENVCFG寄存器
  * @return csr_senvcfg_t 旧的SENVCFG寄存器值
  */
-static inline csr_senvcfg_t csr_xchg_senvcfg(csr_senvcfg_t senvcfg) {
-    csr_senvcfg_t old;
-    CSR_XCHG(senvcfg, senvcfg.value, old.value);
-    return old;
+__OPCSR__ csr_senvcfg_t csr_xchg_senvcfg(csr_senvcfg_t senvcfg) {
+    return {RV64_CSR_SWAP(senvcfg, senvcfg.value)};
 }
 
 enum class SATPMode : umb_t {
@@ -578,22 +578,22 @@ enum class SATPMode : umb_t {
  * @brief SATP寄存器结构体
  * Supervisor Address Translation and Protection
  */
-typedef union {
+union csr_satp_t {
     csr_t value;
     struct {
         umb_t ppn : 44;     // 位[0:43]:  根页表的物理页号
         umb_t asid : 16;    // 位[44:59]: 地址空间标识符
         SATPMode mode : 4;  // 位[60:63]: 地址转换模式
     } PACKED;
-} csr_satp_t;
+};
 
 /**
  * @brief 设置SATP寄存器
  *
  * @param satp SATP寄存器
  */
-static inline void csr_set_satp(csr_satp_t satp) {
-    CSR_SET(satp, satp.value);
+__OPCSR__ void csr_set_satp(csr_satp_t satp) {
+    RV64_CSR_WRITE(satp, satp.value);
 }
 
 /**
@@ -601,10 +601,8 @@ static inline void csr_set_satp(csr_satp_t satp) {
  *
  * @return csr_satp_t SATP寄存器
  */
-static inline csr_satp_t csr_get_satp(void) {
-    csr_satp_t satp;
-    CSR_GET(satp, satp.value);
-    return satp;
+__OPCSR__ csr_satp_t csr_get_satp() {
+    return {RV64_CSR_READ(satp)};
 }
 
 /**
@@ -613,10 +611,8 @@ static inline csr_satp_t csr_get_satp(void) {
  * @param satp 新的SATP寄存器值
  * @return csr_satp_t 旧的SATP寄存器值
  */
-static inline csr_satp_t csr_xchg_satp(csr_satp_t satp) {
-    csr_satp_t old;
-    CSR_XCHG(satp, satp.value, old.value);
-    return old;
+__OPCSR__ csr_satp_t csr_xchg_satp(csr_satp_t satp) {
+    return {RV64_CSR_SWAP(satp, satp.value)};
 }
 
 /**
@@ -624,8 +620,8 @@ static inline csr_satp_t csr_xchg_satp(csr_satp_t satp) {
  *
  * @return csr_t 计时器值
  */
-static inline csr_t csr_get_time(void) {
-    csr_t x;
-    asm volatile("csrr %0, time" : "=r"(x));
-    return x;
+__OPCSR__ csr_t csr_get_time() {
+    return RV64_CSR_READ(time);
 }
+
+#undef __OPCSR__

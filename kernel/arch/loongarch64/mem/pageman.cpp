@@ -9,9 +9,9 @@
  *
  */
 
+#include <arch/loongarch64/csr.h>
 #include <arch/loongarch64/mem/pageman.h>
 #include <arch/loongarch64/mem/paging.h>
-#include <arch/loongarch64/csrnum.h>
 #include <logger.h>
 
 using namespace la64;
@@ -19,14 +19,6 @@ using namespace la64;
 extern "C" void loongarch64_tlb_refill_entry(void);
 
 namespace {
-    #define _STR(x) #x
-    #define STR(x) _STR(x)
-
-    #define csr_write_imm(csr, value) \
-        asm volatile("csrwr %0, " STR(csr) "" ::"r"(value))
-    #define csr_read_imm(csr, value) \
-        asm volatile("csrrd %0, " STR(csr) "" : "=r"(value))
-
     [[nodiscard]]
     bool is_table_pte(const PageMan::PTE &pte, int level) noexcept {
         return level < PageMan::level(PageMan::PageSize::_4K) - 1 &&
@@ -85,23 +77,26 @@ namespace {
     }
 }  // namespace
 
-void PageMan::init(void) {
-    umb_t handler_phys = convert<PhyAddr>(
-        KvaAddr(reinterpret_cast<addr_t>(&loongarch64_tlb_refill_entry)))
-                            .arith() &
-                        PAGE_ADDR_MASK;
-    umb_t old_dmwin1;
-    csr_read_imm(CSR_DMWIN1, old_dmwin1);
+void PageMan::init() {
+    umb_t handler_phys =
+        convert<PhyAddr>(
+            KvaAddr(reinterpret_cast<addr_t>(&loongarch64_tlb_refill_entry)))
+            .arith() &
+        PAGE_ADDR_MASK;
+    auto old_dmwin1 = static_cast<umb_t>(LA64_CSR_READ(CSR_DMWIN1));
 
-    csr_write_imm(CSR_DMWIN1, DMW0_CONFIG);
-    asm volatile("ibar 0\n\tdbar 0" ::: "memory");
+    LA64_CSR_WRITE(CSR_DMWIN1, DMW0_CONFIG);
+    asm volatile(
+        "    ibar 0\n"
+        "    dbar 0\n" ::
+            : "memory");
 
-    csr_write_imm(CSR_TLBRENTRY, DMW0_BASE | handler_phys);
-    csr_write_imm(CSR_PWCTL0, PWCTL0_4LEVEL);
-    csr_write_imm(CSR_PWCTL1, PWCTL1_4LEVEL);
-    csr_write_imm(CSR_STLBPGSIZE, STLBPGSIZE_4K);
-    csr_write_imm(CSR_DMWIN0, DMW0_CONFIG);
-    csr_write_imm(CSR_DMWIN1, old_dmwin1);
+    LA64_CSR_WRITE(CSR_TLBRENTRY, DMW0_BASE | handler_phys);
+    LA64_CSR_WRITE(CSR_PWCTL0, PWCTL0_4LEVEL);
+    LA64_CSR_WRITE(CSR_PWCTL1, PWCTL1_4LEVEL);
+    LA64_CSR_WRITE(CSR_STLBPGSIZE, STLBPGSIZE_4K);
+    LA64_CSR_WRITE(CSR_DMWIN0, DMW0_CONFIG);
+    LA64_CSR_WRITE(CSR_DMWIN1, old_dmwin1);
     flush_tlb();
     loggers::PAGING::INFO("LoongArch64页表管理器初始化完成");
 }
@@ -125,13 +120,12 @@ void PageMan::set_paddr(PTE *pte, PhyAddr paddr) {
     if (pte == nullptr) {
         return;
     }
-    pte->value = (pte->value & ~PAGE_ADDR_MASK) |
-                 (paddr.arith() & PAGE_ADDR_MASK);
+    pte->value =
+        (pte->value & ~PAGE_ADDR_MASK) | (paddr.arith() & PAGE_ADDR_MASK);
 }
 
 PhyAddr PageMan::read_root() {
-    umb_t pgdl;
-    csr_read_imm(CSR_PGDL, pgdl);
+    auto pgdl = static_cast<umb_t>(LA64_CSR_READ(CSR_PGDL));
     return PhyAddr(pgdl & PAGE_ADDR_MASK);
 }
 
@@ -141,8 +135,8 @@ void PageMan::make_root(PhyAddr root) {
 
 void PageMan::__switch_root(PhyAddr root) {
     umb_t root_val = root.arith() & PAGE_ADDR_MASK;
-    csr_write_imm(CSR_PGDL, root_val);
-    csr_write_imm(CSR_PGDH, root_val);
+    LA64_CSR_WRITE(CSR_PGDL, root_val);
+    LA64_CSR_WRITE(CSR_PGDH, root_val);
     flush_tlb();
 }
 
@@ -155,7 +149,8 @@ Result<PageMan::QueryResult> PageMan::query_page(VirAddr vaddr) {
     make_vpn<PageSize::_4K>(vaddr, vpn);
 
     PTE *pt = root();
-    for (int level_index = 0; level_index < level(PageSize::_4K); ++level_index) {
+    for (int level_index = 0; level_index < level(PageSize::_4K); ++level_index)
+    {
         PTE &pte = pt[vpn[level_index]];
         if (!pte_exists(pte)) {
             unexpect_return(ErrCode::PAGE_NOT_PRESENT);
@@ -186,12 +181,12 @@ Result<void> PageMan::clone_mapping_from(PageMan &src, VirAddr vaddr) noexcept {
         propagate_return(query_res);
     }
 
-    auto qres     = query_res.value();
-    auto *src_pte = qres.pte;
-    PhyAddr paddr = get_physical_address(*src_pte);
+    auto qres       = query_res.value();
+    auto *src_pte   = qres.pte;
+    PhyAddr paddr   = get_physical_address(*src_pte);
     PageFlags flags = page_flags(rwx(*src_pte), is_user_accessible(*src_pte),
                                  is_global(*src_pte), is_present(*src_pte));
-    VirAddr mapped = vaddr.page_align_down();
+    VirAddr mapped  = vaddr.page_align_down();
     switch (qres.size) {
         case PageSize::_1G:
             map_page<PageSize::_1G>(mapped, paddr, flags);
@@ -203,8 +198,7 @@ Result<void> PageMan::clone_mapping_from(PageMan &src, VirAddr vaddr) noexcept {
             map_page<PageSize::_4K>(mapped, paddr, flags);
             break;
         case PageSize::_NULL:
-        default:
-            unexpect_return(ErrCode::INVALID_PTE);
+        default:              unexpect_return(ErrCode::INVALID_PTE);
     }
     void_return();
 }
