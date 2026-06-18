@@ -12,6 +12,7 @@
 #pragma once
 
 #include <sus/types.h>
+#include <mem/page_types.h>
 #include <sustcore/addr.h>
 #include <sustcore/boot.h>
 #include <sustcore/errcode.h>
@@ -71,6 +72,7 @@ template <typename T>
 concept ArchPageManTrait_RWX = requires(bool r, bool w, bool x, T::RWX rwx) {
     // RWX 枚举类型
     std::is_scoped_enum_v<typename T::RWX>;
+    requires std::same_as<typename T::RWX, PageRWX>;
     // 对RWX的构造
     {
         T::rwx(r, w, x)
@@ -143,6 +145,7 @@ template <typename T>
 concept ArchPageManTrait_PageFlags =
     requires(typename T::PageFlags flags, typename T::RWX rwx) {
         typename T::PageFlags;
+        requires std::same_as<typename T::PageFlags, ::PageFlags>;
         {
             typename T::PageFlags{rwx, true, false, true}
         };
@@ -165,6 +168,7 @@ template <typename T>
 concept ArchPageManTrait_Modifier =
     requires(bool r, bool w, bool x, bool u, bool g, bool p) {
         std::is_scoped_enum_v<typename T::Modifier>;
+        requires std::same_as<typename T::Modifier, PageModifier>;
         {
             T::make_mask(r, w, x, u, g, p)
         } -> std::same_as<typename T::Modifier>;

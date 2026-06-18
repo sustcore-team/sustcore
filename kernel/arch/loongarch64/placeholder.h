@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arch/trait.h>
+#include <mem/page_types.h>
 #include <sustcore/addr.h>
 
 namespace la64 {
@@ -11,37 +12,10 @@ namespace la64 {
 
     class PageMan {
     public:
-        enum class RWX : umb_t {
-            P    = 0,
-            R    = 1,
-            W    = 2,
-            X    = 4,
-            RO   = R,
-            RW   = R | W,
-            RX   = R | X,
-            RWX  = R | W | X,
-            NONE = 0,
-        };
-
-        enum class Modifier : umb_t {
-            NONE = 0,
-            R    = 1,
-            W    = 2,
-            X    = 4,
-            U    = 8,
-            G    = 16,
-            P    = 32,
-            RWX  = R | W | X,
-            ALL  = R | W | X | U | G | P,
-        };
+        using RWX      = PageRWX;
+        using Modifier = PageModifier;
         enum class PageSize { _NULL, _4K };
-
-        struct PageFlags {
-            RWX rwx;
-            bool u;
-            bool g;
-            bool p;
-        };
+        using PageFlags = ::PageFlags;
 
         union PTE {
             umb_t value;
@@ -54,39 +28,30 @@ namespace la64 {
         };
 
         static constexpr RWX rwx(bool r, bool w, bool x) {
-            return r ? (w ? (x ? RWX::RWX : RWX::RW) : (x ? RWX::RX : RWX::RO))
-                     : RWX::P;
+            return page_rwx(r, w, x);
         }
         static constexpr bool is_readable(RWX rwx) {
-            return rwx == RWX::RO || rwx == RWX::RW || rwx == RWX::RX ||
-                   rwx == RWX::RWX;
+            return page_is_readable(rwx);
         }
         static constexpr bool is_writable(RWX rwx) {
-            return rwx == RWX::RW || rwx == RWX::RWX;
+            return page_is_writable(rwx);
         }
         static constexpr bool is_executable(RWX rwx) {
-            return rwx == RWX::RX || rwx == RWX::RWX;
+            return page_is_executable(rwx);
         }
         static constexpr size_t psize(PageSize) {
             return PAGESIZE;
         }
         static constexpr PageFlags page_flags(RWX rwx, bool u, bool g,
                                               bool p = true) {
-            return PageFlags{
-                .rwx = rwx,
-                .u   = u,
-                .g   = g,
-                .p   = p,
-            };
+            return make_page_flags(rwx, u, g, p);
         }
         static constexpr Modifier make_mask(bool r, bool w, bool x, bool u,
                                             bool g, bool p) {
-            return static_cast<Modifier>((r ? 1 : 0) | (w ? 2 : 0) |
-                                         (x ? 4 : 0) | (u ? 8 : 0) |
-                                         (g ? 16 : 0) | (p ? 32 : 0));
+            return make_page_modifier(r, w, x, u, g, p);
         }
         static constexpr Modifier make_mask(b64 mask) {
-            return static_cast<Modifier>(mask);
+            return make_page_modifier(mask);
         }
         static constexpr RWX rwx(PTE) {
             return RWX::P;
@@ -113,7 +78,7 @@ namespace la64 {
             return false;
         }
         static constexpr RWX without_write(RWX rwx) {
-            return rwx;
+            return ::without_write(rwx);
         }
         static void set_cow(PTE *, bool);
         static void protect_cow(PTE *, RWX) {}

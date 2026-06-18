@@ -16,6 +16,7 @@
 #include <arch/trait.h>
 #include <logger.h>
 #include <mem/gfp.h>
+#include <mem/page_types.h>
 #include <sus/logger.h>
 #include <sus/types.h>
 #include <sustcore/addr.h>
@@ -25,63 +26,15 @@
 #include <cstring>
 
 namespace la64 {
-    enum class LA64RWX : umb_t {
-        P    = 0b000,
-        R    = 0b001,
-        W    = 0b010,
-        X    = 0b100,
-        RO   = R,
-        RW   = R | W,
-        RX   = R | X,
-        RWX  = R | W | X,
-        NONE = 0b000,
-    };
-
-    constexpr bool operator&(LA64RWX lhs, LA64RWX rhs) {
-        return (static_cast<umb_t>(lhs) & static_cast<umb_t>(rhs)) != 0;
-    }
-
-    constexpr LA64RWX operator|(LA64RWX lhs, LA64RWX rhs) {
-        return static_cast<LA64RWX>(static_cast<umb_t>(lhs) |
-                                    static_cast<umb_t>(rhs));
-    }
-
-    constexpr umb_t rwx_cast(LA64RWX rwx) {
+    constexpr umb_t rwx_cast(PageRWX rwx) {
         return static_cast<umb_t>(rwx);
-    }
-
-    enum class LA64Modifier : umb_t {
-        NONE = 0b000000,
-        R    = 0b000001,
-        W    = 0b000010,
-        X    = 0b000100,
-        U    = 0b001000,
-        G    = 0b010000,
-        P    = 0b100000,
-        RWX  = R | W | X,
-        ALL  = R | W | X | U | G | P,
-    };
-
-    constexpr bool operator&(LA64Modifier lhs, LA64Modifier rhs) {
-        return (static_cast<umb_t>(lhs) & static_cast<umb_t>(rhs)) != 0;
-    }
-
-    constexpr LA64Modifier operator|(LA64Modifier lhs, LA64Modifier rhs) {
-        return static_cast<LA64Modifier>(static_cast<umb_t>(lhs) |
-                                         static_cast<umb_t>(rhs));
     }
 
     class PageMan {
     public:
-        using RWX      = LA64RWX;
-        using Modifier = LA64Modifier;
-
-        struct PageFlags {
-            RWX rwx;
-            bool u;
-            bool g;
-            bool p;
-        };
+        using RWX       = PageRWX;
+        using Modifier  = PageModifier;
+        using PageFlags = ::PageFlags;
 
         enum class PageSize { _NULL, _4K, _2M, _1G };
 
@@ -153,38 +106,24 @@ namespace la64 {
         }
 
         static constexpr RWX rwx(bool r, bool w, bool x) {
-            if (r && w && x)
-                return RWX::RWX;
-            else if (r && w)
-                return RWX::RW;
-            else if (r && x)
-                return RWX::RX;
-            else if (r)
-                return RWX::RO;
-            else
-                return RWX::P;
+            return page_rwx(r, w, x);
         }
 
         static constexpr bool is_readable(RWX rwx) {
-            return rwx & RWX::R;
+            return page_is_readable(rwx);
         }
 
         static constexpr bool is_writable(RWX rwx) {
-            return rwx & RWX::W;
+            return page_is_writable(rwx);
         }
 
         static constexpr bool is_executable(RWX rwx) {
-            return rwx & RWX::X;
+            return page_is_executable(rwx);
         }
 
         static constexpr PageFlags page_flags(RWX rwx, bool u, bool g,
                                               bool p = true) {
-            return PageFlags{
-                .rwx = rwx,
-                .u   = u,
-                .g   = g,
-                .p   = p,
-            };
+            return make_page_flags(rwx, u, g, p);
         }
 
         static constexpr size_t psize(PageSize size) {
@@ -207,25 +146,11 @@ namespace la64 {
 
         static constexpr Modifier make_mask(bool r, bool w, bool x, bool u,
                                             bool g, bool p) {
-            Modifier mask = Modifier::NONE;
-            if (r)
-                mask = mask | Modifier::R;
-            if (w)
-                mask = mask | Modifier::W;
-            if (x)
-                mask = mask | Modifier::X;
-            if (u)
-                mask = mask | Modifier::U;
-            if (g)
-                mask = mask | Modifier::G;
-            if (p)
-                mask = mask | Modifier::P;
-            return mask;
+            return make_page_modifier(r, w, x, u, g, p);
         }
 
         static constexpr Modifier make_mask(b64 mask) {
-            return make_mask(mask & 0b000001, mask & 0b000010, mask & 0b000100,
-                             mask & 0b001000, mask & 0b010000, mask & 0b100000);
+            return make_page_modifier(mask);
         }
 
         [[nodiscard]]
@@ -289,11 +214,7 @@ namespace la64 {
         }
 
         static constexpr RWX without_write(RWX rwx) {
-            switch (rwx) {
-                case RWX::RW:  return RWX::RO;
-                case RWX::RWX: return RWX::RX;
-                default:       return rwx;
-            }
+            return ::without_write(rwx);
         }
 
         static void set_cow(PTE *pte, bool cow);

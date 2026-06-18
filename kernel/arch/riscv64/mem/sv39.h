@@ -15,6 +15,7 @@
 #include <arch/trait.h>
 #include <logger.h>
 #include <mem/gfp.h>
+#include <mem/page_types.h>
 #include <sus/logger.h>
 #include <sus/types.h>
 #include <sustcore/addr.h>
@@ -24,85 +25,32 @@
 #include <cstring>
 
 namespace rv64 {
-    enum class SV39RWX : umb_t {
-        // 基本权限
-        P    = 0b000,
-        R    = 0b001,
-        W    = 0b010,
-        X    = 0b100,
-        // 组合权限
-        RO   = R,
-        RW   = R | W,
-        RX   = R | X,
-        RWX  = R | W | X,
-        // 空
-        NONE = 0b000,
-    };
-
-    constexpr bool operator&(SV39RWX lhs, SV39RWX rhs) {
-        return (static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs)) != 0;
-    }
-
-    constexpr SV39RWX operator|(SV39RWX lhs, SV39RWX rhs) {
-        return static_cast<SV39RWX>(static_cast<uint8_t>(lhs) |
-                                    static_cast<uint8_t>(rhs));
-    }
-
-    constexpr umb_t rwx_cast(SV39RWX rwx) {
+    constexpr umb_t rwx_cast(PageRWX rwx) {
         switch (rwx) {
-            case SV39RWX::P:   return 0b000;
-            case SV39RWX::R:   return 0b001;
-            case SV39RWX::W:   return 0b010;
-            case SV39RWX::RW:  return 0b011;
-            case SV39RWX::X:   return 0b100;
-            case SV39RWX::RX:  return 0b101;
-            case SV39RWX::RWX: return 0b111;
+            case PageRWX::P:   return 0b000;
+            case PageRWX::R:   return 0b001;
+            case PageRWX::W:   return 0b010;
+            case PageRWX::RW:  return 0b011;
+            case PageRWX::X:   return 0b100;
+            case PageRWX::RX:  return 0b101;
+            case PageRWX::RWX: return 0b111;
             default:           return 0b000;  // 非法组合, 设置为P
         }
     }
 
-    constexpr bool operator==(SV39RWX lhs, umb_t rhs) {
+    constexpr bool operator==(PageRWX lhs, umb_t rhs) {
         return rwx_cast(lhs) == rhs;
     }
 
-    constexpr bool operator==(umb_t lhs, SV39RWX rhs) {
+    constexpr bool operator==(umb_t lhs, PageRWX rhs) {
         return rwx_cast(rhs) == lhs;
-    }
-
-    enum class SV39Modifier : umb_t {
-        // 基本修改器
-        NONE = 0b000000,
-        R    = 0b000001,
-        W    = 0b000010,
-        X    = 0b000100,
-        U    = 0b001000,
-        G    = 0b010000,
-        P    = 0b100000,
-        // 常用组合
-        RWX  = R | W | X,
-        ALL  = R | W | X | U | G | P,
-    };
-
-    constexpr bool operator&(SV39Modifier lhs, SV39Modifier rhs) {
-        return (static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs)) != 0;
-    }
-
-    constexpr SV39Modifier operator|(SV39Modifier lhs, SV39Modifier rhs) {
-        return static_cast<SV39Modifier>(static_cast<uint8_t>(lhs) |
-                                         static_cast<uint8_t>(rhs));
     }
 
     class SV39PageMan {
     public:
-        using RWX = SV39RWX;
-        using Modifier = SV39Modifier;
-
-        struct PageFlags {
-            RWX rwx;
-            bool u;
-            bool g;
-            bool p;
-        };
+        using RWX       = PageRWX;
+        using Modifier  = PageModifier;
+        using PageFlags = ::PageFlags;
 
         static Result<PhyAddr> new_page(void) {
             return GFP::get_free_page(1);
@@ -121,39 +69,25 @@ namespace rv64 {
 
         // 构造RWX
         static constexpr RWX rwx(bool r, bool w, bool x) {
-            if (r && w && x)
-                return RWX::RWX;
-            else if (r && w)
-                return RWX::RW;
-            else if (r && x)
-                return RWX::RX;
-            else if (r)
-                return RWX::RO;
-            else
-                return RWX::P;
+            return page_rwx(r, w, x);
         }
 
         // RWX信息萃取
         static constexpr bool is_readable(RWX rwx) {
-            return rwx & SV39RWX::R;
+            return page_is_readable(rwx);
         }
 
         static constexpr bool is_writable(RWX rwx) {
-            return rwx & SV39RWX::W;
+            return page_is_writable(rwx);
         }
 
         static constexpr bool is_executable(RWX rwx) {
-            return rwx & SV39RWX::X;
+            return page_is_executable(rwx);
         }
 
         static constexpr PageFlags page_flags(RWX rwx, bool u, bool g,
                                               bool p = true) {
-            return PageFlags{
-                .rwx = rwx,
-                .u   = u,
-                .g   = g,
-                .p   = p,
-            };
+            return make_page_flags(rwx, u, g, p);
         }
 
         enum class PageSize { _NULL, _4K, _2M, _1G };
@@ -259,11 +193,7 @@ namespace rv64 {
         }
 
         static constexpr RWX without_write(RWX rwx) {
-            switch (rwx) {
-                case RWX::RW:  return RWX::RO;
-                case RWX::RWX: return RWX::RX;
-                default:       return rwx;
-            }
+            return ::without_write(rwx);
         }
 
         static void set_cow(PTE *pte, bool cow) {
@@ -300,25 +230,11 @@ namespace rv64 {
 
         static constexpr Modifier make_mask(bool r, bool w, bool x, bool u,
                                             bool g, bool p) {
-            Modifier mask = Modifier::NONE;
-            if (r)
-                mask = mask | Modifier::R;
-            if (w)
-                mask = mask | Modifier::W;
-            if (x)
-                mask = mask | Modifier::X;
-            if (u)
-                mask = mask | Modifier::U;
-            if (g)
-                mask = mask | Modifier::G;
-            if (p)
-                mask = mask | Modifier::P;
-            return mask;
+            return make_page_modifier(r, w, x, u, g, p);
         }
 
         static constexpr Modifier make_mask(b64 mask) {
-            return make_mask(mask & 0b000001, mask & 0b000010, mask & 0b000100,
-                             mask & 0b001000, mask & 0b010000, mask & 0b100000);
+            return make_page_modifier(mask);
         }
 
         // 页表管理操作
