@@ -17,6 +17,7 @@
 #include <arch/trait.h>
 #include <sus/types.h>
 
+#include <concepts>
 #include <cstddef>
 
 namespace rv64 {
@@ -24,7 +25,7 @@ namespace rv64 {
         umb_t ra;
         umb_t _sp;
         umb_t gp;
-        umb_t _tp;
+        umb_t tp;
         umb_t t0;
         umb_t t1;
         umb_t t2;
@@ -56,10 +57,16 @@ namespace rv64 {
         csr_sstatus_t sstatus;
         umb_t kstack_sp;
 
+        [[nodiscard]]
         constexpr umb_t &pc() {
             return sepc;
         }
+        [[nodiscard]]
+        constexpr const umb_t &pc() const {
+            return sepc;
+        }
 
+        [[nodiscard]]
         constexpr umb_t &sp() {
             return _sp;
         }
@@ -69,19 +76,15 @@ namespace rv64 {
             return _sp;
         }
 
+        [[nodiscard]]
         constexpr umb_t &kstack_top() {
             return kstack_sp;
         }
 
-        constexpr umb_t &tp() {
-            return _tp;
-        }
-
         [[nodiscard]]
-        constexpr const umb_t &tp() const {
-            return _tp;
+        constexpr const umb_t &kstack_top() const {
+            return kstack_sp;
         }
-
         [[nodiscard]]
         constexpr static size_t size_bytes() noexcept {
             return CTX_SLOT_OFFSET(CTX_SLOT_COUNT);
@@ -89,9 +92,23 @@ namespace rv64 {
 
         constexpr void setup_regs(bool smode, bool sie, bool spie) {
             ra           = 0;
+            
             sstatus.spp  = smode;
             sstatus.sie  = sie;
             sstatus.spie = spie;
+        }
+
+        template <SetupCase setcase>
+        constexpr void setup_regs() {
+            if constexpr (setcase == SetupCase::UTHREAD_TRAMPOLINE) {
+                setup_regs(true, false, true);
+            } else if constexpr (setcase == SetupCase::USER_THREAD) {
+                setup_regs(false, false, true);
+            } else if constexpr (setcase == SetupCase::KTHREAD) {
+                setup_regs(true, true, false);
+            } else {
+                static_assert(setupcase_dependent_false<setcase>, "Invalid case!");
+            }
         }
     };
 
@@ -101,7 +118,7 @@ namespace rv64 {
     static_assert(offsetof(Context, ra) == CTX_SLOT_OFFSET(CTX_RA_SLOT));
     static_assert(offsetof(Context, _sp) == CTX_SLOT_OFFSET(CTX_SP_SLOT));
     static_assert(offsetof(Context, gp) == CTX_SLOT_OFFSET(CTX_GP_SLOT));
-    static_assert(offsetof(Context, _tp) == CTX_SLOT_OFFSET(CTX_TP_SLOT));
+    static_assert(offsetof(Context, tp) == CTX_SLOT_OFFSET(CTX_TP_SLOT));
     static_assert(offsetof(Context, a0) == CTX_SLOT_OFFSET(CTX_A0_SLOT));
     static_assert(offsetof(Context, a7) == CTX_SLOT_OFFSET(CTX_A7_SLOT));
     static_assert(offsetof(Context, sepc) == CTX_SLOT_OFFSET(CTX_SEPC_SLOT));

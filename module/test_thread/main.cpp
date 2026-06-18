@@ -23,7 +23,9 @@ constexpr size_t PROGRESS_GAP      = 1000;
 constexpr size_t NUMBER_GAP        = 100;
 
 static void init_thread_gp() {
+#if defined(__ARCH_riscv64__)
     asm volatile("la gp, __global_pointer$" ::: "gp");
+#endif
 }
 
 static void finish_once(const char *who) {

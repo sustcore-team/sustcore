@@ -69,9 +69,7 @@ ifneq ($(architecture),loongarch64)
 endif
 	$(q)$(MAKE) -f $(library-component-makefile.basecpp) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.basecpp) $(arg-basic) build-basecpp-kernel
-ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(library-component-makefile.kmod) $(arg-basic) build
-endif
 # 	$(q)$(MAKE) -f $(library-component-makefile.rpc) $(arg-basic) build
 	$(q)$(MAKE) -f $(library-component-makefile.libfdt) $(arg-basic) build
 	$(q)echo "All libraries built successfully."
@@ -86,7 +84,6 @@ kernel/feature.mk: FORCE $(config-json) kernel/feature.json tools/feature_gen/fe
 	$(q)python3 tools/feature_gen/feature_gen.py kernel/feature.json kernel/feature.mk $(config-json) $(config-arch-override)
 
 build-mods: build-libs
-ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(module-component-makefile.default) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.init) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_endpoint_master) $(arg-basic) build
@@ -101,10 +98,8 @@ ifneq ($(architecture),loongarch64)
 	$(q)$(MAKE) -f $(module-component-makefile.test_file_rw_a) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_file_rw_b) $(arg-basic) build
 	$(q)echo "All modules built successfully."
-endif
 
 make-initrd:
-ifneq ($(architecture),loongarch64)
 	$(call if_mkdir, $(path-initrd))
 	$(q)$(rm) -rf $(path-initrd)/src
 	$(call if_mkdir, $(path-initrd)/src)
@@ -115,19 +110,12 @@ ifneq ($(architecture),loongarch64)
 	cp -r ./script/ $(path-initrd)/src/script/
 	cp -r ./tools/ $(path-initrd)/src/tools/
 	$(q)echo "initrd path created"
-endif
 
 build-kernel:
-ifneq ($(architecture),loongarch64)
 	$(q)$(copy) ./LICENSE $(path-initrd)/license
-endif
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile $(arg-basic) build
 
-ifeq ($(architecture),loongarch64)
-build: build-libs build-kernel
-else
 build: make-initrd build-mods build-kernel
-endif
 
 mount:
 	$(q)$(MAKE) -f $(path-script)/image/Makefile.image global-env=$(global-env) loop=$(loop-b) start-image

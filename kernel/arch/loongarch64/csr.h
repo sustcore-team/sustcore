@@ -178,14 +178,13 @@ __OPCSR__ csr_ecfg_t csr_xchg_ecfg(csr_ecfg_t ecfg) {
 union csr_estat_t {
     csr_t value;
     struct {
-        uint64_t is0 : 2;      // [1:0] 软件中断SW10/SW11
-        uint64_t is12_2 : 11;  // [12:2] 其他中断状态
-        uint64_t rsvd0 : 1;    // [13]
-        uint64_t msgint : 1;   // [14] 消息中断
-        uint64_t rsvd1 : 1;    // [15]
-        uint64_t ecode : 6;    // [21:16] 例外一级编码
-        uint64_t esub : 9;     // [30:22] 例外二级编码
-        uint64_t rsvd2 : 33;   // [63:31]
+        uint64_t is : 13;     // [0:12] 中断状态位
+        uint64_t rsvd0 : 1;   // [13]
+        uint64_t msgint : 1;  // [14] 消息中断
+        uint64_t rsvd1 : 1;   // [15]
+        uint64_t ecode : 6;   // [21:16] 例外一级编码
+        uint64_t esub : 9;    // [30:22] 例外二级编码
+        uint64_t rsvd2 : 33;  // [63:31]
     } PACKED;
 };
 __OPCSR__ void csr_set_estat(csr_estat_t estat) {

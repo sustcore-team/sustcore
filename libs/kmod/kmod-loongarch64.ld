@@ -1,6 +1,6 @@
 /* default module linker script */
 ENTRY(_start)
-OUTPUT_ARCH(riscv)
+OUTPUT_ARCH(loongarch64)
 
 BASE_ADDRESS = 0x80000000;
 
@@ -26,9 +26,6 @@ SECTIONS
 	.data : {
 		*(.data .data.*)
 		*(.sdata .sdata.*)
-
-		. = ALIGN(8);
-		PROVIDE(__global_pointer$ = . + 0x800);
 
 		. = ALIGN(8);
 		PROVIDE(__preinit_array_start = .);

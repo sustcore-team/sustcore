@@ -10,7 +10,12 @@
  */
 
 #include <arch/loongarch64/mem/pageman.h>
+#include <arch/loongarch64/device/clock.h>
+#include <arch/loongarch64/device/platform.h>
 #include <arch/loongarch64/trait.h>
+#include <device/int.h>
+#include <device/model.h>
+#include <device/platform.h>
 #include <env.h>
 #include <logger.h>
 #include <sus/logger.h>
@@ -52,13 +57,59 @@ void EarlySerial::serial_write_string(size_t len, const char *str) {
 }
 
 extern "C" void c_setup_main(size_t boot_hart_id, BootInfoHeader *bootinfo) {
-    // TODO: figure out how to get the correct hart id
-    boot_hart_id = 0;
     bind_current_hart(boot_hart_id);
     bootinfo_ptr = bootinfo;
 
     loggers::SUSTCORE::INFO("进入 LoongArch64 内核 C 入口点! hart id: %d", boot_hart_id);
     env_setup();
+    while (true) {
+    }
+}
+
+void Initialization::pre_init(void) {}
+
+void Initialization::post_init(void) {}
+
+Result<void> Initialization::init_clock() {
+    auto &device_model = device::DeviceModel::inst();
+    auto &irqman       = device_model.interrupt();
+    auto *ctx          = env::hart_ctx;
+    assert(ctx != nullptr);
+
+    auto *platform = device_model.platform();
+    if (platform == nullptr) {
+        loggers::SUSTCORE::ERROR("全局 Platform 不可用!");
+        unexpect_return(ErrCode::NULLPTR);
+    }
+    assert(platform->is<la64::LoongArch64Platform>());
+
+    auto *clock_source =
+        platform->as<la64::LoongArch64Platform>()->clock_source();
+    if (clock_source == nullptr) {
+        loggers::SUSTCORE::ERROR("全局 ClockSource 不可用!");
+        unexpect_return(ErrCode::NULLPTR);
+    }
+
+    auto clock_virq = device_model.clock_virq();
+    if (clock_virq == 0) {
+        loggers::SUSTCORE::ERROR("DeviceModel 未提供有效 clock_virq");
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    ctx->alarm()       = new la64::CSRTimer(clock_source, clock_virq);
+    ctx->time_keeper() = new device::TimeKeeper(clock_source, ctx->alarm());
+    auto enable_timer_res = irqman.enable_irq(clock_virq);
+    if (!enable_timer_res.has_value()) {
+        loggers::SUSTCORE::ERROR("启用 LoongArch timer 中断失败!");
+        propagate_return(enable_timer_res);
+    }
+
+    loggers::SUSTCORE::INFO("hart %u 已初始化 CSRTimer",
+                            static_cast<unsigned>(ctx->hart_id()));
+    void_return();
+}
+
+void Idle::idle() {
     while (true) {
     }
 }

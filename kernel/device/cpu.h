@@ -32,7 +32,7 @@ namespace device {
         /**
          * @brief 缓存层级枚举.
          */
-        enum class Level { L1I, L1D, L2, L3 };
+        enum class Level { EMPTY, L1I, L1D, L2, L3 };
         Level level;
         size_t size;       // 大小
         size_t line_size;  // 缓存行
@@ -205,10 +205,106 @@ namespace device {
         };
     };
 
+    class LoongArch64Cpu : public Cpu {
+    public:
+        [[nodiscard]]
+        CpuType type_id() const override {
+            return CpuType::LOONGARCH64;
+        }
+
+        virtual ~LoongArch64Cpu() override;
+
+        [[nodiscard]]
+        cpuid_t id() const noexcept override;
+
+        [[nodiscard]]
+        std::string model() const override;
+
+        [[nodiscard]]
+        units::frequency frequency() const noexcept override;
+
+        [[nodiscard]]
+        CpuPowerState state() const noexcept override {
+            return CpuPowerState::ONLINE;
+        }
+
+        [[nodiscard]]
+        std::vector<CacheInfo> caches() const override;
+
+        [[nodiscard]]
+        std::string mmu_type() const override;
+
+        [[nodiscard]]
+        Result<void> start() override {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+
+        [[nodiscard]]
+        Result<void> stop() override {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+
+        [[nodiscard]]
+        Result<void> send_ipi() override {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+
+        [[nodiscard]]
+        std::string isa_string() const;
+
+        [[nodiscard]]
+        driver::intc_t local_intc() const noexcept override;
+
+    private:
+        cpuid_t _id;
+        std::string _model;
+        units::frequency _frequency;
+        std::string _isa_string;
+        std::string _mmu_type;
+        std::vector<CacheInfo> _caches;
+        driver::intc_t _local_intc;
+
+        LoongArch64Cpu(cpuid_t id, std::string model, units::frequency freq,
+                       std::string isa_string, std::string mmu_type,
+                       std::vector<CacheInfo> caches,
+                       driver::intc_t local_intc) noexcept;
+
+    public:
+        class Builder {
+        private:
+            std::optional<cpuid_t> _id;
+            std::optional<std::string> _model;
+            std::optional<units::frequency> _frequency;
+            std::optional<std::string> _isa_string;
+            std::optional<std::string> _mmu_type;
+            std::vector<CacheInfo> _caches;
+            std::optional<driver::intc_t> _local_intc;
+
+        public:
+            Builder &id(cpuid_t cpu_id) noexcept;
+            Builder &model(std::string model);
+            Builder &frequency(units::frequency frequency) noexcept;
+            Builder &isa_string(std::string isa_string);
+            Builder &mmu_type(std::string mmu_type);
+            Builder &caches(std::vector<CacheInfo> caches);
+            Builder &local_intc(driver::intc_t local_intc) noexcept;
+
+            [[nodiscard]]
+            Result<util::owner<LoongArch64Cpu *>> build() const;
+        };
+    };
+
     /**
      * @brief CPU 拓扑层级.
      */
-    enum class CpuTopoLevel { THREAD, CORE, CLUSTER, PACKAGE, NUMA };
+    enum class CpuTopoLevel {
+        THREAD  = 0,
+        CORE    = 1,
+        CLUSTER = 2,
+        PACKAGE = 3,
+        SOCKET  = 3,
+        NUMA    = 4
+    };
 
     /**
      * @brief CPU 拓扑节点.

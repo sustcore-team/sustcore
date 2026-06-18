@@ -302,6 +302,7 @@ namespace key {
 }  // namespace key
 
 Result<void> init_scheduler() {
+    loggers::SUSTCORE::INFO("创建 KERNEL 进程");
     auto kernel_res = task::TaskManager::inst().create_kernel_task();
     if (!kernel_res.has_value()) {
         loggers::SUSTCORE::ERROR("创建KERNEL进程失败! 错误码: %s",
@@ -309,6 +310,7 @@ Result<void> init_scheduler() {
         propagate_return(kernel_res);
     }
 
+    loggers::SUSTCORE::INFO("创建 IDLE 线程");
     auto idle_res = task::TaskManager::inst().create_idle_thread();
     if (!idle_res.has_value()) {
         loggers::SUSTCORE::ERROR("创建idle内核线程失败! 错误码: %s",
@@ -316,6 +318,7 @@ Result<void> init_scheduler() {
         propagate_return(idle_res);
     }
 
+    loggers::SUSTCORE::INFO("创建 KINIT 线程");
     auto kinit_res = task::TaskManager::inst().create_kinit_thread();
     if (!kinit_res.has_value()) {
         loggers::SUSTCORE::ERROR("创建 kinit 内核线程失败! 错误码: %s",

@@ -129,6 +129,7 @@ namespace {
     }
 
     Result<void> init_vfs() {
+        loggers::SUSTCORE::INFO("初始化块设备管理器与VFS");
         blk::BlkManager::init();
         VFS::init();
         auto &vfs = VFS::inst();
@@ -142,6 +143,7 @@ namespace {
         register_res = vfs.register_fs<devfs::DevFSDriver>();
         propagate(register_res);
 
+        loggers::SUSTCORE::INFO("创建 Initrd 块设备");
         g_initrd_device = make_initrd();
         auto devno_res =
             blk::BlkManager::inst().register_device(util::nnullforce(
@@ -150,11 +152,16 @@ namespace {
             propagate_return(devno_res);
         }
 
+        loggers::SUSTCORE::INFO("挂载 tmpfs");
         auto mount_res = vfs.mount("tmpfs", "/", nullptr);
         propagate(mount_res);
+        loggers::SUSTCORE::INFO("tmpfs 挂载完毕");
+
+        loggers::SUSTCORE::INFO("挂载 tarfs");
         mount_res = vfs.mount("tarfs", devno_res.value(), INITRD_PATH,
                               MountFlags::NONE, nullptr);
         propagate(mount_res);
+        loggers::SUSTCORE::INFO("tarfs 挂载完毕");
 
         // TODO: 挂载一个 sysfs, 此处先使用 mkdir 来处理
         auto cur_pcb = schd::Scheduler::inst().current_pcb();
@@ -164,6 +171,7 @@ namespace {
         }
         auto &cur_holder = *cur_pcb->cholder;
 
+        loggers::SUSTCORE::INFO("创建 /sys/ 目录");
         auto open_res = 
             vfs.open_dir("/", cur_holder, perm::vdir::EXEC | perm::vdir::READ | perm::vdir::WRITE);
         propagate(open_res);
@@ -180,8 +188,10 @@ namespace {
         remove_res = cur_holder.remove(mkdir_res.value());
         propagate(remove_res);
 
+        loggers::SUSTCORE::INFO("挂载 devfs");
         mount_res = vfs.mount("devfs", devfs::DEVFS_MOUNT_PATH, nullptr);
         propagate(mount_res);
+        loggers::SUSTCORE::INFO("devfs 挂载完毕");
         void_return();
     }
 
@@ -193,12 +203,12 @@ namespace {
         propagate(activate_res);
 
         // 开始注册各个设备驱动
-        auto register_res = driver::DriverModel::inst().register_factory(
-            util::owner<driver::IDeviceFactory *>(
-                new driver::SerialDeviceFactory()));
-        propagate(register_res);
+        // auto register_res = driver::DriverModel::inst().register_factory(
+        //     util::owner<driver::IDeviceFactory *>(
+        //         new driver::SerialDeviceFactory()));
+        // propagate(register_res);
 
-        register_res = driver::DriverModel::inst().register_factory(
+        auto register_res = driver::DriverModel::inst().register_factory(
             util::owner<driver::IDeviceFactory *>(
                 new driver::GoldfishRTCFactory()));
         propagate(register_res);

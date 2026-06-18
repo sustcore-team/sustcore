@@ -11,8 +11,9 @@
 
 #pragma once
 
-#include <arch/trait.h>
+#include <arch/loongarch64/csrnum.h>
 #include <arch/loongarch64/mem/paging.h>
+#include <arch/trait.h>
 #include <logger.h>
 #include <mem/gfp.h>
 #include <sus/logger.h>
@@ -84,8 +85,41 @@ namespace la64 {
 
         enum class PageSize { _NULL, _4K, _2M, _1G };
 
+        constexpr static umb_t PLV0 = 0;  // kernel
+        constexpr static umb_t PLV1 = 1;
+        constexpr static umb_t PLV2 = 2;
+        constexpr static umb_t PLV3 = 3;  // user
+
+        // 内存访问类型 (MAT) 枚举定义
+        // 强序非缓存 (Strong-Ordered Uncacheable)
+        constexpr static umb_t MAT_SO = 0;
+        // 一致可缓存 (Coherent Cacheable)
+        constexpr static umb_t MAT_CC = 1;
+        // 弱序非缓存 (Weakly-Ordered Uncacheable)
+        constexpr static umb_t MAT_WO = 2;
+        // 保留 (Reserved)
+        constexpr static umb_t MAT_RS = 3;
+
         union PTE {
             umb_t value;
+            struct {
+                bool v : 1;     // 0 (valid)
+                bool d : 1;     // 1 (dirty)
+                umb_t plv : 2;  // 2-3
+                umb_t mat : 2;  // 4-5
+                bool g : 1;     // 6 (global)
+                bool p : 1;     // 7 (present)
+                bool w : 1;     // 8 (write)
+                umb_t : 3;      // 9-11
+                // 12-47 Physical Frame Number
+                // you can set pfn just by (value |= addr & PAGE_ADDR_MASK)
+                umb_t ppn : 36;
+                umb_t : 11;     // 48-58
+                umb_t rsw : 2;  // reserved for software 59-60
+                bool nr : 1;    // not read 61
+                bool nx : 1;    // not execute 62
+                bool rplv : 1;  // rplv 63
+            } basic;
         };
 
         struct QueryResult {
@@ -96,18 +130,9 @@ namespace la64 {
         static constexpr size_t PAGE_LEVELS     = 4;
         static constexpr size_t PAGE_BITS       = 12;
         static constexpr size_t PAGE_INDEX_BITS = 9;
-        static constexpr umb_t PAGE_ADDR_MASK   = LA_PPN_MASK;
-        static constexpr umb_t PAGE_VALID       = LA_PAGE_VALID;
-        static constexpr umb_t PAGE_DIRTY       = LA_PAGE_DIRTY;
-        static constexpr umb_t PAGE_CACHE_CC    = LA_PAGE_CACHE_CC;
-        static constexpr umb_t PAGE_GLOBAL      = LA_PAGE_GLOBAL;
-        static constexpr umb_t PAGE_PRESENT     = LA_PAGE_PRESENT;
-        static constexpr umb_t PAGE_WRITE       = LA_PAGE_WRITE;
-        static constexpr umb_t PAGE_MODIFIED    = LA_PAGE_MODIFIED;
-        static constexpr umb_t PAGE_USER        = 0xCU;
-        static constexpr umb_t PAGE_NO_READ     = 1ULL << 61;
-        static constexpr umb_t PAGE_NO_EXEC     = 1ULL << 62;
-        static constexpr umb_t PAGE_COW         = 1ULL << 10;
+
+        static constexpr umb_t PAGE_ADDR_MASK = LA_PPN_MASK;
+        static_assert((((1ULL << 36) - 1) << 12) == LA_PPN_MASK);
 
         static constexpr size_t PTE_CNT = PAGESIZE / sizeof(PTE);
 
@@ -203,14 +228,22 @@ namespace la64 {
                              mask & 0b001000, mask & 0b010000, mask & 0b100000);
         }
 
+        [[nodiscard]]
+        static constexpr PTE make_pte_bits(umb_t raw) noexcept {
+            return PTE{.value = raw};
+        }
+
+        [[nodiscard]]
+        static constexpr umb_t pte_bits(PTE pte) noexcept {
+            return pte.value;
+        }
+
         static constexpr bool pte_is_table(PTE pte) {
-            return (pte.value & PAGE_ADDR_MASK) != 0 &&
-                   (pte.value & PAGE_PRESENT) == 0;
+            return get_physical_address(pte).nonnull() && !pte.basic.p;
         }
 
         static constexpr bool pte_is_large(PTE pte) {
-            return (pte.value & (PAGE_PRESENT | PAGE_GLOBAL)) ==
-                   (PAGE_PRESENT | PAGE_GLOBAL);
+            return pte.basic.p && pte.basic.g;
         }
 
         static constexpr bool pte_exists(PTE pte) {
@@ -218,30 +251,29 @@ namespace la64 {
         }
 
         static constexpr RWX rwx(PTE pte) {
-            if ((pte.value & PAGE_PRESENT) == 0) {
+            if (!pte.basic.p) {
                 return RWX::P;
             }
-            bool r = (pte.value & PAGE_NO_READ) == 0;
-            bool w = (pte.value & PAGE_WRITE) != 0;
-            bool x = (pte.value & PAGE_NO_EXEC) == 0;
+            bool r = !pte.basic.nr;
+            bool w = pte.basic.w;
+            bool x = !pte.basic.nx;
             return rwx(r, w, x);
         }
 
         static constexpr bool is_present(PTE pte) {
-            return (pte.value & (PAGE_VALID | PAGE_PRESENT)) ==
-                   (PAGE_VALID | PAGE_PRESENT);
+            return pte.basic.v && pte.basic.p;
         }
 
         static constexpr bool is_user_accessible(PTE pte) {
-            return (pte.value & PAGE_USER) == PAGE_USER;
+            return pte.basic.plv == PLV3;
         }
 
         static constexpr bool is_global(PTE pte) {
-            return (pte.value & PAGE_GLOBAL) != 0;
+            return pte.basic.g;
         }
 
         static constexpr bool is_valid(PTE pte) {
-            return (pte.value & PAGE_VALID) != 0;
+            return pte.basic.v;
         }
 
         static inline PhyAddr get_physical_address(PTE pte) {
@@ -249,11 +281,11 @@ namespace la64 {
         }
 
         static constexpr bool is_dirty(PTE pte) {
-            return (pte.value & PAGE_DIRTY) != 0;
+            return pte.basic.d;
         }
 
         static constexpr bool is_cow(PTE pte) {
-            return (pte.value & PAGE_COW) != 0;
+            return (pte.basic.rsw & 0b01U) != 0;
         }
 
         static constexpr RWX without_write(RWX rwx) {
@@ -287,33 +319,18 @@ namespace la64 {
             return (1UL << PAGE_INDEX_BITS) - 1;
         }
 
-        static constexpr umb_t base_leaf_flags() {
-            return PAGE_VALID | PAGE_PRESENT | PAGE_CACHE_CC | PAGE_MODIFIED;
-        }
-
-        static constexpr umb_t flags_to_leaf_bits(PageFlags flags) {
-            umb_t bits = base_leaf_flags();
-            if (!is_readable(flags.rwx)) {
-                bits |= PAGE_NO_READ;
-            }
-            if (is_writable(flags.rwx)) {
-                bits |= PAGE_WRITE | PAGE_DIRTY;
-            }
-            if (!is_executable(flags.rwx)) {
-                bits |= PAGE_NO_EXEC;
-            }
-            if (flags.u) {
-                bits |= PAGE_USER;
-            } else {
-                bits |= PAGE_GLOBAL;
-            }
-            if (flags.g) {
-                bits |= PAGE_GLOBAL;
-            }
-            if (!flags.p) {
-                bits &= ~PAGE_PRESENT;
-            }
-            return bits;
+        static constexpr void init_leaf_flags(PTE &pte, PageFlags flags) {
+            pte.basic.v    = true;
+            pte.basic.d    = true;
+            pte.basic.plv  = flags.u ? PLV3 : PLV0;
+            pte.basic.mat  = MAT_CC;
+            pte.basic.g    = flags.g;
+            pte.basic.p    = flags.p;
+            pte.basic.w    = is_writable(flags.rwx);
+            pte.basic.rsw  = 0;
+            pte.basic.nr   = !is_readable(flags.rwx);
+            pte.basic.nx   = !is_executable(flags.rwx);
+            pte.basic.rplv = false;
         }
 
         static constexpr umb_t to_rwx_mask(Modifier modifier) {
@@ -384,7 +401,8 @@ namespace la64 {
                     }
                     PhyAddr new_pt = new_page_res.value();
                     make_root(new_pt);
-                    pte.value = new_pt.arith() & PAGE_ADDR_MASK;
+                    pte = {};
+                    set_paddr(&pte, new_pt);
                 } else if (!pte_is_table(pte)) {
                     loggers::PAGING::ERROR(
                         "LoongArch64 页表路径被叶子映射占用");
@@ -399,7 +417,8 @@ namespace la64 {
                 return;
             }
 
-            target_pte->value = (paddr.arith() & PAGE_ADDR_MASK);
+            *target_pte = {};
+            set_paddr(target_pte, paddr);
             modify_pte<Modifier::ALL>(target_pte, flags);
             loggers::PAGING::DEBUG(
                 "LoongArch64 映射完成: va=%p pa=%p rwx=%lu u=%d g=%d p=%d",
@@ -445,7 +464,7 @@ namespace la64 {
                                                 flags);
                         current_vaddr += size_1g;
                         current_paddr += size_1g;
-                        remaining -= size_1g;
+                        remaining     -= size_1g;
                     } else if (remaining >= size_2m &&
                                current_vaddr.aligned<size_2m>() &&
                                current_paddr.aligned<size_2m>())
@@ -454,13 +473,13 @@ namespace la64 {
                                                 flags);
                         current_vaddr += size_2m;
                         current_paddr += size_2m;
-                        remaining -= size_2m;
+                        remaining     -= size_2m;
                     } else {
                         map_page<PageSize::_4K>(current_vaddr, current_paddr,
                                                 flags);
                         current_vaddr += PAGESIZE;
                         current_paddr += PAGESIZE;
-                        remaining -= PAGESIZE;
+                        remaining     -= PAGESIZE;
                     }
                 }
             }
@@ -496,40 +515,24 @@ namespace la64 {
                 if constexpr (modifier & Modifier::X) {
                     x = is_executable(flags.rwx);
                 }
-                pte->value &=
-                    ~(PAGE_NO_READ | PAGE_WRITE | PAGE_DIRTY | PAGE_NO_EXEC);
-                if (!r) {
-                    pte->value |= PAGE_NO_READ;
-                }
-                if (w) {
-                    pte->value |= PAGE_WRITE | PAGE_DIRTY;
-                }
-                if (!x) {
-                    pte->value |= PAGE_NO_EXEC;
-                }
+                pte->basic.nr = !r;
+                pte->basic.w  = w;
+                pte->basic.d  = w ? true : pte->basic.d;
+                pte->basic.nx = !x;
             }
             if constexpr (modifier & Modifier::U) {
-                if (flags.u) {
-                    pte->value |= PAGE_USER;
-                } else {
-                    pte->value &= ~PAGE_USER;
-                }
+                pte->basic.plv = flags.u ? PLV3 : PLV0;
             }
             if constexpr (modifier & Modifier::G) {
-                if (flags.g) {
-                    pte->value |= PAGE_GLOBAL;
-                } else {
-                    pte->value &= ~PAGE_GLOBAL;
-                }
+                pte->basic.g = flags.g;
             }
             if constexpr (modifier & Modifier::P) {
-                if (flags.p) {
-                    pte->value |= PAGE_PRESENT;
-                } else {
-                    pte->value &= ~PAGE_PRESENT;
-                }
+                pte->basic.p = flags.p;
             }
-            pte->value |= PAGE_VALID | PAGE_CACHE_CC | PAGE_MODIFIED;
+            pte->basic.v    = true;
+            pte->basic.d    = true;
+            pte->basic.mat  = MAT_CC;
+            pte->basic.rplv = false;
         }
 
         template <Modifier modifier>

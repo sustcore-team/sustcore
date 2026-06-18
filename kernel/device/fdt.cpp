@@ -18,6 +18,8 @@
 #include <arch/riscv64/intc.h>
 #include <arch/riscv64/plic.h>
 #elif defined(__ARCH_loongarch64__)
+#include <arch/loongarch64/cpuic.h>
+#include <arch/loongarch64/device/platform.h>
 #include <arch/loongarch64/fdt_helper.h>
 #endif
 #include <device/fdt.h>
@@ -66,6 +68,8 @@ namespace {
     constexpr const char *INTERRUPT_CELLS_PROP  = "#interrupt-cells";
     constexpr const char *CPU_MAP_NODE          = "cpu-map";
     constexpr const char *RISCV_NDEV_PROP       = "riscv,ndev";
+    constexpr const char *LOONGARCH_CPUIC_COMPATIBLE =
+        "loongson,cpu-interrupt-controller";
 
     constexpr const char *OKAY_STATUS        = "okay";
     constexpr const char *MEMORY_DEVICE_TYPE = "memory";
@@ -74,6 +78,7 @@ namespace {
     constexpr const char *PLIC_COMPATIBLE    = "riscv,plic0";
     constexpr size_t CLINT_MAX_HW_IRQ        = 16;
     constexpr size_t MAX_PLIC_IRQS           = 256;
+    constexpr uint64_t LOONGARCH_TIMER_FREQ_HZ       = 100000000ULL;
 
     constexpr const char *RESERVED_MEMORY_PATH = "/reserved-memory";
     constexpr const char *CPUS_PATH            = "/cpus";
@@ -566,13 +571,22 @@ namespace {
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
 
-        // 解析 ISA 与本地中断控制器.
+        std::string isa_string{};
+        std::string mmu_type{};
+        fdt::phandle_t local_intc_phandle = 0;
+        fdt::phandle_t cpu_intc_phandle   = 0;
+
+#if defined(__ARCH_riscv64__)
         auto isa_it = cpu_node.properties.find(RISCV_ISA_PROP);
         if (isa_it == cpu_node.properties.end()) {
             loggers::DEVICE::ERROR("CPU 节点 %s 缺少 riscv,isa 属性",
                                    cpu_node.name.c_str());
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
+        isa_string = isa_it->second->as_string();
+        mmu_type   = cpu_node.properties.contains(MMU_TYPE_PROP)
+                         ? cpu_node.properties.at(MMU_TYPE_PROP)->as_string()
+                         : "";
 
         auto local_intc = find_local_intc_phandle(cpu_node);
         if (!local_intc.has_value()) {
@@ -580,17 +594,30 @@ namespace {
                                    cpu_node.name.c_str());
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
+        local_intc_phandle = *local_intc;
+        cpu_intc_phandle   = *local_intc;
+#elif defined(__ARCH_loongarch64__)
+        auto *root = cpu_node.parent != nullptr ? cpu_node.parent->parent : nullptr;
+        auto *cpuic_node =
+            root != nullptr && root->children.contains("cpuic")
+                ? root->children.at("cpuic").get()
+                : nullptr;
+        if (cpuic_node == nullptr || cpuic_node->phandle == 0) {
+            loggers::DEVICE::ERROR("LoongArch CPU 缺少可用 cpuic 节点");
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+        local_intc_phandle = cpuic_node->phandle;
+        cpu_intc_phandle   = cpuic_node->phandle;
+#endif
 
         ParsedCpu parsed{
             .id                 = static_cast<device::cpuid_t>(*reg_value),
             .model              = fallback_cpu_model(cpu_node),
-            .isa_string         = isa_it->second->as_string(),
-            .mmu_type           = cpu_node.properties.contains(MMU_TYPE_PROP)
-                                      ? cpu_node.properties.at(MMU_TYPE_PROP)->as_string()
-                                      : "",
+            .isa_string         = std::move(isa_string),
+            .mmu_type           = std::move(mmu_type),
             .cpu_phandle        = cpu_node.phandle,
-            .local_intc_phandle = *local_intc,
-            .cpu_intc_phandle   = *local_intc,
+            .local_intc_phandle = local_intc_phandle,
+            .cpu_intc_phandle   = cpu_intc_phandle,
         };
         return parsed;
     }
@@ -1269,7 +1296,68 @@ namespace fdt {
             const FDTProvider *_provider = nullptr;
         };
 
- #endif
+#elif defined(__ARCH_loongarch64__)
+        class LoongArchCpuICIrqFactory final : public device::IIrqChipFactory {
+        public:
+            [[nodiscard]]
+            std::string_view compatible() const noexcept override {
+                return LOONGARCH_CPUIC_COMPATIBLE;
+            }
+
+            [[nodiscard]]
+            Result<DriverBase *> create(
+                const device::DeviceNode &node,
+                device::DeviceModel &model) const override {
+                if (_provider == nullptr ||
+                    std::strcmp(node.platform(), "fdt") != 0)
+                {
+                    unexpect_return(ErrCode::INVALID_PARAM);
+                }
+
+                auto &fdt_node = static_cast<const FDTDeviceNode &>(node);
+                auto device_owner_res = la64::CpuICChip::create(
+                    driver::DriverBase::DevRes(node, {}, {}),
+                    fdt_node.raw_node().phandle != 0
+                        ? static_cast<intc_t>(fdt_node.raw_node().phandle)
+                        : device::INVALID_ICTRL_ID,
+                    0);
+                propagate(device_owner_res);
+
+                auto &cpuic = *device_owner_res.value();
+                auto domain_res = model.interrupt().get_domain(cpuic.identifier());
+                propagate(domain_res);
+                auto *platform = model.platform();
+                if (platform != nullptr && platform->is<la64::LoongArch64Platform>()) {
+                    platform->as<la64::LoongArch64Platform>()->set_global_intc(
+                        cpuic.identifier());
+                }
+                if (fdt_node.raw_node().phandle != 0) {
+                    auto irq_domain_res = _provider->register_irq_domain_view(
+                        fdt_node.raw_node().phandle, domain_res.value().get());
+                    propagate(irq_domain_res);
+                }
+
+                for (driver::hwirq_t hwirq = 0;
+                     hwirq < la64::CpuICChip::MAX_HW_IRQ; ++hwirq)
+                {
+                    auto virq_res = model.interrupt().allocate_virq(
+                        domain_res.value().get().id(), hwirq);
+                    propagate(virq_res);
+                    if (hwirq == la64::CpuICChip::TIMER_IRQ) {
+                        model.set_clock_virq(virq_res.value());
+                    }
+                }
+                return static_cast<DriverBase *>(device_owner_res.value().get());
+            }
+
+            void bind_provider(const FDTProvider &provider) noexcept {
+                _provider = &provider;
+            }
+
+        private:
+            const FDTProvider *_provider = nullptr;
+        };
+#endif
     }  // namespace
 
     /**
@@ -1319,6 +1407,15 @@ namespace fdt {
         [[maybe_unused]] auto plic_res =
             driver::DriverModel::inst().register_factory(
                 util::owner<driver::IIrqChipFactory *>(plic_factory));
+#elif defined(__ARCH_loongarch64__)
+        auto *cpuic_factory = new LoongArchCpuICIrqFactory();
+        if (cpuic_factory == nullptr) {
+            return;
+        }
+        cpuic_factory->bind_provider(*this);
+        [[maybe_unused]] auto cpuic_res =
+            driver::DriverModel::inst().register_factory(
+                util::owner<driver::IIrqChipFactory *>(cpuic_factory));
 #endif
     }
 
@@ -1621,6 +1718,7 @@ namespace fdt {
             return;
         }
 
+#if defined(__ARCH_riscv64__)
         auto freq_prop_it = cpus_node->properties.find(TIMEBASE_FREQ_PROP);
         if (freq_prop_it == cpus_node->properties.end()) {
             loggers::DEVICE::WARN(
@@ -1635,14 +1733,19 @@ namespace fdt {
             return;
         }
 
-#if defined(__ARCH_riscv64__)
         auto freq = units::frequency::from_hz(timebase_freq);
         model.set_platform(util::owner<device::Platform *>(
             new riscv::Riscv64Platform(freq)));
         loggers::DEVICE::INFO("已创建 Riscv64Platform, timebase-frequency=%lluHz",
                               static_cast<unsigned long long>(freq.to_hz()));
+#elif defined(__ARCH_loongarch64__)
+        auto freq = units::frequency::from_hz(LOONGARCH_TIMER_FREQ_HZ);
+        model.set_platform(util::owner<device::Platform *>(
+            new la64::LoongArch64Platform(freq)));
+        loggers::DEVICE::INFO(
+            "已创建 LoongArch64Platform, timer-frequency=%lluHz",
+            static_cast<unsigned long long>(freq.to_hz()));
 #else
-        (void)timebase_freq;
 #endif
     }
 
@@ -1728,6 +1831,7 @@ namespace fdt {
                           });
 
         // 收集每个 CPU 的本地中断节点, 后续由 register_intcs() 统一建域.
+#if defined(__ARCH_riscv64__)
         for (const auto &parsed : parsed_cpus) {
             Node *intc_node =
                 _config.get_node_by_phandle(parsed.cpu_intc_phandle);
@@ -1745,11 +1849,13 @@ namespace fdt {
                 .name = "riscv,cpu-intc",
             });
         }
+#endif
 
         // 构造 CPU 对象列表.
         std::vector<device::cpuid_t> cpu_ids;
         cpu_ids.reserve(parsed_cpus.size());
         for (const auto &parsed : parsed_cpus) {
+#if defined(__ARCH_riscv64__)
             auto cpu_res = device::RiscV64Cpu::Builder()
                                .id(parsed.id)
                                .model(parsed.model)
@@ -1766,6 +1872,29 @@ namespace fdt {
             }
             cpu_ids.push_back(parsed.id);
             cpus.cpus.emplace_back(cpu_res.value().get());
+#elif defined(__ARCH_loongarch64__)
+            auto cpu_res = device::LoongArch64Cpu::Builder()
+                               .id(parsed.id)
+                               .model("Loongson-3A5000")
+                               .frequency(cpu_frequency)
+                               .isa_string("")
+                               .mmu_type("")
+                               .caches({device::CacheInfo{
+                                   .level     = device::CacheInfo::Level::EMPTY,
+                                   .size      = 0,
+                                   .line_size = 0,
+                               }})
+                               .local_intc(static_cast<intc_t>(
+                                   parsed.cpu_intc_phandle))
+                               .build();
+            if (!cpu_res.has_value()) {
+                loggers::DEVICE::ERROR("构建 CPU %u 失败: %s", parsed.id,
+                                       to_cstring(cpu_res.error()));
+                return;
+            }
+            cpu_ids.push_back(parsed.id);
+            cpus.cpus.emplace_back(cpu_res.value().get());
+#endif
         }
 
         auto cpu_map_it = cpus_node->children.find(CPU_MAP_NODE);

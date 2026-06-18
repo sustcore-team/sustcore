@@ -14,6 +14,8 @@
 #include <driver/int/base.h>
 #if defined(__ARCH_riscv64__)
 #include <arch/riscv64/device/clock.h>
+#elif defined(__ARCH_loongarch64__)
+#include <arch/loongarch64/device/clock.h>
 #endif
 
 namespace device {
@@ -36,5 +38,7 @@ namespace device {
     using driver::IrqManager;
 #if defined(__ARCH_riscv64__)
     using ClintAlarm = riscv::ClintAlarm;
+#elif defined(__ARCH_loongarch64__)
+    using CSRTimer = la64::CSRTimer;
 #endif
 }  // namespace device

@@ -52,18 +52,18 @@ namespace task {
                                void *kstack_top) noexcept {
             assert(ctx != nullptr);
             *ctx = {};
-            ctx->setup_regs(false, false, true);
+            ctx->template setup_regs<SetupCase::USER_THREAD>();
             ctx->pc()         = reinterpret_cast<umb_t>(entrypoint);
             ctx->sp()         = reinterpret_cast<umb_t>(stack_top);
             ctx->kstack_top() = reinterpret_cast<umb_t>(kstack_top);
         }
 
+        template <SetupCase setcase>
         void init_kernel_context(Context *ctx, void *entrypoint, void *arg0,
-                                 void *stack_top, bool sie,
-                                 bool spie) noexcept {
+                                 void *stack_top) noexcept {
             assert(ctx != nullptr);
             *ctx = {};
-            ctx->setup_regs(true, sie, spie);
+            ctx->template setup_regs<setcase>();
             ctx->sp() = reinterpret_cast<umb_t>(stack_top);
             ctx->ra   = reinterpret_cast<umb_t>(entrypoint);
             ctx->s0   = reinterpret_cast<umb_t>(arg0);
@@ -83,16 +83,18 @@ namespace task {
             auto *user_ctx = tcb->push<Context>();
             init_user_context(user_ctx, entrypoint, user_stack_top,
                               tcb->kstack_top());
-            init_kernel_context(tcb->kernel_context_ptr(),
-                                reinterpret_cast<void *>(&new_utask_trampoline),
-                                user_ctx, tcb->kstack_top(), false, true);
+            init_kernel_context<SetupCase::UTHREAD_TRAMPOLINE>(
+                tcb->kernel_context_ptr(),
+                reinterpret_cast<void *>(&new_utask_trampoline), user_ctx,
+                tcb->kstack_top());
         }
 
         void build_kernel_context(util::nonnull<TCB *> tcb, void *entrypoint,
                                   void *arg0) noexcept {
             tcb->reset_kstack();
-            init_kernel_context(tcb->kernel_context_ptr(), entrypoint, arg0,
-                                tcb->kstack_top(), true, false);
+            init_kernel_context<SetupCase::KTHREAD>(
+                tcb->kernel_context_ptr(), entrypoint, arg0,
+                tcb->kstack_top());
         }
     }  // namespace
 
@@ -1276,10 +1278,10 @@ namespace task {
                       .ret0      = 0,
                       .ret1      = static_cast<b64>(ErrCode::SUCCESS),
                   });
-        init_kernel_context(child_tcb->kernel_context_ptr(),
-                            reinterpret_cast<void *>(&new_utask_trampoline),
-                            child_user_ctx, child_tcb->kstack_top(), false,
-                            true);
+        init_kernel_context<SetupCase::UTHREAD_TRAMPOLINE>(
+            child_tcb->kernel_context_ptr(),
+            reinterpret_cast<void *>(&new_utask_trampoline), child_user_ctx,
+            child_tcb->kstack_top());
         child_tcb->boot_role  = parent_tcb->schd_class == schd::ClassType::INIT
                                     ? BootThreadRole::NONE
                                     : parent_tcb->boot_role;

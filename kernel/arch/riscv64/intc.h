@@ -66,6 +66,16 @@ namespace riscv {
                                  driver::IrqTrigger trigger) noexcept override;
 
         [[nodiscard]]
+        Result<void> post_timer() noexcept {
+            return post(CLOCK_LOCAL_IRQ);
+        }
+
+        [[nodiscard]]
+        Result<void> post_external() noexcept {
+            return post(EXTERNAL_LOCAL_IRQ);
+        }
+
+        [[nodiscard]]
         Result<void> post(driver::hwirq_t hw_irq) noexcept {
             auto virq_res = _domain->to_virq(hw_irq);
             propagate(virq_res);

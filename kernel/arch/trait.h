@@ -260,6 +260,11 @@ concept ArchPageManTrait = requires(T root, size_t size, VirAddr vaddr,
     } -> std::same_as<void>;
 };
 
+enum class SetupCase { UTHREAD_TRAMPOLINE, USER_THREAD, KTHREAD };
+
+template <SetupCase setcase>
+inline static constexpr bool setupcase_dependent_false = false;
+
 template <typename T>
 concept ContextTrait = requires(T *ctx, void *context) {
     {
@@ -271,6 +276,15 @@ concept ContextTrait = requires(T *ctx, void *context) {
     {
         ctx->kstack_top()
     } -> std::same_as<umb_t &>;
+    {
+        ctx->template setup_regs<SetupCase::UTHREAD_TRAMPOLINE>()
+    } -> std::same_as<void>;
+    {
+        ctx->template setup_regs<SetupCase::USER_THREAD>()
+    } -> std::same_as<void>;
+    {
+        ctx->template setup_regs<SetupCase::KTHREAD>()
+    } -> std::same_as<void>;
 };
 
 // 中断管理器 Trait

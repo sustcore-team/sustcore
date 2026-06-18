@@ -50,6 +50,8 @@
 #define CTX_S7_SLOT     29
 #define CTX_S8_SLOT     30
 #define CTX_ERA_SLOT    31
-#define CTX_ESTAT_SLOT  32
-#define CTX_KSTACK_SLOT 33
-#define CTX_SLOT_COUNT  34
+#define CTX_CRMD_SLOT   32
+#define CTX_PRMD_SLOT   33
+#define CTX_ESTAT_SLOT  34
+#define CTX_KSTACK_SLOT 35
+#define CTX_SLOT_COUNT  36

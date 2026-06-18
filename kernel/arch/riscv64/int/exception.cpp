@@ -9,8 +9,8 @@
  *
  */
 
-#include <arch/riscv64/csr.h>
 #include <arch/riscv64/callconv.h>
+#include <arch/riscv64/csr.h>
 #include <arch/riscv64/intc.h>
 #include <arch/riscv64/trait.h>
 #include <device/model.h>
@@ -172,6 +172,74 @@ namespace exception {
         }
     }
 
+    void dump_regs(const Context *ctx) {
+        if (ctx == nullptr) {
+            loggers::EXCEPTION::ERROR("regs: ctx=null");
+            return;
+        }
+
+        loggers::EXCEPTION::ERROR(
+            "regs: ra=0x%016lx  sp=0x%016lx  gp=0x%016lx tp=0x%016lx", ctx->ra,
+            ctx->sp(), ctx->gp, ctx->tp);
+        loggers::EXCEPTION::ERROR(
+            "regs: t0=0x%016lx  t1=0x%016lx  t2=0x%016lx s0=0x%016lx", ctx->t0,
+            ctx->t1, ctx->t2, ctx->s0);
+        loggers::EXCEPTION::ERROR(
+            "regs: s1=0x%016lx  a0=0x%016lx  a1=0x%016lx a2=0x%016lx", ctx->s1,
+            ctx->a0, ctx->a1, ctx->a2);
+        loggers::EXCEPTION::ERROR(
+            "regs: a3=0x%016lx  a4=0x%016lx  a5=0x%016lx a6=0x%016lx", ctx->a3,
+            ctx->a4, ctx->a5, ctx->a6);
+        loggers::EXCEPTION::ERROR(
+            "regs: a7=0x%016lx  s2=0x%016lx  s3=0x%016lx s4=0x%016lx", ctx->a7,
+            ctx->s2, ctx->s3, ctx->s4);
+        loggers::EXCEPTION::ERROR(
+            "regs: s5=0x%016lx  s6=0x%016lx  s7=0x%016lx s8=0x%016lx", ctx->s5,
+            ctx->s6, ctx->s7, ctx->s8);
+        loggers::EXCEPTION::ERROR(
+            "regs: s9=0x%016lx s10=0x%016lx s11=0x%016lx t3=0x%016lx", ctx->s9,
+            ctx->s10, ctx->s11, ctx->t3);
+        loggers::EXCEPTION::ERROR("regs: t4=0x%016lx  t5=0x%016lx  t6=0x%016lx",
+                                  ctx->t4, ctx->t5, ctx->t6);
+    }
+
+    [[noreturn]]
+    void unrecoverable(csr_scause_t scause, umb_t stval, const Context *ctx) {
+        loggers::EXCEPTION::ERROR("=======UNRECOVERABLE EXCEPTION===========");
+        loggers::EXCEPTION::ERROR("cause=%s(%lu), stval=0x%016lx",
+                                  exception_name(scause.cause), scause.cause,
+                                  stval);
+        if (ctx == nullptr) {
+            loggers::EXCEPTION::ERROR("ctx: null");
+        } else {
+            loggers::EXCEPTION::ERROR(
+                "ctx: sstatus=0x%016lx, sepc=0x%016lx, kstack_top=%p",
+                ctx->sstatus.value, ctx->sepc,
+                reinterpret_cast<void *>(ctx->kstack_top()));
+        }
+
+        if (task::TaskManager::initialized()) {
+            if (!schd::Scheduler::initialized()) {
+                loggers::EXCEPTION::ERROR("task: scheduler not initialized");
+            } else {
+                auto *tcb = schd::Scheduler::inst().current_tcb();
+                if (tcb == nullptr) {
+                    loggers::EXCEPTION::ERROR("task: none");
+                } else {
+                    loggers::EXCEPTION::ERROR(
+                        "task: pid=%lu, tid=%lu",
+                        tcb->task != nullptr ? tcb->task->pid : 0, tcb->tid);
+                }
+            }
+        }
+
+        dump_regs(ctx);
+        loggers::EXCEPTION::ERROR(
+            "=======UNRECOVERABLE EXCEPTION END===========");
+        while (true) {
+        }
+    }
+
     void log_current_task_error() {
         if (!schd::Scheduler::initialized()) {
             loggers::EXCEPTION::ERROR("task: scheduler not initialized");
@@ -192,7 +260,8 @@ namespace exception {
     void log_trap_context_error(csr_scause_t scause, umb_t sepc, umb_t stval,
                                 const Context *ctx) {
         loggers::EXCEPTION::ERROR(
-            "trap: cause=%s(%lu), scause=0x%lx, sepc=0x%lx, stval=0x%lx",
+            "trap: cause=%s(%lu), scause=0x%016lx, sepc=0x%016lx, "
+            "stval=0x%016lx",
             exception_name(scause.cause), scause.cause, scause.value, sepc,
             stval);
         if (ctx == nullptr) {
@@ -200,14 +269,14 @@ namespace exception {
             return;
         }
         loggers::EXCEPTION::ERROR(
-            "ctx: ptr=%p, mode=%s, sstatus=0x%lx, sp=0x%lx, ra=0x%lx", ctx,
-            privilege_name(ctx), ctx->sstatus.value, ctx->sp(), ctx->ra);
+            "ctx: ptr=%p, mode=%s, sstatus=0x%016lx, sp=0x%016lx, ra=0x%016lx",
+            ctx, privilege_name(ctx), ctx->sstatus.value, ctx->sp(), ctx->ra);
         loggers::EXCEPTION::ERROR(
-            "args: a0=0x%lx, a1=0x%lx, a2=0x%lx, a3=0x%lx",
-            ctx->a0, ctx->a1, ctx->a2, ctx->a3);
+            "args: a0=0x%016lx, a1=0x%016lx, a2=0x%016lx, a3=0x%016lx", ctx->a0,
+            ctx->a1, ctx->a2, ctx->a3);
         loggers::EXCEPTION::ERROR(
-            "args: a4=0x%lx, a5=0x%lx, a6=0x%lx, a7=0x%lx",
-            ctx->a4, ctx->a5, ctx->a6, ctx->a7);
+            "args: a4=0x%016lx, a5=0x%016lx, a6=0x%016lx, a7=0x%016lx", ctx->a4,
+            ctx->a5, ctx->a6, ctx->a7);
     }
 
     namespace paging {
@@ -227,7 +296,7 @@ namespace exception {
             auto qres        = query_res.value();
             PageMan::PTE pte = *qres.pte;
             loggers::EXCEPTION::DEBUG(
-                "pte: addr=%p, value=0x%lx, pa=%p, size=%s, rwx=0x%lx",
+                "pte: addr=%p, value=0x%016lx, pa=%p, size=%s, rwx=0x%016lx",
                 addr.addr(), pte.value,
                 PageMan::get_physical_address(pte).addr(),
                 page_size_name(qres.size), pte.rwx);
@@ -247,7 +316,7 @@ namespace exception {
             auto qres        = query_res.value();
             PageMan::PTE pte = *qres.pte;
             loggers::EXCEPTION::ERROR(
-                "pte: addr=%p, value=0x%lx, pa=%p, size=%s, rwx=0x%lx",
+                "pte: addr=%p, value=0x%016lx, pa=%p, size=%s, rwx=0x%016lx",
                 addr.addr(), pte.value,
                 PageMan::get_physical_address(pte).addr(),
                 page_size_name(qres.size), pte.rwx);
@@ -301,8 +370,7 @@ namespace exception {
          * @param pman 当前页表管理器.
          */
         static void log_paging_fault_error(csr_scause_t scause, umb_t sepc,
-                                           umb_t stval,
-                                           const Context *ctx,
+                                           umb_t stval, const Context *ctx,
                                            FaultCause cause, PageMan &pman) {
             VirAddr fault_addr = VirAddr(stval);
             loggers::EXCEPTION::ERROR(
@@ -312,6 +380,19 @@ namespace exception {
             log_trap_context_error(scause, sepc, stval, ctx);
             log_current_task_error();
             log_pte_error(fault_addr, pman);
+        }
+
+        [[noreturn]]
+        static void paging_unrecoverable(csr_scause_t scause, umb_t stval,
+                                         const Context *ctx, FaultCause cause,
+                                         PageMan &pman) {
+            VirAddr fault_addr = VirAddr(stval);
+            loggers::EXCEPTION::ERROR(
+                "paging fault: kind=%s, fault_cause=%s, addr=%p, page=%p",
+                page_fault_kind(scause.cause), fault_cause_name(cause),
+                fault_addr.addr(), fault_addr.page_align_down().addr());
+            log_pte_error(fault_addr, pman);
+            exception::unrecoverable(scause, stval, ctx);
         }
 
         /**
@@ -443,14 +524,13 @@ namespace exception {
          * @return true 异常已恢复, 可以继续执行.
          * @return false 异常不可恢复, 需由上层终止执行流.
          */
-        [[nodiscard]]
-        bool paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
+        void paging_fault(csr_scause_t scause, umb_t sepc, umb_t stval,
                           Context *ctx) {
             const VirAddr fault_addr = VirAddr(stval);
             const VirAddr fault_page = fault_addr.page_align_down();
             auto &e                  = env::inst();
             loggers::EXCEPTION::DEBUG(
-                "paging fault: kind=%s, addr=%p, page=%p, sepc=0x%lx",
+                "paging fault: kind=%s, addr=%p, page=%p, sepc=0x%016lx",
                 page_fault_kind(scause.cause), fault_addr.addr(),
                 fault_page.addr(), sepc);
             loggers::EXCEPTION::DEBUG("page fault env: pgd=%p, tm=%p",
@@ -461,7 +541,8 @@ namespace exception {
                 loggers::EXCEPTION::ERROR("page fault: 当前页表根为空");
                 log_trap_context_error(scause, sepc, stval, ctx);
                 log_current_task_error();
-                return false;
+                paging_unrecoverable(scause, stval, ctx, FaultCause::UNKNOWN,
+                                     pman);
             }
 
             FaultCause cause =
@@ -550,7 +631,7 @@ namespace exception {
                 case FaultCause::ACCESS_FAULT: {
                     loggers::EXCEPTION::ERROR(
                         "access fault is not recoverable: type=%s, addr=%p, "
-                        "sepc=0x%lx",
+                        "sepc=0x%016lx",
                         exception_name(scause.cause), fault_addr.addr(), sepc);
                     break;
                 }
@@ -615,10 +696,8 @@ namespace exception {
             }
 
             if (!processed) {
-                log_paging_fault_error(scause, sepc, stval, ctx, cause, pman);
+                paging_unrecoverable(scause, stval, ctx, cause, pman);
             }
-
-            return processed;
 
             // 接下来应该执行页异常相关处理
             // 1. 检查地址是否合法
@@ -658,15 +737,17 @@ namespace exception {
         assert(current_tcb != nullptr);
         syscall::ArgPack args = read_args(*ctx);
         loggers::SYSCALL::DEBUG(
-            "系统调用触发: name=%s, no=0x%lx, pid=%lu, tid=%lu",
+            "系统调用触发: name=%s, no=0x%016lx, pid=%lu, tid=%lu",
             syscall::name_of(args.syscall_number), args.syscall_number,
             current_tcb->task != nullptr ? current_tcb->task->pid : 0,
             current_tcb->tid);
         loggers::SYSCALL::DEBUG(
-            "系统调用参数: capidx=0x%lx, arg0=0x%lx, arg1=0x%lx, arg2=0x%lx",
+            "系统调用参数: capidx=0x%016lx, arg0=0x%016lx, arg1=0x%016lx, "
+            "arg2=0x%016lx",
             args.args[0], args.args[1], args.args[2], args.args[3]);
         loggers::SYSCALL::DEBUG(
-            "系统调用参数: arg3=0x%lx, arg4=0x%lx, arg5=0x%lx, sepc=0x%lx",
+            "系统调用参数: arg3=0x%016lx, arg4=0x%016lx, arg5=0x%016lx, "
+            "sepc=0x%016lx",
             args.args[4], args.args[5], args.args[6], sepc);
 
         ctx->sepc += 4;
@@ -684,8 +765,7 @@ namespace exception {
      * @param stval 异常关联值.
      * @param ctx trap 上下文.
      */
-    void exception(csr_scause_t scause, umb_t sepc, umb_t stval,
-                   Context *ctx) {
+    void dispatch(csr_scause_t scause, umb_t sepc, umb_t stval, Context *ctx) {
         bool processed = false;
         switch (scause.cause) {
             case ECALL_U: processed = on_ecall_u(sepc, ctx); break;
@@ -697,7 +777,8 @@ namespace exception {
             case STORE_PAGE_FAULT:
             case LOAD_ACCESS_FAULT:
             case STORE_ACCESS_FAULT:
-                processed = paging::paging_fault(scause, sepc, stval, ctx);
+                paging::paging_fault(scause, sepc, stval, ctx);
+                processed = true;
                 break;
             default:
                 loggers::EXCEPTION::ERROR("无异常处理程序!");
@@ -706,22 +787,13 @@ namespace exception {
         }
 
         if (!processed) {
-            loggers::EXCEPTION::ERROR("发生异常: %s (%lu), mode=%s",
-                                      exception_name(scause.cause),
-                                      scause.cause, privilege_name(ctx));
-            loggers::EXCEPTION::ERROR("无法处理该异常, 需终止相关进程");
-            if (!is_paging_related_exception(scause.cause)) {
-                log_trap_context_error(scause, sepc, stval, ctx);
-                log_current_task_error();
-            }
-            while (true);
+            unrecoverable(scause, stval, ctx);
         }
     }
 }  // namespace exception
 
 namespace interrupt {
-    void interrupt(csr_scause_t scause, umb_t sepc, umb_t stval,
-                   Context *ctx) {
+    void dispatch(csr_scause_t scause, umb_t sepc, umb_t stval, Context *ctx) {
         auto &irq_manager = device::DeviceModel::inst().interrupt();
         auto *cpu = env::hart_ctx != nullptr ? env::hart_ctx->cpu() : nullptr;
         if (cpu == nullptr) {
@@ -731,10 +803,6 @@ namespace interrupt {
 
         // scause.cause = hwirq
         driver::hwirq_t hwirq = scause.cause;
-        // 对于时钟中断要做特殊处理:
-        if (hwirq == riscv::IntC::CLOCK_LOCAL_IRQ_S) {
-            hwirq = riscv::IntC::CLOCK_LOCAL_IRQ;
-        }
 
         auto root_domain_res = irq_manager.get_domain(cpu->local_intc());
         if (!root_domain_res.has_value()) {
@@ -751,12 +819,28 @@ namespace interrupt {
             return;
         }
         auto &riscv_intc = static_cast<riscv::IntC &>(chip);
-        auto post_res    = riscv_intc.post(hwirq);
-        if (!post_res.has_value()) {
-            loggers::INTERRUPT::ERROR("中断分发失败: %s",
-                                      to_cstring(post_res.error()));
+        switch (hwirq) {
+            case riscv::IntC::CLOCK_LOCAL_IRQ_S: {
+                auto post_res = riscv_intc.post_timer();
+                if (!post_res.has_value()) {
+                    loggers::INTERRUPT::ERROR("中断分发失败: %s",
+                                              to_cstring(post_res.error()));
+                }
+                return;
+            }
+            case riscv::IntC::EXTERNAL_LOCAL_IRQ: {
+                auto post_res = riscv_intc.post_external();
+                if (!post_res.has_value()) {
+                    loggers::INTERRUPT::ERROR("中断分发失败: %s",
+                                              to_cstring(post_res.error()));
+                }
+                return;
+            }
+            default:
+                loggers::INTERRUPT::WARN("忽略未支持的本地中断 hwirq=%llu",
+                                         static_cast<unsigned long long>(hwirq));
+                return;
         }
-        return;
     }
 }  // namespace interrupt
 
@@ -782,10 +866,10 @@ extern "C" void handle_trap(csr_scause_t scause, umb_t sepc, umb_t stval,
         task::TaskManager::inst().reap_recycled();
     }
     if (scause.interrupt) {
-        interrupt::interrupt(scause, sepc, stval, ctx);
+        interrupt::dispatch(scause, sepc, stval, ctx);
     } else {
         // 异常
-        exception::exception(scause, sepc, stval, ctx);
+        exception::dispatch(scause, sepc, stval, ctx);
     }
 
     Interrupt::sti();
@@ -822,7 +906,7 @@ void Interrupt::init(void) {
         loggers::INTERRUPT::ERROR("错误: stvec地址未对齐!");
         return;
     }
-    loggers::INTERRUPT::DEBUG("isr_entry 地址: 0x%lx", isr_addr);
+    loggers::INTERRUPT::DEBUG("isr_entry 地址: 0x%016lx", isr_addr);
 
     // 写入stvec寄存器
     csr_set_stvec(stvec);

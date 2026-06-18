@@ -1,5 +1,6 @@
 #include <arch/loongarch64/csrnum.h>
 #include <arch/loongarch64/ctxlayout.h>
+#include "hart.S"
 #include <boot/laboot/bootinfo.h>
 
     .equ KERNEL_STACK_BYTES, 1024 * 64
@@ -16,10 +17,8 @@ _start:
     li.d $t0, MAX_HARTS
     bgeu $a0, $t0, .Linvalid_hart
 
-    la.local $t0, __hart_context
-    li.d $t1, HART_CONTEXT_SIZE
-    mul.d $t1, $a0, $t1
-    add.d $tp, $t0, $t1
+    locate_hart_context $a0, $t1
+    set_hart_id $a0
 
     la.local $sp, boot_stack_top
     la.local $t0, bootinfo_ptr

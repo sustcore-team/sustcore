@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <arch/loongarch64/csr.h>
 #include <arch/loongarch64/csrnum.h>
 #include <arch/loongarch64/ctxlayout.h>
 #include <arch/trait.h>
@@ -52,13 +53,21 @@ namespace la64 {
         umb_t s7;
         umb_t s8;
         umb_t era;
+        csr_crmd_t crmd;
+        csr_prmd_t prmd;
         umb_t estat;
         umb_t _kstack_top;
 
+        [[nodiscard]]
         constexpr umb_t &pc() {
             return era;
         }
+        [[nodiscard]]
+        constexpr const umb_t &pc() const {
+            return era;
+        }
 
+        [[nodiscard]]
         constexpr umb_t &sp() {
             return _sp;
         }
@@ -73,10 +82,38 @@ namespace la64 {
             return _kstack_top;
         }
 
+        [[nodiscard]]
+        constexpr const umb_t &kstack_top() const {
+            return _kstack_top;
+        }
+
         constexpr void setup_regs(bool smode, bool sie, bool spie) {
-            (void)smode;
-            (void)sie;
-            (void)spie;
+            ra         = 0;
+            crmd       = {};
+            prmd       = {};
+            crmd.plv   = PLV_KERNEL;
+            crmd.ie    = sie;
+            crmd.da    = 0;
+            crmd.pg    = 1;
+            crmd.datf  = 0b01;
+            crmd.datm  = 0b01;
+            crmd.we    = 0;
+            prmd.pplv  = smode ? PLV_KERNEL : PLV_USER;
+            prmd.pie   = spie;
+        }
+
+        template <SetupCase setcase>
+        constexpr void setup_regs() {
+            if constexpr (setcase == SetupCase::UTHREAD_TRAMPOLINE) {
+                setup_regs(true, false, true);
+            } else if constexpr (setcase == SetupCase::USER_THREAD) {
+                setup_regs(false, false, true);
+            } else if constexpr (setcase == SetupCase::KTHREAD) {
+                setup_regs(true, true, false);
+            } else {
+                static_assert(setupcase_dependent_false<setcase>,
+                              "Invalid case!");
+            }
         }
 
         [[nodiscard]]
@@ -98,5 +135,9 @@ namespace la64 {
     static_assert(offsetof(Context, fp) == CTX_SLOT_OFFSET(CTX_FP_SLOT));
     static_assert(offsetof(Context, s8) == CTX_SLOT_OFFSET(CTX_S8_SLOT));
     static_assert(offsetof(Context, era) == CTX_SLOT_OFFSET(CTX_ERA_SLOT));
+    static_assert(offsetof(Context, crmd) == CTX_SLOT_OFFSET(CTX_CRMD_SLOT));
+    static_assert(offsetof(Context, prmd) == CTX_SLOT_OFFSET(CTX_PRMD_SLOT));
     static_assert(offsetof(Context, estat) == CTX_SLOT_OFFSET(CTX_ESTAT_SLOT));
+    static_assert(offsetof(Context, _kstack_top) ==
+                  CTX_SLOT_OFFSET(CTX_KSTACK_SLOT));
 }  // namespace la64

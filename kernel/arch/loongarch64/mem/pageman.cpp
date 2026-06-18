@@ -110,9 +110,9 @@ void PageMan::set_cow(PTE *pte, bool cow) {
         return;
     }
     if (cow) {
-        pte->value |= PAGE_COW;
+        pte->basic.rsw |= 0b01U;
     } else {
-        pte->value &= ~PAGE_COW;
+        pte->basic.rsw &= ~0b01U;
     }
 }
 
@@ -120,8 +120,10 @@ void PageMan::set_paddr(PTE *pte, PhyAddr paddr) {
     if (pte == nullptr) {
         return;
     }
-    pte->value =
-        (pte->value & ~PAGE_ADDR_MASK) | (paddr.arith() & PAGE_ADDR_MASK);
+
+    umb_t new_val = paddr.arith() & PAGE_ADDR_MASK;
+    pte->value &= ~PAGE_ADDR_MASK;
+    pte->value |= new_val;
 }
 
 PhyAddr PageMan::read_root() {

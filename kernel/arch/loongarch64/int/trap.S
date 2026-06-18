@@ -1,5 +1,6 @@
 #include <arch/loongarch64/csrnum.h>
 #include <arch/loongarch64/ctxlayout.h>
+#include "../hart.S"
 
     .equ STACK_SIZE, CTX_SLOT_OFFSET(CTX_SLOT_COUNT)
 
@@ -17,19 +18,23 @@
 
 isr_entry:
 save_context:
-    csrwr $t1, CSR_SAVE1
-    csrwr $t2, CSR_SAVE2
-    csrwr $t3, CSR_SAVE3
+    csrwr $t0, CSR_SAVE1
+    csrwr $t1, CSR_SAVE2
 
+    csrrd $t0, CSR_PRMD
+    andi  $t0, $t0, 0x3
+    li.w  $t1, 3
+    bne   $t0, $t1, isr_sstks
     csrrd $t0, CSR_SAVE0
     beqz  $t0, isr_sstks
 
 isr_ustks:
     move  $t1, $sp
     move  $sp, $t0
-    csrwr $t1, CSR_SAVE0
     addi.d $sp, $sp, -STACK_SIZE
     ctx_store $sp, CTX_SP_SLOT, $t1
+    addi.d $t0, $sp, STACK_SIZE
+    ctx_store $sp, CTX_KSTACK_SLOT, $t0
     csrwr $zero, CSR_SAVE0
     b isr_sregs
 
@@ -37,16 +42,17 @@ isr_sstks:
     move  $t1, $sp
     addi.d $sp, $sp, -STACK_SIZE
     ctx_store $sp, CTX_SP_SLOT, $t1
+    ctx_store $sp, CTX_KSTACK_SLOT, $zero
 
 isr_sregs:
     ctx_store $sp, CTX_RA_SLOT, $ra
     ctx_store $sp, CTX_TP_SLOT, $tp
     csrrd $t0, CSR_SAVE1
-    ctx_store $sp, CTX_T1_SLOT, $t0
+    ctx_store $sp, CTX_T0_SLOT, $t0
     csrrd $t0, CSR_SAVE2
-    ctx_store $sp, CTX_T2_SLOT, $t0
-    csrrd $t0, CSR_SAVE3
-    ctx_store $sp, CTX_T3_SLOT, $t0
+    ctx_store $sp, CTX_T1_SLOT, $t0
+    ctx_store $sp, CTX_T2_SLOT, $t2
+    ctx_store $sp, CTX_T3_SLOT, $t3
     ctx_store $sp, CTX_A0_SLOT, $a0
     ctx_store $sp, CTX_A1_SLOT, $a1
     ctx_store $sp, CTX_A2_SLOT, $a2
@@ -55,7 +61,6 @@ isr_sregs:
     ctx_store $sp, CTX_A5_SLOT, $a5
     ctx_store $sp, CTX_A6_SLOT, $a6
     ctx_store $sp, CTX_A7_SLOT, $a7
-    ctx_store $sp, CTX_T0_SLOT, $t0
     ctx_store $sp, CTX_T4_SLOT, $t4
     ctx_store $sp, CTX_T5_SLOT, $t5
     ctx_store $sp, CTX_T6_SLOT, $t6
@@ -74,8 +79,14 @@ isr_sregs:
     ctx_store $sp, CTX_S8_SLOT, $s8
 
 isr_scsrs:
+    move  $t0, $zero
+    locate_hart_context $t0, $t1
     csrrd $t0, CSR_ERA
     ctx_store $sp, CTX_ERA_SLOT, $t0
+    csrrd $t0, CSR_CRMD
+    ctx_store $sp, CTX_CRMD_SLOT, $t0
+    csrrd $t0, CSR_PRMD
+    ctx_store $sp, CTX_PRMD_SLOT, $t0
     csrrd $t0, CSR_ESTAT
     ctx_store $sp, CTX_ESTAT_SLOT, $t0
 
@@ -88,9 +99,23 @@ __handle_trap:
 
 isr_exit:
 restore_context:
+    ctx_load $t0, $sp, CTX_PRMD_SLOT
+    andi  $t0, $t0, 0x3
+    li.w  $t1, 3
+    bne   $t0, $t1, restore_kernel_return
+    ctx_load $t0, $sp, CTX_KSTACK_SLOT
+    csrwr $t0, CSR_SAVE0
+    b isr_rcsrs
+
+restore_kernel_return:
+    csrwr $zero, CSR_SAVE0
+    b isr_rcsrs
+
+isr_rcsrs:
     ctx_load $t0, $sp, CTX_ERA_SLOT
     csrwr $t0, CSR_ERA
-
+    ctx_load $t0, $sp, CTX_PRMD_SLOT
+    csrwr $t0, CSR_PRMD
 isr_rregs:
     ctx_load $ra, $sp, CTX_RA_SLOT
     ctx_load $tp, $sp, CTX_TP_SLOT
@@ -122,7 +147,6 @@ isr_rregs:
     ctx_load $s6, $sp, CTX_S6_SLOT
     ctx_load $s7, $sp, CTX_S7_SLOT
     ctx_load $s8, $sp, CTX_S8_SLOT
-
 isr_rtn:
     ctx_load $sp, $sp, CTX_SP_SLOT
     ertn
@@ -131,14 +155,21 @@ isr_rtn:
     .type new_utask_trampoline, @function
 new_utask_trampoline:
     move $sp, $s0
-    b restore_context
+    ctx_load $t0, $sp, CTX_KSTACK_SLOT
+    csrwr $t0, CSR_SAVE0
+    b isr_rcsrs
 
     .globl __switch_to
     .type __switch_to, @function
 __switch_to:
+    // cli
+    csrrd $t0, CSR_CRMD
+    ori $t1, $zero, 0x4
+    andn $t0, $t0, $t1
+    csrwr $t0, CSR_CRMD
+
     ctx_store $a0, CTX_RA_SLOT, $ra
     ctx_store $a0, CTX_SP_SLOT, $sp
-    ctx_store $a0, CTX_TP_SLOT, $tp
     ctx_store $a0, CTX_FP_SLOT, $fp
     ctx_store $a0, CTX_S0_SLOT, $s0
     ctx_store $a0, CTX_S1_SLOT, $s1
@@ -152,7 +183,6 @@ __switch_to:
 
     ctx_load $ra, $a1, CTX_RA_SLOT
     ctx_load $sp, $a1, CTX_SP_SLOT
-    ctx_load $tp, $a1, CTX_TP_SLOT
     ctx_load $fp, $a1, CTX_FP_SLOT
     ctx_load $s0, $a1, CTX_S0_SLOT
     ctx_load $s1, $a1, CTX_S1_SLOT
@@ -163,9 +193,10 @@ __switch_to:
     ctx_load $s6, $a1, CTX_S6_SLOT
     ctx_load $s7, $a1, CTX_S7_SLOT
     ctx_load $s8, $a1, CTX_S8_SLOT
-    jr $ra
 
-    .globl loongarch64_trap_return
-    .type loongarch64_trap_return, @function
-loongarch64_trap_return:
-    b restore_context
+    // sti
+    csrrd $t0, CSR_CRMD
+    ori $t1, $zero, 0x4
+    or $t0, $t0, $t1
+    csrwr $t0, CSR_CRMD
+    jr $ra

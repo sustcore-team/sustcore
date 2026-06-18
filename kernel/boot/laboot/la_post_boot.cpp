@@ -506,8 +506,9 @@ namespace laboot {
         bootinfo->hart_id = static_cast<size_t>(
             reinterpret_cast<LabootInfo *>(boot_ptr)->bsp_phys_id);
         serial_puts(FDT_FOUND_MSG);
-        serial_puts(KERNEL_ENTRY_MSG);
-        c_setup(bootinfo->hart_id, bootinfo);
+        serial_puts(KERNEL_ENTRY_MSG);    
+        // TODO: figure out how to get the correct hart id
+        c_setup(0, bootinfo);
         while (true) {
         }
     }

@@ -29,6 +29,14 @@ namespace loader::elf {
     namespace {
         constexpr size_t SEGMENT_IO_CHUNK_SIZE = PAGESIZE;
 
+#if defined(__ARCH_riscv64__)
+        constexpr Elf64_Half SUPPORTED_MACHINE = EM_RISCV;
+#elif defined(__ARCH_loongarch64__)
+        constexpr Elf64_Half SUPPORTED_MACHINE = EM_LOONGARCH;
+#else
+#error "Unsupported architecture for ELF loader"
+#endif
+
         /**
          * @brief 判断程序头是否表示可加载段.
          */
@@ -202,9 +210,7 @@ namespace loader::elf {
             unexpect_return(ErrCode::NOT_SUPPORTED);
         }
 
-        // TODO: extends it into different archs according to current running
-        // arch.
-        if (ehdr.e_machine != EM_RISCV) {
+        if (ehdr.e_machine != SUPPORTED_MACHINE) {
             unexpect_return(ErrCode::NOT_SUPPORTED);
         }
 

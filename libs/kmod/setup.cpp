@@ -14,6 +14,7 @@
 #include <prm.h>
 #include <sustcore/startup.h>
 #include <sustcore/capability.h>
+#include <kmod/syscall.h>
 
 #include <cstddef>
 #include <cstdio>

@@ -22,3 +22,7 @@ defs-cpp := $(defs-mode-cpp)
 
 include-asm := -I$(path-include) -I$(path-include)/std \
 	-I$(path-third_party)/include -I$(path-third_party)/include/std
+
+ifeq ($(architecture),loongarch64)
+flags-cpp += -mno-lsx
+endif
