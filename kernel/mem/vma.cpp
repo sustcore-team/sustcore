@@ -53,8 +53,7 @@ namespace {
 }  // namespace
 
 TaskMemoryManager::TaskMemoryManager(PhyAddr _pgd)
-    : vma_list(), _pgd(_pgd), _pman(_pgd)
-{
+    : vma_list(), _pgd(_pgd), _pman(_pgd) {
     PageMan::make_root(_pgd);
     auto kernel_pgd = env::inst().main_kernel_pgd();
     assert(kernel_pgd.nonnull());
@@ -277,13 +276,7 @@ Result<void> TaskMemoryManager::protect_memory_cow(cap::MemoryPayload *memory) {
             }
             PageMan::RWX rwx = PageMan::rwx(*qres.pte);
             if (PageMan::is_writable(rwx)) {
-                PageMan::modify_pte<PageMan::Modifier::RWX>(
-                    qres.pte,
-                    PageMan::page_flags(PageMan::without_write(rwx),
-                                        PageMan::is_user_accessible(*qres.pte),
-                                        PageMan::is_global(*qres.pte),
-                                        PageMan::is_present(*qres.pte)));
-                PageMan::set_cow(qres.pte, true);
+                PageMan::protect_cow(qres.pte, rwx);
             }
         }
     }
@@ -369,12 +362,11 @@ bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
     assert(paddr.nonnull());
 
     // 如果正在加载, 此时应当给予读写权限
-    PageMan::RWX rwx = vma->loading ? PageMan::RWX::RW : vma->rwx;
+    PageMan::RWX rwx  = vma->loading ? PageMan::RWX::RW : vma->rwx;
     auto refcount_res = vma->memory->page_refcount(mem_offset);
     if (!refcount_res.has_value()) {
-        loggers::PAGING::ERROR(
-            "TM::on_np: 无法获取页共享计数: addr=%p err=%d",
-            aligned_vaddr.addr(), refcount_res.error());
+        loggers::PAGING::ERROR("TM::on_np: 无法获取页共享计数: addr=%p err=%d",
+                               aligned_vaddr.addr(), refcount_res.error());
         return false;
     }
     bool cow_page = !vma->memory->shared && PageMan::is_writable(rwx) &&
@@ -387,13 +379,13 @@ bool TaskMemoryManager::on_np(const NoPresentEvent &e) {
     if (cow_page) {
         auto query_res = _pman.query_page(aligned_vaddr);
         if (query_res.has_value()) {
-            PageMan::set_cow(query_res.value().pte, true);
+            PageMan::protect_cow(query_res.value().pte, rwx);
         }
     }
     _pman.flush_tlb();
-    loggers::PAGING::DEBUG(
-        "TM::on_np: mapped addr=%p page=%p cow=%d", e.access_address.addr(),
-        aligned_vaddr.addr(), cow_page);
+    loggers::PAGING::DEBUG("TM::on_np: mapped addr=%p page=%p cow=%d",
+                           e.access_address.addr(), aligned_vaddr.addr(),
+                           cow_page);
 
     // 调试: 使用当前硬件页表根再次查询该页
     PhyAddr hw_root = PageMan::read_root();
@@ -462,12 +454,11 @@ bool TaskMemoryManager::on_wp(VirAddr fault_addr) {
     }
 
     PageMan::set_paddr(qres.pte, page_res.value());
-    PageMan::modify_pte<PageMan::Modifier::RWX>(
+    PageMan::restore_from_cow(
         qres.pte,
         PageMan::page_flags(vma->rwx, PageMan::is_user_accessible(*qres.pte),
                             PageMan::is_global(*qres.pte),
                             PageMan::is_present(*qres.pte)));
-    PageMan::set_cow(qres.pte, false);
     PageMan::flush_tlb();
     loggers::PAGING::INFO("TM::on_wp: resolved cow addr=%p page=%p",
                           fault_addr.addr(), aligned_vaddr.addr());
@@ -523,25 +514,18 @@ Result<void> TaskMemoryManager::clone_vma_pages_to_cow(const VMA &vma,
 
         dst.pman().map_page<PageMan::PageSize::_4K>(
             vaddr, paddr,
-            PageMan::page_flags(child_rwx,
-                                PageMan::is_user_accessible(*qres.pte),
-                                PageMan::is_global(*qres.pte),
-                                PageMan::is_present(*qres.pte)));
+            PageMan::page_flags(
+                child_rwx, PageMan::is_user_accessible(*qres.pte),
+                PageMan::is_global(*qres.pte), PageMan::is_present(*qres.pte)));
 
         if (cow_page) {
-            PageMan::modify_pte<PageMan::Modifier::RWX>(
-                qres.pte,
-                PageMan::page_flags(PageMan::without_write(rwx),
-                                    PageMan::is_user_accessible(*qres.pte),
-                                    PageMan::is_global(*qres.pte),
-                                    PageMan::is_present(*qres.pte)));
-            PageMan::set_cow(qres.pte, true);
+            PageMan::protect_cow(qres.pte, rwx);
 
             auto dst_query_res = dst.pman().query_page(vaddr);
             if (!dst_query_res.has_value()) {
                 propagate_return(dst_query_res);
             }
-            PageMan::set_cow(dst_query_res.value().pte, true);
+            PageMan::protect_cow(dst_query_res.value().pte, rwx);
         }
     }
     void_return();

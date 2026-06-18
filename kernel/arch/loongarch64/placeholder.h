@@ -116,6 +116,8 @@ namespace la64 {
             return rwx;
         }
         static void set_cow(PTE *, bool);
+        static void protect_cow(PTE *, RWX) {}
+        static void restore_from_cow(PTE *, PageFlags) {}
         static void set_paddr(PTE *, PhyAddr);
         static PhyAddr read_root();
         static void init();

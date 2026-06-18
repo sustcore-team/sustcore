@@ -297,6 +297,8 @@ namespace la64 {
         }
 
         static void set_cow(PTE *pte, bool cow);
+        static void protect_cow(PTE *pte, RWX original_rwx);
+        static void restore_from_cow(PTE *pte, PageFlags flags);
         static void set_paddr(PTE *pte, PhyAddr paddr);
         static PhyAddr read_root();
         static void make_root(PhyAddr root);

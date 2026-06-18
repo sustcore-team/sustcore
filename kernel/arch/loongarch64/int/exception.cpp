@@ -337,6 +337,12 @@ namespace exception {
                 return FaultCause::NO_PRESENT;
             }
 
+            if ((cause == STORE_PAGE_INVALID || cause == PAGE_MODIFICATION) &&
+                PageMan::is_cow(pte))
+            {
+                return FaultCause::WRITE_PROTECT;
+            }
+
             auto rwx = PageMan::rwx(pte);
             switch (cause) {
                 case LOAD_PAGE_INVALID:

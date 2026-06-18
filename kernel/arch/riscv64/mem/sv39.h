@@ -273,6 +273,25 @@ namespace rv64 {
             pte->rsw = cow ? (pte->rsw | 0b01) : (pte->rsw & ~0b01);
         }
 
+        static void protect_cow(PTE *pte, RWX original_rwx) {
+            if (pte == nullptr) {
+                return;
+            }
+            modify_pte<Modifier::RWX>(
+                pte,
+                page_flags(without_write(original_rwx), is_user_accessible(*pte),
+                           is_global(*pte), is_present(*pte)));
+            set_cow(pte, true);
+        }
+
+        static void restore_from_cow(PTE *pte, PageFlags flags) {
+            if (pte == nullptr) {
+                return;
+            }
+            modify_pte<Modifier::ALL>(pte, flags);
+            set_cow(pte, false);
+        }
+
         static void set_paddr(PTE *pte, PhyAddr paddr) {
             if (pte != nullptr) {
                 pte->ppn = to_ppn(paddr);
