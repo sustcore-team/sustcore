@@ -147,7 +147,8 @@ namespace fdt {
         FDTProvider(FDTProvider &&)                 = delete;
         FDTProvider &operator=(FDTProvider &&)      = delete;
 
-        void register_device(device::DeviceModel &model) const override;
+        [[nodiscard]]
+        Result<void> register_device(device::DeviceModel &model) const override;
         [[nodiscard]]
         const char *name() const override {
             return "fdt";

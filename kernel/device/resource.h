@@ -89,6 +89,11 @@ namespace device {
      */
     class MMIOResource {
     public:
+        [[nodiscard]]
+        static util::owner<MMIOResource *> make(PhyArea region) noexcept {
+            return util::owner<MMIOResource *>(new MMIOResource(region));
+        }
+
         /**
          * @brief 获取资源中包含的唯一 MMIO 区域.
          *

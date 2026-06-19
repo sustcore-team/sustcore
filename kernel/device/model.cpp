@@ -129,6 +129,16 @@ namespace device {
                 _non_irq_devices.push_back(registered);
             }
         }
+        if (driver::DriverModel::initialized()) {
+            auto runtime_res =
+                driver::DriverModel::inst().register_runtime_device(registered);
+            if (!runtime_res.has_value()) {
+                loggers::DEVICE::ERROR(
+                    "运行时接入 DeviceNode 失败: node=%s err=%s",
+                    registered->name(), to_cstring(runtime_res.error()));
+                propagate_return(runtime_res);
+            }
+        }
         loggers::DEVICE::DEBUG("已登记 DeviceNode: platform=%d",
                                static_cast<int>(registered->platform()));
         return registered;
@@ -290,8 +300,9 @@ namespace device {
         return merge_same_status_regions(std::move(normalized));
     }
 
-    void KernelProvider::register_device(DeviceModel &model) const {
+    Result<void> KernelProvider::register_device(DeviceModel &model) const {
         (void)model;
+        void_return();
     }
 
     DeviceModel DeviceModel::_INSTANCE;

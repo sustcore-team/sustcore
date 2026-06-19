@@ -26,9 +26,21 @@ namespace virtio {
             {.compatible = "virtio,mmio", .driver_flag = 0},
             {.compatible = nullptr, .driver_flag = 0},
         };
+        constexpr driver::PCIDeviceId VIRTIO_MMIO_PCI_IDS[] = {
+            {
+                .vendor_id = 0x1AF4,
+                .subvendor_id = 0xFFFF,
+                .device_id = 0x1001,
+                .subdevice_id = 0xFFFF,
+                .class_code = 0,
+                .class_mask = 0,
+                .driver_flag = 0,
+            },
+            {},
+        };
         constexpr driver::DeviceId VIRTIO_MMIO_DEVICE_ID = {
             .fdt_ids = VIRTIO_MMIO_FDT_IDS,
-            .pci_ids = nullptr,
+            .pci_ids = VIRTIO_MMIO_PCI_IDS,
         };
 
         [[nodiscard]]
@@ -216,25 +228,21 @@ namespace virtio {
                 }
             });
 
-            auto *regs = reinterpret_cast<volatile const CommonConfig *>(
-                map_res.value().as<char>());
-            ProbeInfo info{
+            ProbeInfo transport_info{
                 .valid           = false,
                 .legacy          = false,
-                .magic_value     = regs->magic_value,
-                .version         = regs->version,
-                .device_id       = regs->device_id,
-                .vendor_id       = regs->vendor_id,
-                .status          = regs->status,
+                .magic_value     = 0,
+                .version         = 0,
+                .device_id       = 0,
+                .vendor_id       = 0,
+                .status          = 0,
                 .device_features = 0,
                 .mmio            = mmio,
             };
-
-            auto *writable_regs = const_cast<volatile CommonConfig *>(regs);
-            writable_regs->device_features_sel = 0;
-            info.device_features               = writable_regs->device_features;
-            info.legacy = info.version == virtio::VERSION_LEGACY;
-            info.valid  = is_valid_device(info);
+            TransportMMIO transport(transport_info, *mmio,
+                                    map_res.value().as<char>());
+            auto info = transport.probe_info();
+            info.valid = is_valid_device(info);
 
             if (emit_log) {
                 log_probe_result(node, info);
@@ -245,11 +253,115 @@ namespace virtio {
             return info;
         }
     }  // namespace
+    TransportMMIO::TransportMMIO(ProbeInfo probe_info,
+                                 const device::MMIOResource &mmio,
+                                 char *mmio_base) noexcept
+        : Transport(probe_info),
+          _mmio(&mmio),
+          _regs(reinterpret_cast<volatile CommonConfig *>(mmio_base)) {
+        if (_regs != nullptr) {
+            _probe_info.magic_value = _regs->magic_value;
+            _probe_info.version     = _regs->version;
+            _probe_info.device_id   = _regs->device_id;
+            _probe_info.vendor_id   = _regs->vendor_id;
+            _probe_info.status      = _regs->status;
+            _regs->device_features_sel = 0;
+            _probe_info.device_features = _regs->device_features;
+            _probe_info.legacy = _probe_info.version == virtio::VERSION_LEGACY;
+        }
+    }
+
+    u32 TransportMMIO::read_reg32(size_t reg_offset) const noexcept {
+        auto *ptr = reinterpret_cast<volatile u32 *>(
+            reinterpret_cast<volatile char *>(_regs) + reg_offset);
+        return *ptr;
+    }
+
+    void TransportMMIO::write_reg32(size_t reg_offset, u32 value) noexcept {
+        auto *ptr = reinterpret_cast<volatile u32 *>(
+            reinterpret_cast<volatile char *>(_regs) + reg_offset);
+        *ptr = value;
+    }
+
+    Result<u8> TransportMMIO::read_config_u8(size_t config_offset) const noexcept {
+        if (!_probe_info.legacy) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u8 *>(
+            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
+            config_offset);
+        return static_cast<u8>(*ptr);
+    }
+
+    Result<u16> TransportMMIO::read_config_u16(
+        size_t config_offset) const noexcept {
+        if (!_probe_info.legacy) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u16 *>(
+            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
+            config_offset);
+        return static_cast<u16>(*ptr);
+    }
+
+    Result<u32> TransportMMIO::read_config_u32(
+        size_t config_offset) const noexcept {
+        if (!_probe_info.legacy) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u32 *>(
+            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
+            config_offset);
+        return static_cast<u32>(*ptr);
+    }
+
+    Result<u64> TransportMMIO::read_config_u64(
+        size_t config_offset) const noexcept {
+        auto lo_res = read_config_u32(config_offset);
+        propagate(lo_res);
+        auto hi_res = read_config_u32(config_offset + sizeof(u32));
+        propagate(hi_res);
+        return (static_cast<u64>(hi_res.value()) << 32) | lo_res.value();
+    }
+
+    u32 TransportPCI::read_reg32(size_t reg_offset) const noexcept {
+        (void)reg_offset;
+        return 0;
+    }
+
+    void TransportPCI::write_reg32(size_t reg_offset, u32 value) noexcept {
+        (void)reg_offset;
+        (void)value;
+    }
+
+    Result<u8> TransportPCI::read_config_u8(size_t config_offset) const noexcept {
+        (void)config_offset;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
+    Result<u16> TransportPCI::read_config_u16(
+        size_t config_offset) const noexcept {
+        (void)config_offset;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
+    Result<u32> TransportPCI::read_config_u32(
+        size_t config_offset) const noexcept {
+        (void)config_offset;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
+    Result<u64> TransportPCI::read_config_u64(
+        size_t config_offset) const noexcept {
+        (void)config_offset;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
     VirtioDriverBase::VirtioDriverBase(DevRes res, ProbeInfo probe_info,
-                                       char *mmio_base) noexcept
+                                       util::owner<Transport *> transport) noexcept
         : DriverBase(std::move(res)),
           _probe_info(probe_info),
-          _regs(reinterpret_cast<volatile CommonConfig *>(mmio_base)),
+          _transport(std::move(transport)),
           _device_features(0),
           _negotiated_features(0),
           _queues() {}
@@ -311,44 +423,34 @@ namespace virtio {
 
     Result<u8> VirtioDriverBase::read_config_u8(
         size_t config_offset) const noexcept {
-        if (!_probe_info.legacy) {
-            unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (_transport.get() == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
         }
-        auto *ptr = reinterpret_cast<volatile u8 *>(
-            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
-            config_offset);
-        return static_cast<u8>(*ptr);
+        return _transport->read_config_u8(config_offset);
     }
 
     Result<u16> VirtioDriverBase::read_config_u16(
         size_t config_offset) const noexcept {
-        if (!_probe_info.legacy) {
-            unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (_transport.get() == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
         }
-        auto *ptr = reinterpret_cast<volatile u16 *>(
-            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
-            config_offset);
-        return static_cast<u16>(*ptr);
+        return _transport->read_config_u16(config_offset);
     }
 
     Result<u32> VirtioDriverBase::read_config_u32(
         size_t config_offset) const noexcept {
-        if (!_probe_info.legacy) {
-            unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (_transport.get() == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
         }
-        auto *ptr = reinterpret_cast<volatile u32 *>(
-            reinterpret_cast<volatile char *>(_regs) + offset::CONFIG_SPACE +
-            config_offset);
-        return static_cast<u32>(*ptr);
+        return _transport->read_config_u32(config_offset);
     }
 
     Result<u64> VirtioDriverBase::read_config_u64(
         size_t config_offset) const noexcept {
-        auto lo_res = read_config_u32(config_offset);
-        propagate(lo_res);
-        auto hi_res = read_config_u32(config_offset + sizeof(u32));
-        propagate(hi_res);
-        return (static_cast<u64>(hi_res.value()) << 32) | lo_res.value();
+        if (_transport.get() == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        return _transport->read_config_u64(config_offset);
     }
 
     Result<VirtQueueLegacy *> VirtioDriverBase::init_queue_legacy(
@@ -602,15 +704,13 @@ namespace virtio {
     }
 
     u32 VirtioDriverBase::read_reg32(size_t reg_offset) const noexcept {
-        auto *ptr = reinterpret_cast<volatile u32 *>(
-            reinterpret_cast<volatile char *>(_regs) + reg_offset);
-        return *ptr;
+        assert(_transport.get() != nullptr);
+        return _transport->read_reg32(reg_offset);
     }
 
     void VirtioDriverBase::write_reg32(size_t reg_offset, u32 value) noexcept {
-        auto *ptr = reinterpret_cast<volatile u32 *>(
-            reinterpret_cast<volatile char *>(_regs) + reg_offset);
-        *ptr = value;
+        assert(_transport.get() != nullptr);
+        _transport->write_reg32(reg_offset, value);
     }
 
     u32 VirtioDriverBase::status() const noexcept {
@@ -723,6 +823,12 @@ namespace virtio {
                                   b64 driver_flag) const noexcept {
         (void)model;
         (void)driver_flag;
+        if (node.platform() == device::DevicePlatform::PCI) {
+            loggers::DEVICE::DEBUG(
+                "virtio-pci 节点已命中总工厂，但当前 transport 尚未支持: node=%s",
+                node.name());
+            return true;
+        }
         auto probe_res = probe_mmio_device_impl(node, true, true);
         return probe_res.has_value() && is_valid_device(probe_res.value());
     }
@@ -731,6 +837,12 @@ namespace virtio {
         const device::DeviceNode &node, device::DeviceModel &model,
         b64 driver_flag) const {
         (void)driver_flag;
+        if (node.platform() == device::DevicePlatform::PCI) {
+            loggers::DEVICE::ERROR(
+                "virtio 总工厂已匹配 PCI 设备，但当前仅支持 virtio-mmio transport: node=%s",
+                node.name());
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
         auto probe_res = probe_mmio_device(node);
         propagate(probe_res);
         const auto &info = probe_res.value();

@@ -111,6 +111,18 @@ namespace driver {
         Result<DriverBase *> create_irq_driver(device::DeviceNode *node) noexcept;
 
         /**
+         * @brief 在运行时接入一个新登记的统一设备节点.
+         *
+         * 供晚注册的 DeviceProvider 使用，使新增节点进入 devfs 与后续驱动
+         * 匹配视图。
+         *
+         * @param node 新设备节点非拥有指针.
+         * @return Result<void> 接入结果.
+         */
+        [[nodiscard]]
+        Result<void> register_runtime_device(device::DeviceNode *node) noexcept;
+
+        /**
          * @brief 获取普通设备工厂注册表只读引用.
          *
          * @return const DeviceFactoryRegistry& 普通工厂注册表.

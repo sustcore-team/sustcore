@@ -14,6 +14,7 @@
 
 #include <device/fdt/device_node.h>
 #include <device/model.h>
+#include <device/pci.h>
 
 namespace {
     [[nodiscard]]
@@ -47,9 +48,38 @@ namespace {
     [[nodiscard]]
     driver::MatchResult match_pci_ids(const driver::PCIDeviceId *ids,
                                       const device::DeviceNode &node) noexcept {
-        (void)ids;
-        (void)node;
-        return {};
+        driver::MatchResult result{};
+        auto *pci_node = node.as<pci::PCIDeviceNode>();
+        if (ids == nullptr || pci_node == nullptr) {
+            return result;
+        }
+
+        const auto &identity = pci_node->identity();
+        for (int index = 0; !is_end_id(ids[index]); ++index) {
+            const auto &id = ids[index];
+            const bool subvendor_match =
+                id.subvendor_id == 0xFFFF ||
+                identity.subvendor_id == id.subvendor_id;
+            const bool subdevice_match =
+                id.subdevice_id == 0xFFFF ||
+                identity.subdevice_id == id.subdevice_id;
+            const bool class_match =
+                id.class_mask == 0 ||
+                ((identity.class_code & id.class_mask) ==
+                 (id.class_code & id.class_mask));
+            if (identity.vendor_id != id.vendor_id ||
+                identity.device_id != id.device_id || !subvendor_match ||
+                !subdevice_match || !class_match)
+            {
+                continue;
+            }
+
+            result.matched     = true;
+            result.driver_flag = id.driver_flag;
+            result.index       = index;
+            return result;
+        }
+        return result;
     }
 
     template <typename FactoryT>

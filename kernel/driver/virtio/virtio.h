@@ -218,6 +218,110 @@ namespace virtio {
     };
 
     /**
+     * @brief virtio transport 抽象.
+     *
+     * 负责屏蔽不同 transport 的寄存器与配置空间访问差异.
+     */
+    class Transport {
+    public:
+        explicit Transport(ProbeInfo probe_info) noexcept
+            : _probe_info(probe_info) {}
+        virtual ~Transport() = default;
+
+        [[nodiscard]]
+        virtual const char *name() const noexcept = 0;
+
+        [[nodiscard]]
+        virtual u32 read_reg32(size_t reg_offset) const noexcept = 0;
+        virtual void write_reg32(size_t reg_offset, u32 value) noexcept = 0;
+
+        [[nodiscard]]
+        virtual Result<u8> read_config_u8(size_t config_offset) const noexcept = 0;
+        [[nodiscard]]
+        virtual Result<u16> read_config_u16(
+            size_t config_offset) const noexcept = 0;
+        [[nodiscard]]
+        virtual Result<u32> read_config_u32(
+            size_t config_offset) const noexcept = 0;
+        [[nodiscard]]
+        virtual Result<u64> read_config_u64(
+            size_t config_offset) const noexcept = 0;
+
+        [[nodiscard]]
+        const ProbeInfo &probe_info() const noexcept {
+            return _probe_info;
+        }
+
+    protected:
+        ProbeInfo _probe_info;
+    };
+
+    /**
+     * @brief virtio-mmio transport 实现.
+     */
+    class TransportMMIO final : public Transport {
+    public:
+        TransportMMIO(ProbeInfo probe_info, const device::MMIOResource &mmio,
+                      char *mmio_base) noexcept;
+        ~TransportMMIO() override = default;
+
+        [[nodiscard]]
+        const char *name() const noexcept override {
+            return "virtio-mmio";
+        }
+
+        [[nodiscard]]
+        u32 read_reg32(size_t reg_offset) const noexcept override;
+        void write_reg32(size_t reg_offset, u32 value) noexcept override;
+
+        [[nodiscard]]
+        Result<u8> read_config_u8(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u16> read_config_u16(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u32> read_config_u32(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u64> read_config_u64(size_t config_offset) const noexcept override;
+
+        [[nodiscard]]
+        const device::MMIOResource &mmio() const noexcept {
+            return *_mmio;
+        }
+
+    private:
+        const device::MMIOResource *_mmio = nullptr;
+        volatile CommonConfig *_regs      = nullptr;
+    };
+
+    /**
+     * @brief virtio-pci transport 预留骨架.
+     */
+    class TransportPCI final : public Transport {
+    public:
+        explicit TransportPCI(ProbeInfo probe_info) noexcept
+            : Transport(probe_info) {}
+        ~TransportPCI() override = default;
+
+        [[nodiscard]]
+        const char *name() const noexcept override {
+            return "virtio-pci";
+        }
+
+        [[nodiscard]]
+        u32 read_reg32(size_t reg_offset) const noexcept override;
+        void write_reg32(size_t reg_offset, u32 value) noexcept override;
+
+        [[nodiscard]]
+        Result<u8> read_config_u8(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u16> read_config_u16(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u32> read_config_u32(size_t config_offset) const noexcept override;
+        [[nodiscard]]
+        Result<u64> read_config_u64(size_t config_offset) const noexcept override;
+    };
+
+    /**
      * @brief legacy virtqueue 描述符项.
      */
     struct VirtQueueDescLegacy {
@@ -329,7 +433,7 @@ namespace virtio {
          * @param mmio_base 已映射的 MMIO 基址.
          */
         VirtioDriverBase(DevRes res, ProbeInfo probe_info,
-                         char *mmio_base) noexcept;
+                         util::owner<Transport *> transport) noexcept;
         /**
          * @brief 销毁 virtio 通用设备对象并回收队列 DMA 资源.
          */
@@ -499,9 +603,10 @@ namespace virtio {
         Result<void> write_driver_features(u64 features) noexcept;
 
         ProbeInfo _probe_info;
-        volatile CommonConfig *_regs = nullptr;
-        u64 _device_features         = 0;
-        u64 _negotiated_features     = 0;
+        util::owner<Transport *> _transport =
+            util::owner<Transport *>(nullptr);
+        u64 _device_features     = 0;
+        u64 _negotiated_features = 0;
         std::vector<VirtQueueLegacy> _queues;
     };
 

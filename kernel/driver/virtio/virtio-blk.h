@@ -117,7 +117,7 @@ namespace virtio {
          * @brief 构造一个 virtio-blk 设备对象.
          */
         VirtioBlkDriver(DevRes res, ProbeInfo probe_info,
-                        char *mmio_base) noexcept;
+                        util::owner<Transport *> transport) noexcept;
         /**
          * @brief 销毁 virtio-blk 设备对象并回收请求 DMA 缓冲区.
          */

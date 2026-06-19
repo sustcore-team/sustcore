@@ -146,6 +146,57 @@ namespace driver {
         return driver_res.value();
     }
 
+    Result<void> DriverModel::register_runtime_device(
+        device::DeviceNode *node) noexcept {
+        if (node == nullptr) {
+            loggers::DEVICE::ERROR("运行时登记设备失败: node 为空");
+            unexpect_return(ErrCode::NULLPTR);
+        }
+
+        auto it = std::find(_device_nodes.begin(), _device_nodes.end(), node);
+        if (it != _device_nodes.end()) {
+            loggers::DEVICE::DEBUG("运行时设备已登记: node=%s", node->name());
+            void_return();
+        }
+
+        _device_nodes.push_back(node);
+        if (!_runtime_activated) {
+            loggers::DEVICE::DEBUG("运行时设备登记已缓存: node=%s",
+                                   node->name());
+            void_return();
+        }
+
+        auto dir_res = _register_device_directory(*node);
+        propagate(dir_res);
+
+        for (const auto *factory : _device_factories.factories()) {
+            if (factory == nullptr) {
+                continue;
+            }
+
+            auto match = _device_factories.match(*factory, *node);
+            if (!match.matched) {
+                continue;
+            }
+            if (!factory->probe(*node, device::DeviceModel::inst(),
+                                match.driver_flag))
+            {
+                continue;
+            }
+
+            auto bind_res = _bind_device_with_factory(*node, *factory, match);
+            if (!bind_res.has_value()) {
+                loggers::DEVICE::ERROR(
+                    "运行时绑定驱动失败: node=%s err=%s", node->name(),
+                    to_cstring(bind_res.error()));
+            }
+            break;
+        }
+
+        loggers::DEVICE::INFO("已接入运行时设备节点: node=%s", node->name());
+        void_return();
+    }
+
     Result<void> DriverModel::_register_device_directories() noexcept {
         for (auto *node : _device_nodes) {
             if (node == nullptr) {
@@ -201,7 +252,9 @@ namespace driver {
 
     Result<void> DriverModel::_probe_new_factory(
         const IDeviceFactory &factory) noexcept {
-        for (auto *node : _device_nodes) {
+        const size_t initial_count = _device_nodes.size();
+        for (size_t index = 0; index < initial_count; ++index) {
+            auto *node = _device_nodes[index];
             if (node == nullptr) {
                 continue;
             }

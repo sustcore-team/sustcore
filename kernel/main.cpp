@@ -24,6 +24,7 @@ extern "C" char __la_boot_stack, __la_boot_stack_top;
 #include <device/int.h>
 #include <device/model.h>
 #include <device/resource.h>
+#include <driver/model.h>
 #include <env.h>
 #include <kinit.h>
 #include <libfdt.h>
@@ -558,10 +559,20 @@ void init_device_model() {
         });
     }
     model.collect_memory_regions(&boot_regions);
-    model.register_provider(
+    auto provider_res = model.register_provider(
         util::owner<device::DeviceProvider *>(new fdt::FDTProvider(dtb_ptr)));
-    model.register_provider(
+    if (!provider_res.has_value()) {
+        loggers::SUSTCORE::FATAL("注册 FDTProvider 失败: %s",
+                                 to_cstring(provider_res.error()));
+        panic("注册 FDTProvider 失败");
+    }
+    provider_res = model.register_provider(
         util::owner<device::DeviceProvider *>(new device::KernelProvider()));
+    if (!provider_res.has_value()) {
+        loggers::SUSTCORE::FATAL("注册 KernelProvider 失败: %s",
+                                 to_cstring(provider_res.error()));
+        panic("注册 KernelProvider 失败");
+    }
 
     auto regions = device::DeviceModel::inst().memory_regions();
     for (size_t i = 0; i < regions.size(); ++i) {

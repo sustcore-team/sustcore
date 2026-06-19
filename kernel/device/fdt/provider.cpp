@@ -1079,12 +1079,14 @@ namespace fdt {
             static_cast<unsigned long long>(model.clock_virq()));
     }
 
-    void FDTProvider::register_device(device::DeviceModel &model) const {
+    Result<void> FDTProvider::register_device(
+        device::DeviceModel &model) const {
         register_memory_regions(model);
         register_platform(model);
         register_cpus(model);
         register_nodes(model);
         register_intcs(model);
         register_clock_virq(model);
+        void_return();
     }
 }  // namespace fdt

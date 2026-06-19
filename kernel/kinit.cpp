@@ -16,6 +16,7 @@
 #include <device/int.h>
 #include <device/model.h>
 #include <driver/model.h>
+#include <driver/pci_host.h>
 #include <driver/rtc/goldfish.h>
 #include <driver/serial.h>
 #include <driver/virtio/virtio-blk.h>
@@ -216,6 +217,10 @@ namespace {
         register_res = driver::DriverModel::inst().register_factory(
             util::owner<driver::IDeviceFactory *>(
                 new virtio::VirtioMmioFactory()));
+        propagate(register_res);
+
+        register_res = driver::DriverModel::inst().register_factory(
+            util::owner<driver::IDeviceFactory *>(new pci::PCIHostFactory()));
         propagate(register_res);
         void_return();
     }
