@@ -1,12 +1,12 @@
 # Common build flags shared by kernel, modules, and libraries.
 
-flags-common-c := -std=gnu23 -nostdlib -fno-builtin -ffreestanding \
+flags-common-c := -std=gnu18 -nostdlib -fno-builtin -ffreestanding -fpermissive \
 	-Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
 	-fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 	-fno-stack-protector -Wno-int-to-pointer-cast \
 	-fno-toplevel-reorder -fno-tree-scev-cprop
 
-flags-common-cpp := -std=gnu++26 -nostdlib -fno-builtin -ffreestanding \
+flags-common-cpp := -std=gnu++23 -nostdlib -fno-builtin -ffreestanding -fpermissive \
 	-Wall -Wno-sign-compare -Wno-literal-suffix -Wno-int-to-pointer-cast \
 	-fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 	-fno-stack-protector -fno-toplevel-reorder -fno-tree-scev-cprop \

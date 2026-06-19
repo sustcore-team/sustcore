@@ -73,7 +73,9 @@ namespace std {
 
     // is_scoped_enum
     template <typename _Tp>
-    struct is_scoped_enum : public bool_constant<__is_scoped_enum(_Tp)> {};
+    struct is_scoped_enum
+        : public bool_constant<is_enum<_Tp>::value &&
+                               !is_convertible<_Tp, int>::value> {};
 
     // is_union
     template <typename _Tp>
@@ -85,34 +87,124 @@ namespace std {
 
     // is_array
     template <typename _Tp>
-    struct is_array : public bool_constant<__is_array(_Tp)> {};
+    struct is_array : public false_type {};
+    template <typename _Tp>
+    struct is_array<_Tp[]> : public true_type {};
+    template <typename _Tp, size_t _Nm>
+    struct is_array<_Tp[_Nm]> : public true_type {};
 
     // is_pointer
     template <typename _Tp>
-    struct is_pointer : public bool_constant<__is_pointer(_Tp)> {};
+    struct is_pointer : public false_type {};
+    template <typename _Tp>
+    struct is_pointer<_Tp*> : public true_type {};
+    template <typename _Tp>
+    struct is_pointer<_Tp* const> : public true_type {};
+    template <typename _Tp>
+    struct is_pointer<_Tp* volatile> : public true_type {};
+    template <typename _Tp>
+    struct is_pointer<_Tp* const volatile> : public true_type {};
+
+    // is_function
+    template <typename _Tp>
+    struct is_function : public false_type {};
+
+#define SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(_Cv, _Ref, _Noexcept)         \
+    template <typename _Ret, typename... _Args>                               \
+    struct is_function<_Ret(_Args...) _Cv _Ref _Noexcept>                     \
+        : public true_type {};                                                \
+    template <typename _Ret, typename... _Args>                               \
+    struct is_function<_Ret(_Args..., ...) _Cv _Ref _Noexcept>                \
+        : public true_type {};
+
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, , )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, , )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, , )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, , )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, &, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, &, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, &, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, &, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, &&, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, &&, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, &&, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, &&, )
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, , noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, , noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, , noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, , noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, &, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, &, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, &, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, &, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(, &&, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const, &&, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(volatile, &&, noexcept)
+    SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION(const volatile, &&, noexcept)
+
+#undef SUS_TYPE_TRAITS_FUNCTION_SPECIALIZATION
 
     // is_member_pointer
     template <typename _Tp>
-    struct is_member_pointer : public bool_constant<__is_member_pointer(_Tp)> {
+    struct is_member_pointer : public false_type {};
+    template <typename _Tp, typename _Class>
+    struct is_member_pointer<_Tp _Class::*> : public true_type {};
+    template <typename _Tp, typename _Class>
+    struct is_member_pointer<_Tp _Class::* const> : public true_type {};
+    template <typename _Tp, typename _Class>
+    struct is_member_pointer<_Tp _Class::* volatile> : public true_type {};
+    template <typename _Tp, typename _Class>
+    struct is_member_pointer<_Tp _Class::* const volatile> : public true_type {
     };
 
     // is_member_function_pointer
     template <typename _Tp>
-    struct is_member_function_pointer
-        : public bool_constant<__is_member_function_pointer(_Tp)> {};
+    struct is_member_function_pointer : public false_type {};
+    template <typename _Tp, typename _Class>
+    struct is_member_function_pointer<_Tp _Class::*>
+        : public is_function<_Tp> {};
+    template <typename _Tp, typename _Class>
+    struct is_member_function_pointer<_Tp _Class::* const>
+        : public is_member_function_pointer<_Tp _Class::*> {};
+    template <typename _Tp, typename _Class>
+    struct is_member_function_pointer<_Tp _Class::* volatile>
+        : public is_member_function_pointer<_Tp _Class::*> {};
+    template <typename _Tp, typename _Class>
+    struct is_member_function_pointer<_Tp _Class::* const volatile>
+        : public is_member_function_pointer<_Tp _Class::*> {};
 
     // is_member_object_pointer
     template <typename _Tp>
     struct is_member_object_pointer
-        : public bool_constant<__is_member_object_pointer(_Tp)> {};
+        : public bool_constant<is_member_pointer<_Tp>::value &&
+                               !is_member_function_pointer<_Tp>::value> {};
 
-    // is_function
     template <typename _Tp>
-    struct is_function : public bool_constant<__is_function(_Tp)> {};
+    struct is_reference : public false_type {};
+    template <typename _Tp>
+    struct is_reference<_Tp&> : public true_type {};
+    template <typename _Tp>
+    struct is_reference<_Tp&&> : public true_type {};
+
+    namespace detail {
+        template <typename _Tp>
+        struct is_void_helper : public false_type {};
+        template <>
+        struct is_void_helper<void> : public true_type {};
+        template <>
+        struct is_void_helper<const void> : public true_type {};
+        template <>
+        struct is_void_helper<volatile void> : public true_type {};
+        template <>
+        struct is_void_helper<const volatile void> : public true_type {};
+    }  // namespace detail
 
     // is_object
     template <typename _Tp>
-    struct is_object : public bool_constant<__is_object(_Tp)> {};
+    struct is_object
+        : public bool_constant<!is_function<_Tp>::value &&
+                               !is_reference<_Tp>::value &&
+                               !detail::is_void_helper<_Tp>::value> {};
 
     // is_pod
     template <typename _Tp>
@@ -200,6 +292,8 @@ namespace std {
     template <typename _Tp>
     inline constexpr bool is_function_v = is_function<_Tp>::value;
     template <typename _Tp>
+    inline constexpr bool is_reference_v = is_reference<_Tp>::value;
+    template <typename _Tp>
     inline constexpr bool is_void_v = is_void<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_member_pointer_v = is_member_pointer<_Tp>::value;
@@ -264,7 +358,11 @@ namespace std {
 
     // rank
     template <typename _Tp>
-    struct rank : public size_constant<__array_rank(_Tp)> {};
+    struct rank : public size_constant<0> {};
+    template <typename _Tp>
+    struct rank<_Tp[]> : public size_constant<rank<_Tp>::value + 1> {};
+    template <typename _Tp, size_t _Nm>
+    struct rank<_Tp[_Nm]> : public size_constant<rank<_Tp>::value + 1> {};
 
     // 别名
     template <typename _Tp>

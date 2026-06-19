@@ -22,7 +22,7 @@ _la_start:
     la.abs $t0, __laboot_system_table_phys
     st.d $s1, $t0, 0
     la.abs $sp, __la_boot_stack_top
-    call _laboot_setup
+    bl _laboot_setup
 
 _la_paging_setup:
     move $s0, $a0

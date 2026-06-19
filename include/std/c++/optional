@@ -59,7 +59,7 @@ namespace std {
     class optional {
     private:
         static_assert(!is_void_v<T>, "optional<T>: T 不应为空");
-        static_assert(!__is_reference(T), "optional<T>: T 不应为引用");
+        static_assert(!is_reference_v<T>, "optional<T>: T 不应为引用");
 
         union __storage {
             char D_dummy;

@@ -6,7 +6,6 @@ build/
 !script/*
 bochsrc.bxrc
 bochsrc
-*.img
 bx_enh_dbg.ini
 config.mk
 kernel/logger.h
@@ -16,10 +15,18 @@ config-ref/*.tar.xz
 setup.sh
 build-setup.sh
 gdb-setup.sh
-.github/
 documents/
 .cache/
 compile_commands.json
 .zed/
 config.json
 .sisyphus/
+*.bak
+
+os_serial_out_rv.txt
+kernel-rv
+sdcard-rv.img
+
+os_serial_out_la.txt
+kernel-la
+sdcard-la.img

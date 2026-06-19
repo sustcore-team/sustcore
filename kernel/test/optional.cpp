@@ -34,7 +34,9 @@ namespace test::optional {
         return !value && doubled.has_value() && *doubled == 16;
     }
 
+#if __cplusplus > 202302L
     static_assert(constexpr_optional_smoke());
+#endif
 
     class CaseBasicState : public TestCase {
     public:

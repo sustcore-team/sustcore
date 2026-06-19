@@ -56,6 +56,15 @@ def emit_config(config, override_arch=None):
         lines.append(f"build-mode ?= {make_value(mode)}")
     lines.append(f"architecture ?= {make_value(arch)}")
 
+    compiler_prefix = arch_config.get("compiler-prefix")
+    if compiler_prefix is not None:
+        compiler_prefix = require_string(
+            compiler_prefix, f"{arch}.compiler-prefix"
+        )
+        lines.append(
+            f"{make_value(arch)}-compiler-prefix ?= {make_value(compiler_prefix)}"
+        )
+
     qemu = arch_config.get("qemu")
     if qemu is not None:
         qemu = require_object(qemu, f"{arch}.qemu")

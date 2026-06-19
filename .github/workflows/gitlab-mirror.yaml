@@ -1,0 +1,17 @@
+name: Mirror main to GitLab
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push main to GitLab
+        run: |
+          git clone --branch main https://github.com/sustcore-team/sustcore.git
+          cd sustcore
+          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.eduxiji.net/T202614325999682/oskernel2025-sustcore.git
+          git push gitlab HEAD:main --force

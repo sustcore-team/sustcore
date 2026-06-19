@@ -76,7 +76,7 @@ kernel/feature.mk: $(config-json) kernel/feature.json tools/feature_gen/feature_
 
 ### 每个生成器输出什么
 
-*   `tools/config_gen/config_gen.py` 将 JSON 转换为 Make 变量，例如 `build-mode`、`qemu-memory-args`、`qemu-attached-args` 和 `features`。
+*   `tools/config_gen/config_gen.py` 将 JSON 转换为 Make 变量，例如 `build-mode`、`<arch>-compiler-prefix`、`qemu-memory-args`、`qemu-attached-args` 和 `features`。
 *   `tools/logger_gen/logger_gen.py` 读取 `kernel/logger.json` 以及配置覆盖项，并生成包含 `DECLARE_LOGGER(...)` 条目的 `kernel/logger.h`。
 *   `tools/feature_gen/feature_gen.py` 将配置的功能名称映射到 `-D...=1` 宏，并将其写入 `kernel/feature.mk` 作为 `kernel-feature-defs`。
 
@@ -273,6 +273,23 @@ compiler-ar ?= $(prefix-compiler)ar
 
 *   `riscv64` -> 前缀 `riscv64-unknown-elf-`
 *   `loongarch64` -> 前缀 `loongarch64-unknown-elf-`
+
+这些默认值由 `script/build/arch/*.mk` 使用 `?=` 提供，也可以在对应架构的 JSON 配置中覆盖：
+
+```json
+{
+    "arch": "loongarch64",
+    "loongarch64": {
+        "compiler-prefix": "loongarch64-linux-elf-"
+    }
+}
+```
+
+`tools/config_gen/config_gen.py` 会将其生成为：
+
+```make
+loongarch64-compiler-prefix ?= loongarch64-linux-elf-
+```
 
 ### 共享标志
 

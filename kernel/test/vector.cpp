@@ -43,7 +43,9 @@ namespace test::vector {
         return v.empty();
     }
 
+#if __cplusplus > 202302L
     static_assert(constexpr_vector_smoke());
+#endif
 
     class CaseBasicAccess : public TestCase {
     public:

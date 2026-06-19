@@ -10,8 +10,17 @@ ifeq ($(origin architecture), command line)
 config-arch-override := $(architecture)
 endif
 
-all:
-	$(q)$(MAKE) -s build && $(MAKE) run
+all: autotest
+
+autotest: kernel-rv kernel-la
+
+kernel-rv:
+	$(q)$(MAKE) build architecture=riscv64 build-mode=$(build-mode)
+	$(q)$(copy) build/$(build-mode)/riscv64/bin/kernel/sustcore.bin $@
+
+kernel-la:
+	$(q)$(MAKE) build architecture=loongarch64 build-mode=$(build-mode)
+	$(q)$(copy) build/$(build-mode)/loongarch64/bin/kernel/sustcore.bin $@
 
 image-sectors ?= 262144
 
@@ -27,7 +36,7 @@ include $(path-script)/tool.mk
 include $(path-script)/util.mk
 include $(path-script)/run.mk
 
-.PHONY: build mount umount image __image stat_code all dbg clean FORCE
+.PHONY: build mount umount image __image stat_code all autotest kernel-rv kernel-la run-local dbg clean FORCE
 .PHONY: build-libs build-mods build-kernel make-initrd
 
 build-mode ?= release
@@ -143,12 +152,16 @@ __unload_image:
 stat_code:
 	$(q)$(comments-stat)
 
-dbg:
+
+build-and-run:
+	$(q)$(MAKE) -s build && $(MAKE) run
+
+build-and-dbg:
 	$(q)$(MAKE) -s build && $(MAKE) run_dbg
 
 clean:
-	rm -rf $(path-e)/build
+	rm -rf $(path-e)/build kernel-rv kernel-la
 
-build-libs build-mods make-initrd build-kernel build all dbg run run_dbg image __image mount umount: config.mk kernel/logger.h kernel/feature.mk
+build-libs build-mods make-initrd build-kernel build all autotest kernel-rv kernel-la build-and-run build-and-dbg run run_dbg image __image mount umount: config.mk kernel/logger.h kernel/feature.mk
 
 include $(path-script)/setup.mk

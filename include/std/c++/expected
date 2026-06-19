@@ -147,8 +147,8 @@ namespace std {
             !is_void_v<T>,
             "expected<T, E>: T 为空时, 应当是特化版本 expected<void, E>");
         static_assert(!is_void_v<E>, "expected<T, E>: E 不应为空");
-        static_assert(!__is_reference(T), "expected<T, E>: T 不应为引用");
-        static_assert(!__is_reference(E), "expected<T, E>: E 不应为引用");
+        static_assert(!is_reference_v<T>, "expected<T, E>: T 不应为引用");
+        static_assert(!is_reference_v<E>, "expected<T, E>: E 不应为引用");
 
         // 使用union存储value和error
         // dummy变量用于初始化union, 避免调用非trivial类型的默认构造函数
@@ -756,7 +756,7 @@ namespace std {
     class expected<void, E> {
     private:
         static_assert(!is_void_v<E>, "expected<void, E>: E should not be void");
-        static_assert(!__is_reference(E),
+        static_assert(!is_reference_v<E>,
                       "expected<void, E>: E should not be a reference");
 
         union __storage {
