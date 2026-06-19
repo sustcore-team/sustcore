@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <cstring>
 #include <device/cpu.h>
@@ -22,7 +23,6 @@
 #include <sustcore/addr.h>
 
 namespace env {
-    class HartContext;
     register HartContext *hart_ctx asm("tp");
 
     // passkey

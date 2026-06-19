@@ -15,8 +15,6 @@
 #include <syscall/uaccess.h>
 
 namespace syscall {
-    class UString;
-
     [[nodiscard]]
     Result<CapIdx> vfs_open(CapIdx parent_dir_cap, const UString &relpath,
                             flags::oflg_t oflags);

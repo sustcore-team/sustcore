@@ -10,6 +10,7 @@
  */
 
 #include <device/resource.h>
+#include <device/pci.h>
 #include <bio/blk.h>
 #include <driver/virtio/virtio-blk.h>
 #include <logger.h>
@@ -80,7 +81,16 @@ namespace virtio {
         auto config_res = load_config();
         propagate(config_res);
 
-        auto queue_res = init_queue_legacy(REQUEST_QUEUE_INDEX, 8);
+        Result<VirtQueueLegacy *> queue_res = std::unexpected(
+            ErrCode::NOT_SUPPORTED);
+        if (_transport.get() != nullptr &&
+            _transport->kind() == Transport::Kind::PCI)
+        {
+            auto *transport_pci = static_cast<TransportPCI *>(_transport.get());
+            queue_res = init_queue_modern(REQUEST_QUEUE_INDEX, 8);
+        } else {
+            queue_res = init_queue_legacy(REQUEST_QUEUE_INDEX, 8);
+        }
         propagate(queue_res);
         _request_queue = queue_res.value();
 
@@ -434,22 +444,35 @@ namespace virtio {
         const device::DeviceNode &node, device::DeviceModel &model,
         const ProbeInfo &info) const {
         (void)model;
-        // 先提取资源并映射 MMIO, 然后构造驱动对象, 最后调用初始化收敛失败路径.
+        // 按 transport 构造具体访问后端, 然后再创建统一 virtio-blk 驱动对象.
         auto virqs = device::DevResManager::get_virq_resource(node);
         auto mmios = device::DevResManager::get_mmio_resource(node);
-        if (mmios.empty()) {
-            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        util::owner<Transport *> transport =
+            util::owner<Transport *>(nullptr);
+        if (node.platform() == device::DevicePlatform::FDT) {
+            if (mmios.empty()) {
+                unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+            }
+
+            auto *mmio = mmios.front().get();
+            if (mmio == nullptr) {
+                unexpect_return(ErrCode::NULLPTR);
+            }
+            auto map_res = device::MMIOManager::inst().map_to_kernel(*mmio);
+            propagate(map_res);
+            transport = util::owner<Transport *>(
+                new TransportMMIO(info, *mmio, map_res.value().as<char>()));
+        } else if (node.platform() == device::DevicePlatform::PCI) {
+            auto *pci_node = node.as<pci::PCIDeviceNode>();
+            if (pci_node == nullptr) {
+                unexpect_return(ErrCode::INVALID_PARAM);
+            }
+            transport = util::owner<Transport *>(
+                new TransportPCI(*pci_node, info));
+        } else {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
         }
 
-        auto *mmio = mmios.front().get();
-        if (mmio == nullptr) {
-            unexpect_return(ErrCode::NULLPTR);
-        }
-        auto map_res = device::MMIOManager::inst().map_to_kernel(*mmio);
-        propagate(map_res);
-
-        auto transport = util::owner<Transport *>(
-            new TransportMMIO(info, *mmio, map_res.value().as<char>()));
         auto *driver = new VirtioBlkDriver(
             driver::DriverBase::DevRes(node, std::move(virqs), std::move(mmios)),
             info, std::move(transport));

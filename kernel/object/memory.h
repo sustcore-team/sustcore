@@ -11,14 +11,13 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <cap/capability.h>
 #include <sus/list.h>
 #include <sustcore/addr.h>
 
 #include <unordered_map>
-
-class TaskMemoryManager;
 
 namespace cap {
     /**

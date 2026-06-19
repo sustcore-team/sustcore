@@ -5,16 +5,12 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <cap/capability.h>
 #include <cap/cholder.h>
 #include <object/memory.h>
 #include <sustcore/capability.h>
-
-namespace task {
-    struct PCB;
-    struct TCB;
-}  // namespace task
 
 namespace cap {
     /**

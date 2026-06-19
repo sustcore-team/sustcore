@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <cap/permission.h>
 #include <mem/alloc.h>
 #include <sus/nonnull.h>
@@ -23,14 +24,7 @@
 
 #include <new>
 
-// forward declarations
-
 namespace cap {
-    class Payload;
-    class Capability;
-    class CGroup;
-    class CHolder;
-
     // 载荷基类
     // 所有的载荷都必须继承自该基类
     class Payload : public RTTIBase<Payload, PayloadType> {

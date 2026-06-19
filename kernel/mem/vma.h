@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <object/memory.h>
 #include <sus/list.h>
@@ -22,8 +23,6 @@
 #include <sustcore/errcode.h>
 
 #include <cassert>
-
-class TaskMemoryManager;
 
 struct VMA {
     enum class Type {

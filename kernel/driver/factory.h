@@ -11,15 +11,12 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <device/device.h>
 #include <driver/base.h>
 #include <sustcore/errcode.h>
 
 #include <vector>
-
-namespace device {
-    class DeviceModel;
-}
 
 namespace driver {
     struct FDTDeviceId {

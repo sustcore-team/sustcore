@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <spinlock.h>
 #include <sus/coroutine.h>
 #include <sus/list.h>
@@ -38,7 +39,10 @@ namespace wait {
     class Promise;
 
     struct promise_base;
+}  // namespace wait
 
+
+namespace wait {
     wd_t alloc_reason();
     Result<void> future_begin_update() noexcept;
     Result<void> future_wait_current(wd_t wait_wd,

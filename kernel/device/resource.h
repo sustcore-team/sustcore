@@ -11,16 +11,13 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <device/device.h>
 #include <sus/owner.h>
 #include <sustcore/addr.h>
 
 #include <vector>
-
 namespace device {
-    class DevResManager;
-    class MMIOManager;
-
     /**
      * @brief 统一设备节点导出的单个虚拟中断资源.
      */

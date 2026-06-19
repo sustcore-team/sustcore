@@ -53,6 +53,7 @@ namespace pci {
         b64 pci_addr = 0;
         b64 cpu_addr = 0;
         b64 size = 0;
+        b64 alloc_next = 0;
     };
 
     struct PCIHostControllerConfig {
@@ -84,7 +85,8 @@ namespace pci {
         static constexpr device::DevicePlatform IDENTIFIER =
             device::DevicePlatform::PCI;
 
-        PCIDeviceNode(PCIDeviceIdentity identity, std::vector<PCIBar> bars,
+        PCIDeviceNode(PCIDeviceIdentity identity, PCIHostControllerConfig host,
+                      std::vector<PCIBar> bars,
                       std::vector<PhyArea> mmios,
                       std::vector<device::RawIrqSpec> irqs) noexcept;
         ~PCIDeviceNode() override = default;
@@ -108,6 +110,21 @@ namespace pci {
             return _bars;
         }
 
+        [[nodiscard]]
+        const PCIBar *find_bar(b8 index) const noexcept;
+
+        [[nodiscard]]
+        b8 read_config8(b16 offset) const noexcept;
+        [[nodiscard]]
+        b16 read_config16(b16 offset) const noexcept;
+        [[nodiscard]]
+        b32 read_config32(b16 offset) const noexcept;
+
+        [[nodiscard]]
+        b8 capability_pointer() const noexcept;
+        [[nodiscard]]
+        b16 find_capability(b8 cap_id) const noexcept;
+
     protected:
         [[nodiscard]]
         device::DevicePlatform type_id() const override {
@@ -115,7 +132,30 @@ namespace pci {
         }
 
     private:
+        class ConfigAccessor final : public PCIConfigOps {
+        public:
+            explicit ConfigAccessor(PCIHostControllerConfig config) noexcept
+                : _config(std::move(config)) {}
+
+            [[nodiscard]]
+            b8 read8(const Bdf &bdf, b16 offset) const noexcept override;
+            [[nodiscard]]
+            b16 read16(const Bdf &bdf, b16 offset) const noexcept override;
+            [[nodiscard]]
+            b32 read32(const Bdf &bdf, b16 offset) const noexcept override;
+            void write32(const Bdf &bdf, b16 offset,
+                         b32 value) const noexcept override;
+
+        private:
+            [[nodiscard]]
+            volatile void *config_ptr(const Bdf &bdf,
+                                      b16 offset) const noexcept;
+
+            PCIHostControllerConfig _config;
+        };
+
         PCIDeviceIdentity _identity{};
+        PCIHostControllerConfig _host{};
         std::vector<PCIBar> _bars;
         std::vector<PhyArea> _mmios;
         std::vector<device::RawIrqSpec> _irqs;
@@ -124,7 +164,7 @@ namespace pci {
 
     class PCIBusProvider final : public device::DeviceProvider {
     public:
-        explicit PCIBusProvider(const fdt::FDTDeviceNode &host) noexcept;
+        explicit PCIBusProvider(const ::fdt::FDTDeviceNode &host) noexcept;
         ~PCIBusProvider() override = default;
 
         [[nodiscard]]
@@ -175,9 +215,9 @@ namespace pci {
             const PCIConfigOps &ops, const Bdf &bdf) const noexcept;
         [[nodiscard]]
         Result<void> log_and_register_device(
-            device::DeviceModel &model, PCIDeviceIdentity identity,
-            std::vector<PCIBar> bars) const noexcept;
+            device::DeviceModel &model, const PCIHostControllerConfig &config,
+            PCIDeviceIdentity identity, std::vector<PCIBar> bars) const noexcept;
 
-        const fdt::FDTDeviceNode *_host = nullptr;
+        const ::fdt::FDTDeviceNode *_host = nullptr;
     };
 }  // namespace pci

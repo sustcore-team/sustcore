@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <cap/cholder.h>
 #include <device/device.h>
 #include <driver/base.h>
@@ -18,10 +19,6 @@
 #include <sus/owner.h>
 
 #include <vector>
-
-namespace device {
-    class DeviceModel;
-}
 
 namespace driver {
     /**

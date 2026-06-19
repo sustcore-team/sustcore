@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <cap/capability.h>
 #include <object/perm.h>
 #include <sus/coroutine.h>
@@ -23,8 +24,6 @@
 #include <cstddef>
 
 namespace cap {
-    class CHolder;
-
     /**
      * @brief Endpoint发送侧消息视图, 不持有缓冲区或cap数组.
      */

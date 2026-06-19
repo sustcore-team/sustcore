@@ -19,8 +19,6 @@
 #include <cstddef>
 
 namespace syscall {
-    class UString;
-
     /**
      * @brief 创建进程, 用户路径与 capability 列表已由 dispatcher 预处理.
      */

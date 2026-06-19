@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <driver/clock.h>
 #include <driver/base.h>
@@ -57,9 +58,6 @@ public:
 };
 
 namespace driver {
-    class IrqDomain;
-    class IrqManager;
-
     /**
      * @brief 中断触发方式.
      */

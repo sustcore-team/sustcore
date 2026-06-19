@@ -13,6 +13,7 @@
 #include <driver/virtio/virtio.h>
 #include <logger.h>
 #include <mem/gfp.h>
+#include <device/pci.h>
 #include <sus/raii.h>
 #include <task/scheduler.h>
 
@@ -70,6 +71,30 @@ namespace virtio {
                    virtio::is_supported_version(info.version) &&
                    info.device_id !=
                        static_cast<virtio::u32>(virtio::DeviceType::INVALID);
+        }
+
+        [[nodiscard]]
+        std::optional<size_t> pci_common_reg_offset(size_t reg_offset) noexcept {
+            switch (reg_offset) {
+                case offset::DEVICE_FEATURE_SEL:
+                    return offsetof(VirtioPciCommonCfg, device_feature_select);
+                case offset::DEVICE_FEATURE:
+                    return offsetof(VirtioPciCommonCfg, device_feature);
+                case offset::DRIVER_FEATURE_SEL:
+                    return offsetof(VirtioPciCommonCfg, driver_feature_select);
+                case offset::DRIVER_FEATURE:
+                    return offsetof(VirtioPciCommonCfg, driver_feature);
+                case offset::QUEUE_SEL:
+                    return offsetof(VirtioPciCommonCfg, queue_select);
+                case offset::QUEUE_NUM_MAX:
+                    return offsetof(VirtioPciCommonCfg, queue_size);
+                case offset::QUEUE_NUM:
+                    return offsetof(VirtioPciCommonCfg, queue_size);
+                case offset::STATUS:
+                    return offsetof(VirtioPciCommonCfg, device_status);
+                default:
+                    return std::nullopt;
+            }
         }
 
         /**
@@ -324,37 +349,331 @@ namespace virtio {
         return (static_cast<u64>(hi_res.value()) << 32) | lo_res.value();
     }
 
+    TransportPCI::TransportPCI(const pci::PCIDeviceNode &node,
+                               ProbeInfo probe_info) noexcept
+        : Transport(probe_info), _node(&node), _modern(false) {
+        auto parse_res = parse_capabilities();
+        if (!parse_res.has_value()) {
+            return;
+        }
+        auto probe_res = load_probe_info();
+        if (!probe_res.has_value()) {
+            return;
+        }
+    }
+
+    TransportPCI::~TransportPCI() {
+        auto unmap_one = [](util::owner<device::MMIOResource *> &resource) {
+            if (resource.get() == nullptr || !resource->mapped()) {
+                return;
+            }
+            auto unmap_res =
+                device::MMIOManager::inst().unmap_from_kernel(*resource.get());
+            if (!unmap_res.has_value()) {
+                loggers::DEVICE::ERROR(
+                    "解除 virtio-pci MMIO capability 映射失败: err=%s",
+                    to_cstring(unmap_res.error()));
+            }
+        };
+        unmap_one(_common_resource);
+        unmap_one(_notify_resource);
+        unmap_one(_device_resource);
+    }
+
+    Result<void> TransportPCI::parse_capabilities() noexcept {
+        if (_node == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+
+        b16 offset = _node->capability_pointer();
+        loggers::DEVICE::INFO(
+            "virtio-pci 开始解析 capability 链: node=%s cap_ptr=0x%02x",
+            _node->name(), static_cast<unsigned>(offset));
+        size_t limit = 64;
+        while (offset != 0 && offset < 0x1000 && limit-- > 0) {
+            auto cap_id = _node->read_config8(offset);
+            loggers::DEVICE::INFO(
+                "virtio-pci capability: node=%s offset=0x%02x cap_id=0x%02x next=0x%02x",
+                _node->name(), static_cast<unsigned>(offset),
+                static_cast<unsigned>(cap_id),
+                static_cast<unsigned>(
+                    _node->read_config8(static_cast<b16>(offset + 1))));
+            if (cap_id == pci_cap::CAP_ID_VENDOR) {
+                auto parse_res = parse_vendor_cap(offset);
+                propagate(parse_res);
+            }
+            offset = _node->read_config8(static_cast<b16>(offset + 1));
+        }
+
+        if (!_common_cfg.valid || !_notify_cfg.valid || !_device_cfg.valid) {
+            loggers::DEVICE::ERROR(
+                "virtio-pci capability 不完整: node=%s common=%s notify=%s device=%s",
+                _node->name(), _common_cfg.valid ? "yes" : "no",
+                _notify_cfg.valid ? "yes" : "no",
+                _device_cfg.valid ? "yes" : "no");
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+
+        auto common_map_res = map_bar_region(_common_cfg, _common_resource);
+        propagate(common_map_res);
+        _common_base = common_map_res.value();
+
+        auto notify_map_res = map_bar_region(_notify_cfg, _notify_resource);
+        propagate(notify_map_res);
+        _notify_base = notify_map_res.value();
+
+        auto device_map_res = map_bar_region(_device_cfg, _device_resource);
+        propagate(device_map_res);
+        _device_base = device_map_res.value();
+
+        _modern = true;
+        void_return();
+    }
+
+    Result<void> TransportPCI::parse_vendor_cap(b16 offset) noexcept {
+        auto cfg_type = _node->read_config8(static_cast<b16>(offset + 3));
+        auto bar = _node->read_config8(static_cast<b16>(offset + 4));
+        auto region_offset =
+            _node->read_config32(static_cast<b16>(offset + 8));
+        auto region_length =
+            _node->read_config32(static_cast<b16>(offset + 12));
+        loggers::DEVICE::INFO(
+            "virtio-pci vendor cap: node=%s offset=0x%02x cfg_type=%u bar=%u cap_off=0x%x len=0x%x",
+            _node->name(), static_cast<unsigned>(offset),
+            static_cast<unsigned>(cfg_type), static_cast<unsigned>(bar),
+            static_cast<unsigned>(region_offset),
+            static_cast<unsigned>(region_length));
+        switch (cfg_type) {
+            case pci_cap::CFG_COMMON: {
+                auto region_res = read_region(offset, pci_cap::CFG_COMMON);
+                propagate(region_res);
+                _common_cfg = region_res.value();
+                loggers::DEVICE::INFO(
+                    "virtio-pci common cfg 就绪: node=%s cpu=0x%llx len=0x%x",
+                    _node->name(),
+                    static_cast<unsigned long long>(_common_cfg.cpu_addr),
+                    static_cast<unsigned>(_common_cfg.length));
+                break;
+            }
+            case pci_cap::CFG_NOTIFY: {
+                auto region_res = read_region(offset, pci_cap::CFG_NOTIFY);
+                propagate(region_res);
+                _notify_cfg = region_res.value();
+                _notify_off_multiplier =
+                    _node->read_config32(static_cast<b16>(offset + 16));
+                loggers::DEVICE::INFO(
+                    "virtio-pci notify cfg 就绪: node=%s cpu=0x%llx len=0x%x multiplier=0x%x",
+                    _node->name(),
+                    static_cast<unsigned long long>(_notify_cfg.cpu_addr),
+                    static_cast<unsigned>(_notify_cfg.length),
+                    static_cast<unsigned>(_notify_off_multiplier));
+                break;
+            }
+            case pci_cap::CFG_DEVICE: {
+                auto region_res = read_region(offset, pci_cap::CFG_DEVICE);
+                propagate(region_res);
+                _device_cfg = region_res.value();
+                loggers::DEVICE::INFO(
+                    "virtio-pci device cfg 就绪: node=%s cpu=0x%llx len=0x%x",
+                    _node->name(),
+                    static_cast<unsigned long long>(_device_cfg.cpu_addr),
+                    static_cast<unsigned>(_device_cfg.length));
+                break;
+            }
+            default: break;
+        }
+        void_return();
+    }
+
+    Result<VirtioPciRegion> TransportPCI::read_region(
+        b16 cap_offset, b8 expected_cfg_type) const noexcept {
+        if (_node == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        auto cfg_type = _node->read_config8(static_cast<b16>(cap_offset + 3));
+        if (cfg_type != expected_cfg_type) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        auto bar = _node->read_config8(static_cast<b16>(cap_offset + 4));
+        const auto *bar_info = _node->find_bar(bar);
+        if (bar_info == nullptr || !bar_info->valid || !bar_info->mmio ||
+            bar_info->cpu_addr == 0)
+        {
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+        auto region_offset = _node->read_config32(static_cast<b16>(cap_offset + 8));
+        auto region_length = _node->read_config32(static_cast<b16>(cap_offset + 12));
+        return VirtioPciRegion{
+            .valid = true,
+            .bar = bar,
+            .cpu_addr = bar_info->cpu_addr + region_offset,
+            .length = region_length,
+        };
+    }
+
+    Result<void> TransportPCI::load_probe_info() noexcept {
+        if (_node == nullptr || !_common_cfg.valid || _common_base == nullptr) {
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+
+        const auto &identity = _node->identity();
+        auto *common = reinterpret_cast<volatile VirtioPciCommonCfg *>(
+            _common_base);
+
+        u32 device_id = 0;
+        if (identity.device_id >= 0x1000 && identity.device_id < 0x1040) {
+            device_id = static_cast<u32>(identity.device_id - 0x0FFF);
+        } else if (identity.device_id >= 0x1040) {
+            device_id = static_cast<u32>(identity.device_id - 0x1040);
+        }
+
+        _probe_info.magic_value = MAGIC_VALUE;
+        _probe_info.version = VERSION_MODERN;
+        _probe_info.device_id = device_id;
+        _probe_info.vendor_id = identity.vendor_id;
+        _probe_info.status = common->device_status;
+        common->device_feature_select = 0;
+        const auto lo = common->device_feature;
+        common->device_feature_select = 1;
+        const auto hi = common->device_feature;
+        _probe_info.device_features =
+            static_cast<u32>(lo | (hi != 0 ? 0x80000000u : 0u));
+        _probe_info.legacy = false;
+        _probe_info.valid = is_valid_device(_probe_info);
+        void_return();
+    }
+
+    Result<volatile char *> TransportPCI::map_bar_region(
+        const VirtioPciRegion &region,
+        util::owner<device::MMIOResource *> &resource) noexcept {
+        if (!region.valid || region.cpu_addr == 0 || region.length == 0) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        resource = device::MMIOResource::make(PhyArea(
+            PhyAddr(static_cast<addr_t>(region.cpu_addr)),
+            PhyAddr(static_cast<addr_t>(region.cpu_addr + region.length))));
+        if (resource.get() == nullptr) {
+            unexpect_return(ErrCode::OUT_OF_MEMORY);
+        }
+        auto map_res = device::MMIOManager::inst().map_to_kernel(*resource.get());
+        propagate(map_res);
+        return map_res.value().as<char>();
+    }
+
     u32 TransportPCI::read_reg32(size_t reg_offset) const noexcept {
-        (void)reg_offset;
-        return 0;
+        if (!_common_cfg.valid || _common_base == nullptr) {
+            return 0;
+        }
+        auto mapped = pci_common_reg_offset(reg_offset);
+        if (!mapped.has_value()) {
+            return 0;
+        }
+        if (reg_offset == offset::STATUS) {
+            auto *ptr = reinterpret_cast<volatile u8 *>(_common_base + *mapped);
+            return *ptr;
+        }
+        if (reg_offset == offset::QUEUE_SEL || reg_offset == offset::QUEUE_NUM ||
+            reg_offset == offset::QUEUE_NUM_MAX)
+        {
+            auto *ptr =
+                reinterpret_cast<volatile u16 *>(_common_base + *mapped);
+            return *ptr;
+        }
+        auto *ptr = reinterpret_cast<volatile u32 *>(_common_base + *mapped);
+        return *ptr;
     }
 
     void TransportPCI::write_reg32(size_t reg_offset, u32 value) noexcept {
-        (void)reg_offset;
-        (void)value;
+        if (!_common_cfg.valid || _common_base == nullptr) {
+            return;
+        }
+        auto mapped = pci_common_reg_offset(reg_offset);
+        if (!mapped.has_value()) {
+            return;
+        }
+        if (reg_offset == offset::STATUS) {
+            auto *ptr = reinterpret_cast<volatile u8 *>(_common_base + *mapped);
+            *ptr = static_cast<u8>(value);
+            return;
+        }
+        if (reg_offset == offset::QUEUE_SEL || reg_offset == offset::QUEUE_NUM ||
+            reg_offset == offset::QUEUE_NUM_MAX)
+        {
+            auto *ptr =
+                reinterpret_cast<volatile u16 *>(_common_base + *mapped);
+            *ptr = static_cast<u16>(value);
+            return;
+        }
+        auto *ptr = reinterpret_cast<volatile u32 *>(_common_base + *mapped);
+        *ptr = value;
     }
 
     Result<u8> TransportPCI::read_config_u8(size_t config_offset) const noexcept {
-        (void)config_offset;
-        unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (!_device_cfg.valid || _device_base == nullptr) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u8 *>(_device_base + config_offset);
+        return static_cast<u8>(*ptr);
     }
 
     Result<u16> TransportPCI::read_config_u16(
         size_t config_offset) const noexcept {
-        (void)config_offset;
-        unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (!_device_cfg.valid || _device_base == nullptr) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u16 *>(_device_base + config_offset);
+        return static_cast<u16>(*ptr);
     }
 
     Result<u32> TransportPCI::read_config_u32(
         size_t config_offset) const noexcept {
-        (void)config_offset;
-        unexpect_return(ErrCode::NOT_SUPPORTED);
+        if (!_device_cfg.valid || _device_base == nullptr) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *ptr = reinterpret_cast<volatile u32 *>(_device_base + config_offset);
+        return static_cast<u32>(*ptr);
     }
 
     Result<u64> TransportPCI::read_config_u64(
         size_t config_offset) const noexcept {
-        (void)config_offset;
-        unexpect_return(ErrCode::NOT_SUPPORTED);
+        auto lo_res = read_config_u32(config_offset);
+        propagate(lo_res);
+        auto hi_res = read_config_u32(config_offset + sizeof(u32));
+        propagate(hi_res);
+        return (static_cast<u64>(hi_res.value()) << 32) | lo_res.value();
+    }
+
+    Result<u16> TransportPCI::max_queue_size(u16 queue_index) noexcept {
+        auto *common = reinterpret_cast<volatile VirtioPciCommonCfg *>(
+            _common_base);
+        common->queue_select = queue_index;
+        return static_cast<u16>(common->queue_size);
+    }
+
+    Result<void> TransportPCI::setup_queue(u16 queue_index, u16 queue_size,
+                                           PhyAddr desc, PhyAddr driver_area,
+                                           PhyAddr device_area) noexcept {
+        auto *common = reinterpret_cast<volatile VirtioPciCommonCfg *>(
+            _common_base);
+        common->queue_select = queue_index;
+        common->queue_size = queue_size;
+        common->queue_desc = desc.arith();
+        common->queue_driver = driver_area.arith();
+        common->queue_device = device_area.arith();
+        common->queue_enable = 1;
+        void_return();
+    }
+
+    Result<void> TransportPCI::notify_queue(u16 queue_index) noexcept {
+        auto *common = reinterpret_cast<volatile VirtioPciCommonCfg *>(
+            _common_base);
+        common->queue_select = queue_index;
+        const auto notify_off = common->queue_notify_off;
+        auto *notify_addr = reinterpret_cast<volatile u16 *>(
+            _notify_base +
+            static_cast<size_t>(notify_off) * _notify_off_multiplier);
+        *notify_addr = queue_index;
+        void_return();
     }
 
     VirtioDriverBase::VirtioDriverBase(DevRes res, ProbeInfo probe_info,
@@ -375,10 +694,11 @@ namespace virtio {
     }
 
     Result<void> VirtioDriverBase::begin_init(u64 supported_features) noexcept {
-        // 先校验 transport 前置条件, 当前通用运行时仅实现 legacy 路径.
-        if (!_probe_info.valid || !_probe_info.legacy) {
+        // 先校验 transport 前置条件，当前通用运行时支持 legacy-mmio
+        // 与 modern-pci 两条路径。
+        if (!_probe_info.valid) {
             loggers::DEVICE::ERROR(
-                "VirtioDriverBase 仅支持已探测的 legacy virtio 设备: node=%s",
+                "VirtioDriverBase 仅支持已探测的 virtio 设备: node=%s",
                 name());
             unexpect_return(ErrCode::NOT_SUPPORTED);
         }
@@ -530,6 +850,78 @@ namespace virtio {
         return created;
     }
 
+    Result<VirtQueueLegacy *> VirtioDriverBase::init_queue_modern(
+        u16 queue_index, u16 requested_size) noexcept {
+        auto *transport = _transport.get();
+        if (transport == nullptr || transport->kind() != Transport::Kind::PCI) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto *transport_pci = static_cast<TransportPCI *>(transport);
+        if (!transport_pci->modern()) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+
+        auto max_size_res = transport_pci->max_queue_size(queue_index);
+        propagate(max_size_res);
+        const auto queue_size = static_cast<u16>(std::min<u32>(
+            std::min<u32>(requested_size, MAX_QUEUE_SIZE), max_size_res.value()));
+        if (queue_size == 0) {
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+
+        size_t avail_offset = 0;
+        size_t used_offset = 0;
+        const auto total_bytes =
+            queue_total_bytes(queue_size, &avail_offset, &used_offset);
+        auto ring_res = alloc_dma_buffer(total_bytes);
+        propagate(ring_res);
+        auto ring = ring_res.value();
+        std::memset(ring.kaddr, 0, ring.size);
+
+        auto *base = static_cast<char *>(ring.kaddr);
+        VirtQueueLegacy queue{
+            .queue_index = queue_index,
+            .size        = queue_size,
+            .ring        = ring,
+            .desc        = reinterpret_cast<VirtQueueDescLegacy *>(base),
+            .avail_flags =
+                reinterpret_cast<volatile le16 *>(base + avail_offset),
+            .avail_index = reinterpret_cast<volatile le16 *>(
+                base + avail_offset + sizeof(le16)),
+            .avail_ring = reinterpret_cast<volatile le16 *>(
+                base + avail_offset + sizeof(le16) * 2),
+            .used_flags = reinterpret_cast<volatile le16 *>(base + used_offset),
+            .used_index = reinterpret_cast<volatile le16 *>(base + used_offset +
+                                                            sizeof(le16)),
+            .used_ring  = reinterpret_cast<volatile VirtQueueUsedElemLegacy *>(
+                base + used_offset + sizeof(le16) * 2),
+            .avail_offset     = avail_offset,
+            .used_offset      = used_offset,
+            .ring_bytes       = total_bytes,
+            .free_head        = 0,
+            .free_count       = queue_size,
+            .last_used_index  = 0,
+            .last_avail_index = 0,
+        };
+
+        for (u16 i = 0; i < queue_size; ++i) {
+            queue.desc[i].next = (i + 1 < queue_size)
+                                     ? static_cast<le16>(i + 1)
+                                     : static_cast<le16>(vring::INVALID_DESC);
+        }
+
+        auto desc_paddr = ring.paddr;
+        auto driver_paddr = ring.paddr + avail_offset;
+        auto device_paddr = ring.paddr + used_offset;
+        auto setup_res = transport_pci->setup_queue(queue_index, queue_size,
+                                                    desc_paddr, driver_paddr,
+                                                    device_paddr);
+        propagate(setup_res);
+
+        _queues.push_back(queue);
+        return &_queues.back();
+    }
+
     Result<u16> VirtioDriverBase::queue_add_chain_legacy(
         VirtQueueLegacy &queue,
         const std::vector<vring::BufferView> &buffers) noexcept {
@@ -583,6 +975,11 @@ namespace virtio {
 
     Result<void> VirtioDriverBase::queue_notify_legacy(
         VirtQueueLegacy &queue) noexcept {
+        auto *transport = _transport.get();
+        if (transport != nullptr && transport->kind() == Transport::Kind::PCI) {
+            auto *transport_pci = static_cast<TransportPCI *>(transport);
+            return transport_pci->notify_queue(queue.queue_index);
+        }
         write_reg32(offset::QUEUE_NOTIFY, queue.queue_index);
         void_return();
     }
@@ -814,6 +1211,24 @@ namespace virtio {
         return probe_mmio_device_impl(node, true, true);
     }
 
+    Result<ProbeInfo> probe_pci_device(const device::DeviceNode &node) noexcept {
+        auto *pci_node = node.as<pci::PCIDeviceNode>();
+        if (pci_node == nullptr) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        ProbeInfo info{};
+        auto transport = TransportPCI(*pci_node, info);
+        info = transport.probe_info();
+        if (!info.valid) {
+            loggers::DEVICE::ERROR(
+                "virtio-pci 探测失败或当前仅检测到 legacy transport: node=%s",
+                node.name());
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        log_probe_result(node, info);
+        return info;
+    }
+
     const driver::DeviceId &VirtioMmioFactory::device_id() const noexcept {
         return VIRTIO_MMIO_DEVICE_ID;
     }
@@ -824,10 +1239,8 @@ namespace virtio {
         (void)model;
         (void)driver_flag;
         if (node.platform() == device::DevicePlatform::PCI) {
-            loggers::DEVICE::DEBUG(
-                "virtio-pci 节点已命中总工厂，但当前 transport 尚未支持: node=%s",
-                node.name());
-            return true;
+            auto probe_res = probe_pci_device(node);
+            return probe_res.has_value() && is_valid_device(probe_res.value());
         }
         auto probe_res = probe_mmio_device_impl(node, true, true);
         return probe_res.has_value() && is_valid_device(probe_res.value());
@@ -838,10 +1251,14 @@ namespace virtio {
         b64 driver_flag) const {
         (void)driver_flag;
         if (node.platform() == device::DevicePlatform::PCI) {
-            loggers::DEVICE::ERROR(
-                "virtio 总工厂已匹配 PCI 设备，但当前仅支持 virtio-mmio transport: node=%s",
-                node.name());
-            unexpect_return(ErrCode::NOT_SUPPORTED);
+            auto probe_res = probe_pci_device(node);
+            propagate(probe_res);
+            const auto &info = probe_res.value();
+            auto *factory = find_virtio_factory(node, model, info);
+            if (factory == nullptr) {
+                unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+            }
+            return factory->create(node, model, info);
         }
         auto probe_res = probe_mmio_device(node);
         propagate(probe_res);

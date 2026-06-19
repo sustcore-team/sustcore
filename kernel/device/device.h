@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <sus/rtti.h>
 #include <sus/types.h>
 #include <sustcore/addr.h>
@@ -30,8 +31,6 @@ namespace driver {
     inline constexpr domain_t INVALID_DOMAIN_ID = 0xFFFFFFFF;
     inline constexpr virq_t INVALID_VIRQ        = 0xFFFFFFFF'FFFFFFFFuLL;
 
-    struct IrqEvent;
-    enum class IrqTrigger;
     using IrqHandler = std::function<void(const IrqEvent &)>;
 }  // namespace driver
 

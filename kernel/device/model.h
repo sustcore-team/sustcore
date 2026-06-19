@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <device/cpu.h>
 #include <device/device.h>
 #include <device/platform.h>
@@ -25,10 +26,6 @@
 #include <sustcore/errcode.h>
 
 #include <vector>
-
-namespace device {
-    class DeviceModel;
-}
 
 namespace device {
     class DeviceProvider {

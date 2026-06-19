@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <fwd.h>
 #include <arch/description.h>
 #include <cap/cholder.h>
 #include <mem/vma.h>
@@ -28,10 +29,6 @@
 using tid_t = size_t;
 using pid_t = size_t;
 
-namespace task {
-    struct TCB;
-}  // namespace task
-
 namespace wait {
     /// `wd` 是 `wait descriptor` 的缩写, 表示等待子系统分配的描述符编号.
     using wd_t               = size_t;
@@ -46,7 +43,6 @@ namespace task {
         INIT_USER,
     };
 
-    struct PCB;
     using KThreadEntry = void (*)(void *);
 
     // Make sure that TCB is has standard layout,

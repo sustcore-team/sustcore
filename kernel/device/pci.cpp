@@ -35,6 +35,7 @@ namespace {
     constexpr b16 PCI_SUBVENDOR_ID    = 0x2C;
     constexpr b16 PCI_SUBDEVICE_ID    = 0x2E;
     constexpr b16 PCI_SECONDARY_BUS   = 0x19;
+    constexpr b16 PCI_COMMAND         = 0x04;
     constexpr b8 PCI_HEADER_MULTIFUNC = 0x80;
     constexpr b8 PCI_HEADER_TYPE_MASK = 0x7F;
     constexpr b8 PCI_HEADER_BRIDGE    = 0x01;
@@ -127,14 +128,52 @@ namespace {
         }
         return 0;
     }
+
+    [[nodiscard]]
+    std::optional<b64> allocate_pci_bar_address(
+        std::vector<pci::PCIHostRange> &ranges, b64 size, bool is_64bit) noexcept {
+        if (size == 0) {
+            return std::nullopt;
+        }
+
+        for (auto &range : ranges) {
+            if (!pci_range_is_mmio(range.flags)) {
+                continue;
+            }
+            if (!is_64bit &&
+                range.pci_addr + range.size > static_cast<b64>(UINT32_MAX))
+            {
+                continue;
+            }
+
+            b64 alloc = range.alloc_next == 0 ? range.pci_addr : range.alloc_next;
+            alloc = page_align_up(alloc);
+            if (alloc < range.pci_addr ||
+                alloc + size > range.pci_addr + range.size)
+            {
+                continue;
+            }
+            if (!is_64bit &&
+                alloc + size > static_cast<b64>(UINT32_MAX))
+            {
+                continue;
+            }
+
+            range.alloc_next = alloc + size;
+            return alloc;
+        }
+        return std::nullopt;
+    }
 }  // namespace
 
 namespace pci {
     PCIDeviceNode::PCIDeviceNode(PCIDeviceIdentity identity,
+                                 PCIHostControllerConfig host,
                                  std::vector<PCIBar> bars,
                                  std::vector<PhyArea> mmios,
                                  std::vector<device::RawIrqSpec> irqs) noexcept
         : _identity(identity),
+          _host(std::move(host)),
           _bars(std::move(bars)),
           _mmios(std::move(mmios)),
           _irqs(std::move(irqs)) {
@@ -153,6 +192,84 @@ namespace pci {
 
     std::vector<device::RawIrqSpec> PCIDeviceNode::irq_specs() const noexcept {
         return _irqs;
+    }
+
+    const PCIBar *PCIDeviceNode::find_bar(b8 index) const noexcept {
+        for (const auto &bar : _bars) {
+            if (bar.index == index) {
+                return &bar;
+            }
+        }
+        return nullptr;
+    }
+
+    volatile void *PCIDeviceNode::ConfigAccessor::config_ptr(
+        const Bdf &bdf, b16 offset) const noexcept {
+        if (offset >= 0x1000 || bdf.device > 31 || bdf.function > 7 ||
+            bdf.bus < _config.bus_start || bdf.bus > _config.bus_end)
+        {
+            return nullptr;
+        }
+        auto ecam_kva = convert<KvaAddr>(_config.ecam_region.begin);
+        const auto offset_bytes =
+            (static_cast<b64>(bdf.bus - _config.bus_start) << 20) |
+            (static_cast<b64>(bdf.device) << 15) |
+            (static_cast<b64>(bdf.function) << 12) | offset;
+        return static_cast<volatile char *>(ecam_kva.addr()) + offset_bytes;
+    }
+
+    b8 PCIDeviceNode::ConfigAccessor::read8(const Bdf &bdf,
+                                            b16 offset) const noexcept {
+        auto *ptr = reinterpret_cast<volatile b8 *>(config_ptr(bdf, offset));
+        return ptr != nullptr ? *ptr : 0xFF;
+    }
+
+    b16 PCIDeviceNode::ConfigAccessor::read16(const Bdf &bdf,
+                                              b16 offset) const noexcept {
+        auto *ptr = reinterpret_cast<volatile b16 *>(config_ptr(bdf, offset));
+        return ptr != nullptr ? *ptr : 0xFFFF;
+    }
+
+    b32 PCIDeviceNode::ConfigAccessor::read32(const Bdf &bdf,
+                                              b16 offset) const noexcept {
+        auto *ptr = reinterpret_cast<volatile b32 *>(config_ptr(bdf, offset));
+        return ptr != nullptr ? *ptr : 0xFFFFFFFFu;
+    }
+
+    void PCIDeviceNode::ConfigAccessor::write32(const Bdf &bdf, b16 offset,
+                                                b32 value) const noexcept {
+        auto *ptr = reinterpret_cast<volatile b32 *>(config_ptr(bdf, offset));
+        if (ptr != nullptr) {
+            *ptr = value;
+        }
+    }
+
+    b8 PCIDeviceNode::read_config8(b16 offset) const noexcept {
+        return ConfigAccessor(_host).read8(_identity.bdf, offset);
+    }
+
+    b16 PCIDeviceNode::read_config16(b16 offset) const noexcept {
+        return ConfigAccessor(_host).read16(_identity.bdf, offset);
+    }
+
+    b32 PCIDeviceNode::read_config32(b16 offset) const noexcept {
+        return ConfigAccessor(_host).read32(_identity.bdf, offset);
+    }
+
+    b8 PCIDeviceNode::capability_pointer() const noexcept {
+        return read_config8(0x34);
+    }
+
+    b16 PCIDeviceNode::find_capability(b8 cap_id) const noexcept {
+        b16 current = capability_pointer();
+        size_t limit = 64;
+        while (current != 0 && current < 0x1000 && limit-- > 0) {
+            if (read_config8(current) == cap_id) {
+                return current;
+            }
+            current = read_config8(static_cast<b16>(current + 1));
+        }
+        return 0;
     }
 
     PCIBusProvider::PCIBusProvider(const fdt::FDTDeviceNode &host) noexcept
@@ -324,6 +441,33 @@ namespace pci {
                 }
             }
 
+            if (raw_addr == 0) {
+                auto allocated =
+                    allocate_pci_bar_address(const_cast<PCIHostControllerConfig &>(
+                                                 config)
+                                                 .ranges,
+                                             size, is_64bit);
+                if (allocated.has_value()) {
+                    raw_addr = *allocated;
+                    auto new_low = static_cast<b32>((raw_addr & 0xFFFFFFFFu) |
+                                                    (bar_low & 0xFu));
+                    ops.write32(identity.bdf, bar_offset, new_low);
+                    if (is_64bit && index > current_index) {
+                        auto new_high =
+                            static_cast<b32>((raw_addr >> 32) & 0xFFFFFFFFu);
+                        ops.write32(identity.bdf,
+                                    static_cast<b16>(bar_offset + 4), new_high);
+                    }
+                    loggers::DEVICE::INFO(
+                        "为 PCI BAR%u 分配地址: %04x:%02x:%02x.%u pci=0x%llx size=0x%llx",
+                        static_cast<unsigned>(current_index),
+                        identity.bdf.segment, identity.bdf.bus,
+                        identity.bdf.device, identity.bdf.function,
+                        static_cast<unsigned long long>(raw_addr),
+                        static_cast<unsigned long long>(size));
+                }
+            }
+
             b64 cpu_addr = translate_pci_addr(config.ranges, raw_addr);
             if (cpu_addr == 0) {
                 loggers::DEVICE::WARN(
@@ -349,7 +493,8 @@ namespace pci {
     }
 
     Result<void> PCIBusProvider::log_and_register_device(
-        device::DeviceModel &model, PCIDeviceIdentity identity,
+        device::DeviceModel &model, const PCIHostControllerConfig &config,
+        PCIDeviceIdentity identity,
         std::vector<PCIBar> bars) const noexcept {
         std::vector<PhyArea> mmios;
         mmios.reserve(bars.size());
@@ -380,8 +525,8 @@ namespace pci {
 
         auto node_res = model.register_device_node(
             util::owner<device::DeviceNode *>(
-                new PCIDeviceNode(identity, std::move(bars), std::move(mmios),
-                                  {})));
+                new PCIDeviceNode(identity, config, std::move(bars),
+                                  std::move(mmios), {})));
         propagate(node_res);
         void_return();
     }
@@ -422,8 +567,18 @@ namespace pci {
                 static_cast<unsigned>(secondary));
         }
 
+        auto command = ops.read16(bdf, PCI_COMMAND);
+        command |= (1u << 0);
+        command |= (1u << 1);
+        command |= (1u << 2);
+        auto command_low = static_cast<b32>(command);
+        auto command_full = ops.read32(bdf, PCI_COMMAND & ~0x3u);
+        command_full = (command_full & 0xFFFF0000u) | command_low;
+        ops.write32(bdf, PCI_COMMAND & ~0x3u, command_full);
+
         auto register_res =
-            log_and_register_device(model, identity, std::move(bars_res.value()));
+            log_and_register_device(model, config, identity,
+                                    std::move(bars_res.value()));
         propagate(register_res);
         void_return();
     }
