@@ -385,7 +385,11 @@ namespace fdt {
         friend class FDTDeviceNode;
 
     private:
-        using InterruptRef = std::pair<phandle_t, hwirq_t>;
+        struct InterruptRef {
+            phandle_t phandle = 0;
+            hwirq_t hwirq = 0;
+            std::optional<driver::IrqTrigger> trigger = std::nullopt;
+        };
 
         Configuration _config;
         mutable std::unordered_map<phandle_t, domain_t> _irq_domains;
@@ -423,41 +427,6 @@ namespace fdt {
         [[nodiscard]]
         Result<size_t> interrupt_cells_for_controller(
             phandle_t controller_phandle) const;
-
-        /**
-         * @brief 沿父节点链查找节点生效的 interrupt-parent.
-         *
-         * @param node 待查询节点.
-         * @return Result<phandle_t> 继承解析后的 interrupt-parent phandle.
-         */
-        [[nodiscard]]
-        Result<phandle_t> resolve_interrupt_parent(const Node &node) const;
-
-        /**
-         * @brief 将 interrupts-extended 属性解析为中断引用列表.
-         *
-         * 返回值顺序与属性中的条目顺序一致. 当前仅支持
-         * `#interrupt-cells == 1` 的中断控制器编码.
-         *
-         * @param node 待解析节点.
-         * @return Result<std::vector<InterruptRef>> 解析得到的中断引用列表.
-         */
-        [[nodiscard]]
-        Result<std::vector<InterruptRef>> parse_interrupts_extended(
-            const Node &node) const;
-
-        /**
-         * @brief 将 interrupt-parent + interrupts 解析为中断引用列表.
-         *
-         * 返回值顺序与属性中的条目顺序一致. 当前仅支持
-         * `#interrupt-cells == 1` 的中断控制器编码.
-         *
-         * @param node 待解析节点.
-         * @return Result<std::vector<InterruptRef>> 解析得到的中断引用列表.
-         */
-        [[nodiscard]]
-        Result<std::vector<InterruptRef>> parse_interrupts(
-            const Node &node) const;
 
         /**
          * @brief 将一组中断引用解析为稳定的 virq 列表.
@@ -510,6 +479,17 @@ namespace fdt {
 
     public:
         FDTProvider(void *dtb);
+        [[nodiscard]]
+        std::optional<phandle_t> maybe_interrupt_parent(
+            const Node &node) const noexcept;
+        [[nodiscard]]
+        Result<phandle_t> resolve_interrupt_parent(const Node &node) const;
+        [[nodiscard]]
+        Result<std::vector<InterruptRef>> parse_interrupts_extended(
+            const Node &node) const;
+        [[nodiscard]]
+        Result<std::vector<InterruptRef>> parse_interrupts(
+            const Node &node) const;
         /**
          * @brief 向普通设备工厂注册表登记默认 FDT 设备工厂.
          */

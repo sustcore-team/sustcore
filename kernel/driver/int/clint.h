@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <arch/riscv64/clint.h>
+#include <arch/riscv64/device/clint.h>
 
 namespace driver {
     using Clint = riscv::Clint;

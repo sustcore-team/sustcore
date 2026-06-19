@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/fdt_helper.h>
+#include <arch/loongarch64/device/fdt_helper.h>
 #include <libfdt.h>
 #include <logger.h>
 

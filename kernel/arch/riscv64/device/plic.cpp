@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/riscv64/plic.h>
+#include <arch/riscv64/device/plic.h>
 #include <device/resource.h>
 #include <env.h>
 #include <logger.h>

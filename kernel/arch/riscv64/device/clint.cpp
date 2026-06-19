@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/riscv64/clint.h>
+#include <arch/riscv64/device/clint.h>
 #include <logger.h>
 
 namespace riscv {

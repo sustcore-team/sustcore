@@ -11,18 +11,22 @@
 
 #include <arch/description.h>
 #if defined(__ARCH_riscv64__)
-#include <arch/riscv64/clint.h>
-#include <arch/riscv64/clock.h>
+#include <arch/riscv64/device/cpu.h>
+#include <arch/riscv64/device/clint.h>
 #include <arch/riscv64/device/fdt_helper.h>
 #include <arch/riscv64/device/platform.h>
-#include <arch/riscv64/intc.h>
-#include <arch/riscv64/plic.h>
+#include <arch/riscv64/device/intc.h>
+#include <arch/riscv64/device/plic.h>
 #elif defined(__ARCH_loongarch64__)
-#include <arch/loongarch64/cpuic.h>
+#include <arch/loongarch64/device/cpu.h>
+#include <arch/loongarch64/device/cpuic.h>
+#include <arch/loongarch64/device/eiointc.h>
+#include <arch/loongarch64/device/platic.h>
+#include <arch/loongarch64/device/fdt_helper.h>
 #include <arch/loongarch64/device/platform.h>
-#include <arch/loongarch64/fdt_helper.h>
 #endif
 #include <device/fdt.h>
+#include <device/ic_graph.h>
 #include <device/model.h>
 #include <driver/model.h>
 #include <driver/rtc/goldfish.h>
@@ -82,6 +86,18 @@ namespace {
 
     constexpr const char *RESERVED_MEMORY_PATH = "/reserved-memory";
     constexpr const char *CPUS_PATH            = "/cpus";
+
+    [[nodiscard]]
+    std::optional<driver::IrqTrigger> decode_trigger_cell(
+        uint32_t raw) noexcept {
+        switch (raw) {
+            case 1: return driver::IrqTrigger::EDGE_RISING;
+            case 2: return driver::IrqTrigger::EDGE_FALLING;
+            case 4: return driver::IrqTrigger::LEVEL_HIGH;
+            case 8: return driver::IrqTrigger::LEVEL_LOW;
+            default: return std::nullopt;
+        }
+    }
 
     struct ParsedCpu {
         device::cpuid_t id;
@@ -1357,6 +1373,120 @@ namespace fdt {
         private:
             const FDTProvider *_provider = nullptr;
         };
+
+        class LoongArchEioIntcIrqFactory final : public device::IIrqChipFactory {
+        public:
+            [[nodiscard]]
+            std::string_view compatible() const noexcept override {
+                return la64::EioIntcChip::COMPATIBLE_STRING;
+            }
+
+            [[nodiscard]]
+            Result<DriverBase *> create(
+                const device::DeviceNode &node,
+                device::DeviceModel &model) const override {
+                if (_provider == nullptr ||
+                    std::strcmp(node.platform(), "fdt") != 0)
+                {
+                    unexpect_return(ErrCode::INVALID_PARAM);
+                }
+
+                auto &fdt_node = static_cast<const FDTDeviceNode &>(node);
+                auto refs_res = _provider->parse_interrupts(
+                    fdt_node.raw_node());
+                propagate(refs_res);
+                driver::hwirq_t parent_hwirq =
+                    refs_res.value().empty() ? 0 : refs_res.value().front().hwirq;
+
+                auto device_owner_res = la64::EioIntcChip::create(
+                    driver::DriverBase::DevRes(
+                        node,
+                        device::DevResManager::get_virq_resource(node),
+                        device::DevResManager::get_mmio_resource(node)),
+                    fdt_node.raw_node().phandle != 0
+                        ? static_cast<intc_t>(fdt_node.raw_node().phandle)
+                        : device::INVALID_ICTRL_ID,
+                    parent_hwirq);
+                propagate(device_owner_res);
+
+                auto &chip = *device_owner_res.value();
+                auto domain_res = model.interrupt().get_domain(chip.identifier());
+                propagate(domain_res);
+                if (fdt_node.raw_node().phandle != 0) {
+                    auto irq_domain_res = _provider->register_irq_domain_view(
+                        fdt_node.raw_node().phandle, domain_res.value().get());
+                    propagate(irq_domain_res);
+                }
+                auto attach_res = chip.attach_to_parent_domain(
+                    model.interrupt(), domain_res.value().get());
+                propagate(attach_res);
+                return static_cast<DriverBase *>(device_owner_res.value().get());
+            }
+
+            void bind_provider(const FDTProvider &provider) noexcept {
+                _provider = &provider;
+            }
+
+        private:
+            const FDTProvider *_provider = nullptr;
+        };
+
+        class LoongArchPlaticIrqFactory final : public device::IIrqChipFactory {
+        public:
+            [[nodiscard]]
+            std::string_view compatible() const noexcept override {
+                return la64::PlaticChip::COMPATIBLE_STRING;
+            }
+
+            [[nodiscard]]
+            Result<DriverBase *> create(
+                const device::DeviceNode &node,
+                device::DeviceModel &model) const override {
+                if (_provider == nullptr ||
+                    std::strcmp(node.platform(), "fdt") != 0)
+                {
+                    unexpect_return(ErrCode::INVALID_PARAM);
+                }
+
+                auto &fdt_node = static_cast<const FDTDeviceNode &>(node);
+                auto parent_phandle_res =
+                    _provider->resolve_interrupt_parent(fdt_node.raw_node());
+                if (!parent_phandle_res.has_value()) {
+                    unexpect_return(parent_phandle_res.error());
+                }
+
+                auto device_owner_res = la64::PlaticChip::create(
+                    driver::DriverBase::DevRes(
+                        node,
+                        device::DevResManager::get_virq_resource(node),
+                        device::DevResManager::get_mmio_resource(node)),
+                    fdt_node.raw_node().phandle != 0
+                        ? static_cast<intc_t>(fdt_node.raw_node().phandle)
+                        : device::INVALID_ICTRL_ID,
+                    static_cast<intc_t>(parent_phandle_res.value()));
+                propagate(device_owner_res);
+
+                auto &chip = *device_owner_res.value();
+                auto domain_res = model.interrupt().get_domain(chip.identifier());
+                propagate(domain_res);
+                if (fdt_node.raw_node().phandle != 0) {
+                    auto irq_domain_res = _provider->register_irq_domain_view(
+                        fdt_node.raw_node().phandle, domain_res.value().get());
+                    propagate(irq_domain_res);
+                }
+                auto attach_res = chip.attach_to_parent_domain(
+                    model.interrupt(), domain_res.value().get());
+                propagate(attach_res);
+                return static_cast<DriverBase *>(device_owner_res.value().get());
+            }
+
+            void bind_provider(const FDTProvider &provider) noexcept {
+                _provider = &provider;
+            }
+
+        private:
+            const FDTProvider *_provider = nullptr;
+        };
 #endif
     }  // namespace
 
@@ -1409,13 +1539,25 @@ namespace fdt {
                 util::owner<driver::IIrqChipFactory *>(plic_factory));
 #elif defined(__ARCH_loongarch64__)
         auto *cpuic_factory = new LoongArchCpuICIrqFactory();
-        if (cpuic_factory == nullptr) {
+        auto *eiointc_factory = new LoongArchEioIntcIrqFactory();
+        auto *platic_factory  = new LoongArchPlaticIrqFactory();
+        if (cpuic_factory == nullptr || eiointc_factory == nullptr ||
+            platic_factory == nullptr)
+        {
             return;
         }
         cpuic_factory->bind_provider(*this);
+        eiointc_factory->bind_provider(*this);
+        platic_factory->bind_provider(*this);
         [[maybe_unused]] auto cpuic_res =
             driver::DriverModel::inst().register_factory(
                 util::owner<driver::IIrqChipFactory *>(cpuic_factory));
+        [[maybe_unused]] auto eiointc_res =
+            driver::DriverModel::inst().register_factory(
+                util::owner<driver::IIrqChipFactory *>(eiointc_factory));
+        [[maybe_unused]] auto platic_res =
+            driver::DriverModel::inst().register_factory(
+                util::owner<driver::IIrqChipFactory *>(platic_factory));
 #endif
     }
 
@@ -1480,9 +1622,9 @@ namespace fdt {
 
         size_t cell_count =
             static_cast<size_t>(cells_it->second->as_integral());
-        if (cell_count != 1) {
+        if (cell_count != 1 && cell_count != 2) {
             loggers::DEVICE::ERROR(
-                "中断控制器节点 %s 的 %s=%u, 当前仅支持单 cell 中断编码",
+                "中断控制器节点 %s 的 %s=%u, 当前仅支持 1 或 2 cell 中断编码",
                 controller->name.c_str(), INTERRUPT_CELLS_PROP,
                 static_cast<unsigned>(cell_count));
             unexpect_return(ErrCode::INVALID_PARAM);
@@ -1491,8 +1633,8 @@ namespace fdt {
         return cell_count;
     }
 
-    Result<phandle_t> FDTProvider::resolve_interrupt_parent(
-        const Node &node) const {
+    std::optional<phandle_t> FDTProvider::maybe_interrupt_parent(
+        const Node &node) const noexcept {
         for (const Node *current = &node; current != nullptr;
              current             = current->parent)
         {
@@ -1505,9 +1647,19 @@ namespace fdt {
             if (phandle == 0) {
                 loggers::DEVICE::ERROR("节点 %s 的 interrupt-parent 为 0",
                                        current->name.c_str());
-                unexpect_return(ErrCode::INVALID_PARAM);
+                return std::nullopt;
             }
             return phandle;
+        }
+
+        return std::nullopt;
+    }
+
+    Result<phandle_t> FDTProvider::resolve_interrupt_parent(
+        const Node &node) const {
+        auto parent = maybe_interrupt_parent(node);
+        if (parent.has_value()) {
+            return parent.value();
         }
 
         loggers::DEVICE::ERROR("节点 %s 及其祖先均未声明 interrupt-parent",
@@ -1554,12 +1706,29 @@ namespace fdt {
             }
 
             hwirq_t hwirq = static_cast<hwirq_t>(cells[offset]);
+            std::optional<driver::IrqTrigger> trigger = std::nullopt;
+            if (cell_count == 2) {
+                auto trigger_opt = decode_trigger_cell(cells[offset + 1]);
+                if (!trigger_opt.has_value()) {
+                    loggers::DEVICE::ERROR(
+                        "节点 %s 的 interrupts-extended 含有非法触发方式: phandle=%u raw=%u",
+                        node.name.c_str(), phandle,
+                        static_cast<unsigned>(cells[offset + 1]));
+                } else {
+                    trigger = trigger_opt;
+                }
+            }
             offset += cell_count;
 
-            refs.emplace_back(phandle, hwirq);
+            refs.push_back(FDTProvider::InterruptRef{
+                .phandle = phandle,
+                .hwirq   = hwirq,
+                .trigger = trigger,
+            });
             loggers::DEVICE::DEBUG(
-                "解析 interrupts-extended: node=%s phandle=%u hwirq=%u",
-                node.name.c_str(), phandle, static_cast<unsigned>(hwirq));
+                "解析 interrupts-extended: node=%s phandle=%u hwirq=%u trigger=%d",
+                node.name.c_str(), phandle, static_cast<unsigned>(hwirq),
+                trigger.has_value() ? static_cast<int>(*trigger) : -1);
         }
 
         return refs;
@@ -1591,11 +1760,28 @@ namespace fdt {
         refs.reserve(cells.size() / cell_count);
         for (size_t offset = 0; offset < cells.size(); offset += cell_count) {
             hwirq_t hwirq = static_cast<hwirq_t>(cells[offset]);
-            refs.emplace_back(parent_phandle, hwirq);
+            std::optional<driver::IrqTrigger> trigger = std::nullopt;
+            if (cell_count == 2) {
+                auto trigger_opt = decode_trigger_cell(cells[offset + 1]);
+                if (!trigger_opt.has_value()) {
+                    loggers::DEVICE::ERROR(
+                        "节点 %s 的 interrupts 含有非法触发方式: parent=%u raw=%u",
+                        node.name.c_str(), parent_phandle,
+                        static_cast<unsigned>(cells[offset + 1]));
+                } else {
+                    trigger = trigger_opt;
+                }
+            }
+            refs.push_back(FDTProvider::InterruptRef{
+                .phandle = parent_phandle,
+                .hwirq   = hwirq,
+                .trigger = trigger,
+            });
             loggers::DEVICE::DEBUG(
-                "解析 interrupts: node=%s parent=%u hwirq=%u",
+                "解析 interrupts: node=%s parent=%u hwirq=%u trigger=%d",
                 node.name.c_str(), parent_phandle,
-                static_cast<unsigned>(hwirq));
+                static_cast<unsigned>(hwirq),
+                trigger.has_value() ? static_cast<int>(*trigger) : -1);
         }
 
         return refs;
@@ -1608,29 +1794,39 @@ namespace fdt {
         std::vector<virq_t> virqs;
         virqs.reserve(refs.size());
 
-        for (const auto &[phandle, hwirq] : refs) {
-            auto domain_res = resolve_irq_domain(phandle, irqman);
+        for (const auto &ref : refs) {
+            auto domain_res = resolve_irq_domain(ref.phandle, irqman);
             propagate(domain_res);
 
             if (domain_res.value().get().id() ==
-                    static_cast<domain_t>(phandle) &&
-                hwirq == static_cast<hwirq_t>(-1))
+                    static_cast<domain_t>(ref.phandle) &&
+                ref.hwirq == static_cast<hwirq_t>(-1))
             {
                 loggers::DEVICE::DEBUG(
                     "跳过无效中断引用: phandle=%u hwirq=%u",
-                    phandle, static_cast<unsigned>(hwirq));
+                    ref.phandle, static_cast<unsigned>(ref.hwirq));
                 continue;
             }
 
             auto virq_res =
-                irqman.allocate_virq(domain_res.value().get().id(), hwirq);
+                irqman.allocate_virq(domain_res.value().get().id(), ref.hwirq);
             propagate(virq_res);
+
+            if (ref.trigger.has_value()) {
+                auto trigger_res =
+                    irqman.set_trigger(virq_res.value(), *ref.trigger);
+                if (!trigger_res.has_value() &&
+                    trigger_res.error() != ErrCode::NOT_SUPPORTED)
+                {
+                    propagate_return(trigger_res);
+                }
+            }
 
             virqs.push_back(virq_res.value());
             loggers::DEVICE::DEBUG(
                 "解析中断引用到 virq: phandle=%u domain=%u hwirq=%u virq=%llu",
-                phandle, domain_res.value().get().id(),
-                static_cast<unsigned>(hwirq),
+                ref.phandle, domain_res.value().get().id(),
+                static_cast<unsigned>(ref.hwirq),
                 static_cast<unsigned long long>(virq_res.value()));
         }
 
@@ -1970,73 +2166,89 @@ namespace fdt {
     }
 
     void FDTProvider::register_intcs(device::DeviceModel &model) const {
-        auto register_node =
-            [this, &model](const FDTDeviceNode &fdt_node) -> Result<void> {
-            auto *irq_factory =
-                driver::DriverModel::inst().irq_factories().find(fdt_node);
-            if (irq_factory == nullptr) {
-                void_return();
-            }
+        device::ICInitGraph graph{};
+        auto *driver_model = &driver::DriverModel::inst();
 
-            loggers::DEVICE::DEBUG("发现 IRQ 设备节点: node=%s compatible=%s",
-                                   fdt_node.raw_node().name.c_str(),
-                                   irq_factory->compatible().data());
-
-            auto device_res = driver::DriverModel::inst().create_irq_driver(
-                const_cast<FDTDeviceNode *>(&fdt_node));
-            propagate(device_res);
-            void_return();
-        };
-
-        // 第一轮: 先注册 CPU 本地中断端点, 建立 root domain 映射.
-        for (const auto &candidate : _cpu_intc_candidates) {
-            if (candidate.node == nullptr) {
+        for (size_t node_id = 0; node_id < model.device_nodes().size(); ++node_id) {
+            auto *base_node = model.device_nodes()[node_id].get();
+            if (base_node == nullptr) {
                 continue;
             }
-            for (const auto &node_owner : model.device_nodes()) {
-                if (node_owner.get() == nullptr) {
-                    continue;
-                }
-                auto *fdt_node =
-                    static_cast<const FDTDeviceNode *>(node_owner.get());
-                if (&fdt_node->raw_node() != candidate.node) {
-                    continue;
-                }
-                auto register_res = register_node(*fdt_node);
-                if (!register_res.has_value()) {
-                    loggers::DEVICE::ERROR(
-                        "注册 CPU IRQ 控制器失败: node=%s err=%s",
-                        fdt_node->raw_node().name.c_str(),
-                        to_cstring(register_res.error()));
-                    return;
-                }
-                break;
+            auto *fdt_node = static_cast<const FDTDeviceNode *>(base_node);
+            auto *irq_factory = driver_model->irq_factories().find(*fdt_node);
+            if (irq_factory == nullptr) {
+                continue;
+            }
+
+            driver::domain_t id =
+                static_cast<driver::domain_t>(fdt_node->raw_node().phandle);
+            auto add_res = graph.add_node(id, static_cast<int>(node_id),
+                                          const_cast<FDTDeviceNode *>(fdt_node));
+            if (!add_res.has_value()) {
+                loggers::DEVICE::FATAL("构建中断控制器图失败: node=%s err=%s",
+                                       fdt_node->raw_node().name.c_str(),
+                                       to_cstring(add_res.error()));
+                panic("构建中断控制器图失败");
             }
         }
 
-        // 第二轮: 再注册其它 IRQ 控制器.
         for (const auto &node_owner : model.device_nodes()) {
-            if (node_owner.get() == nullptr) {
+            auto *base_node = node_owner.get();
+            if (base_node == nullptr) {
                 continue;
             }
-            auto *fdt_node =
-                static_cast<const FDTDeviceNode *>(node_owner.get());
-            bool is_cpu_intc = false;
-            for (const auto &candidate : _cpu_intc_candidates) {
-                if (candidate.node == &fdt_node->raw_node()) {
-                    is_cpu_intc = true;
-                    break;
-                }
-            }
-            if (is_cpu_intc) {
+            auto *fdt_node = static_cast<const FDTDeviceNode *>(base_node);
+            auto *irq_factory = driver_model->irq_factories().find(*fdt_node);
+            if (irq_factory == nullptr) {
                 continue;
             }
 
-            auto register_res = register_node(*fdt_node);
-            if (!register_res.has_value()) {
+            auto parent_opt = maybe_interrupt_parent(fdt_node->raw_node());
+            if (!parent_opt.has_value()) {
+                continue;
+            }
+
+            driver::domain_t parent =
+                static_cast<driver::domain_t>(parent_opt.value());
+            driver::domain_t child =
+                static_cast<driver::domain_t>(fdt_node->raw_node().phandle);
+
+            auto edge_res = graph.add_edge(parent, child);
+            if (!edge_res.has_value() &&
+                edge_res.error() != ErrCode::ENTRY_NOT_FOUND)
+            {
+                loggers::DEVICE::FATAL(
+                    "构建中断控制器依赖边失败: parent=%u child=%u err=%s",
+                    parent, child, to_cstring(edge_res.error()));
+                panic("构建中断控制器依赖边失败");
+            }
+        }
+
+        auto ordered_res = graph.topo_sort();
+        if (!ordered_res.has_value()) {
+            loggers::DEVICE::FATAL("中断控制器拓扑排序失败: err=%s",
+                                   to_cstring(ordered_res.error()));
+            panic("中断控制器拓扑排序失败");
+        }
+
+        for (auto *device_node : ordered_res.value()) {
+            if (device_node == nullptr) {
+                continue;
+            }
+            auto *fdt_node = static_cast<FDTDeviceNode *>(device_node);
+            auto *irq_factory = driver_model->irq_factories().find(*fdt_node);
+            if (irq_factory == nullptr) {
+                continue;
+            }
+
+            loggers::DEVICE::DEBUG("按拓扑序初始化 IRQ 控制器: node=%s compatible=%s",
+                                   fdt_node->raw_node().name.c_str(),
+                                   irq_factory->compatible().data());
+            auto device_res = driver_model->create_irq_driver(fdt_node);
+            if (!device_res.has_value()) {
                 loggers::DEVICE::ERROR("注册 IRQ 控制器失败: node=%s err=%s",
                                        fdt_node->raw_node().name.c_str(),
-                                       to_cstring(register_res.error()));
+                                       to_cstring(device_res.error()));
                 return;
             }
         }

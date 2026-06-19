@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <arch/riscv64/intc.h>
+#include <arch/riscv64/device/intc.h>
 
 namespace driver {
     using RiscVIntC = riscv::IntC;

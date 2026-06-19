@@ -11,7 +11,7 @@
 
 #include <arch/riscv64/callconv.h>
 #include <arch/riscv64/csr.h>
-#include <arch/riscv64/intc.h>
+#include <arch/riscv64/device/intc.h>
 #include <arch/riscv64/trait.h>
 #include <device/model.h>
 #include <env.h>

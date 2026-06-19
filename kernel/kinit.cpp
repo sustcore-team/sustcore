@@ -203,12 +203,12 @@ namespace {
         propagate(activate_res);
 
         // 开始注册各个设备驱动
-        // auto register_res = driver::DriverModel::inst().register_factory(
-        //     util::owner<driver::IDeviceFactory *>(
-        //         new driver::SerialDeviceFactory()));
-        // propagate(register_res);
-
         auto register_res = driver::DriverModel::inst().register_factory(
+            util::owner<driver::IDeviceFactory *>(
+                new driver::SerialDeviceFactory()));
+        propagate(register_res);
+
+        register_res = driver::DriverModel::inst().register_factory(
             util::owner<driver::IDeviceFactory *>(
                 new driver::GoldfishRTCFactory()));
         propagate(register_res);

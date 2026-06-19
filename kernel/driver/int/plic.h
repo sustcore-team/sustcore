@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <arch/riscv64/plic.h>
+#include <arch/riscv64/device/plic.h>
 
 namespace driver {
     using Plic = riscv::Plic;

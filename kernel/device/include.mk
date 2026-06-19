@@ -1,1 +1,1 @@
-sources += cpu.cpp device.cpp fdt.cpp model.cpp resource.cpp
+sources += cpu.cpp device.cpp fdt.cpp ic_graph.cpp model.cpp resource.cpp

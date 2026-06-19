@@ -10,7 +10,7 @@
  */
 
 #include <arch/riscv64/csr.h>
-#include <arch/riscv64/intc.h>
+#include <arch/riscv64/device/intc.h>
 #include <logger.h>
 #include <sus/raii.h>
 

@@ -1,1 +1,1 @@
-loongarch64-sources += placeholder.cpp setup.cpp fdt_helper.cpp entry.S cpuic.cpp
+loongarch64-sources += placeholder.cpp setup.cpp entry.S

@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/cpuic.h>
+#include <arch/loongarch64/device/cpuic.h>
 #include <arch/loongarch64/csr.h>
 #include <arch/loongarch64/trait.h>
 #include <device/model.h>

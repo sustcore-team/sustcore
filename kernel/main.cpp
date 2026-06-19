@@ -16,7 +16,7 @@
 #include <arch/riscv64/device/platform.h>
 #include <arch/riscv64/mem/sv39.h>
 #elif defined(__ARCH_loongarch64__)
-#include <arch/loongarch64/fdt_helper.h>
+#include <arch/loongarch64/device/fdt_helper.h>
 extern "C" char __la_boot_stack, __la_boot_stack_top;
 #endif
 #include <arch/trait.h>
