@@ -15,6 +15,8 @@
 #include <device/device.h>
 #include <device/resource.h>
 
+#include <string_view>
+
 namespace driver {
     /**
      * @brief 驱动对象基本类
@@ -106,17 +108,20 @@ namespace driver {
          * @return const char* 平台名称字符串.
          */
         [[nodiscard]]
-        const char *platform() const noexcept {
-            return _node != nullptr ? _node->platform() : "unknown";
+        device::DevicePlatform platform() const noexcept {
+            return _node != nullptr ? _node->platform()
+                                    : device::DevicePlatform::FDT;
         }
 
         /**
-         * @brief 获取驱动兼容串.
+         * @brief 返回驱动对象的自描述 compatible 字符串.
          *
-         * @return std::string_view 驱动兼容串.
+         * 该接口仅用于少量运行时调试/兼容判断，不参与工厂匹配。
          */
         [[nodiscard]]
-        virtual std::string_view compatible() const = 0;
+        virtual std::string_view compatible() const noexcept {
+            return {};
+        }
 
         /**
          * @brief 获取驱动名称

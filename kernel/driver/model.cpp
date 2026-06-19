@@ -105,12 +105,38 @@ namespace driver {
             loggers::DEVICE::ERROR("创建 IRQ 驱动失败: node 为空");
             unexpect_return(ErrCode::NULLPTR);
         }
-        auto *irq_factory = _irq_factories.find(*node);
+        const IIrqChipFactory *irq_factory = nullptr;
+        MatchResult match{};
+        for (const auto *factory : _irq_factories.factories()) {
+            if (factory == nullptr) {
+                continue;
+            }
+            auto candidate = _irq_factories.match(*factory, *node);
+            if (!candidate.matched) {
+                continue;
+            }
+            if (!factory->probe(*node, device::DeviceModel::inst(),
+                                candidate.driver_flag))
+            {
+                continue;
+            }
+            irq_factory = factory;
+            match       = candidate;
+            break;
+        }
         if (irq_factory == nullptr) {
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
 
-        auto driver_res = irq_factory->create(*node, device::DeviceModel::inst());
+        loggers::DEVICE::INFO("create_irq_driver: node=%s 开始调用工厂 create",
+                              node->name());
+        auto driver_res = irq_factory->create(*node, device::DeviceModel::inst(),
+                                              match.driver_flag);
+        if (!driver_res.has_value()) {
+            loggers::DEVICE::ERROR(
+                "create_irq_driver: node=%s 工厂 create 失败 err=%s",
+                node->name(), to_cstring(driver_res.error()));
+        }
         propagate(driver_res);
         if (driver_res.value() == nullptr) {
             unexpect_return(ErrCode::NULLPTR);
@@ -161,12 +187,13 @@ namespace driver {
         propagate(devdir_res);
 
         _bound_devices.push_back(BoundDevice{
-            .node             = &node,
-            .driver           = nullptr,
-            .factory          = nullptr,
-            .compatible_index = -1,
-            .devdir           = devdir_res.value(),
-            .holder           = util::owner<cap::CHolder *>(holder),
+            .node       = &node,
+            .driver     = nullptr,
+            .factory    = nullptr,
+            .match_index = -1,
+            .driver_flag = 0,
+            .devdir     = devdir_res.value(),
+            .holder     = util::owner<cap::CHolder *>(holder),
         });
         holder_guard.release();
         void_return();
@@ -186,44 +213,32 @@ namespace driver {
             auto *bound = bound_res.value();
             assert(bound != nullptr);
 
-            const int compatible_index =
-                node->is_compatible_with(factory.compatible());
-            if (compatible_index < 0) {
+            auto match = _device_factories.match(factory, *node);
+            if (!match.matched) {
                 continue;
             }
 
-            if (!factory.probe(*node, device::DeviceModel::inst())) {
+            if (!factory.probe(*node, device::DeviceModel::inst(),
+                               match.driver_flag))
+            {
                 continue;
             }
 
             if (bound->driver == nullptr) {
-                auto bind_res = _bind_device_with_factory(*node, factory);
+                auto bind_res = _bind_device_with_factory(*node, factory, match);
                 if (!bind_res.has_value()) {
-                    loggers::DEVICE::ERROR(
-                        "绑定驱动失败: node=%s compatible=%s err=%s",
-                        node->name(), std::string(factory.compatible()).c_str(),
-                        to_cstring(bind_res.error()));
+                    loggers::DEVICE::ERROR("绑定驱动失败: node=%s err=%s",
+                                           node->name(),
+                                           to_cstring(bind_res.error()));
                 }
-                continue;
-            }
-
-            if (_is_better_match(*node, factory.compatible(),
-                                 bound->compatible_index))
-            {
-                loggers::DEVICE::WARN(
-                    "发现更适配驱动但暂不重绑定: node=%s current=%s new=%s",
-                    node->name(),
-                    bound->factory == nullptr
-                        ? "unknown"
-                        : std::string(bound->factory->compatible()).c_str(),
-                    std::string(factory.compatible()).c_str());
             }
         }
         void_return();
     }
 
     Result<void> DriverModel::_bind_device_with_factory(
-        device::DeviceNode &node, const IDeviceFactory &factory) noexcept {
+        device::DeviceNode &node, const IDeviceFactory &factory,
+        MatchResult match) noexcept {
         auto bound_res = _find_bound_device(node);
         propagate(bound_res);
         auto *bound = bound_res.value();
@@ -237,7 +252,7 @@ namespace driver {
             unexpect_return(ErrCode::NULLPTR);
         }
 
-        auto driver_res = _create_driver(node, factory);
+        auto driver_res = _create_driver(node, factory, match.driver_flag);
         propagate(driver_res);
         auto *driver = driver_res.value();
         assert(driver != nullptr);
@@ -252,10 +267,11 @@ namespace driver {
 
         bound->driver           = driver;
         bound->factory          = &factory;
-        bound->compatible_index = node.is_compatible_with(factory.compatible());
-        loggers::DEVICE::INFO("已绑定驱动: node=%s compatible=%s",
-                              node.name(),
-                              std::string(factory.compatible()).c_str());
+        bound->match_index      = match.index;
+        bound->driver_flag      = match.driver_flag;
+        loggers::DEVICE::INFO("已绑定驱动: node=%s match=%d flag=%llu",
+                              node.name(), match.index,
+                              static_cast<unsigned long long>(match.driver_flag));
         void_return();
     }
 
@@ -280,8 +296,10 @@ namespace driver {
     }
 
     Result<DriverBase *> DriverModel::_create_driver(
-        device::DeviceNode &node, const IDeviceFactory &factory) noexcept {
-        auto driver_res = factory.create(node, device::DeviceModel::inst());
+        device::DeviceNode &node, const IDeviceFactory &factory,
+        b64 driver_flag) noexcept {
+        auto driver_res =
+            factory.create(node, device::DeviceModel::inst(), driver_flag);
         propagate(driver_res);
 
         if (driver_res.value() == nullptr) {
@@ -321,16 +339,4 @@ namespace driver {
         return dir_res.value();
     }
 
-    bool DriverModel::_is_better_match(const device::DeviceNode &node,
-                                       std::string_view candidate,
-                                       int current_index) noexcept {
-        const int candidate_index = node.is_compatible_with(candidate);
-        if (candidate_index < 0) {
-            return false;
-        }
-        if (current_index < 0) {
-            return true;
-        }
-        return candidate_index < current_index;
-    }
 }  // namespace driver

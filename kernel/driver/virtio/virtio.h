@@ -36,7 +36,7 @@ namespace virtio {
     using be32 = uint32_t;
     using be64 = uint64_t;
 
-    constexpr std::string_view VIRTIO_MMIO_COMPATIBLE = "virtio,mmio";
+    constexpr const char *VIRTIO_MMIO_COMPATIBLE = "virtio,mmio";
     constexpr u32 MAGIC_VALUE                         = 0x74726976;
     constexpr u32 VERSION_LEGACY                     = 0x1;
     constexpr u32 VERSION_MODERN                     = 0x2;
@@ -336,11 +336,6 @@ namespace virtio {
         ~VirtioDriverBase() noexcept override;
 
         [[nodiscard]]
-        std::string_view compatible() const noexcept override {
-            return VIRTIO_MMIO_COMPATIBLE;
-        }
-
-        [[nodiscard]]
         bool legacy() const noexcept {
             return _probe_info.legacy;
         }
@@ -550,18 +545,16 @@ namespace virtio {
      */
     class VirtioMmioFactory final : public driver::IDeviceFactory {
     public:
-        /**
-         * @brief 返回该工厂服务的主 compatible.
-         */
         [[nodiscard]]
-        std::string_view compatible() const noexcept override;
+        const driver::DeviceId &device_id() const noexcept override;
 
         /**
          * @brief 在普通设备工厂匹配阶段识别合法 virtio-mmio 节点.
          */
         [[nodiscard]]
         bool probe(const device::DeviceNode &node,
-                   device::DeviceModel &model) const noexcept override;
+                   device::DeviceModel &model,
+                   b64 driver_flag) const noexcept override;
 
         /**
          * @brief 执行通用探测并向对应 virtio 子工厂转发创建请求.
@@ -569,7 +562,8 @@ namespace virtio {
         [[nodiscard]]
         Result<driver::DriverBase *> create(
             const device::DeviceNode &node,
-            device::DeviceModel &model) const override;
+            device::DeviceModel &model,
+            b64 driver_flag) const override;
     };
 
     /**

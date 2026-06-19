@@ -22,6 +22,24 @@
 
 namespace virtio {
     namespace {
+        constexpr driver::FDTDeviceId VIRTIO_MMIO_FDT_IDS[] = {
+            {.compatible = "virtio,mmio", .driver_flag = 0},
+            {.compatible = nullptr, .driver_flag = 0},
+        };
+        constexpr driver::DeviceId VIRTIO_MMIO_DEVICE_ID = {
+            .fdt_ids = VIRTIO_MMIO_FDT_IDS,
+            .pci_ids = nullptr,
+        };
+
+        [[nodiscard]]
+        const char *platform_name(device::DevicePlatform platform) noexcept {
+            switch (platform) {
+                case device::DevicePlatform::FDT: return "fdt";
+                case device::DevicePlatform::PCI: return "pci";
+                default:                          return "unknown";
+            }
+        }
+
         /**
          * @brief 计算 legacy 描述符区所需字节数.
          */
@@ -139,7 +157,8 @@ namespace virtio {
                 "virtio 探测结果: node=%s platform=%s mmio=[%p,%p) valid=%s "
                 "transport=%s magic=0x%08x version=%u device_id=%u type=%s "
                 "vendor=0x%08x status=0x%08x(%s) features0=0x%08x",
-                node.name(), node.platform(), mmio_begin, mmio_end,
+                node.name(), platform_name(node.platform()), mmio_begin,
+                mmio_end,
                 info.valid ? "true" : "false",
                 virtio::transport_version_name(info.version), info.magic_value,
                 static_cast<unsigned>(info.version),
@@ -695,19 +714,23 @@ namespace virtio {
         return probe_mmio_device_impl(node, true, true);
     }
 
-    std::string_view VirtioMmioFactory::compatible() const noexcept {
-        return VIRTIO_MMIO_COMPATIBLE;
+    const driver::DeviceId &VirtioMmioFactory::device_id() const noexcept {
+        return VIRTIO_MMIO_DEVICE_ID;
     }
 
     bool VirtioMmioFactory::probe(const device::DeviceNode &node,
-                                  device::DeviceModel &model) const noexcept {
+                                  device::DeviceModel &model,
+                                  b64 driver_flag) const noexcept {
         (void)model;
+        (void)driver_flag;
         auto probe_res = probe_mmio_device_impl(node, true, true);
         return probe_res.has_value() && is_valid_device(probe_res.value());
     }
 
     Result<driver::DriverBase *> VirtioMmioFactory::create(
-        const device::DeviceNode &node, device::DeviceModel &model) const {
+        const device::DeviceNode &node, device::DeviceModel &model,
+        b64 driver_flag) const {
+        (void)driver_flag;
         auto probe_res = probe_mmio_device(node);
         propagate(probe_res);
         const auto &info = probe_res.value();

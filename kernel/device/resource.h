@@ -26,6 +26,11 @@ namespace device {
      */
     class VIrqResource {
     public:
+        [[nodiscard]]
+        static util::owner<VIrqResource *> make(driver::virq_t virq) noexcept {
+            return util::owner<VIrqResource *>(new VIrqResource(virq));
+        }
+
         /**
          * @brief 获取资源中包含的唯一 virq.
          *

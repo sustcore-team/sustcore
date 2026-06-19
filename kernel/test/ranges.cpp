@@ -168,6 +168,17 @@ namespace test::ranges {
             ttest(std::ranges::abs(-5) == 5);
             ttest(std::ranges::clamp(9, 1, 5) == 5);
             ttest(std::ranges::clamp(-1, 1, 5) == 1);
+
+            int arr[] = {1, 2, 3, 4};
+            auto arr_mid = std::ranges::reverse(arr);
+            ttest(arr[0] == 4 && arr[1] == 3 && arr[2] == 2 && arr[3] == 1);
+            ttest(arr_mid == arr + 2);
+
+            std::vector<int> reversed = {9, 8, 7};
+            auto vec_mid =
+                std::ranges::reverse(reversed.begin(), reversed.end());
+            ttest(reversed[0] == 7 && reversed[1] == 8 && reversed[2] == 9);
+            ttest(vec_mid == reversed.begin() + 1);
         }
     };
 

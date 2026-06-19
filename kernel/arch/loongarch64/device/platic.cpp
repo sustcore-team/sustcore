@@ -61,10 +61,6 @@ namespace la64 {
         void_return();
     }
 
-    std::string_view PlaticChip::compatible() const noexcept {
-        return COMPATIBLE_STRING;
-    }
-
     driver::intc_t PlaticChip::identifier() const noexcept {
         return _identifier;
     }

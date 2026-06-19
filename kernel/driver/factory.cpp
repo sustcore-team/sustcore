@@ -1,7 +1,7 @@
 /**
  * @file factory.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief compatible 工厂注册表
+ * @brief 设备工厂注册表
  * @version alpha-1.0.0
  * @date 2026-05-29
  *
@@ -12,105 +12,118 @@
 #include <driver/factory.h>
 #include <logger.h>
 
+#include <device/fdt/device_node.h>
 #include <device/model.h>
-#include <type_traits>
 
 namespace {
-    template <typename FactoryT>
     [[nodiscard]]
-    const FactoryT *find_best_factory(
-        const std::unordered_map<std::string_view, const FactoryT *> &factories,
-        const device::DeviceNode &node,
-        device::DeviceModel *model = nullptr) noexcept {
-        // foreach the compatibles nodes
-        for (const auto &compatible : node.compatibles()) {
-            // try to find a factory for the compatible
-            auto it = factories.find(compatible);
-            if (it != factories.end()) {
-                loggers::DEVICE::DEBUG("找到匹配的工厂: compatible=%s",
-                                       std::string(compatible).c_str());
-                if constexpr (std::is_same_v<FactoryT, driver::IDeviceFactory>) {
-                    if (model == nullptr) {
-                        loggers::DEVICE::WARN(
-                            "普通设备工厂二次探测缺少 DeviceModel: compatible=%s",
-                            std::string(compatible).c_str());
-                        continue;
-                    }
-                    if (!it->second->probe(node, *model)) {
-                        loggers::DEVICE::DEBUG(
-                            "工厂 probe 拒绝接管节点: compatible=%s",
-                            std::string(compatible).c_str());
-                        continue;
-                    }
-                    loggers::DEVICE::DEBUG(
-                        "工厂 probe 接受接管节点: compatible=%s",
-                        std::string(compatible).c_str());
-                }
-                return it->second;
+    bool is_end_id(const driver::PCIDeviceId &id) noexcept {
+        return id.vendor_id == 0 && id.subvendor_id == 0 && id.device_id == 0 &&
+               id.subdevice_id == 0 && id.class_mask == 0;
+    }
+
+    [[nodiscard]]
+    driver::MatchResult match_fdt_ids(const driver::FDTDeviceId *ids,
+                                      const device::DeviceNode &node) noexcept {
+        driver::MatchResult result{};
+        auto *fdt_node = node.as<fdt::FDTDeviceNode>();
+        if (ids == nullptr || fdt_node == nullptr) {
+            return result;
+        }
+
+        for (int index = 0; ids[index].compatible != nullptr; ++index) {
+            if ((ids[index].compatible[0] == '\0') ||
+                fdt_node->is_compatible_with(ids[index].compatible) >= 0)
+            {
+                result.matched     = true;
+                result.driver_flag = ids[index].driver_flag;
+                result.index       = index;
+                return result;
             }
         }
-        return nullptr;
+        return result;
+    }
+
+    [[nodiscard]]
+    driver::MatchResult match_pci_ids(const driver::PCIDeviceId *ids,
+                                      const device::DeviceNode &node) noexcept {
+        (void)ids;
+        (void)node;
+        return {};
+    }
+
+    template <typename FactoryT>
+    [[nodiscard]]
+    driver::MatchResult match_factory_ids(const FactoryT &factory,
+                                          const device::DeviceNode &node) noexcept {
+        const auto &ids = factory.device_id();
+        switch (node.platform()) {
+            case device::DevicePlatform::FDT:
+                return match_fdt_ids(ids.fdt_ids, node);
+            case device::DevicePlatform::PCI:
+                return match_pci_ids(ids.pci_ids, node);
+            default:
+                return {};
+        }
     }
 }  // namespace
 
 namespace driver {
     bool IDeviceFactory::probe(const device::DeviceNode &node,
-                               device::DeviceModel &model) const noexcept {
+                               device::DeviceModel &model,
+                               b64 driver_flag) const noexcept {
         (void)node;
         (void)model;
+        (void)driver_flag;
         return true;
     }
 
-    /**
-     * @brief 向普通设备工厂注册表登记工厂.
-     */
+    bool IIrqChipFactory::probe(const device::DeviceNode &node,
+                                device::DeviceModel &model,
+                                b64 driver_flag) const noexcept {
+        (void)node;
+        (void)model;
+        (void)driver_flag;
+        return true;
+    }
+
     Result<void> DeviceFactoryRegistry::register_factory(
         const IDeviceFactory &factory) noexcept {
-        auto compatible = factory.compatible();
-        if (_factories.contains(compatible)) {
-            loggers::DEVICE::ERROR("DeviceFactory 重复注册: %s",
-                                   std::string(compatible).c_str());
-            unexpect_return(ErrCode::KEY_DUPLICATED);
+        for (auto *registered : _factories) {
+            if (registered == &factory) {
+                loggers::DEVICE::ERROR("DeviceFactory 重复注册: ptr=%p",
+                                       &factory);
+                unexpect_return(ErrCode::KEY_DUPLICATED);
+            }
         }
-        _factories.emplace(compatible, &factory);
-        loggers::DEVICE::DEBUG("注册 DeviceFactory: %s",
-                               std::string(compatible).c_str());
+        _factories.push_back(&factory);
+        loggers::DEVICE::DEBUG("注册 DeviceFactory: ptr=%p", &factory);
         void_return();
     }
 
-    /**
-     * @brief 按节点 compatible 查找最佳普通设备工厂.
-     */
-    const IDeviceFactory *DeviceFactoryRegistry::find(
-        const device::DeviceNode &node) const noexcept {
-        auto *model =
-            device::DeviceModel::initialized() ? &device::DeviceModel::inst()
-                                               : nullptr;
-        return find_best_factory(_factories, node, model);
+    MatchResult DeviceFactoryRegistry::match(const IDeviceFactory &factory,
+                                             const device::DeviceNode &node) const
+        noexcept {
+        return match_factory_ids(factory, node);
     }
 
-    /**
-     * @brief 向 IRQ 工厂注册表登记工厂.
-     */
     Result<void> IrqChipFactoryRegistry::register_factory(
         const IIrqChipFactory &factory) noexcept {
-        auto compatible = factory.compatible();
-        if (_factories.contains(compatible)) {
-            loggers::DEVICE::ERROR("IrqChipFactory 重复注册: %s",
-                                   std::string(compatible).c_str());
-            unexpect_return(ErrCode::KEY_DUPLICATED);
+        for (auto *registered : _factories) {
+            if (registered == &factory) {
+                loggers::DEVICE::ERROR("IrqChipFactory 重复注册: ptr=%p",
+                                       &factory);
+                unexpect_return(ErrCode::KEY_DUPLICATED);
+            }
         }
-        _factories.emplace(compatible, &factory);
-        loggers::DEVICE::DEBUG("注册 IrqChipFactory: %s",
-                               std::string(compatible).c_str());
+        _factories.push_back(&factory);
+        loggers::DEVICE::DEBUG("注册 IrqChipFactory: ptr=%p", &factory);
         void_return();
     }
 
-    /**
-     * @brief 按节点 compatible 查找最佳 IRQ 工厂.
-     */
-    const IIrqChipFactory *IrqChipFactoryRegistry::find(
-        const device::DeviceNode &node) const noexcept {
-        return find_best_factory(_factories, node);
+    MatchResult IrqChipFactoryRegistry::match(
+        const IIrqChipFactory &factory, const device::DeviceNode &node) const
+        noexcept {
+        return match_factory_ids(factory, node);
     }
-}  // namespace device
+}  // namespace driver

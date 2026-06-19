@@ -25,10 +25,6 @@ namespace riscv {
         _crsrs_base    = nullptr;
     }
 
-    std::string_view Plic::compatible() const noexcept {
-        return PLIC_COMPATIBLE_STRING;
-    }
-
     driver::intc_t Plic::identifier() const noexcept {
         return _identifier;
     }
@@ -143,6 +139,11 @@ namespace riscv {
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
         if (ctx_it->second >= _contexts.size()) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] resolve_ctx 越界: parent_virq=%llu mapped_ctx=%u contexts_size=%u",
+                _identifier, static_cast<unsigned long long>(parent_virq),
+                static_cast<unsigned>(ctx_it->second),
+                static_cast<unsigned>(_contexts.size()));
             unexpect_return(ErrCode::OUT_OF_BOUNDARY);
         }
         return std::ref(const_cast<Context &>(_contexts[ctx_it->second]));
@@ -163,6 +164,11 @@ namespace riscv {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
         if (hw_irq > _srccnt || hw_irq > PLIC_MAX_SOURCES) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] validate_source 越界: hw_irq=%u srccnt=%u max_sources=%u",
+                _identifier, static_cast<unsigned>(hw_irq),
+                static_cast<unsigned>(_srccnt),
+                static_cast<unsigned>(PLIC_MAX_SOURCES));
             unexpect_return(ErrCode::OUT_OF_BOUNDARY);
         }
         void_return();
@@ -170,6 +176,11 @@ namespace riscv {
 
     Result<void> Plic::validate_context(size_t ctx_id) const noexcept {
         if (ctx_id >= _ctxcnt || ctx_id >= PLIC_MAX_CONTEXTS) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] validate_context 越界(1): ctx_id=%u ctxcnt=%u max_contexts_const=%u",
+                _identifier, static_cast<unsigned>(ctx_id),
+                static_cast<unsigned>(_ctxcnt),
+                static_cast<unsigned>(PLIC_MAX_CONTEXTS));
             unexpect_return(ErrCode::OUT_OF_BOUNDARY);
         }
         if (mmio_resources().empty() || mmio_resources().front() == nullptr) {
@@ -177,10 +188,21 @@ namespace riscv {
         }
         size_t mmio_range = mmio_resources().front()->region().size();
         if (mmio_range <= PLIC_CRSR) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] validate_context 越界(2): mmio_range=%llu plic_crsr=%u",
+                _identifier, static_cast<unsigned long long>(mmio_range),
+                static_cast<unsigned>(PLIC_CRSR));
             unexpect_return(ErrCode::OUT_OF_BOUNDARY);
         }
         size_t max_contexts = (mmio_range - PLIC_CRSR) / sizeof(CRSR);
         if (ctx_id >= max_contexts) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] validate_context 越界(3): ctx_id=%u max_contexts_runtime=%u mmio_range=%llu crsr=%u crsr_size=%u",
+                _identifier, static_cast<unsigned>(ctx_id),
+                static_cast<unsigned>(max_contexts),
+                static_cast<unsigned long long>(mmio_range),
+                static_cast<unsigned>(PLIC_CRSR),
+                static_cast<unsigned>(sizeof(CRSR)));
             unexpect_return(ErrCode::OUT_OF_BOUNDARY);
         }
         void_return();
@@ -351,6 +373,12 @@ namespace riscv {
         }
 
         if (err != ErrCode::SUCCESS) {
+            loggers::INTERRUPT::ERROR(
+                "Plic[%u] initialize 最终失败: err=%s first_enabled_ctx=%u ctxcnt=%u srccnt=%u",
+                _identifier, to_cstring(err),
+                static_cast<unsigned>(_first_enabled_ctx),
+                static_cast<unsigned>(_ctxcnt),
+                static_cast<unsigned>(_srccnt));
             unexpect_return(err);
         }
         void_return();
@@ -375,6 +403,13 @@ namespace riscv {
         }
         auto mmio = devres.mmios[0];
         size_t max_contexts = (mmio->region().size() - PLIC_CRSR) / PLIC_CRSR_SIZE;
+        loggers::INTERRUPT::INFO(
+            "Plic::create 输入: identifier=%u srccnt=%u mmio_size=%llu virqs=%u ctxs=%u max_contexts=%u",
+            identifier, static_cast<unsigned>(srccnt),
+            static_cast<unsigned long long>(mmio->region().size()),
+            static_cast<unsigned>(devres.virqs.size()),
+            static_cast<unsigned>(ctxs.size()),
+            static_cast<unsigned>(max_contexts));
         if (ctxs.size() > max_contexts) {
             loggers::INTERRUPT::ERROR(
                 "创建 PLIC 失败: 设备资源中的 virq 数量 %d 超过 mmio 支持的最大 context 数 %d",
@@ -382,6 +417,11 @@ namespace riscv {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
         auto map_res = device::MMIOManager::inst().map_to_kernel(*mmio);
+        if (!map_res.has_value()) {
+            loggers::INTERRUPT::ERROR(
+                "Plic::create 映射 MMIO 失败: err=%s",
+                to_cstring(map_res.error()));
+        }
         propagate(map_res);
         auto base = map_res.value().as<volatile char>();
         std::string name = devres.node->name();
@@ -394,9 +434,19 @@ namespace riscv {
 
         auto register_res =
             irqman().register_domain(util::owner<device::IrqDomain *>(domain));
+        if (!register_res.has_value()) {
+            loggers::INTERRUPT::ERROR(
+                "Plic::create 注册 domain 失败: err=%s",
+                to_cstring(register_res.error()));
+        }
         propagate(register_res);
 
         auto init_res = plic->initialize(domain);
+        if (!init_res.has_value()) {
+            loggers::INTERRUPT::ERROR(
+                "Plic::create initialize 失败: err=%s",
+                to_cstring(init_res.error()));
+        }
         propagate(init_res);
 
         domain_deleter.release();

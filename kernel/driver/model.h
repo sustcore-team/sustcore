@@ -135,7 +135,8 @@ namespace driver {
             device::DeviceNode *node          = nullptr;
             DriverBase *driver                = nullptr;
             const IDeviceFactory *factory     = nullptr;
-            int compatible_index              = -1;
+            int match_index                   = -1;
+            b64 driver_flag                   = 0;
             CapIdx devdir                     = 0;
             util::owner<cap::CHolder *> holder = util::owner<cap::CHolder *>(
                 nullptr);
@@ -149,7 +150,8 @@ namespace driver {
         Result<void> _register_device_directory(device::DeviceNode &node) noexcept;
         [[nodiscard]]
         Result<void> _bind_device_with_factory(device::DeviceNode &node,
-                                               const IDeviceFactory &factory) noexcept;
+                                               const IDeviceFactory &factory,
+                                               MatchResult match) noexcept;
         [[nodiscard]]
         Result<void> _probe_new_factory(const IDeviceFactory &factory) noexcept;
         [[nodiscard]]
@@ -160,14 +162,10 @@ namespace driver {
             const device::DeviceNode &node) const noexcept;
         [[nodiscard]]
         Result<DriverBase *> _create_driver(device::DeviceNode &node,
-                                            const IDeviceFactory &factory) noexcept;
+                                            const IDeviceFactory &factory,
+                                            b64 driver_flag) noexcept;
         [[nodiscard]]
         Result<CapIdx> _open_devdir(const char *name, cap::CHolder &holder) noexcept;
-        [[nodiscard]]
-        static bool _is_better_match(const device::DeviceNode &node,
-                                     std::string_view candidate,
-                                     int current_index) noexcept;
-
         static DriverModel _INSTANCE;
         static bool _initialized;
 

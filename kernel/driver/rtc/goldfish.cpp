@@ -15,6 +15,17 @@
 #include <sustcore/errcode.h>
 
 namespace driver {
+    namespace {
+        constexpr FDTDeviceId GOLDFISH_RTC_FDT_IDS[] = {
+            {.compatible = "google,goldfish-rtc", .driver_flag = 0},
+            {.compatible = nullptr, .driver_flag = 0},
+        };
+        constexpr DeviceId GOLDFISH_RTC_DEVICE_ID = {
+            .fdt_ids = GOLDFISH_RTC_FDT_IDS,
+            .pci_ids = nullptr,
+        };
+    }  // namespace
+
     GoldfishRTC::GoldfishRTC(DevRes res, char *base, virq_t virq) noexcept
         : DriverBase(std::move(res)),
           regs(reinterpret_cast<volatile Goldfish *>(base)),
@@ -104,9 +115,8 @@ namespace driver {
      *
      * @return std::string_view compatible 字符串.
      */
-    [[nodiscard]]
-    std::string_view GoldfishRTCFactory::compatible() const noexcept {
-        return GoldfishRTC::GOLDFISH_RTC_COMPATIBLE;
+    const DeviceId &GoldfishRTCFactory::device_id() const noexcept {
+        return GOLDFISH_RTC_DEVICE_ID;
     }
 
     /**
@@ -118,8 +128,10 @@ namespace driver {
      */
     [[nodiscard]]
     Result<DriverBase *> GoldfishRTCFactory::create(
-        const device::DeviceNode &node, device::DeviceModel &model) const {
+        const device::DeviceNode &node, device::DeviceModel &model,
+        b64 driver_flag) const {
         (void)model;
+        (void)driver_flag;
         loggers::DEVICE::INFO("开始创建设备驱动: goldfish-rtc name=%s",
                               node.name());
         // 获取 mmio & virqs

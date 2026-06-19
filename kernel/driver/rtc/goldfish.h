@@ -36,16 +36,6 @@ namespace driver {
          */
         ~GoldfishRTC() override = default;
 
-        /**
-         * @brief 获取设备命中的主 compatible.
-         *
-         * @return std::string_view compatible 字符串.
-         */
-        [[nodiscard]]
-        std::string_view compatible() const noexcept override {
-            return GOLDFISH_RTC_COMPATIBLE;
-        }
-
         [[nodiscard]]
         units::time read_time() const noexcept;
 
@@ -130,13 +120,8 @@ namespace driver {
      */
     class GoldfishRTCFactory final : public IDeviceFactory {
     public:
-        /**
-         * @brief 获取该工厂支持的主 compatible.
-         *
-         * @return std::string_view compatible 字符串.
-         */
         [[nodiscard]]
-        std::string_view compatible() const noexcept override;
+        const DeviceId &device_id() const noexcept override;
 
         /**
          * @brief 基于统一设备节点创建串口设备包装对象.
@@ -147,6 +132,7 @@ namespace driver {
          */
         [[nodiscard]]
         Result<DriverBase *> create(const device::DeviceNode &node,
-                                    device::DeviceModel &model) const override;
+                                    device::DeviceModel &model,
+                                    b64 driver_flag) const override;
     };
 }  // namespace driver

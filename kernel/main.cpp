@@ -594,7 +594,7 @@ void init_device_model() {
 extern "C" void post_init(void) {
     loggers::SUSTCORE::INFO("已进入 post-init 阶段");
 
-    // 初始化 kernel object pool
+    // 初始化 cholder
     loggers::SUSTCORE::INFO("初始化能力系统");
     cap::CHolderManager::init();
 

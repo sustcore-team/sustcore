@@ -4,9 +4,9 @@ component-target := $(path-bin)/libs/$(architecture)/libkmod.a
 component-objdir := $(path-objects)/kmod/$(architecture)
 
 library-is-libc := true
-libc-crt0 := crt0.o
-libc-crti := crti.o
-libc-crtn := crtn.o
+libc-crt0 := arch/$(architecture)/crt0.o
+libc-crti := arch/$(architecture)/crti.o
+libc-crtn := arch/$(architecture)/crtn.o
 
 flags-c := $(flags-common-c) -nostdinc $(flags-mode-c)
 include-c := -I$(path-include) -I$(path-include)/std -I$(path-include)/libs \

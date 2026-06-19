@@ -358,6 +358,39 @@ namespace std::ranges {
             }
         };
 
+        struct __reverse {
+            template <class I, class S>
+                requires(!range<I>)
+            constexpr I operator()(I first, S last) const {
+                if (first == last) {
+                    return first;
+                }
+
+                for (;;) {
+                    --last;
+                    if (first == last) {
+                        break;
+                    }
+
+                    auto tmp = std::move(*first);
+                    *first   = std::move(*last);
+                    *last    = std::move(tmp);
+                    ++first;
+
+                    if (first == last) {
+                        break;
+                    }
+                }
+
+                return first;
+            }
+
+            template <input_range R>
+            constexpr iterator_t<R> operator()(R&& r) const {
+                return (*this)(ranges::begin(r), ranges::end(r));
+            }
+        };
+
         struct __min {
             template <class T, class Comp = __less, class Proj = __identity>
             [[nodiscard]]
@@ -418,6 +451,7 @@ namespace std::ranges {
     inline constexpr __algo::__remove_if remove_if{};
     inline constexpr __algo::__remove remove{};
     inline constexpr __algo::__unique unique{};
+    inline constexpr __algo::__reverse reverse{};
     inline constexpr __algo::__min min{};
     inline constexpr __algo::__max max{};
     inline constexpr __algo::__abs abs{};

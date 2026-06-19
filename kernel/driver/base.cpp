@@ -12,6 +12,7 @@
 #include <device/resource.h>
 #include <driver/base.h>
 #include <logger.h>
+#include <device/fdt/device_node.h>
 
 namespace driver {
     /**
@@ -31,14 +32,21 @@ namespace driver {
             integral_sz = sizeof(sus_u64);
         }
 
-        auto prop_res = node.property(prop_name);
+        auto *fdt_node = node.as<fdt::FDTDeviceNode>();
+        if (fdt_node == nullptr) {
+            loggers::DEVICE::ERROR("节点 %s 不支持 FDT 属性访问",
+                                   node.name());
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+
+        auto prop_res = fdt_node->property(prop_name);
         if (!prop_res.has_value()) {
             loggers::DEVICE::ERROR("串口节点缺少 %s 属性", prop_name.data());
             unexpect_return(ErrCode::ENTRY_NOT_FOUND);
         }
 
         const auto &prop = prop_res.value();
-        if (prop.type() != device::DevicePropView::PropType::INTEGER) {
+        if (prop.type() != fdt::DevicePropView::PropType::INTEGER) {
             loggers::DEVICE::ERROR("串口节点 %s 类型非法", prop_name.data());
             unexpect_return(ErrCode::INVALID_PROPERTY_TYPE);
         }

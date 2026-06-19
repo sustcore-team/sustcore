@@ -28,8 +28,6 @@ namespace la64 {
         ~PlaticChip() override = default;
 
         [[nodiscard]]
-        std::string_view compatible() const noexcept override;
-        [[nodiscard]]
         driver::intc_t identifier() const noexcept;
         [[nodiscard]]
         Result<void> enable_irq(driver::hwirq_t hw_irq) noexcept override;

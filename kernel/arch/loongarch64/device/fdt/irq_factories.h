@@ -1,7 +1,7 @@
 /**
- * @file fdt.h
+ * @file irq_factories.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief FDT 聚合入口
+ * @brief LoongArch FDT IRQ 工厂注册
  * @version alpha-1.0.0
  * @date 2026-06-20
  *
@@ -11,5 +11,8 @@
 
 #pragma once
 
-#include <device/fdt/device_node.h>
 #include <device/fdt/provider.h>
+
+namespace la64::fdt {
+    void register_irq_factories(const ::fdt::FDTProvider &provider) noexcept;
+}

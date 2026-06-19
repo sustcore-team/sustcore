@@ -194,21 +194,49 @@ namespace device {
      */
     std::vector<util::owner<VIrqResource *>> DevResManager::get_virq_resource(
         const DeviceNode &node) noexcept {
-        auto virqs = node.irqs();
-        if (!virqs.has_value()) {
-            loggers::DEVICE::DEBUG("设备节点 %s 未导出 virq 资源",
-                                   node.platform());
+        auto specs = node.irq_specs();
+        if (specs.empty()) {
+            loggers::DEVICE::DEBUG("设备节点 %s 未导出 IRQ 资源",
+                                   node.name());
             return {};
         }
-        loggers::DEVICE::DEBUG("提取 virq 资源: count=%u",
-                               static_cast<unsigned>(virqs->size()));
+        if (!DeviceModel::initialized()) {
+            loggers::DEVICE::ERROR("提取 IRQ 资源失败: DeviceModel 未初始化");
+            return {};
+        }
+        auto &irqman = DeviceModel::inst().interrupt();
+        loggers::DEVICE::DEBUG("提取 IRQ 资源: count=%u",
+                               static_cast<unsigned>(specs.size()));
         std::vector<util::owner<VIrqResource *>> resources;
-        resources.reserve(virqs->size());
-        for (auto virq : virqs.value()) {
-            loggers::DEVICE::DEBUG("提取单 virq 资源: virq=%llu",
-                                   static_cast<unsigned long long>(virq));
+        resources.reserve(specs.size());
+        for (const auto &spec : specs) {
+            auto virq_res = irqman.allocate_virq(spec.domain, spec.hwirq);
+            if (!virq_res.has_value()) {
+                loggers::DEVICE::ERROR(
+                    "提取 IRQ 资源失败: domain=%u hwirq=%u err=%s",
+                    spec.domain, static_cast<unsigned>(spec.hwirq),
+                    to_cstring(virq_res.error()));
+                continue;
+            }
+            if (spec.trigger.has_value()) {
+                auto trigger_res =
+                    irqman.set_trigger(virq_res.value(), *spec.trigger);
+                if (!trigger_res.has_value() &&
+                    trigger_res.error() != ErrCode::NOT_SUPPORTED)
+                {
+                    loggers::DEVICE::ERROR(
+                        "设置 IRQ trigger 失败: virq=%llu err=%s",
+                        static_cast<unsigned long long>(virq_res.value()),
+                        to_cstring(trigger_res.error()));
+                    continue;
+                }
+            }
+            loggers::DEVICE::DEBUG(
+                "提取单 IRQ 资源: domain=%u hwirq=%u virq=%llu",
+                spec.domain, static_cast<unsigned>(spec.hwirq),
+                static_cast<unsigned long long>(virq_res.value()));
             resources.push_back(
-                util::owner<VIrqResource *>(new VIrqResource(virq)));
+                util::owner<VIrqResource *>(new VIrqResource(virq_res.value())));
         }
         return resources;
     }
@@ -219,16 +247,16 @@ namespace device {
     std::vector<util::owner<MMIOResource *>> DevResManager::get_mmio_resource(
         const DeviceNode &node) noexcept {
         auto mmio = node.mmio_regions();
-        if (!mmio.has_value()) {
+        if (mmio.empty()) {
             loggers::DEVICE::DEBUG("设备节点 %s 未导出 MMIO 资源",
-                                   node.platform());
+                                   node.name());
             return {};
         }
         loggers::DEVICE::DEBUG("提取 MMIO 资源: count=%u",
-                               static_cast<unsigned>(mmio->size()));
+                               static_cast<unsigned>(mmio.size()));
         std::vector<util::owner<MMIOResource *>> resources;
-        resources.reserve(mmio->size());
-        for (const auto &region : mmio.value()) {
+        resources.reserve(mmio.size());
+        for (const auto &region : mmio) {
             loggers::DEVICE::DEBUG("提取单 MMIO 资源: [%p,%p)",
                                    region.begin.addr(), region.end.addr());
             resources.push_back(

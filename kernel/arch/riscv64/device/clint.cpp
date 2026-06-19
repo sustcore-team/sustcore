@@ -57,10 +57,6 @@ namespace riscv {
           _hart_id(hart_id),
           _target_harts(std::move(target_harts)) {}
 
-    std::string_view Clint::compatible() const noexcept {
-        return "riscv,clint0";
-    }
-
     driver::intc_t Clint::identifier() const noexcept {
         return _identifier;
     }

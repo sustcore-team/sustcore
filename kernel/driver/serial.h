@@ -45,17 +45,6 @@ namespace driver {
         units::frequency clock_frequency() const noexcept;
 
         /**
-         * @brief 获取驱动命中的主 compatible.
-         *
-         * @return std::string_view compatible 字符串.
-         */
-        [[nodiscard]]
-        std::string_view compatible() const noexcept override
-        {
-            return NS16550A_COMPATIBLE;
-        }
-
-        /**
          * @brief 向 UART 发送一个字符.
          *
          * @param ch 待发送字符.
@@ -164,13 +153,8 @@ namespace driver {
      */
     class SerialDeviceFactory final : public IDeviceFactory {
     public:
-        /**
-         * @brief 获取该工厂支持的主 compatible.
-         *
-         * @return std::string_view compatible 字符串.
-         */
         [[nodiscard]]
-        std::string_view compatible() const noexcept override;
+        const DeviceId &device_id() const noexcept override;
 
         /**
          * @brief 基于统一设备节点创建串口设备包装对象.
@@ -181,7 +165,8 @@ namespace driver {
          */
         [[nodiscard]]
         Result<DriverBase *> create(const device::DeviceNode &node,
-                                    device::DeviceModel &model) const override;
+                                    device::DeviceModel &model,
+                                    b64 driver_flag) const override;
     };
 
 }  // namespace driver

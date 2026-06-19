@@ -28,8 +28,6 @@ namespace riscv {
         ~Clint() override = default;
 
         [[nodiscard]]
-        std::string_view compatible() const noexcept override;
-        [[nodiscard]]
         driver::intc_t identifier() const noexcept;
         [[nodiscard]]
         device::cpuid_t hart_id() const noexcept;

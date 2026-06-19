@@ -19,6 +19,15 @@
 
 namespace driver {
     namespace {
+        constexpr FDTDeviceId SERIAL_FDT_IDS[] = {
+            {.compatible = "ns16550a", .driver_flag = 0},
+            {.compatible = nullptr, .driver_flag = 0},
+        };
+        constexpr DeviceId SERIAL_DEVICE_ID = {
+            .fdt_ids = SERIAL_FDT_IDS,
+            .pci_ids = nullptr,
+        };
+
         class SerialIOFile final : public devfs::CharDevFile {
         private:
             SerialDevice &_device;
@@ -108,16 +117,18 @@ namespace driver {
     /**
      * @brief 获取该工厂支持的主 compatible.
      */
-    std::string_view SerialDeviceFactory::compatible() const noexcept {
-        return SerialDevice::NS16550A_COMPATIBLE;
+    const DeviceId &SerialDeviceFactory::device_id() const noexcept {
+        return SERIAL_DEVICE_ID;
     }
 
     /**
      * @brief 基于统一设备节点创建串口设备驱动.
      */
     Result<DriverBase *> SerialDeviceFactory::create(
-        const device::DeviceNode &node, device::DeviceModel &model) const {
+        const device::DeviceNode &node, device::DeviceModel &model,
+        b64 driver_flag) const {
         (void)model;
+        (void)driver_flag;
         loggers::DEVICE::INFO("开始创建设备驱动: serial name=%s", node.name());
 
         auto load_res = SerialDevice::__load_integral(
@@ -164,12 +175,10 @@ namespace driver {
             unexpect_return(ErrCode::OUT_OF_MEMORY);
         }
 
-        loggers::DEVICE::DEBUG(
-            "创建 SerialDevice: name=%s clock=%llu "
-            "compatible=%s",
-            device->name(),
-            static_cast<unsigned long long>(device->_clock_frequency.to_hz()),
-            std::string(device->compatible()).c_str());
+        loggers::DEVICE::DEBUG("创建 SerialDevice: name=%s clock=%llu",
+                               device->name(),
+                               static_cast<unsigned long long>(
+                                   device->_clock_frequency.to_hz()));
         return device;
     }
 }  // namespace driver

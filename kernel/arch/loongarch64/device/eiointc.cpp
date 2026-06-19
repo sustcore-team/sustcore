@@ -61,10 +61,6 @@ namespace la64 {
         void_return();
     }
 
-    std::string_view EioIntcChip::compatible() const noexcept {
-        return COMPATIBLE_STRING;
-    }
-
     driver::intc_t EioIntcChip::identifier() const noexcept {
         return _identifier;
     }
