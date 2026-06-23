@@ -71,7 +71,9 @@ namespace syscall {
                            UBuffer &&out);
     [[nodiscard]]
     Result<size_t> vfs_readlink(CapIdx parent_dir_cap, const UString &relpath,
-                                UBuffer &&buf, size_t bufsiz);
+                                 UBuffer &&buf, size_t bufsiz);
+    [[nodiscard]]
+    Result<void> vfs_page_cache_stats(UBuffer &&out, bool reset);
     [[nodiscard]]
     Result<bool> vfs_mount(CapIdx parent_dir_cap, const UString &fs_name,
                            CapIdx devfile_cap, const UString &mountpoint,

@@ -318,7 +318,7 @@ namespace syscall {
     }
 
     Result<size_t> vfs_readlink(CapIdx parent_dir_cap, const UString &relpath,
-                                UBuffer &&buf, size_t bufsiz) {
+                                 UBuffer &&buf, size_t bufsiz) {
         auto parent_res = lookup_current_cap(parent_dir_cap);
         propagate(parent_res);
         auto readlink_res =
@@ -328,6 +328,18 @@ namespace syscall {
         auto commit_res = buf.commit_to_user(readlink_res.value());
         propagate(commit_res);
         return readlink_res.value();
+    }
+
+    Result<void> vfs_page_cache_stats(UBuffer &&out, bool reset) {
+        if (out.kbuf() == nullptr || out.len() < sizeof(VFSPageCacheStats)) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        VFSPageCacheStats stats = VFS::page_cache_stats();
+        if (reset) {
+            VFS::reset_page_cache_stats();
+        }
+        memcpy(out.kbuf(), &stats, sizeof(stats));
+        return out.commit_to_user(sizeof(stats));
     }
 
     Result<bool> vfs_mount(CapIdx parent_dir_cap, const UString &fs_name,

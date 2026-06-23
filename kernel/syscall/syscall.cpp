@@ -282,6 +282,8 @@ namespace syscall {
             case SYS_VFS_LSTAT:          return "SYS_VFS_LSTAT";
             case SYS_VFS_READLINK:       return "SYS_VFS_READLINK";
             case SYS_VFS_MOUNT:          return "SYS_VFS_MOUNT";
+            case SYS_VFS_PAGE_CACHE_STATS:
+                return "SYS_VFS_PAGE_CACHE_STATS";
             default:                      return "UNKNOWN_SYSCALL";
         }
     }
@@ -331,6 +333,13 @@ namespace syscall {
             case SYS_SHUTDOWN: {
                 sys_shutdown();
                 __builtin_unreachable();
+            }
+            case SYS_VFS_PAGE_CACHE_STATS: {
+                UBuffer buf((VirAddr)arg0, sizeof(VFSPageCacheStats));
+                ret = result_void_ret(
+                    "vfs_page_cache_stats",
+                    vfs_page_cache_stats(std::move(buf), arg1 != 0));
+                break;
             }
             case SYS_CREATE_PROCESS: {
                 StartupArguments startup{};
