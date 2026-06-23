@@ -1,6 +1,6 @@
 # Common build flags shared by kernel, modules, and libraries.
 
-flags-common-c := -std=gnu18 -nostdlib -fno-builtin -ffreestanding -fpermissive \
+flags-common-c := -std=gnu18 -nostdlib -fno-builtin -ffreestanding \
 	-Wall -Wno-int-conversion -Wstrict-prototypes -Werror=implicit-function-declaration \
 	-fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 	-fno-stack-protector -Wno-int-to-pointer-cast \

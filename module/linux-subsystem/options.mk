@@ -18,5 +18,6 @@ flags-cpp := $(flags-common-cpp) -nostdinc $(flags-no-rtti-cpp) $(flags-no-excep
 include-cpp := -I$(path-include) -I$(path-include)/std -I$(path-include)/std/c++ \
 	-I$(path-third_party)/include -I$(path-third_party)/include/libfdt \
 	-I$(path-third_party)/include/std -I$(component-root) -I$(path-include)/arch \
+	-I$(path-e)/kernel \
 	-I$(path-e)/libs/linuxss-libc
 defs-cpp := -DASSERT_IMPLEMENTED=0 $(defs-mode-cpp)

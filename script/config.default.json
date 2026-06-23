@@ -1,8 +1,8 @@
 {
-	"mode": "release",
+	"mode": "debug",
 	"arch": "riscv64",
 	"riscv64": {
-		"compiler-prefix": "riscv64-unknown-elf-",
+		"compiler-prefix": "/usr/bin/riscv64-unknown-elf-",
 		"additional-flags": {},
 		"qemu": {},
 		"features": [
@@ -12,7 +12,7 @@
 		"logger-disable-all": true
 	},
 	"loongarch64": {
-		"compiler-prefix": "loongarch64-linux-gnu-",
+		"compiler-prefix": "/opt/gcc-13.2.0-loongarch64-linux-gnu/bin/loongarch64-linux-gnu-",
 		"additional-flags": {},
 		"qemu": {},
 		"features": [

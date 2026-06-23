@@ -16,12 +16,15 @@
 #include <std/stdio.h>
 #include <sus/types.h>
 #include <sustcore/bootstrap.h>
+#include <sustcore/files.h>
 #include <sustcore/syscall_str.h>
 #include <syscall.h>
 
 #include <cstddef>
 #include <cstring>
 #include <syscall.h.in>
+
+#include "fdtable.h"
 
 extern "C" bool g_linux_initialized = false;
 
@@ -92,6 +95,35 @@ namespace {
             }
             offset += count;
         }
+    }
+
+    constexpr int AT_FDCWD        = -100;
+    constexpr int LINUX_O_RDONLY  = 0;
+    constexpr int LINUX_O_WRONLY  = 1;
+    constexpr int LINUX_O_RDWR    = 2;
+    constexpr int LINUX_O_CREAT   = 0100;   // octal
+    constexpr int LINUX_O_TRUNC   = 0200;   // octal
+    constexpr int LINUX_O_APPEND  = 04000;  // octal
+
+    [[nodiscard]]
+    flags::oflg_t linux_oflags_to_sustcore(int linux_flags) noexcept {
+        flags::oflg_t result = 0;
+        int access_mode = linux_flags & 3;
+
+        if (access_mode == LINUX_O_RDONLY) {
+            result = flags::O_READ;
+        } else if (access_mode == LINUX_O_WRONLY) {
+            result = flags::O_WRITE;
+        } else if (access_mode == LINUX_O_RDWR) {
+            result = flags::O_READ | flags::O_WRITE;
+        }
+
+        if (linux_flags & LINUX_O_CREAT) {
+            result |= flags::O_CREAT;
+        }
+
+        // O_TRUNC and O_APPEND intentionally not translated (out of scope)
+        return result;
     }
 
 }  // namespace
@@ -284,12 +316,59 @@ extern "C" void linux_main(const void *stack_sp, size_t argc,
 }
 
 size_t linux_sys_write(size_t fd, const void *buf, size_t len) {
+    // Keep existing stdout/stderr serial behavior
     if (fd == 1 || fd == 2) {
         sys_write_serial(0, reinterpret_cast<const char *>(buf), len);
         return len;
     }
-    printf("linux-subsystem: unsupported fd %d\n", fd);
-    return INVALID_VALUE;
+
+    if (buf == nullptr) {
+        return -EFAULT;
+    }
+
+    CapIdx file_cap = fd_to_cap(static_cast<int>(fd));
+    if (file_cap == cap::error) {
+        return -EBADF;
+    }
+
+    size_t offset    = fd_offset(static_cast<int>(fd));
+    size_t written   = sys_vfs_write(file_cap, offset,
+                                     reinterpret_cast<const void *>(buf), len);
+    if (written == INVALID_VALUE) {
+        return -EIO;
+    }
+
+    set_fd_offset(static_cast<int>(fd), offset + written);
+    return written;
+}
+
+size_t linux_sys_read(int fd, void *buf, size_t count) {
+    if (fd == 0) {
+        // stdin not implemented
+        return -EBADF;
+    }
+
+    if (buf == nullptr && count != 0) {
+        return -EFAULT;
+    }
+
+    if (count == 0) {
+        return 0;
+    }
+
+    CapIdx file_cap = fd_to_cap(fd);
+    if (file_cap == cap::error) {
+        return -EBADF;
+    }
+
+    size_t offset = fd_offset(fd);
+    size_t nread  = sys_vfs_read(file_cap, offset, buf, count);
+    if (nread == INVALID_VALUE) {
+        return -EIO;
+    }
+
+    set_fd_offset(fd, offset + nread);
+    return nread;
 }
 
 size_t linux_sys_writev(size_t fd, const linux_iovec *iov, size_t iovcnt) {
@@ -357,12 +436,88 @@ size_t linux_sys_munmap(void *addr, size_t length) {
                                                                : INVALID_VALUE;
 }
 
+size_t linux_sys_close(int fd) {
+    CapIdx cap = fd_to_cap(fd);
+    if (cap == cap::error) {
+        return -EBADF;
+    }
+    free_fd(fd);
+    return 0;
+}
+
+size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode) {
+    CapIdx parent_cap;
+    if (dirfd == AT_FDCWD) {
+        parent_cap = __prog_root_dir_cap;
+    } else {
+        return -ENOENT;
+    }
+
+    if (parent_cap == cap::null) {
+        return -ENOENT;
+    }
+
+    if (pathname == nullptr) {
+        return -ENOENT;
+    }
+
+    flags::oflg_t sustcore_flags = linux_oflags_to_sustcore(flags);
+
+    CapIdx file_cap = sys_vfs_open(parent_cap, pathname, sustcore_flags);
+
+    if (file_cap == cap::null || file_cap == cap::error) {
+        return -ENOENT;
+    }
+
+    int fd = alloc_fd(file_cap);
+    if (fd < 0) {
+        sys_cap_remove(file_cap);
+        return -EMFILE;
+    }
+
+    return fd;
+}
+
+size_t linux_sys_lseek(int fd, size_t offset, int whence) {
+    CapIdx file_cap = fd_to_cap(fd);
+    if (file_cap == cap::error) {
+        return -EBADF;
+    }
+
+    size_t new_offset;
+
+    switch (whence) {
+    case 0:
+        new_offset = offset;
+        break;
+    case 1:
+        new_offset = fd_offset(fd) + offset;
+        break;
+    case 2: {
+        size_t file_size = sys_vfs_size(file_cap);
+        if (file_size == static_cast<size_t>(-1)) {
+            return -EIO;
+        }
+        new_offset = file_size + offset;
+        break;
+    }
+    default:
+        return -EINVAL;
+    }
+
+    set_fd_offset(fd, new_offset);
+    return new_offset;
+}
+
 extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
                                  size_t a4, size_t a5, size_t a6, size_t a7,
                                  addr_t dispatch_frame_sp) {
     switch (a7) {
         case __NR_write:
             return linux_sys_write(a0, reinterpret_cast<const void *>(a1), a2);
+        case __NR_read:
+            return linux_sys_read(static_cast<int>(a0),
+                                  reinterpret_cast<void *>(a1), a2);
         case __NR_writev:
             return linux_sys_writev(
                 a0, reinterpret_cast<const linux_iovec *>(a1), a2);
@@ -394,6 +549,15 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
                                    static_cast<int>(a2),
                                    reinterpret_cast<void *>(a3));
         case __NR_exit: linux_sys_exit(a0); return 0;
+        case __NR_openat:
+            return linux_sys_openat(static_cast<int>(a0),
+                                    reinterpret_cast<const char *>(a1),
+                                    static_cast<int>(a2), static_cast<int>(a3));
+        case __NR_close:
+            return linux_sys_close(static_cast<int>(a0));
+        case __NR_lseek:
+            return linux_sys_lseek(static_cast<int>(a0), a1,
+                                   static_cast<int>(a2));
         default:
             printf("linux-subsystem: unsupported syscall %s (%d)\n",
                    syscall_to_string(a7), a7);

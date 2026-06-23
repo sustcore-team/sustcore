@@ -83,6 +83,7 @@ size_t __prog_brk          = 0;
 CapIdx __prog_pcb_cap      = cap::null;
 CapIdx __prog_main_tcb_cap = cap::null;
 CapIdx __prog_heap_mem_cap = cap::null;
+CapIdx __prog_root_dir_cap  = cap::null;
 
 void init_prog_data(size_t bsargc, const bsheader *bsargv[]) {
     __prog_heap_base    = 0;
@@ -90,6 +91,7 @@ void init_prog_data(size_t bsargc, const bsheader *bsargv[]) {
     __prog_pcb_cap      = cap::null;
     __prog_main_tcb_cap = cap::null;
     __prog_heap_mem_cap = cap::null;
+    __prog_root_dir_cap  = cap::null;
 
     for (size_t i = 0; i < bsargc; ++i) {
         BootstrapRecordView view{};
@@ -120,6 +122,16 @@ void init_prog_data(size_t bsargc, const bsheader *bsargv[]) {
                 has_memory_kind(cap_view.cap_desc, "heap"))
             {
                 __prog_heap_mem_cap = cap_view.cap_idx;
+                continue;
+            }
+            if (cap_view.cap_type == PayloadType::VDIR &&
+                cap_view.cap_desc != nullptr &&
+                cap_view.cap_desc[0] == '#')
+            {
+                if (strcmp(cap_view.cap_desc + 1, "/") == 0) {
+                    __prog_root_dir_cap = cap_view.cap_idx;
+                }
+                continue;
             }
             continue;
         }
