@@ -82,7 +82,8 @@ namespace syscall {
             auto locate_res = tmm_res.value()->locate(_uaddr);
             propagate(locate_res);
             VMA *vma = locate_res.value();
-            if (vma == nullptr || vma->memory == nullptr) {
+            auto *memory = vma != nullptr ? vma->memory_payload() : nullptr;
+            if (memory == nullptr) {
                 loggers::SYSCALL::ERROR("UBuffer: 用户缓冲区无有效 MemoryPayload");
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
@@ -95,7 +96,7 @@ namespace syscall {
                 unexpect_return(ErrCode::OUT_OF_BOUNDARY);
             }
 
-            _memory     = vma->memory;
+            _memory     = memory;
             _mem_offset = vma->mem_offset + (_uaddr - vma->varea.begin);
             _resolved   = true;
             auto *current = schd::Scheduler::inst().current_tcb();
@@ -313,15 +314,15 @@ namespace syscall {
             auto locate_res = tmm->locate(addr);
             propagate(locate_res);
             VMA *vma = locate_res.value();
-            if (vma == nullptr || vma->memory == nullptr ||
-                !within(vma->varea, addr))
+            auto *memory = vma != nullptr ? vma->memory_payload() : nullptr;
+            if (memory == nullptr || !within(vma->varea, addr))
             {
                 unexpect_return(ErrCode::OUT_OF_BOUNDARY);
             }
 
             size_t mem_offset = vma->mem_offset + (addr - vma->varea.begin);
             char ch           = '\0';
-            auto read_res     = vma->memory->read(mem_offset, &ch, 1);
+            auto read_res     = memory->read(mem_offset, &ch, 1);
             propagate(read_res);
             if (read_res.value() != 1) {
                 unexpect_return(ErrCode::IO_ERROR);
