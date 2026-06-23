@@ -24,6 +24,7 @@ namespace {
     constexpr size_t __NR_lseek         = 62;
     constexpr size_t __NR_read          = 63;
     constexpr size_t __NR_write         = 64;
+    constexpr size_t __NR_getcwd        = 17;
 
     // open flags
     constexpr int O_RDONLY              = 0;
@@ -93,6 +94,11 @@ static long linux_lseek(int fd, long offset, int whence) {
                          0, 0, 0, __NR_lseek);
 }
 
+static long linux_getcwd(char *buf, size_t size) {
+    return linux_syscall(reinterpret_cast<size_t>(buf), size, 0, 0, 0, 0,
+                         __NR_getcwd);
+}
+
 extern "C" [[noreturn]] void test_linux_main() {
     // Original test: write hello three times
     const char *msg = "Hello, linux subsystem!\n";
@@ -102,7 +108,23 @@ extern "C" [[noreturn]] void test_linux_main() {
 
     // Test 1: open existing file for reading
     puts("Test 1: open existing file...\n");
-    int fd = static_cast<int>(linux_openat(AT_FDCWD, "initrd/linux-subsystem.mod",
+    char cwd[128];
+    long cwd_ret = linux_getcwd(cwd, sizeof(cwd));
+    if (cwd_ret == reinterpret_cast<long>(cwd)) {
+        test_pass("getcwd");
+    } else {
+        test_fail("getcwd", "expected buffer pointer");
+    }
+
+    char small_cwd[1];
+    long small_cwd_ret = linux_getcwd(small_cwd, sizeof(small_cwd));
+    if (small_cwd_ret < 0) {
+        test_pass("getcwd small buffer");
+    } else {
+        test_fail("getcwd small buffer", "expected negative");
+    }
+
+    int fd = static_cast<int>(linux_openat(AT_FDCWD, "/initrd/linux-subsystem.mod",
                                O_RDONLY, 0));
     if (fd >= 3) {
         test_pass("open existing file");
@@ -172,6 +194,14 @@ extern "C" [[noreturn]] void test_linux_main() {
         test_pass("close invalid fd");
     } else {
         test_fail("close invalid fd", "expected negative");
+    }
+
+    puts("Test 8.5: openat unsupported dirfd...\n");
+    long bad_dirfd = linux_openat(3, "linux-subsystem.mod", O_RDONLY, 0);
+    if (bad_dirfd < 0) {
+        test_pass("openat unsupported dirfd");
+    } else {
+        test_fail("openat unsupported dirfd", "expected negative");
     }
 
     // Test 9: create file, write, close, reopen, read, verify content

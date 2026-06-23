@@ -57,8 +57,11 @@ namespace {
     }
 
     [[nodiscard]]
-    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap) {
+    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap, const char *cwd_path) {
         if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error) {
+            return cap::error;
+        }
+        if (cwd_path == nullptr || cwd_path[0] == '\0') {
             return cap::error;
         }
 
@@ -86,11 +89,22 @@ namespace {
             .desc = "#/",
         };
 
+        const size_t cwd_path_len = strlen(cwd_path) + 1;
+        alignas(bsheader) char cwd_bootstrap[sizeof(bsheader) + 256]{};
+        if (cwd_path_len > sizeof(cwd_bootstrap) - sizeof(bsheader)) {
+            sys_cap_remove(child_root_cap);
+            return cap::error;
+        }
+        auto *cwd_header = reinterpret_cast<bsheader *>(cwd_bootstrap);
+        cwd_header->size = sizeof(bsheader) + cwd_path_len;
+        cwd_header->type = boot::TYPE_CWDPATH;
+        memcpy(cwd_bootstrap + sizeof(bsheader), cwd_path, cwd_path_len);
+
         CapIdx initial_caps[] = {child_root_cap, cap::null};
         const char *bsargv[]  = {reinterpret_cast<const char *>(&bootstrap),
-                                 nullptr};
+                                 cwd_bootstrap, nullptr};
         CapIdx child_pcb      = sys_create_linux_process(
-            kmod_getcap(fd), SCHED_CLASS_RR, initial_caps, nullptr, nullptr,
+            kmod_getcap(fd), SCHED_CLASS_FCFS, initial_caps, nullptr, nullptr,
             bsargv);
         sys_cap_remove(child_root_cap);
         return child_pcb;
@@ -112,7 +126,7 @@ namespace {
             return;
         }
 
-        CapIdx child_pcb = spawn_linux_test(fd, root_dir_cap);
+        CapIdx child_pcb = spawn_linux_test(fd, root_dir_cap, root);
         kmod_fclose(fd);
         if (child_pcb == cap::null || child_pcb == cap::error) {
             ++stats.failed;

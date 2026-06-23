@@ -70,6 +70,11 @@ namespace task {
         }
 
         [[nodiscard]]
+        bool valid_cwd_path(const char *cwd_path) noexcept {
+            return cwd_path != nullptr && cwd_path[0] != '\0';
+        }
+
+        [[nodiscard]]
         TaskSpec::BootstrapRecordData make_bootstrap_record(
             uint32_t type, const void *payload, size_t payload_size) {
             TaskSpec::BootstrapRecordData record{
@@ -167,6 +172,13 @@ namespace task {
             if (!bootstrap_parse_vaddr_explain(view, vaddr_explain) ||
                 !valid_vaddr_explain(vaddr_explain.vaddr,
                                      vaddr_explain.vaddr_desc))
+            {
+                unexpect_return(ErrCode::INVALID_PARAM);
+            }
+        } else if (header->type == boot::TYPE_CWDPATH) {
+            const char *cwd_path = nullptr;
+            if (!bootstrap_parse_cwd_path(view, cwd_path) ||
+                !valid_cwd_path(cwd_path))
             {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }

@@ -54,6 +54,7 @@ struct BootstrapVaddrExplainView {
 namespace boot {
     constexpr uint32_t TYPE_CAPEXP   = 0x1;
     constexpr uint32_t TYPE_VADDREXP = 0x2;
+    constexpr uint32_t TYPE_CWDPATH  = 0x3;
 }  // namespace boot
 
 constexpr uint32_t BOOTSTRAP_USER_TYPE_PREFIX = 0xFFFF0000U;
@@ -159,6 +160,23 @@ inline bool bootstrap_parse_vaddr_explain(
     {
         if (bytes[i] == '\0') {
             return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]]
+inline bool bootstrap_parse_cwd_path(const BootstrapRecordView &view,
+                                     const char *&cwd_path) {
+    if (view.data == nullptr || view.data_size == 0) {
+        return false;
+    }
+
+    auto *bytes = static_cast<const char *>(view.data);
+    cwd_path    = bytes;
+    for (size_t i = 0; i < view.data_size; ++i) {
+        if (bytes[i] == '\0') {
+            return i != 0;
         }
     }
     return false;
