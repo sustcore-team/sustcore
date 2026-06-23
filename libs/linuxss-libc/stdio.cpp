@@ -34,13 +34,13 @@ extern "C" int puts(const char *str) {
 }
 
 extern "C" int printf(const char *fmt, ...) {
-    // char chunk[256];
-    // va_list args;
-    // va_start(args, fmt);
-    // int ret =
-    //     vcbprintf(chunk, sizeof(chunk), serial_write_chunk, nullptr, fmt, args);
-    // va_end(args);
-    // return ret;
+    char chunk[256];
+    va_list args;
+    va_start(args, fmt);
+    int ret =
+        vcbprintf(chunk, sizeof(chunk), serial_write_chunk, nullptr, fmt, args);
+    va_end(args);
+    return ret;
 
     return 0;
 }

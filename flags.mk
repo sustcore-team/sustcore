@@ -6,7 +6,7 @@ flags-common-c := -std=gnu18 -nostdlib -fno-builtin -ffreestanding \
 	-fno-stack-protector -Wno-int-to-pointer-cast \
 	-fno-toplevel-reorder -fno-tree-scev-cprop
 
-flags-common-cpp := -std=gnu++23 -nostdlib -fno-builtin -ffreestanding -fpermissive \
+flags-common-cpp := -std=gnu++23 -nostdlib -fno-builtin -ffreestanding \
 	-Wall -Wno-sign-compare -Wno-literal-suffix -Wno-int-to-pointer-cast \
 	-fno-strict-aliasing -fomit-frame-pointer -fno-pic -fno-asynchronous-unwind-tables \
 	-fno-stack-protector -fno-toplevel-reorder -fno-tree-scev-cprop \

@@ -9,6 +9,7 @@
  *
  */
 
+#include <logger.h>
 #include <prm.h>
 #include <prog.h>
 #include <syscall.h>
@@ -186,6 +187,7 @@ size_t linux_sys_uname(void *buf) {
 [[noreturn]]
 void linux_sys_exit(int exitcode) {
     sys_pcb_kill(__prog_pcb_cap, exitcode);
-    printf("linux-subsystem: this statement shouldn't be executed!");
+    loggers::LXRT::ERROR("sys_exit 返回到不应执行的位置: exitcode=%d",
+                         exitcode);
     while (true);
 }

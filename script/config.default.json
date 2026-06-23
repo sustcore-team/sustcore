@@ -9,6 +9,10 @@
 			"kernel-run-modules"
 		],
 		"logger": {},
+		"linuxss": {
+			"logger": {},
+			"logger-disable-all": true
+		},
 		"logger-disable-all": true
 	},
 	"loongarch64": {
@@ -19,6 +23,10 @@
 			"kernel-run-modules"
 		],
 		"logger": {},
+		"linuxss": {
+			"logger": {},
+			"logger-disable-all": true
+		},
 		"logger-disable-all": true
 	}
 }

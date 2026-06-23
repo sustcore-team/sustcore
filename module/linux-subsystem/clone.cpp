@@ -10,6 +10,7 @@
  */
 
 #include <errno.h>
+#include <logger.h>
 #include <prog.h>
 #include <std/stdio.h>
 #include <sus/types.h>
@@ -144,26 +145,25 @@ namespace {
 size_t clone_process(size_t flags, addr_t newsp, int *parent_tid,
                      int *child_tid, addr_t tls,
                      addr_t dispatch_frame_sp) {
-    printf(
-        "linux-subsystem: clone_process flags=0x%016lx newsp=%p "
-        "parent_tid=%p child_tid=%p tls=%p dispatch_frame=%p\n",
+    loggers::LXSC::DEBUG(
+        "clone_process flags=0x%016lx newsp=%p parent_tid=%p child_tid=%p "
+        "tls=%p dispatch_frame=%p",
         static_cast<unsigned long>(flags), reinterpret_cast<void *>(newsp),
         parent_tid, child_tid, reinterpret_cast<void *>(tls),
         reinterpret_cast<void *>(dispatch_frame_sp));
 
     if (newsp != 0) {
-        printf("linux-subsystem: clone_process 忽略 newsp=%p\n",
-               reinterpret_cast<void *>(newsp));
+        loggers::LXSC::INFO("clone_process 忽略 newsp=%p",
+                            reinterpret_cast<void *>(newsp));
     }
     if (parent_tid != nullptr || child_tid != nullptr || tls != 0) {
-        printf(
-            "linux-subsystem: clone_process 忽略 父子 tid 与 tls\n");
+        loggers::LXSC::INFO("clone_process 忽略 父子 tid 与 tls");
     }
 
     CapIdx child_pcb_cap = cap::null;
     size_t pid           = sys_pcb_fork(__prog_pcb_cap, &child_pcb_cap);
     if (pid == 0 && child_pcb_cap != cap::null && child_pcb_cap != cap::error) {
-        printf("linux-subsystem: 子进程返回\n");
+        loggers::LXRT::INFO("fork 子进程返回");
         __prog_pcb_cap = child_pcb_cap;
         clear_last_child();
         if (newsp != 0) {
@@ -171,16 +171,19 @@ size_t clone_process(size_t flags, addr_t newsp, int *parent_tid,
             linux_clone_fork_return_trampoline(newsp, dispatch_frame_sp);
         }
     } else {
-        printf("linux-subsystem: 父进程返回\n");
+        loggers::LXRT::INFO("fork 父进程返回");
         if (pid > 0 && child_pcb_cap != cap::null && child_pcb_cap != cap::error) {
             g_last_child = LastChildState{
                 .pid     = pid,
                 .pcb_cap = child_pcb_cap,
                 .valid   = true,
             };
-            printf("linux-subsystem: 记录最近子进程 pid=%lu pcb_cap=%p\n",
-                   static_cast<unsigned long>(g_last_child.pid),
-                   reinterpret_cast<void *>(g_last_child.pcb_cap));
+            loggers::LXRT::DEBUG("记录最近子进程 pid=%lu pcb_cap=%p",
+                                 static_cast<unsigned long>(g_last_child.pid),
+                                 reinterpret_cast<void *>(g_last_child.pcb_cap));
+        } else if (pid > 0) {
+            loggers::LXRT::ERROR("fork 返回 pid=%lu 但 child_pcb_cap 无效",
+                                 static_cast<unsigned long>(pid));
         }
     }
     return pid;
@@ -188,9 +191,9 @@ size_t clone_process(size_t flags, addr_t newsp, int *parent_tid,
 
 CapIdx clone_thread(size_t flags, addr_t newsp, int *parent_tid, int *child_tid,
                     addr_t tls) {
-    printf(
-        "linux-subsystem: clone_thread placeholder flags=0x%016lx newsp=%p "
-        "parent_tid=%p child_tid=%p tls=%p\n",
+    loggers::LXSC::INFO(
+        "clone_thread placeholder flags=0x%016lx newsp=%p parent_tid=%p "
+        "child_tid=%p tls=%p",
         static_cast<unsigned long>(flags), reinterpret_cast<void *>(newsp),
         parent_tid, child_tid, reinterpret_cast<void *>(tls));
     return cap::error;
@@ -201,9 +204,9 @@ size_t linux_sys_clone(size_t flags, addr_t newsp, int *parent_tid,
                        addr_t dispatch_frame_sp) {
     auto flags_str = clone_flags_to_string(flags);
     size_t csignal = flags & CSIGNAL;
-    printf(
-        "linux-subsystem: clone flags=0x%016lx (%s) newsp=%p parent_tid=%p "
-        "child_tid=%p tls=%p dispatch_frame=%p CSIGNAL=0x%02lx\n",
+    loggers::LXSC::DEBUG(
+        "clone flags=0x%016lx (%s) newsp=%p parent_tid=%p child_tid=%p tls=%p "
+        "dispatch_frame=%p CSIGNAL=0x%02lx",
         static_cast<unsigned long>(flags), flags_str.c_str(),
         reinterpret_cast<void *>(newsp), parent_tid, child_tid,
         reinterpret_cast<void *>(tls),
@@ -211,15 +214,14 @@ size_t linux_sys_clone(size_t flags, addr_t newsp, int *parent_tid,
         static_cast<unsigned long>(csignal));
 
     if (thread_like_clone(flags)) {
-        printf("linux-subsystem: clone dispatch => clone_thread\n");
-        printf("linux-subsystem: TODO thread-like clone is not implemented\n");
+        loggers::LXSC::DEBUG("clone dispatch => clone_thread");
+        loggers::LXSC::ERROR("thread-like clone is not implemented");
         return -ENOSYS;
     } else {
-        printf("linux-subsystem: clone dispatch => clone_process\n");
+        loggers::LXSC::DEBUG("clone dispatch => clone_process");
         if (newsp != 0) {
-            printf(
-                "linux-subsystem: clone->fork forwarding will return via "
-                "helper with newsp=%p dispatch_frame=%p\n",
+            loggers::LXSC::DEBUG(
+                "clone->fork forwarding via helper newsp=%p dispatch_frame=%p",
                 reinterpret_cast<void *>(newsp),
                 reinterpret_cast<void *>(dispatch_frame_sp));
         }
@@ -230,30 +232,30 @@ size_t linux_sys_clone(size_t flags, addr_t newsp, int *parent_tid,
 }
 
 size_t linux_sys_wait4(int pid, int *status, int options, void *rusage) {
-    printf(
-        "linux-subsystem: wait4 pid=%d status=%p options=0x%x rusage=%p\n",
+    loggers::LXSC::DEBUG(
+        "wait4 pid=%d status=%p options=0x%x rusage=%p",
         pid, status, options, rusage);
 
     if (rusage != nullptr) {
-        printf("linux-subsystem: wait4 暂不支持 rusage\n");
+        loggers::LXSC::ERROR("wait4 暂不支持 rusage");
         return static_cast<size_t>(-ENOSYS);
     }
 
     if (!g_last_child.valid) {
-        printf("linux-subsystem: wait4 没有可等待的子进程\n");
+        loggers::LXRT::ERROR("wait4 没有可等待的子进程");
         return static_cast<size_t>(-ECHILD);
     }
 
     if (pid != WAIT4_ANY_CHILD &&
         static_cast<size_t>(pid) != g_last_child.pid)
     {
-        printf("linux-subsystem: wait4 pid=%d 不匹配最近子进程 pid=%lu\n",
-               pid, static_cast<unsigned long>(g_last_child.pid));
+        loggers::LXRT::ERROR("wait4 pid=%d 不匹配最近子进程 pid=%lu", pid,
+                             static_cast<unsigned long>(g_last_child.pid));
         return static_cast<size_t>(-ECHILD);
     }
 
     if (options != 0 && options != WAIT4_WNOHANG) {
-        printf("linux-subsystem: wait4 暂不支持 options=0x%x\n", options);
+        loggers::LXSC::ERROR("wait4 暂不支持 options=0x%x", options);
         return static_cast<size_t>(-EINVAL);
     }
 
@@ -265,17 +267,17 @@ size_t linux_sys_wait4(int pid, int *status, int options, void *rusage) {
     CapIdx waited_cap =
         sys_tcb_wait(__prog_main_tcb_cap, wait_caps, status_ptr, wait_options);
     if (waited_cap == cap::null) {
-        printf("linux-subsystem: wait4 WNOHANG 未等到子进程退出\n");
+        loggers::LXSC::INFO("wait4 WNOHANG 未等到子进程退出");
         return 0;
     }
     if (waited_cap == cap::error) {
-        printf("linux-subsystem: wait4 syscall 失败\n");
+        loggers::LXSC::ERROR("wait4 syscall 失败");
         return static_cast<size_t>(-ECHILD);
     }
 
     const size_t child_pid = g_last_child.pid;
-    printf("linux-subsystem: wait4 等到子进程 pid=%lu 退出\n",
-           static_cast<unsigned long>(child_pid));
+    loggers::LXRT::INFO("wait4 等到子进程 pid=%lu 退出",
+                        static_cast<unsigned long>(child_pid));
     clear_last_child();
     return child_pid;
 }

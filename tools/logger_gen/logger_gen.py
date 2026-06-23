@@ -40,6 +40,49 @@ def resolve_arch_config(config, override_arch=None):
     return arch, arch_config
 
 
+def resolve_config_path(config, path, name):
+    current = require_object(config, name)
+    if path is None:
+        return current
+
+    for part in path.split("."):
+        current = require_object(current.get(part), f"{name}.{part}")
+    return current
+
+
+def resolve_optional_object_path(config, path):
+    if path is None:
+        return {}
+
+    current = config
+    for part in path.split("."):
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(part)
+        if current is None:
+            return {}
+
+    if not isinstance(current, dict):
+        raise ValueError(f"{path} must be an object")
+    return current
+
+
+def resolve_disable_all(config, key):
+    if key is None:
+        return False
+    if "." not in key:
+        return config.get(key) is True
+
+    current = config
+    for part in key.split("."):
+        if not isinstance(current, dict):
+            return False
+        current = current.get(part)
+        if current is None:
+            return False
+    return current is True
+
+
 def level_to_enum(level, name):
     level_key = str(level).lower()
     if level_key not in LOGGER_LEVELS:
@@ -51,11 +94,21 @@ def level_to_enum(level, name):
     return LOGGER_LEVELS[level_key]
 
 
-def emit_logger_header(logger_config, config, override_arch=None):
+def emit_logger_header(
+    logger_config,
+    config,
+    override_arch=None,
+    override_key_path="logger",
+    disable_all_key="logger-disable-all",
+    putfunctor_name="kputer",
+    putfunctor_include="kio.h",
+    putfunctor_type=None,
+    putfunctor_body=None,
+):
     logger_config = require_object(logger_config, "logger config")
     _, arch_config = resolve_arch_config(config, override_arch)
-    overrides = require_object(arch_config.get("logger", {}), "logger")
-    disable_all = arch_config.get("logger-disable-all") is True
+    overrides = resolve_optional_object_path(arch_config, override_key_path)
+    disable_all = resolve_disable_all(arch_config, disable_all_key)
 
     unknown_loggers = sorted(set(overrides) - set(logger_config))
     if unknown_loggers:
@@ -79,7 +132,7 @@ def emit_logger_header(logger_config, config, override_arch=None):
             level_enum = level_to_enum(level, f"logger.{key}")
 
         declarations.append(
-            f"    DECLARE_LOGGER(kputer, LogLevel::{level_enum}, {name});"
+            f"    DECLARE_LOGGER({putfunctor_name}, LogLevel::{level_enum}, {name});"
         )
 
     lines = [
@@ -93,18 +146,23 @@ def emit_logger_header(logger_config, config, override_arch=None):
         "",
         "#pragma once",
         "",
-        "#include <kio.h>",
+        f"#include <{putfunctor_include}>",
         "#include <sus/logger.h>",
         "",
-        "struct kputer {",
-        "    int operator()(const char *str) const",
-        "    {",
-        "        return kputs(str);",
-        "    }",
-        "};",
-        "",
-        "namespace loggers {",
     ]
+    if putfunctor_type is None:
+        lines.extend([
+            f"struct {putfunctor_name} {{",
+            "    int operator()(const char *str) const",
+            "    {",
+            f"        {putfunctor_body}",
+            "    }",
+            "};",
+            "",
+        ])
+    else:
+        lines.extend([f"using {putfunctor_name} = {putfunctor_type};", ""])
+    lines.append("namespace loggers {")
     lines.extend(declarations)
     lines.extend(["};  // namespace loggers", ""])
     return "\n".join(lines)
@@ -117,10 +175,11 @@ def write_text_if_changed(path, content):
 
 
 def main(argv):
-    if len(argv) > 5:
+    if len(argv) > 10:
         print(
             "usage: logger_gen.py [kernel/logger.json] [kernel/logger.h] "
-            "[config.json] [arch]",
+            "[config.json] [arch] [logger-key-path] [disable-all-key] "
+            "[putfunctor-name] [putfunctor-include] [putfunctor-body]",
             file=sys.stderr,
         )
         return 2
@@ -131,6 +190,11 @@ def main(argv):
     output_path = Path(argv[2]) if len(argv) >= 3 else Path("kernel/logger.h")
     config_path = Path(argv[3]) if len(argv) >= 4 else default_config_path()
     override_arch = argv[4] if len(argv) >= 5 else None
+    override_key_path = argv[5] if len(argv) >= 6 else "logger"
+    disable_all_key = argv[6] if len(argv) >= 7 else "logger-disable-all"
+    putfunctor_name = argv[7] if len(argv) >= 8 else "kputer"
+    putfunctor_include = argv[8] if len(argv) >= 9 else "kio.h"
+    putfunctor_body = argv[9] if len(argv) >= 10 else "return kputs(str);"
 
     try:
         with logger_input_path.open(encoding="utf-8") as fp:
@@ -138,7 +202,17 @@ def main(argv):
         with config_path.open(encoding="utf-8") as fp:
             config = json.load(fp)
         write_text_if_changed(
-            output_path, emit_logger_header(logger_config, config, override_arch)
+            output_path,
+            emit_logger_header(
+                logger_config,
+                config,
+                override_arch,
+                override_key_path=override_key_path,
+                disable_all_key=disable_all_key,
+                putfunctor_name=putfunctor_name,
+                putfunctor_include=putfunctor_include,
+                putfunctor_body=putfunctor_body,
+            ),
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"logger_gen.py: {exc}", file=sys.stderr)

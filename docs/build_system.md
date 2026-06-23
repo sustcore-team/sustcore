@@ -122,6 +122,10 @@ kernel/feature.mk: $(config-json) kernel/feature.json tools/feature_gen/feature_
         "qemu": {},
         "features": [],
         "logger": {},
+        "linuxss": {
+            "logger": {},
+            "logger-disable-all": true
+        },
         "logger-disable-all": true
     }
 }
@@ -174,9 +178,11 @@ loongarch64-compiler-prefix ?= loongarch64-linux-gnu-
 
 `logger-disable-all` 只有严格等于 JSON 布尔值 `true` 时才生效。它的优先级高于 `logger` 中的单项覆盖，会把所有 logger 都生成成 `LogLevel::DISABLE`。省略该字段、写成 `false`，或误写成字符串 `"true"` 都不会触发全局禁用。
 
+`linuxss.logger` 和 `linuxss.logger-disable-all` 作用于 `module/linux-subsystem/logger.h`。它们的语义与内核 logger 配置一致，但 logger 名称集合来自 `module/linux-subsystem/logger.json`，当前包含 `lxsc` 和 `lxrt`。
+
 ### 生成文件的注意事项
 
-`config.mk`、`kernel/logger.h` 和 `kernel/feature.mk` 都是生成文件，不应该手写维护。相关 Make 规则带有 `FORCE`，所以每次构建入口都会尝试重新生成；生成器内部会在内容未变化时避免重写文件。
+`config.mk`、`kernel/logger.h`、`module/linux-subsystem/logger.h` 和 `kernel/feature.mk` 都是生成文件，不应该手写维护。相关 Make 规则带有 `FORCE`，所以每次构建入口都会尝试重新生成；生成器内部会在内容未变化时避免重写文件。
 
 `config.mk` 被顶层 `Makefile` 和组件构建模板包含，用于把 JSON 配置转成 Make 变量。直接修改 `config.mk` 很容易在下一次构建时被覆盖。
 

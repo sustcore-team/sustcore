@@ -10,9 +10,11 @@
  */
 
 #include <prm.h>
+#include <logger.h>
 #include <std/assert.h>
 #include <std/stdio.h>
 
+#include <cstdarg>
 #include <cstddef>
 
 namespace {
@@ -37,8 +39,7 @@ namespace {
 void *operator new(size_t size) {
     void *ptr = linuxss_alloc(size);
     if (ptr == nullptr) {
-        panic("linux-subsystem: operator new failed size=%lu",
-              static_cast<unsigned long>(size));
+        panic("operator new failed size=%lu", static_cast<unsigned long>(size));
     }
     return ptr;
 }
@@ -53,8 +54,13 @@ void operator delete(void *ptr, size_t size) noexcept {
 }
 
 void panic(const char *format, ...) {
-    printf("linux-subsystem panic: %s\n",
-           format == nullptr ? "(null)" : format);
+    char buffer[256]{};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format == nullptr ? "(null)" : format,
+              args);
+    va_end(args);
+    loggers::LXRT::FATAL("panic: %s", buffer);
     while (true) {
     }
 }

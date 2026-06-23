@@ -9,6 +9,7 @@ bochsrc
 bx_enh_dbg.ini
 config.mk
 kernel/logger.h
+module/linux-subsystem/logger.h
 kernel/feature.mk
 config-ref/*/
 config-ref/*.tar.xz

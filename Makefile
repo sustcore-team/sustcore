@@ -99,6 +99,9 @@ config.mk: FORCE $(config-json) tools/config_gen/config_gen.py
 kernel/logger.h: FORCE $(config-json) kernel/logger.json tools/logger_gen/logger_gen.py
 	$(q)python3 tools/logger_gen/logger_gen.py kernel/logger.json kernel/logger.h $(config-json) $(config-arch-override)
 
+module/linux-subsystem/logger.h: FORCE $(config-json) module/linux-subsystem/logger.json tools/logger_gen/logger_gen.py
+	$(q)python3 tools/logger_gen/logger_gen.py module/linux-subsystem/logger.json module/linux-subsystem/logger.h $(config-json) $(architecture) linuxss.logger linuxss.logger-disable-all lputer syscall.h "size_t len = 0; while (str[len] != '\0') { ++len; } sys_write_serial(0, str, len); return static_cast<int>(len);"
+
 kernel/feature.mk: FORCE $(config-json) kernel/feature.json tools/feature_gen/feature_gen.py
 	$(q)python3 tools/feature_gen/feature_gen.py kernel/feature.json kernel/feature.mk $(config-json) $(config-arch-override)
 
@@ -174,6 +177,6 @@ dbg: build
 clean:
 	rm -rf $(path-e)/build kernel-rv kernel-la
 
-build-libs build-mods make-initrd build-kernel build all autotest kernel-rv kernel-la run dbg run-only dbg-only image __image mount umount: config.mk kernel/logger.h kernel/feature.mk
+build-libs build-mods make-initrd build-kernel build all autotest kernel-rv kernel-la run dbg run-only dbg-only image __image mount umount: config.mk kernel/logger.h module/linux-subsystem/logger.h kernel/feature.mk
 
 include $(path-script)/setup.mk

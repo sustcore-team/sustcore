@@ -1,0 +1,12 @@
+{
+    "lxsc": {
+        "name": "LXSC",
+        "channel": "LinuxSerial",
+        "default": "info"
+    },
+    "lxrt": {
+        "name": "LXRT",
+        "channel": "LinuxSerial",
+        "default": "info"
+    }
+}
