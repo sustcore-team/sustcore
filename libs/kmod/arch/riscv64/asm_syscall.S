@@ -419,3 +419,11 @@ sys_vfs_sync:
     li a7, SYS_VFS_SYNC
     ecall
     ret
+
+    .global sys_vfs_page_cache_stats
+    .type sys_vfs_page_cache_stats, @function
+sys_vfs_page_cache_stats:
+    /* a0 = always zero, a1 = VFSPageCacheStats*, a2 = reset */
+    li a7, SYS_VFS_PAGE_CACHE_STATS
+    ecall
+    ret

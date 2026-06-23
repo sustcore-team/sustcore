@@ -325,3 +325,9 @@ sys_vfs_readlink:
 sys_vfs_mount:
     li.d $a7, SYS_VFS_MOUNT
     do_syscall
+
+    .global sys_vfs_page_cache_stats
+    .type sys_vfs_page_cache_stats, @function
+sys_vfs_page_cache_stats:
+    li.d $a7, SYS_VFS_PAGE_CACHE_STATS
+    do_syscall

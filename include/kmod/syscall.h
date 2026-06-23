@@ -126,6 +126,8 @@ size_t sys_vfs_size(CapIdx file_cap);
 size_t sys_vfs_getdents(CapIdx dir_cap, void *buf, size_t buflen,
                         size_t offset);
 bool sys_vfs_sync(CapIdx capidx);
+bool sys_vfs_page_cache_stats(size_t __always_zero, VFSPageCacheStats *out,
+                              bool reset);
 
 CapIdx sys_cap_clone(CapIdx src);
 bool sys_cap_downgrade(CapIdx idx, uint64_t new_perm);
