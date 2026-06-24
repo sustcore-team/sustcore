@@ -80,5 +80,6 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
     kmod_unlink(TEST_FILE);
 
     printf("test_file_backed_memory: PASS\n");
+    exit(0);
     return 0;
 }

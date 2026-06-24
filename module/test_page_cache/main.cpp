@@ -9,7 +9,7 @@
 #include <cstring>
 
 namespace {
-    constexpr const char *TEST_FILE = "/testing/page_cache_test_file";
+    constexpr const char *TEST_FILE = "/test_img/page_cache_test_file";
     constexpr size_t PAGE_SIZE      = 4096;
     constexpr size_t TEST_PAGES     = 9;
     constexpr size_t TEST_SIZE      = PAGE_SIZE * TEST_PAGES;
