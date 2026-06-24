@@ -24,6 +24,11 @@ namespace {
         nullptr,
     };
 
+    constexpr const char *KMOD_TESTS[] = {
+        "/initrd/test_page_cache.mod",
+        nullptr,
+    };
+
     struct TestRunStats {
         size_t total  = 0;
         size_t passed = 0;
@@ -57,7 +62,47 @@ namespace {
     }
 
     [[nodiscard]]
-    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap, const char *cwd_path) {
+    CapIdx spawn_kmod_test(int fd, CapIdx root_dir_cap) {
+        if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error) {
+            return cap::error;
+        }
+
+        CapIdx child_root_cap = sys_cap_clone(root_dir_cap);
+        if (child_root_cap == cap::null || child_root_cap == cap::error) {
+            return cap::error;
+        }
+
+        struct RootDirBootstrap {
+            bsheader header;
+            BootstrapCapExplainPayloadHead explain;
+            char desc[3];
+        } bootstrap{
+            .header =
+                bsheader{
+                    .size = sizeof(RootDirBootstrap),
+                    .type = boot::TYPE_CAPEXP,
+                },
+            .explain =
+                BootstrapCapExplainPayloadHead{
+                    .cap_idx  = child_root_cap,
+                    .cap_type = PayloadType::VDIR,
+                    .cap_perm = ~b64(0),
+                },
+            .desc = "#/",
+        };
+
+        CapIdx initial_caps[] = {child_root_cap, cap::null};
+        const char *bsargv[]  = {reinterpret_cast<const char *>(&bootstrap),
+                                 nullptr};
+        CapIdx child_pcb      = sys_create_process(
+            kmod_getcap(fd), SCHED_CLASS_RR, initial_caps, nullptr, nullptr,
+            bsargv);
+        sys_cap_remove(child_root_cap);
+        return child_pcb;
+    }
+
+    [[nodiscard]]
+    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap) {
         if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error) {
             return cap::error;
         }
@@ -108,6 +153,60 @@ namespace {
             bsargv);
         sys_cap_remove(child_root_cap);
         return child_pcb;
+    }
+
+    void run_kmod_testcase(const char *path, CapIdx root_dir_cap,
+                           TestRunStats &stats) {
+        ++stats.total;
+        printf("contest-runner: start %s\n", path);
+
+        int fd = kmod_fopen(path, "x");
+        if (fd < 0) {
+            ++stats.failed;
+            printf("contest-runner: open failed %s\n", path);
+            return;
+        }
+
+        CapIdx child_pcb = spawn_kmod_test(fd, root_dir_cap);
+        kmod_fclose(fd);
+        if (child_pcb == cap::null || child_pcb == cap::error) {
+            ++stats.failed;
+            printf("contest-runner: spawn failed %s\n", path);
+            return;
+        }
+
+        CapIdx wait_caps[] = {child_pcb, cap::null};
+        int status         = 0;
+        CapIdx exited_cap =
+            sys_tcb_wait(__main_tcb_cap, wait_caps, &status, 0);
+        if (exited_cap == cap::null || exited_cap == cap::error) {
+            ++stats.failed;
+            printf("contest-runner: wait failed %s\n", path);
+            return;
+        }
+
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            ++stats.failed;
+            printf("contest-runner: failed %s status=0x%x\n", path, status);
+            return;
+        }
+
+        ++stats.passed;
+        printf("contest-runner: passed %s status=0x%x\n", path, status);
+    }
+
+    [[nodiscard]]
+    TestRunStats run_kmod_suite(CapIdx root_dir_cap) {
+        TestRunStats stats{};
+        printf("contest-runner: kmod suite begin\n");
+        for (size_t i = 0; KMOD_TESTS[i] != nullptr; ++i) {
+            run_kmod_testcase(KMOD_TESTS[i], root_dir_cap, stats);
+        }
+        printf("contest-runner: kmod suite done total=%lu passed=%lu failed=%lu\n",
+               static_cast<unsigned long>(stats.total),
+               static_cast<unsigned long>(stats.passed),
+               static_cast<unsigned long>(stats.failed));
+        return stats;
     }
 
     void run_testcase(const char *root, const char *testcase,
@@ -183,6 +282,11 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
     }
 
     TestRunStats total{};
+    auto kmod_stats = run_kmod_suite(root_dir_cap);
+    total.total += kmod_stats.total;
+    total.passed += kmod_stats.passed;
+    total.failed += kmod_stats.failed;
+
     for (size_t i = 0; TEST_ROOTS[i] != nullptr; ++i) {
         auto stats = run_suite(TEST_ROOTS[i], root_dir_cap);
         total.total += stats.total;
