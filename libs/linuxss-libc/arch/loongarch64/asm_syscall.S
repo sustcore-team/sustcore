@@ -72,6 +72,13 @@ sys_pcb_execve:
     syscall 0
     ret
 
+    .global sys_yield
+    .type sys_yield, @function
+sys_yield:
+    li.d $a7, SYS_YIELD
+    syscall 0
+    ret
+
     .global sys_getpid
     .type sys_getpid, @function
 sys_getpid:

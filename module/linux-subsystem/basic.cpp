@@ -203,3 +203,14 @@ void linux_sys_exit(int exitcode) {
                          exitcode);
     while (true);
 }
+
+size_t linux_sys_getpid() {
+    if (__prog_pcb_cap == cap::null || __prog_pcb_cap == cap::error) {
+        return INVALID_VALUE;
+    }
+    return sys_getpid(__prog_pcb_cap);
+}
+
+size_t linux_sys_sched_yield() {
+    return sys_yield() != 0 ? INVALID_VALUE : 0;
+}

@@ -30,6 +30,8 @@ void init_prog_data(size_t bsargc, const bsheader *bsargv[]);
 size_t linux_sys_brk(size_t newbrk);
 [[noreturn]]
 void linux_sys_exit(int exitcode);
+size_t linux_sys_getpid();
+size_t linux_sys_sched_yield();
 size_t linux_sys_uname(void *buf);
 size_t linux_sys_wait4(int pid, int *status, int options, void *rusage);
 size_t linux_sys_clone(size_t flags, addr_t newsp, int *parent_tid,

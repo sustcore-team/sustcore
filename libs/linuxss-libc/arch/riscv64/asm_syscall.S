@@ -71,6 +71,13 @@ sys_pcb_execve:
     ecall
     ret
 
+    .global sys_yield
+    .type   sys_yield, @function
+sys_yield:
+    li a7, SYS_YIELD
+    ecall
+    ret
+
     .global sys_getpid
     .type   sys_getpid, @function
 sys_getpid:

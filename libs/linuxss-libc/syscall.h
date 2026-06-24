@@ -56,6 +56,7 @@ extern "C" size_t sys_pcb_fork(CapIdx pcb_cap, CapIdx *child_pcb_cap);
 extern "C" bool sys_pcb_execve(CapIdx pcb_cap, CapIdx image_cap,
                                CapIdx rsvdlst[], const char *argv[],
                                const char *envp[], const char *bsargv[]);
+extern "C" size_t sys_yield();
 extern "C" size_t sys_getpid(CapIdx pcb_cap);
 extern "C" CapIdx sys_notif_create();
 extern "C" bool sys_notif_signal(CapIdx capidx, size_t idx);
