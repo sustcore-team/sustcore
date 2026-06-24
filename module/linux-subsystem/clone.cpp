@@ -19,19 +19,15 @@
 #include <thread.h>
 
 #include <cstddef>
+#include <cstring>
 #include <string>
+#include <vector>
 #include <syscall.h.in>
 
 namespace {
     struct CloneFlagName {
         size_t value;
         const char *name;
-    };
-
-    struct LastChildState {
-        size_t pid   = 0;
-        CapIdx pcb_cap = cap::null;
-        bool valid   = false;
     };
 
     constexpr size_t CSIGNAL              = 0x000000ff;
@@ -62,8 +58,6 @@ namespace {
     constexpr size_t CLONE_NEWTIME        = 0x00000080;
     constexpr int WAIT4_WNOHANG           = 1;
     constexpr int WAIT4_ANY_CHILD         = -1;
-
-    LastChildState g_last_child{};
 
     constexpr CloneFlagName CLONE_FLAG_NAMES[] = {
         {.value = CLONE_NEWTIME, .name = "CLONE_NEWTIME"},
@@ -137,8 +131,36 @@ namespace {
         return (flags & CLONE_VM_FLAG) != 0 && (flags & CLONE_THREAD_FLAG) != 0;
     }
 
-    void clear_last_child() noexcept {
-        g_last_child = {};
+    [[nodiscard]]
+    size_t find_child_index_by_cap(CapIdx pcb_cap) noexcept {
+        for (size_t i = 0; i < __prog_children.size(); ++i) {
+            if (__prog_children[i] == pcb_cap) {
+                return i;
+            }
+        }
+        return __prog_children.size();
+    }
+
+    [[nodiscard]]
+    bool find_child_cap_by_pid(int pid, CapIdx &pcb_cap) noexcept {
+        for (auto child_cap : __prog_children) {
+            if (sys_getpid(child_cap) == static_cast<size_t>(pid)) {
+                pcb_cap = child_cap;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]]
+    std::vector<CapIdx> make_wait_caps_vector() {
+        std::vector<CapIdx> wait_caps{};
+        wait_caps.reserve(__prog_children.size() + 1);
+        for (auto child_cap : __prog_children) {
+            wait_caps.push_back(child_cap);
+        }
+        wait_caps.push_back(cap::null);
+        return wait_caps;
     }
 }  // namespace
 
@@ -164,8 +186,10 @@ size_t clone_process(size_t flags, addr_t newsp, int *parent_tid,
     size_t pid           = sys_pcb_fork(__prog_pcb_cap, &child_pcb_cap);
     if (pid == 0 && child_pcb_cap != cap::null && child_pcb_cap != cap::error) {
         loggers::LXRT::INFO("fork 子进程返回");
+        CapIdx parent_pcb_cap = __prog_pcb_cap;
+        __prog_parent_cap     = parent_pcb_cap;
         __prog_pcb_cap = child_pcb_cap;
-        clear_last_child();
+        __prog_children.clear();
         if (newsp != 0) {
             // TODO: 当前仅做 stack pivot，不复制旧调用链依赖的栈内容。
             linux_clone_fork_return_trampoline(newsp, dispatch_frame_sp);
@@ -173,14 +197,11 @@ size_t clone_process(size_t flags, addr_t newsp, int *parent_tid,
     } else {
         loggers::LXRT::INFO("fork 父进程返回");
         if (pid > 0 && child_pcb_cap != cap::null && child_pcb_cap != cap::error) {
-            g_last_child = LastChildState{
-                .pid     = pid,
-                .pcb_cap = child_pcb_cap,
-                .valid   = true,
-            };
-            loggers::LXRT::DEBUG("记录最近子进程 pid=%lu pcb_cap=%p",
-                                 static_cast<unsigned long>(g_last_child.pid),
-                                 reinterpret_cast<void *>(g_last_child.pcb_cap));
+            __prog_children.push_back(child_pcb_cap);
+            loggers::LXRT::DEBUG("记录子进程 pid=%lu pcb_cap=%p children=%lu",
+                                 static_cast<unsigned long>(pid),
+                                 reinterpret_cast<void *>(child_pcb_cap),
+                                 static_cast<unsigned long>(__prog_children.size()));
         } else if (pid > 0) {
             loggers::LXRT::ERROR("fork 返回 pid=%lu 但 child_pcb_cap 无效",
                                  static_cast<unsigned long>(pid));
@@ -241,16 +262,8 @@ size_t linux_sys_wait4(int pid, int *status, int options, void *rusage) {
         return static_cast<size_t>(-ENOSYS);
     }
 
-    if (!g_last_child.valid) {
+    if (__prog_children.empty()) {
         loggers::LXRT::ERROR("wait4 没有可等待的子进程");
-        return static_cast<size_t>(-ECHILD);
-    }
-
-    if (pid != WAIT4_ANY_CHILD &&
-        static_cast<size_t>(pid) != g_last_child.pid)
-    {
-        loggers::LXRT::ERROR("wait4 pid=%d 不匹配最近子进程 pid=%lu", pid,
-                             static_cast<unsigned long>(g_last_child.pid));
         return static_cast<size_t>(-ECHILD);
     }
 
@@ -259,13 +272,25 @@ size_t linux_sys_wait4(int pid, int *status, int options, void *rusage) {
         return static_cast<size_t>(-EINVAL);
     }
 
-    CapIdx wait_caps[] = {g_last_child.pcb_cap, cap::null};
-    int *status_ptr    = status;
+    std::vector<CapIdx> wait_caps{};
+    if (pid == WAIT4_ANY_CHILD) {
+        wait_caps = make_wait_caps_vector();
+    } else {
+        CapIdx child_pcb_cap = cap::null;
+        if (!find_child_cap_by_pid(pid, child_pcb_cap)) {
+            loggers::LXRT::ERROR("wait4 pid=%d 不属于直接子进程", pid);
+            return static_cast<size_t>(-ECHILD);
+        }
+        wait_caps = {child_pcb_cap, cap::null};
+    }
+
+    int *status_ptr     = status;
     size_t wait_options = options == WAIT4_WNOHANG
                               ? static_cast<size_t>(WAIT4_WNOHANG)
                               : 0;
     CapIdx waited_cap =
-        sys_tcb_wait(__prog_main_tcb_cap, wait_caps, status_ptr, wait_options);
+        sys_tcb_wait(__prog_main_tcb_cap, wait_caps.data(), status_ptr,
+                     wait_options);
     if (waited_cap == cap::null) {
         loggers::LXSC::INFO("wait4 WNOHANG 未等到子进程退出");
         return 0;
@@ -275,9 +300,20 @@ size_t linux_sys_wait4(int pid, int *status, int options, void *rusage) {
         return static_cast<size_t>(-ECHILD);
     }
 
-    const size_t child_pid = g_last_child.pid;
+    const size_t child_pid = sys_getpid(waited_cap);
+    size_t child_index     = find_child_index_by_cap(waited_cap);
+    if (child_index == __prog_children.size()) {
+        loggers::LXRT::ERROR("wait4 返回未知子进程能力=%p",
+                             reinterpret_cast<void *>(waited_cap));
+        return static_cast<size_t>(-ECHILD);
+    }
+    __prog_children.erase(__prog_children.begin() +
+                          static_cast<std::ptrdiff_t>(child_index));
+    if (!sys_cap_remove(waited_cap)) {
+        loggers::LXRT::ERROR("wait4 无法移除已退出子进程能力=%p",
+                             reinterpret_cast<void *>(waited_cap));
+    }
     loggers::LXRT::INFO("wait4 等到子进程 pid=%lu 退出",
                         static_cast<unsigned long>(child_pid));
-    clear_last_child();
     return child_pid;
 }

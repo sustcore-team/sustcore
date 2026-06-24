@@ -47,7 +47,7 @@ sys_pcb_create_linux_process:
     .type   sys_pcb_create_thread, @function
 sys_pcb_create_thread:
     /* a0 = pcb cap slot, a1 = entry, a2 = stack_addr, a3 = stack_size */
-    li a7, SYS_CREATE_THREAD
+    li a7, SYS_PCB_CREATE_THREAD
     ecall
     ret
 
@@ -64,7 +64,7 @@ sys_tcb_wait:
 sys_pcb_fork:
     /* a0 = pcb cap slot, a1 = child PCB cap out ptr */
     mv t0, a1
-    li a7, SYS_FORK
+    li a7, SYS_PCB_FORK
     ecall
     beqz a1, 1f
     beqz t0, 1f
@@ -78,7 +78,7 @@ sys_pcb_fork:
 sys_pcb_execve:
     /* a0 = pcb cap slot, a1 = image cap, a2 = reserved caps, a3 = reserved caps size,
        a4 = startup blob ptr, a5 = startup blob size */
-    li a7, SYS_EXECVE
+    li a7, SYS_PCB_EXECVE
     ecall
     ret
 
@@ -158,7 +158,7 @@ sys_cap_remove:
     .type sys_getpid, @function
 sys_getpid:
     /* a0 = pcb cap slot */
-    li a7, SYS_GETPID
+    li a7, SYS_PCB_GETPID
     ecall
     ret
 

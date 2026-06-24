@@ -4,6 +4,7 @@ component-variants := default kernel
 
 variant.default.target := $(path-bin)/libs/$(architecture)/libbasecpp.a
 variant.default.dir-obj := $(path-objects)/bcl/$(architecture)
+variant.default.flags-cpp := $(flags-no-rtti-cpp) $(flags-no-exceptions-cpp) -DUSE_SUSTCORE_FEATURES
 variant.kernel.target := $(path-bin)/libs/$(architecture)/libkerbasecpp.a
 variant.kernel.dir-obj := $(path-objects)/kernel/bcl/$(architecture)
 variant.kernel.flags-cpp := $(flags-no-rtti-cpp) $(flags-no-exceptions-cpp) -DUSE_SUSTCORE_FEATURES

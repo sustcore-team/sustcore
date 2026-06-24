@@ -40,7 +40,7 @@ sys_pcb_create_linux_process:
     .global sys_pcb_create_thread
     .type   sys_pcb_create_thread, @function
 sys_pcb_create_thread:
-    li a7, SYS_CREATE_THREAD
+    li a7, SYS_PCB_CREATE_THREAD
     ecall
     ret
 
@@ -55,7 +55,7 @@ sys_tcb_wait:
     .type   sys_pcb_fork, @function
 sys_pcb_fork:
     mv t0, a1
-    li a7, SYS_FORK
+    li a7, SYS_PCB_FORK
     ecall
     beqz a1, 1f
     beqz t0, 1f
@@ -67,21 +67,21 @@ sys_pcb_fork:
     .global sys_pcb_execve
     .type   sys_pcb_execve, @function
 sys_pcb_execve:
-    li a7, SYS_EXECVE
+    li a7, SYS_PCB_EXECVE
     ecall
     ret
 
     .global sys_yield
     .type   sys_yield, @function
 sys_yield:
-    li a7, SYS_YIELD
+    li a7, SYS_TCB_YIELD
     ecall
     ret
 
     .global sys_getpid
     .type   sys_getpid, @function
 sys_getpid:
-    li a7, SYS_GETPID
+    li a7, SYS_PCB_GETPID
     ecall
     ret
 

@@ -230,13 +230,11 @@ namespace syscall {
             case SYS_CREATE_POSIX_PROCESS:return "SYS_CREATE_POSIX_PROCESS";
             case SYS_SHUTDOWN:            return "SYS_SHUTDOWN";
             case SYS_PCB_KILL:            return "SYS_PCB_KILL";
-            case SYS_YIELD:               return "SYS_YIELD";
-            case SYS_LOG:                 return "SYS_LOG";
-            case SYS_FORK:                return "SYS_FORK";
-            case SYS_GETPID:              return "SYS_GETPID";
-            case SYS_CREATE_THREAD:       return "SYS_CREATE_THREAD";
-            case SYS_YIELD_THREAD:        return "SYS_YIELD_THREAD";
-            case SYS_EXECVE:              return "SYS_EXECVE";
+            case SYS_PCB_FORK:            return "SYS_PCB_FORK";
+            case SYS_PCB_GETPID:          return "SYS_PCB_GETPID";
+            case SYS_PCB_CREATE_THREAD:   return "SYS_PCB_CREATE_THREAD";
+            case SYS_TCB_YIELD:           return "SYS_TCB_YIELD";
+            case SYS_PCB_EXECVE:          return "SYS_PCB_EXECVE";
             case SYS_TCB_WAIT:            return "SYS_TCB_WAIT";
             case SYS_PCB_MAP:             return "SYS_PCB_MAP";
             case SYS_PCB_UNMAP:           return "SYS_PCB_UNMAP";
@@ -431,10 +429,19 @@ namespace syscall {
                     pcb_create_linux_process(capidx, arg0, arg1, startup));
                 break;
             }
-            case SYS_CREATE_THREAD: {
+            case SYS_PCB_CREATE_THREAD: {
                 ret = result_value_ret("创建线程",
                                        pcb_create_thread(capidx, VirAddr(arg0),
                                                          VirAddr(arg1), arg2));
+                break;
+            }
+            case SYS_TCB_YIELD: {
+                schd::Scheduler::inst().yield();
+                ret = RetPack{
+                    .processed = true,
+                    .ret0      = 0,
+                    .ret1      = static_cast<b64>(ErrCode::SUCCESS),
+                };
                 break;
             }
             case SYS_TCB_WAIT: {
@@ -458,7 +465,7 @@ namespace syscall {
                                                 status_buf_ptr, arg2));
                 break;
             }
-            case SYS_FORK: {
+            case SYS_PCB_FORK: {
                 UBuffer child_cap_buf((VirAddr)arg0, sizeof(CapIdx));
                 auto sync_res = child_cap_buf.sync_from_user();
                 if (!sync_res.has_value()) {
@@ -469,7 +476,7 @@ namespace syscall {
                 ret           = result_value_ret("fork", fork_res);
                 break;
             }
-            case SYS_EXECVE: {
+            case SYS_PCB_EXECVE: {
                 StartupArguments startup{};
                 auto caps_res = copy_terminated_values<CapIdx>(
                     VirAddr(arg1), cap::null);
@@ -646,7 +653,7 @@ namespace syscall {
                                       pcb_kill(capidx, static_cast<int>(arg0)));
                 break;
             }
-            case SYS_GETPID: {
+            case SYS_PCB_GETPID: {
                 ret = result_value_ret("get_pid", get_pid(capidx));
                 break;
             }

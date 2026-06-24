@@ -13,11 +13,15 @@
 #include <sustcore/bootstrap.h>
 #include <sys/wait.h>
 
+#include <cstdint>
 #include <cstdio>
 
 #include "basic.h"
 
 namespace {
+    constexpr uint64_t PERM_BASIC_MIGRATE_ONCE = 0x0008;
+    constexpr uint64_t PERM_PCB_GETPID         = 0x01'0000;
+
     constexpr const char *TEST_ROOTS[] = {
         "/testing/glibc/basic",
         "/testing/musl/basic",
@@ -69,6 +73,28 @@ namespace {
         if (child_root_cap == cap::null || child_root_cap == cap::error) {
             return cap::error;
         }
+        int cwd_fd = kmod_fopen(cwd_path, "r");
+        if (cwd_fd < 0) {
+            sys_cap_remove(child_root_cap);
+            return cap::error;
+        }
+        CapIdx cwd_cap = kmod_getcap(cwd_fd);
+        CapIdx child_cwd_dir_cap = sys_cap_clone(cwd_cap);
+        kmod_fclose(cwd_fd);
+        if (child_cwd_dir_cap == cap::null || child_cwd_dir_cap == cap::error) {
+            sys_cap_remove(child_root_cap);
+            return cap::error;
+        }
+        CapIdx child_parent_pcb_cap =
+            sys_cap_derive(__pcb_cap,
+                           PERM_PCB_GETPID | PERM_BASIC_MIGRATE_ONCE);
+        if (child_parent_pcb_cap == cap::null ||
+            child_parent_pcb_cap == cap::error)
+        {
+            sys_cap_remove(child_root_cap);
+            sys_cap_remove(child_cwd_dir_cap);
+            return cap::error;
+        }
 
         struct RootDirBootstrap {
             bsheader header;
@@ -89,10 +115,50 @@ namespace {
             .desc = "#/",
         };
 
+        struct CwdDirBootstrap {
+            bsheader header;
+            BootstrapCapExplainPayloadHead explain;
+            char desc[5];
+        } cwd_dir_bootstrap{
+            .header =
+                bsheader{
+                    .size = sizeof(CwdDirBootstrap),
+                    .type = boot::TYPE_CAPEXP,
+                },
+            .explain =
+                BootstrapCapExplainPayloadHead{
+                    .cap_idx  = child_cwd_dir_cap,
+                    .cap_type = PayloadType::VDIR,
+                    .cap_perm = ~b64(0),
+                },
+            .desc = "#cwd",
+        };
+
+        struct ParentPcbBootstrap {
+            bsheader header;
+            BootstrapCapExplainPayloadHead explain;
+            char desc[8];
+        } parent_pcb_bootstrap{
+            .header =
+                bsheader{
+                    .size = sizeof(ParentPcbBootstrap),
+                    .type = boot::TYPE_CAPEXP,
+                },
+            .explain =
+                BootstrapCapExplainPayloadHead{
+                    .cap_idx  = child_parent_pcb_cap,
+                    .cap_type = PayloadType::PCB,
+                    .cap_perm = PERM_PCB_GETPID | PERM_BASIC_MIGRATE_ONCE,
+                },
+            .desc = "#parent",
+        };
+
         const size_t cwd_path_len = strlen(cwd_path) + 1;
         alignas(bsheader) char cwd_bootstrap[sizeof(bsheader) + 256]{};
         if (cwd_path_len > sizeof(cwd_bootstrap) - sizeof(bsheader)) {
             sys_cap_remove(child_root_cap);
+            sys_cap_remove(child_cwd_dir_cap);
+            sys_cap_remove(child_parent_pcb_cap);
             return cap::error;
         }
         auto *cwd_header = reinterpret_cast<bsheader *>(cwd_bootstrap);
@@ -100,13 +166,20 @@ namespace {
         cwd_header->type = boot::TYPE_CWDPATH;
         memcpy(cwd_bootstrap + sizeof(bsheader), cwd_path, cwd_path_len);
 
-        CapIdx initial_caps[] = {child_root_cap, cap::null};
+        CapIdx initial_caps[] = {child_root_cap, child_cwd_dir_cap,
+                                 child_parent_pcb_cap, cap::null};
         const char *bsargv[]  = {reinterpret_cast<const char *>(&bootstrap),
+                                 reinterpret_cast<const char *>(&cwd_dir_bootstrap),
+                                 reinterpret_cast<const char *>(&parent_pcb_bootstrap),
                                  cwd_bootstrap, nullptr};
         CapIdx child_pcb      = sys_create_linux_process(
             kmod_getcap(fd), SCHED_CLASS_FCFS, initial_caps, nullptr, nullptr,
             bsargv);
         sys_cap_remove(child_root_cap);
+        sys_cap_remove(child_cwd_dir_cap);
+        if (child_pcb == cap::null || child_pcb == cap::error) {
+            sys_cap_remove(child_parent_pcb_cap);
+        }
         return child_pcb;
     }
 

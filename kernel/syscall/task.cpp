@@ -102,25 +102,6 @@ namespace syscall {
         return pcb;
     }
 
-    /**
-     * @brief 查找当前进程 capability 空间中的 Memory payload.
-     */
-    static Result<cap::MemoryPayload *> lookup_memory(
-        CapIdx idx, cap::Capability **out_cap) {
-        auto holder_res = current_holder();
-        propagate(holder_res);
-        auto cap_res = holder_res.value()->lookup(idx);
-        propagate(cap_res);
-        if (out_cap != nullptr) {
-            *out_cap = cap_res.value();
-        }
-        auto *memory = cap_res.value()->payload_as<cap::MemoryPayload>();
-        if (memory == nullptr) {
-            unexpect_return(ErrCode::TYPE_NOT_MATCHED);
-        }
-        return memory;
-    }
-
     static Result<cap::MemoryPayload *> lookup_memory_in_holder(
         cap::CHolder *holder, CapIdx idx, cap::Capability **out_cap) {
         if (holder == nullptr) {
@@ -169,10 +150,14 @@ namespace syscall {
     }
 
     /**
-     * @brief 将父进程指定 capability 按相同 CapIdx 复制到子 CHolder.
+     * @brief 将父进程指定 capability 按相同 CapIdx 放入子 CHolder.
      *
-     * 该函数只处理 capability transfer 的 CLONE 语义; 对象自身权限检查
-     * 仍由对应 CapObj 方法完成.
+     * 支持两类基础语义:
+     * - `CLONE`: 子进程获得 payload 副本/共享引用, 父进程保留原 capability.
+     * - `MIGRATE` / `MIGRATE_ONCE`: 子进程获得同一 payload 的 capability,
+     *   若为 `MIGRATE_ONCE` 则目标 capability 自动清除此位, 父进程源 slot 被消费.
+     *
+     * 对象自身权限检查仍由对应 CapObj 方法完成.
      */
     static Result<void> copy_initial_caps_in_place(cap::CHolder *src_holder,
                                                    TaskMemoryManager *src_tmm,
@@ -195,18 +180,40 @@ namespace syscall {
             auto src_res = src_holder->lookup(idx);
             propagate(src_res);
             cap::Capability *src_cap = src_res.value();
-            if (!src_cap->imply(perm::basic::CLONE)) {
+
+            cap::Payload *payload = nullptr;
+            b64 delivered_perm    = src_cap->perm();
+            bool moved_cap        = false;
+
+            if (src_cap->imply(perm::basic::CLONE)) {
+                auto *src_payload = src_cap->payload();
+                payload           = src_payload->clone_payload();
+            } else if (src_cap->imply(perm::basic::MIGRATE) ||
+                       src_cap->imply(perm::basic::MIGRATE_ONCE))
+            {
+                payload        = src_cap->payload();
+                delivered_perm = src_cap->perm() & ~perm::basic::MIGRATE_ONCE;
+                moved_cap      = true;
+            } else {
                 unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
             }
 
-            cap::Payload *src_payload = src_cap->payload();
-            cap::Payload *payload     = src_payload->clone_payload();
-            auto insert_res = dst_holder->insert(idx, payload, src_cap->perm());
+            auto insert_res = dst_holder->insert(idx, payload, delivered_perm);
             if (!insert_res.has_value()) {
-                if (payload != src_payload) {
+                if (!moved_cap && payload != src_cap->payload()) {
                     payload->destruct();
                 }
                 propagate_return(insert_res);
+            }
+
+            if (moved_cap) {
+                auto remove_res = src_holder->remove(idx);
+                if (!remove_res.has_value()) {
+                    auto rollback_res = dst_holder->remove(idx);
+                    assert(rollback_res.has_value());
+                    propagate_return(remove_res);
+                }
+                continue;
             }
 
             auto *memory = src_cap->payload_as<cap::MemoryPayload>();

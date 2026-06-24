@@ -13,14 +13,13 @@
 
 #define SYSCALL_BASE (0xFFFF0000)
 
-#define SYS_PCB_KILL      (SYSCALL_BASE + 0x01)
-#define SYS_YIELD         (SYSCALL_BASE + 0x02)
-#define SYS_LOG           (SYSCALL_BASE + 0x03)
-#define SYS_FORK          (SYSCALL_BASE + 0x04)
-#define SYS_GETPID        (SYSCALL_BASE + 0x05)
-#define SYS_CREATE_THREAD (SYSCALL_BASE + 0x06)
-#define SYS_YIELD_THREAD  (SYSCALL_BASE + 0x07)
-#define SYS_EXECVE        (SYSCALL_BASE + 0x08)
+#define SYS_PCB_KILL          (SYSCALL_BASE + 0x01)
+
+#define SYS_PCB_FORK          (SYSCALL_BASE + 0x04)
+#define SYS_PCB_GETPID        (SYSCALL_BASE + 0x05)
+#define SYS_PCB_CREATE_THREAD (SYSCALL_BASE + 0x06)
+#define SYS_TCB_YIELD         (SYSCALL_BASE + 0x07)
+#define SYS_PCB_EXECVE        (SYSCALL_BASE + 0x08)
 #define SYS_TCB_WAIT      (SYSCALL_BASE + 0x09)
 #define SYS_PCB_MAP       (SYSCALL_BASE + 0x0A)
 #define SYS_PCB_UNMAP     (SYSCALL_BASE + 0x0B)

@@ -53,6 +53,31 @@ void operator delete(void *ptr, size_t size) noexcept {
     (void)size;
 }
 
+void *operator new[](size_t size) {
+    void *ptr = linuxss_alloc(size);
+    if (ptr == nullptr) {
+        panic("operator new[] failed size=%lu", static_cast<unsigned long>(size));
+    }
+    return ptr;
+}
+
+void operator delete[](void *ptr) noexcept {
+    (void)ptr;
+}
+
+void operator delete[](void *ptr, size_t size) noexcept {
+    (void)ptr;
+    (void)size;
+}
+
+extern "C" {
+void *__dso_handle = nullptr;
+
+int __cxa_atexit(void (*)(void *), void *, void *) {
+    return 0;
+}
+}
+
 void panic(const char *format, ...) {
     char buffer[256]{};
     va_list args;

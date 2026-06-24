@@ -42,7 +42,7 @@ sys_pcb_create_linux_process:
     .global sys_pcb_create_thread
     .type sys_pcb_create_thread, @function
 sys_pcb_create_thread:
-    li.d $a7, SYS_CREATE_THREAD
+    li.d $a7, SYS_PCB_CREATE_THREAD
     do_syscall
 
     .global sys_tcb_wait
@@ -56,7 +56,7 @@ sys_tcb_wait:
     .type sys_pcb_fork, @function
 sys_pcb_fork:
     move $t0, $a1
-    li.d $a7, SYS_FORK
+    li.d $a7, SYS_PCB_FORK
     syscall 0
     beqz $a1, 1f
     beqz $t0, 1f
@@ -68,7 +68,7 @@ sys_pcb_fork:
     .global sys_pcb_execve
     .type sys_pcb_execve, @function
 sys_pcb_execve:
-    li.d $a7, SYS_EXECVE
+    li.d $a7, SYS_PCB_EXECVE
     do_syscall
 
     .global sys_notif_wait
@@ -128,7 +128,7 @@ sys_cap_remove:
     .global sys_getpid
     .type sys_getpid, @function
 sys_getpid:
-    li.d $a7, SYS_GETPID
+    li.d $a7, SYS_PCB_GETPID
     do_syscall
 
     .global sys_notif_create

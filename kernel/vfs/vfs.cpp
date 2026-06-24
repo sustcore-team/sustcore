@@ -435,7 +435,7 @@ namespace {
 
     [[nodiscard]]
     b64 file_perm_from_oflags(flags::oflg_t oflags) {
-        b64 perm = 0;
+        b64 perm = perm::basic::CLONE;
         if ((oflags & flags::O_READ) != 0) {
             perm |= perm::vfile::READ;
         }

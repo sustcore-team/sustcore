@@ -23,6 +23,7 @@
 #endif
 
 constexpr int MAX_FDS = 1024;
+constexpr int CWD_FD_RESERVED = 3;
 
 struct FdEntry {
     CapIdx cap;

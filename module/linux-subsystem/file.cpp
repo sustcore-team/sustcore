@@ -12,14 +12,16 @@
 #include <file.h>
 
 #include <errno.h>
+#include <fdtable.h>
 #include <logger.h>
 #include <prog.h>
+#include <sus/path.h>
 #include <syscall.h>
+
 #include <cstddef>
 #include <cstring>
 #include <string>
-#include <string_view>
-#include <fdtable.h>
+#include <utility>
 
 namespace {
     constexpr size_t INVALID_VALUE = 0xFFFF'FFFF'FFFF'FFFF;
@@ -30,7 +32,6 @@ namespace {
     constexpr int LINUX_O_CREAT    = 0100;   // octal
     constexpr int LINUX_O_DIRECTORY = 0200000;  // octal
     constexpr int AT_REMOVEDIR      = 0x200;
-    constexpr size_t MAX_SEGMENTS   = 64;
     constexpr size_t MAX_DIR_FDS    = 128;
     constexpr uint8_t DT_REG        = 8;
     constexpr uint8_t DT_DIR        = 4;
@@ -47,15 +48,21 @@ namespace {
 
     struct DirFdState {
         bool used         = false;
+        bool pinned       = false;
         int fd            = -1;
         size_t next_index = 0;
         std::string *abs_path = nullptr;
     };
 
-    struct SplitPath {
-        std::string parent{};
-        std::string name{};
-        bool valid = false;
+    struct DirBase {
+        CapIdx cap = cap::null;
+        std::string abs_path{};
+    };
+
+    struct ResolvedPath {
+        CapIdx parent_cap = cap::null;
+        std::string absolute_path{};
+        std::string relative_path{};
     };
 
     DirFdState g_dir_fd_states[MAX_DIR_FDS]{};
@@ -81,181 +88,37 @@ namespace {
     }
 
     [[nodiscard]]
-    bool is_absolute_path(std::string_view path) noexcept {
-        return !path.empty() && path.front() == '/';
+    util::Path normalize_path(const util::Path &path) {
+        return path.normalize();
     }
 
     [[nodiscard]]
-    bool append_segment(std::string &out, size_t segment_starts[],
-                        size_t &segment_count, std::string_view segment) {
-        if (segment_count >= MAX_SEGMENTS) {
-            return false;
-        }
-        size_t needed = out.size() + segment.size();
-        if (out.size() > 1) {
-            needed += 1;
-        }
-        if (needed >= LINUX_PATH_MAX) {
-            return false;
-        }
-
-        if (out.size() > 1) {
-            out.push_back('/');
-        }
-        segment_starts[segment_count++] = out.size();
-        out.append(segment.data(), segment.size());
-        return true;
+    std::string path_to_string(const util::Path &path) {
+        return static_cast<std::string>(path);
     }
 
     [[nodiscard]]
-    std::string normalize_absolute_path(std::string_view pathname) {
-        if (!is_absolute_path(pathname)) {
+    util::Path make_path(const char *pathname) {
+        return util::Path::from(pathname == nullptr ? "" : pathname);
+    }
+
+    [[nodiscard]]
+    bool valid_normalized_path(const util::Path &path) {
+        auto text = path.view();
+        return !text.empty() && text.size() < LINUX_PATH_MAX;
+    }
+
+    [[nodiscard]]
+    std::string absolute_path_to_relpath(const util::Path &abs_path) {
+        auto normalized = normalize_path(abs_path);
+        if (!normalized.is_absolute()) {
             return {};
         }
-
-        size_t segment_starts[MAX_SEGMENTS]{};
-        size_t segment_count = 0;
-        std::string out      = "/";
-
-        size_t cursor = 0;
-        while (cursor < pathname.size()) {
-            while (cursor < pathname.size() && pathname[cursor] == '/') {
-                ++cursor;
-            }
-            size_t segment_begin = cursor;
-            while (cursor < pathname.size() && pathname[cursor] != '/') {
-                ++cursor;
-            }
-            size_t segment_len = cursor - segment_begin;
-            if (segment_len == 0) {
-                break;
-            }
-            auto segment = pathname.substr(segment_begin, segment_len);
-            if (segment == ".") {
-                continue;
-            }
-            if (segment == "..") {
-                if (segment_count == 0) {
-                    continue;
-                }
-                size_t new_size = segment_starts[segment_count - 1];
-                if (new_size > 1) {
-                    --new_size;
-                }
-                out.resize(new_size);
-                --segment_count;
-                if (out.empty()) {
-                    out = "/";
-                }
-                continue;
-            }
-            if (!append_segment(out, segment_starts, segment_count, segment)) {
-                return {};
-            }
+        auto text = path_to_string(normalized);
+        if (text == "/") {
+            return ".";
         }
-
-        return out.empty() ? "/" : out;
-    }
-
-    [[nodiscard]]
-    std::string make_absolute_path(const char *pathname) {
-        if (pathname == nullptr || pathname[0] == '\0') {
-            return {};
-        }
-        if (is_absolute_path(pathname)) {
-            return normalize_absolute_path(pathname);
-        }
-
-        std::string joined(__prog_cwd);
-        if (joined.empty()) {
-            joined = "/";
-        }
-        if (joined.size() > 1 && joined.back() != '/') {
-            joined.push_back('/');
-        }
-        joined += pathname;
-        if (joined.size() >= LINUX_PATH_MAX) {
-            return {};
-        }
-        return normalize_absolute_path(joined);
-    }
-
-    [[nodiscard]]
-    SplitPath split_parent_basename(std::string_view abs_path) {
-        if (!is_absolute_path(abs_path)) {
-            return {};
-        }
-
-        size_t last_slash = abs_path.rfind('/');
-        if (last_slash == std::string_view::npos ||
-            last_slash + 1 >= abs_path.size())
-        {
-            return {};
-        }
-
-        SplitPath split{};
-        split.parent = last_slash == 0 ? "/" : std::string(abs_path.substr(0, last_slash));
-        split.name   = std::string(abs_path.substr(last_slash + 1));
-        split.valid  = !split.name.empty();
-        if (!split.valid || split.parent.size() >= LINUX_PATH_MAX ||
-            split.name.size() >= LINUX_PATH_MAX)
-        {
-            return {};
-        }
-        return split;
-    }
-
-    [[nodiscard]]
-    CapIdx open_absolute_dir_cap(const std::string &abs_path) {
-        if (!is_absolute_path(abs_path)) {
-            return cap::error;
-        }
-        if (__prog_root_dir_cap == cap::null || __prog_root_dir_cap == cap::error) {
-            return cap::error;
-        }
-
-        const char *relpath = abs_path.c_str() + 1;
-        return sys_vfs_opendir(__prog_root_dir_cap, relpath, flags::O_READ);
-    }
-
-    [[nodiscard]]
-    bool is_directory_absolute_path(const std::string &abs_path) {
-        CapIdx dir_cap = open_absolute_dir_cap(abs_path);
-        if (dir_cap == cap::null || dir_cap == cap::error) {
-            return false;
-        }
-        sys_cap_remove(dir_cap);
-        return true;
-    }
-
-    [[nodiscard]]
-    size_t alloc_dir_fd_state(int fd, const std::string &abs_path) {
-        if (fd < 0 || abs_path.empty() || abs_path.size() >= LINUX_PATH_MAX) {
-            return static_cast<size_t>(-1);
-        }
-        for (size_t i = 0; i < MAX_DIR_FDS; ++i) {
-            if (g_dir_fd_states[i].used) {
-                continue;
-            }
-            g_dir_fd_states[i].used = true;
-            g_dir_fd_states[i].fd = fd;
-            g_dir_fd_states[i].next_index = 0;
-            g_dir_fd_states[i].abs_path = new std::string(abs_path);
-            return i;
-        }
-        return static_cast<size_t>(-1);
-    }
-
-    void clear_dir_fd_state(int fd) {
-        for (auto &state : g_dir_fd_states) {
-            if (!state.used || state.fd != fd) {
-                continue;
-            }
-            delete state.abs_path;
-            state = {};
-            state.fd = -1;
-            return;
-        }
+        return text.substr(1);
     }
 
     [[nodiscard]]
@@ -266,6 +129,144 @@ namespace {
             }
         }
         return nullptr;
+    }
+
+    void free_dir_fd_state(DirFdState &state) {
+        delete state.abs_path;
+        state = {};
+        state.fd = -1;
+    }
+
+    [[nodiscard]]
+    size_t register_dir_fd_state(int fd, const std::string &abs_path,
+                                 bool pinned) {
+        if (fd < 0 || abs_path.empty() || abs_path.size() >= LINUX_PATH_MAX) {
+            return static_cast<size_t>(-1);
+        }
+
+        if (auto *state = find_dir_fd_state(fd); state != nullptr) {
+            state->next_index = 0;
+            state->pinned     = pinned;
+            if (state->abs_path == nullptr) {
+                state->abs_path = new std::string(abs_path);
+            } else {
+                *state->abs_path = abs_path;
+            }
+            return 0;
+        }
+
+        for (size_t i = 0; i < MAX_DIR_FDS; ++i) {
+            if (g_dir_fd_states[i].used) {
+                continue;
+            }
+            g_dir_fd_states[i].used       = true;
+            g_dir_fd_states[i].pinned     = pinned;
+            g_dir_fd_states[i].fd         = fd;
+            g_dir_fd_states[i].next_index = 0;
+            g_dir_fd_states[i].abs_path   = new std::string(abs_path);
+            return i;
+        }
+        return static_cast<size_t>(-1);
+    }
+
+    void clear_dir_fd_state(int fd) {
+        auto *state = find_dir_fd_state(fd);
+        if (state == nullptr || state->pinned) {
+            return;
+        }
+        free_dir_fd_state(*state);
+    }
+
+    [[nodiscard]]
+    CapIdx open_dir_cap_at(CapIdx parent_cap, const std::string &relative_path) {
+        if (parent_cap == cap::null || parent_cap == cap::error) {
+            return cap::error;
+        }
+        return sys_vfs_opendir(parent_cap, relative_path.c_str(), flags::O_READ);
+    }
+
+    [[nodiscard]]
+    bool ensure_cwd_fd_bound() {
+        if (__prog_cwd_dir_cap == cap::null || __prog_cwd_dir_cap == cap::error) {
+            return false;
+        }
+
+        if (fd_to_cap(CWD_FD) != cap::error) {
+            free_fd(CWD_FD);
+        }
+        auto *entry = lookup_fd(CWD_FD);
+        if (entry == nullptr) {
+            return false;
+        }
+        entry->cap    = __prog_cwd_dir_cap;
+        entry->offset = 0;
+        return register_dir_fd_state(CWD_FD, __prog_cwd, true) !=
+               static_cast<size_t>(-1);
+    }
+
+    [[nodiscard]]
+    DirBase resolve_dirfd_base(int dirfd) {
+        if (dirfd == AT_FDCWD) {
+            if (!ensure_cwd_fd_bound()) {
+                return {};
+            }
+            dirfd = CWD_FD;
+        }
+
+        auto *state = find_dir_fd_state(dirfd);
+        if (state == nullptr || state->abs_path == nullptr) {
+            return {};
+        }
+        CapIdx cap = fd_to_cap(dirfd);
+        if (cap == cap::error) {
+            return {};
+        }
+        return DirBase{
+            .cap      = cap,
+            .abs_path = *state->abs_path,
+        };
+    }
+
+    [[nodiscard]]
+    ResolvedPath resolve_path_at(int dirfd, const char *pathname) {
+        if (pathname == nullptr || pathname[0] == '\0') {
+            return {};
+        }
+
+        auto path = normalize_path(make_path(pathname));
+        if (!valid_normalized_path(path)) {
+            return {};
+        }
+
+        if (path.is_absolute()) {
+            auto absolute_path = path_to_string(path);
+            return ResolvedPath{
+                .parent_cap     = __prog_root_dir_cap,
+                .absolute_path  = absolute_path,
+                .relative_path  = absolute_path_to_relpath(path),
+            };
+        }
+
+        auto base = resolve_dirfd_base(dirfd);
+        if (base.cap == cap::null || base.cap == cap::error) {
+            return {};
+        }
+
+        auto base_path = normalize_path(util::Path::from(base.abs_path));
+        if (!base_path.is_absolute()) {
+            return {};
+        }
+
+        auto absolute_path = normalize_path(base_path / path);
+        if (!valid_normalized_path(absolute_path) || !absolute_path.is_absolute()) {
+            return {};
+        }
+
+        return ResolvedPath{
+            .parent_cap    = base.cap,
+            .absolute_path = path_to_string(absolute_path),
+            .relative_path = path_to_string(path),
+        };
     }
 
     [[nodiscard]]
@@ -310,35 +311,75 @@ namespace {
     }
 
     [[nodiscard]]
-    size_t do_open_absolute(const std::string &abs_path, int flags) {
-        if (!is_absolute_path(abs_path)) {
-            return -ENOENT;
+    bool refresh_cwd_dir_cap(const std::string &cwd_path) {
+        auto cwd = normalize_path(util::Path::from(cwd_path));
+        if (!cwd.is_absolute()) {
+            return false;
         }
-        if (__prog_root_dir_cap == cap::null || __prog_root_dir_cap == cap::error) {
+        auto relpath = absolute_path_to_relpath(cwd);
+        if (relpath.empty()) {
+            return false;
+        }
+
+        if (__prog_cwd_dir_cap != cap::null && __prog_cwd_dir_cap != cap::error) {
+            sys_cap_remove(__prog_cwd_dir_cap);
+            __prog_cwd_dir_cap = cap::null;
+        }
+        __prog_cwd = path_to_string(cwd);
+
+        CapIdx cwd_cap = open_dir_cap_at(__prog_root_dir_cap, relpath);
+        if (cwd_cap == cap::null || cwd_cap == cap::error) {
+            return false;
+        }
+
+        __prog_cwd_dir_cap = cwd_cap;
+        return ensure_cwd_fd_bound();
+    }
+
+    size_t do_open_resolved(const ResolvedPath &resolved, int flags) {
+        if (resolved.parent_cap == cap::null || resolved.parent_cap == cap::error ||
+            resolved.relative_path.empty())
+        {
             return -ENOENT;
         }
 
         flags::oflg_t sustcore_flags = linux_oflags_to_sustcore(flags);
-        const char *relpath          = abs_path.c_str() + 1;
-        bool want_directory = (flags & LINUX_O_DIRECTORY) != 0 ||
-                              is_directory_absolute_path(abs_path);
-        CapIdx file_cap     = want_directory
-                                  ? sys_vfs_opendir(__prog_root_dir_cap, relpath,
-                                                    sustcore_flags)
-                                  : sys_vfs_open(__prog_root_dir_cap, relpath,
-                                                 sustcore_flags);
+        bool want_directory          = (flags & LINUX_O_DIRECTORY) != 0;
+        CapIdx file_cap              = want_directory
+                                           ? sys_vfs_opendir(resolved.parent_cap,
+                                                             resolved.relative_path.c_str(),
+                                                             sustcore_flags)
+                                           : sys_vfs_open(resolved.parent_cap,
+                                                          resolved.relative_path.c_str(),
+                                                          sustcore_flags);
         if (file_cap == cap::null || file_cap == cap::error) {
-            loggers::LXSC::ERROR("Invalid path: %s", abs_path.c_str());
+            if (!want_directory) {
+                auto dir_cap = sys_vfs_opendir(resolved.parent_cap,
+                                               resolved.relative_path.c_str(),
+                                               sustcore_flags);
+                if (dir_cap != cap::null && dir_cap != cap::error) {
+                    want_directory = true;
+                    file_cap       = dir_cap;
+                }
+            }
+        }
+        if (file_cap == cap::null || file_cap == cap::error) {
+            loggers::LXSC::ERROR("Invalid path: %s", resolved.absolute_path.c_str());
             return -ENOENT;
         }
 
+        if (want_directory && register_dir_fd_state(CWD_FD, resolved.absolute_path, true),
+            false)
+        {
+        }
         int fd = alloc_fd(file_cap);
         if (fd < 0) {
             sys_cap_remove(file_cap);
             return -EMFILE;
         }
         if (want_directory &&
-            alloc_dir_fd_state(fd, abs_path) == static_cast<size_t>(-1))
+            register_dir_fd_state(fd, resolved.absolute_path, false) ==
+                static_cast<size_t>(-1))
         {
             free_fd(fd);
             return -EMFILE;
@@ -403,6 +444,9 @@ size_t linux_sys_read(int fd, void *buf, size_t count) {
 }
 
 size_t linux_sys_close(int fd) {
+    if (fd == CWD_FD) {
+        return -EBADF;
+    }
     CapIdx cap = fd_to_cap(fd);
     if (cap == cap::error) {
         return -EBADF;
@@ -418,15 +462,12 @@ size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode) {
     if (pathname == nullptr) {
         return -EINVAL;
     }
-    if (dirfd != AT_FDCWD) {
-        return -ENOSYS;
-    }
 
-    auto abs_path = make_absolute_path(pathname);
-    if (abs_path.empty()) {
+    auto resolved = resolve_path_at(dirfd, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
         return -ENOENT;
     }
-    return do_open_absolute(abs_path, flags);
+    return do_open_resolved(resolved, flags);
 }
 
 size_t linux_sys_lseek(int fd, size_t offset, int whence) {
@@ -474,20 +515,36 @@ size_t linux_sys_lseek(int fd, size_t offset, int whence) {
     return new_offset;
 }
 
-    size_t linux_sys_getcwd(char *buf, size_t size) {
-        if (buf == nullptr || size == 0) {
-            return -EINVAL;
-        }
-
-        std::string cwd(__prog_cwd);
-        size_t cwd_len = cwd.size() + 1;
-        if (size < cwd_len) {
-            return -ERANGE;
-        }
-
-        memcpy(buf, cwd.c_str(), cwd_len);
-        return reinterpret_cast<size_t>(buf);
+size_t linux_sys_getcwd(char *buf, size_t size) {
+    if (buf == nullptr || size == 0) {
+        return -EINVAL;
     }
+
+    size_t cwd_len = __prog_cwd.size() + 1;
+    if (size < cwd_len) {
+        return -ERANGE;
+    }
+
+    memcpy(buf, __prog_cwd.c_str(), cwd_len);
+    return reinterpret_cast<size_t>(buf);
+}
+
+size_t linux_sys_chdir(const char *pathname) {
+    auto resolved = resolve_path_at(AT_FDCWD, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
+    }
+
+    CapIdx dir_cap =
+        sys_vfs_opendir(resolved.parent_cap, resolved.relative_path.c_str(),
+                        flags::O_READ);
+    if (dir_cap == cap::null || dir_cap == cap::error) {
+        return -ENOTDIR;
+    }
+    sys_cap_remove(dir_cap);
+
+    return refresh_cwd_dir_cap(resolved.absolute_path) ? 0 : -EIO;
+}
 
 size_t linux_sys_mkdirat(int dirfd, const char *pathname, int mode) {
     (void)mode;
@@ -495,18 +552,15 @@ size_t linux_sys_mkdirat(int dirfd, const char *pathname, int mode) {
     if (pathname == nullptr) {
         return -EINVAL;
     }
-    if (dirfd != AT_FDCWD) {
-        return -ENOSYS;
+
+    auto resolved = resolve_path_at(dirfd, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
     }
 
-    auto abs_path = make_absolute_path(pathname);
-    auto split    = split_parent_basename(abs_path);
-    if (abs_path.empty() || !split.valid) {
-        return -EINVAL;
-    }
-
-    const char *relpath = abs_path.c_str() + 1;
-    CapIdx dir_cap = sys_vfs_mkdir(__prog_root_dir_cap, relpath, flags::O_READ);
+    CapIdx dir_cap =
+        sys_vfs_mkdir(resolved.parent_cap, resolved.relative_path.c_str(),
+                      flags::O_READ);
     if (dir_cap == cap::null || dir_cap == cap::error) {
         return -EIO;
     }
@@ -518,23 +572,20 @@ size_t linux_sys_unlinkat(int dirfd, const char *pathname, int flags) {
     if (pathname == nullptr) {
         return -EINVAL;
     }
-    if (dirfd != AT_FDCWD) {
-        return -ENOSYS;
-    }
     if ((flags & ~AT_REMOVEDIR) != 0) {
         return -EINVAL;
     }
 
-    auto abs_path = make_absolute_path(pathname);
-    auto split    = split_parent_basename(abs_path);
-    if (abs_path.empty() || !split.valid) {
-        return -EINVAL;
+    auto resolved = resolve_path_at(dirfd, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
     }
 
-    const char *relpath = abs_path.c_str() + 1;
     bool ok = (flags & AT_REMOVEDIR) != 0
-                  ? sys_vfs_rmdir(__prog_root_dir_cap, relpath)
-                  : sys_vfs_unlink(__prog_root_dir_cap, relpath);
+                  ? sys_vfs_rmdir(resolved.parent_cap,
+                                  resolved.relative_path.c_str())
+                  : sys_vfs_unlink(resolved.parent_cap,
+                                   resolved.relative_path.c_str());
     return ok ? 0 : -EIO;
 }
 

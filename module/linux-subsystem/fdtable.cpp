@@ -11,7 +11,7 @@ int alloc_fd(CapIdx cap) {
     fd_table_lock.lock();
 
     int fd = -EMFILE;
-    for (int i = 3; i < MAX_FDS; ++i) {
+    for (int i = CWD_FD_RESERVED + 1; i < MAX_FDS; ++i) {
         if (fd_table[i].cap == cap::null) {
             fd_table[i].cap    = cap;
             fd_table[i].offset = 0;
