@@ -78,6 +78,10 @@ namespace cap {
         bool continuity;
         /// 允许的增长/收缩方式. 
         MemoryGrowth growth;
+        /// 可选的后端文件 capability. 非空时按需从文件读取页面内容.
+        util::owner<Capability *> file;
+        /// 后端文件内起始偏移.
+        size_t file_offset;
         /// 已实际分配的物理页映射, key 为 offvpn. 
         std::unordered_map<size_t, PhyPage> phy_pages;
 
@@ -90,8 +94,16 @@ namespace cap {
          * @param growth 允许的增长/收缩方式. 
          */
         MemoryPayload(size_t memsz, bool shared, bool continuity,
-                      MemoryGrowth growth);
-        ~MemoryPayload() override = default;
+                      MemoryGrowth growth,
+                      util::owner<Capability *> file =
+                          util::owner<Capability *>(nullptr),
+                      size_t file_offset = 0);
+        ~MemoryPayload() override;
+
+        [[nodiscard]]
+        bool file_backed() const noexcept {
+            return file.get() != nullptr;
+        }
 
         /**
          * @brief 释放 payload 及其持有的所有物理页. 
