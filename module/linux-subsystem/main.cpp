@@ -326,7 +326,8 @@ size_t linux_sys_mmap(void *addr, size_t length, size_t prot, size_t flags,
     }
 
     CapIdx mem_cap =
-        sys_mem_create(0, aligned_length, false, false, MEMORY_GROWTH_FIXED);
+        sys_mem_create(cap::null, aligned_length, false, false,
+                       MEMORY_GROWTH_FIXED, 0);
     if (mem_cap == cap::null || mem_cap == cap::error) {
         return INVALID_VALUE;
     }

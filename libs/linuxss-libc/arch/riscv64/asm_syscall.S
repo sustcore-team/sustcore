@@ -216,7 +216,7 @@ sys_mem_resize:
     .global sys_mem_create
     .type   sys_mem_create, @function
 sys_mem_create:
-    /* a0 = __always_zero, a1 = memsz, a2 = shared, a3 = continuity, a4 = growth */
+    /* a0 = file cap, a1 = memsz, a2 = shared, a3 = continuity, a4 = growth, a5 = file offset */
     li a7, SYS_MEM_CREATE
     ecall
     ret

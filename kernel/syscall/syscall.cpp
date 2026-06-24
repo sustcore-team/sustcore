@@ -740,8 +740,8 @@ namespace syscall {
             case SYS_MEM_CREATE: {
                 ret = result_value_ret(
                     "mem_create",
-                    mem_create(arg0, arg1, arg2,
-                               static_cast<cap::MemoryGrowth>(arg3)));
+                    mem_create(capidx, arg0, arg1, arg2,
+                               static_cast<cap::MemoryGrowth>(arg3), arg4));
                 break;
             }
             case SYS_PCB_MAP: {
