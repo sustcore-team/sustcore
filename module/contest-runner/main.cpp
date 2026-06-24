@@ -26,6 +26,7 @@ namespace {
 
     constexpr const char *KMOD_TESTS[] = {
         "/initrd/test_page_cache.mod",
+        "/initrd/test_file_backed_memory.mod",
         nullptr,
     };
 
