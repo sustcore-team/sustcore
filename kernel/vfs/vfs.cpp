@@ -25,7 +25,7 @@
 #include <utility>
 
 namespace {
-    constexpr size_t kMaxPageCachePages = 1024;
+    constexpr size_t kMaxPageCachePages = 4;
 
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
     static VFS inst_vfs;
