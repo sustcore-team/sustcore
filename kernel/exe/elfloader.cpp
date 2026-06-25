@@ -279,7 +279,7 @@ namespace loader::elf {
             VMA &vma = vma_res.value().get();
             size_t mem_offset = vma.mem_offset + segment.page_prefix;
 
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "加载ELF段: idx=%u map=[%p,%p) vaddr=%p filesz=%lu memsz=%lu "
                 "prefix=%lu mem_off=%lu",
                 segment.index, segment.map_begin.addr(),
@@ -307,7 +307,7 @@ namespace loader::elf {
             }
             auto first_page_res = memory->lookup_page(mem_offset);
             if (first_page_res.has_value()) {
-                loggers::ELFLOADER::INFO(
+                loggers::ELFLOADER::DEBUG(
                     "ELF段首物理页: mem=%p mem_off=%lu paddr=%p", memory,
                     mem_offset, first_page_res.value().addr());
             }
@@ -444,7 +444,7 @@ namespace loader::elf {
                                          add_res.error());
                 while (true);
             }
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "创建ELF VMA: type=%s area=[%p,%p) mem=%p memsz=%lu mem_off=%lu",
                 to_string(vma_type), aligned_segvaddr.addr(), segvend.addr(),
                 segment_mem, static_cast<unsigned long>(map_memsz), 0UL);
@@ -499,7 +499,7 @@ namespace loader::elf {
                                          heap_res.error());
                 propagate_return(heap_res);
             }
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "创建HEAP VMA: area=[%p,%p) mem=%p memsz=%lu",
                 heap_start.addr(), heap_start.addr(), heap_mem, 0UL);
             spec.heap_vaddr   = heap_start;
