@@ -15,11 +15,13 @@
 #include <sus/path.h>
 #include <sustcore/errcode.h>
 #include <sustcore/files.h>
+#include <task/scheduler.h>
 #include <task/wait.h>
 #include <vfs/ops.h>
 #include <vfs/vfs.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstring>
 #include <utility>
@@ -38,51 +40,143 @@ namespace {
         .evictions     = 0,
         .cached_pages  = 0,
         .max_pages     = kMaxPageCachePages,
+        .backing_reads = 0,
+        .backing_writes = 0,
     };
-    static std::vector<VINode *> page_cache_vnodes{};
+    static SpinLocker page_cache_lock;
+    static std::atomic<size_t> page_cache_readers{0};
+    static VINode::CachedFilePage *inactive_head = nullptr;
+    static VINode::CachedFilePage *inactive_tail = nullptr;
+    static VINode::CachedFilePage *active_head = nullptr;
+    static VINode::CachedFilePage *active_tail = nullptr;
 
-    void register_page_cache_vnode(VINode &vnode) {
-        for (auto *cached : page_cache_vnodes) {
-            if (cached == &vnode) {
-                return;
+    class PageCacheReadGuard {
+    public:
+        PageCacheReadGuard() {
+            page_cache_readers.fetch_add(1, std::memory_order_acquire);
+        }
+
+        ~PageCacheReadGuard() {
+            page_cache_readers.fetch_sub(1, std::memory_order_release);
+        }
+    };
+
+    void synchronize_page_cache_rcu() noexcept {
+        while (page_cache_readers.load(std::memory_order_acquire) != 0) {
+            if (schd::Scheduler::initialized()) {
+                schd::Scheduler::inst().yield();
             }
         }
-        page_cache_vnodes.push_back(&vnode);
     }
 
-    void unregister_page_cache_vnode(VINode &vnode) {
-        for (auto it = page_cache_vnodes.begin(); it != page_cache_vnodes.end();
-             ++it) {
-            if (*it == &vnode) {
-                page_cache_vnodes.erase(it);
-                return;
-            }
+    void lru_refs(bool active, VINode::CachedFilePage *&head,
+                  VINode::CachedFilePage *&tail) noexcept {
+        if (active) {
+            head = active_head;
+            tail = active_tail;
+        } else {
+            head = inactive_head;
+            tail = inactive_tail;
         }
     }
+
+    void lru_store_refs(bool active, VINode::CachedFilePage *head,
+                        VINode::CachedFilePage *tail) noexcept {
+        if (active) {
+            active_head = head;
+            active_tail = tail;
+        } else {
+            inactive_head = head;
+            inactive_tail = tail;
+        }
+    }
+
+    void lru_remove(VINode::CachedFilePage &page) noexcept {
+        VINode::CachedFilePage *head = nullptr;
+        VINode::CachedFilePage *tail = nullptr;
+        lru_refs(page.active, head, tail);
+
+        if (page.prev != nullptr) {
+            page.prev->next = page.next;
+        } else if (head == &page) {
+            head = page.next;
+        }
+        if (page.next != nullptr) {
+            page.next->prev = page.prev;
+        } else if (tail == &page) {
+            tail = page.prev;
+        }
+        page.prev = nullptr;
+        page.next = nullptr;
+        lru_store_refs(page.active, head, tail);
+    }
+
+    void lru_push_tail(VINode::CachedFilePage &page, bool active) noexcept {
+        page.active = active;
+        page.prev = nullptr;
+        page.next = nullptr;
+        VINode::CachedFilePage *head = nullptr;
+        VINode::CachedFilePage *tail = nullptr;
+        lru_refs(active, head, tail);
+        if (tail == nullptr) {
+            head = &page;
+            tail = &page;
+        } else {
+            tail->next = &page;
+            page.prev = tail;
+            tail = &page;
+        }
+        lru_store_refs(active, head, tail);
+    }
+
+    void lru_touch(VINode::CachedFilePage &page) noexcept {
+        lru_remove(page);
+        lru_push_tail(page, true);
+    }
+
+    void lru_demote_one_active_page() noexcept {
+        if (active_head == nullptr) {
+            return;
+        }
+        auto *page = active_head;
+        lru_remove(*page);
+        lru_push_tail(*page, false);
+    }
+
+    VINode::CachedFilePage *lru_victim() noexcept {
+        if (inactive_head == nullptr) {
+            lru_demote_one_active_page();
+        }
+        return inactive_head;
+    }
+
+    Result<bool> evict_lru_page();
 
     Result<void> ensure_page_cache_capacity() {
         while (page_cache_stats.cached_pages >= kMaxPageCachePages) {
-            bool evicted = false;
-            for (auto it = page_cache_vnodes.begin();
-                 it != page_cache_vnodes.end();) {
-                VINode *vnode = *it;
-                if (vnode == nullptr || !vnode->has_file_pages()) {
-                    it = page_cache_vnodes.erase(it);
-                    continue;
-                }
-                auto evict_res = vnode->evict_file_page();
-                propagate(evict_res);
-                if (evict_res.value()) {
-                    evicted = true;
-                    break;
-                }
-                ++it;
-            }
-            if (!evicted) {
+            auto evict_res = evict_lru_page();
+            propagate(evict_res);
+            if (!evict_res.value()) {
                 unexpect_return(ErrCode::OUT_OF_MEMORY);
             }
         }
         void_return();
+    }
+
+    Result<bool> evict_lru_page() {
+        VINode *owner = nullptr;
+        {
+            GuardedLock cache_guard(page_cache_lock);
+            auto *victim = lru_victim();
+            if (victim == nullptr || victim->owner == nullptr) {
+                return false;
+            }
+            owner = victim->owner;
+            owner->keep();
+        }
+        auto evict_res = owner->evict_file_page();
+        owner->release();
+        return evict_res;
     }
 }  // namespace
 
@@ -202,20 +296,27 @@ Result<void> VINode::invalidate() {
 }
 
 Result<PhyAddr> VINode::cached_file_page(IFile &file, size_t page_index,
-                                         size_t *valid_len) {
-    auto cached = _file_pages.find(page_index);
-    if (cached != _file_pages.end()) {
-        page_cache_stats.hits++;
-        loggers::VFS::DEBUG("page cache hit: inode=%u page=%lu paddr=%p",
-                            static_cast<unsigned>(_inode->inode_id()),
-                            page_index, cached->second.paddr.addr());
-        if (valid_len != nullptr) {
-            *valid_len = cached->second.valid;
+                                          size_t *valid_len) {
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        auto cached = _file_pages.find(page_index);
+        if (cached != _file_pages.end() && !cached->second.evicting) {
+            lru_touch(cached->second);
+            page_cache_stats.hits++;
+            loggers::VFS::DEBUG("page cache hit: inode=%u page=%lu paddr=%p",
+                                static_cast<unsigned>(_inode->inode_id()),
+                                page_index, cached->second.paddr.addr());
+            if (valid_len != nullptr) {
+                *valid_len = cached->second.valid;
+            }
+            return cached->second.paddr;
         }
-        return cached->second.paddr;
     }
 
-    page_cache_stats.misses++;
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        page_cache_stats.misses++;
+    }
     loggers::VFS::DEBUG("page cache miss: inode=%u page=%lu",
                         static_cast<unsigned>(_inode->inode_id()), page_index);
 
@@ -236,17 +337,76 @@ Result<PhyAddr> VINode::cached_file_page(IFile &file, size_t page_index,
     }
 
     size_t valid = read_res.value();
-    _file_pages.insert_or_assign(page_index, CachedFilePage{
-                                                  .paddr = paddr,
-                                                  .valid = valid,
-                                                  .dirty = false,
-                                              });
-    page_cache_stats.cached_pages++;
-    register_page_cache_vnode(*this);
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        page_cache_stats.backing_reads++;
+        auto existing = _file_pages.find(page_index);
+        if (existing != _file_pages.end() && !existing->second.evicting) {
+            lru_touch(existing->second);
+            GFP::put_page(paddr, 1);
+            if (valid_len != nullptr) {
+                *valid_len = existing->second.valid;
+            }
+            return existing->second.paddr;
+        }
+        auto &cached = _file_pages[page_index];
+        cached.paddr = paddr;
+        cached.valid = valid;
+        cached.dirty = false;
+        cached.evicting = false;
+        cached.owner = this;
+        cached.page_index = page_index;
+        lru_push_tail(cached, false);
+        page_cache_stats.cached_pages++;
+    }
     if (valid_len != nullptr) {
         *valid_len = valid;
     }
     return paddr;
+}
+
+Result<size_t> VINode::read_cached_file(IFile &file, size_t offset, void *buf,
+                                        size_t len) {
+    auto *dst        = static_cast<char *>(buf);
+    size_t completed = 0;
+    while (completed < len) {
+        size_t cur_offset = offset + completed;
+        if (cur_offset < offset) {
+            unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+        }
+
+        size_t page_index = cur_offset / PAGESIZE;
+        size_t in_page    = cur_offset % PAGESIZE;
+        size_t valid      = 0;
+        auto page_res     = cached_file_page(file, page_index, &valid);
+        propagate(page_res);
+
+        if (in_page >= valid) {
+            break;
+        }
+
+        CachedFilePage *page = nullptr;
+        {
+            PageCacheReadGuard rcu_guard;
+            GuardedLock cache_guard(page_cache_lock);
+            auto page_it = _file_pages.find(page_index);
+            if (page_it == _file_pages.end() || page_it->second.evicting) {
+                unexpect_return(ErrCode::PAGE_NOT_PRESENT);
+            }
+            page = &page_it->second;
+            GuardedLock page_guard(page->lock);
+            size_t chunk = std::min(len - completed, page->valid - in_page);
+            memcpy(dst + completed,
+                   static_cast<char *>(convert<KpaAddr>(page->paddr).addr()) +
+                       in_page,
+                   chunk);
+            completed += chunk;
+            if (page->valid < PAGESIZE && in_page + chunk >= page->valid) {
+                break;
+            }
+        }
+    }
+    return completed;
 }
 
 Result<size_t> VINode::write_cached_file(IFile &file, size_t offset,
@@ -262,19 +422,25 @@ Result<size_t> VINode::write_cached_file(IFile &file, size_t offset,
         size_t page_index = cur_offset / PAGESIZE;
         size_t in_page    = cur_offset % PAGESIZE;
         size_t chunk      = std::min(len - written, PAGESIZE - in_page);
-        size_t valid      = 0;
-        auto page_res = cached_file_page(file, page_index, &valid);
+        auto page_res = cached_file_page(file, page_index, nullptr);
         propagate(page_res);
 
-        auto page_it = _file_pages.find(page_index);
-        if (page_it == _file_pages.end()) {
-            unexpect_return(ErrCode::UNKNOWN_ERROR);
+        {
+            PageCacheReadGuard rcu_guard;
+            GuardedLock cache_guard(page_cache_lock);
+            auto page_it = _file_pages.find(page_index);
+            if (page_it == _file_pages.end() || page_it->second.evicting) {
+                unexpect_return(ErrCode::UNKNOWN_ERROR);
+            }
+            GuardedLock page_guard(page_it->second.lock);
+            memcpy(static_cast<char *>(convert<KpaAddr>(page_it->second.paddr).addr()) +
+                       in_page,
+                   src + written, chunk);
+            page_it->second.valid = std::max(page_it->second.valid,
+                                             in_page + chunk);
+            page_it->second.dirty = true;
+            lru_touch(page_it->second);
         }
-        memcpy(static_cast<char *>(convert<KpaAddr>(page_res.value()).addr()) +
-                   in_page,
-               src + written, chunk);
-        page_it->second.valid = std::max(valid, in_page + chunk);
-        page_it->second.dirty = true;
         written += chunk;
     }
     return written;
@@ -290,51 +456,84 @@ Result<void> VINode::flush_file_pages() {
     IFile *file = file_res.value();
 
     for (auto &[page_index, page] : _file_pages) {
-        if (!page.dirty) {
-            continue;
+        bool wrote_back = false;
+        {
+            GuardedLock page_guard(page.lock);
+            if (!page.dirty) {
+                continue;
+            }
+            auto write_res = file->write(static_cast<off_t>(page_index * PAGESIZE),
+                                         convert<KpaAddr>(page.paddr).addr(),
+                                         page.valid);
+            propagate(write_res);
+            if (write_res.value() != page.valid) {
+                unexpect_return(ErrCode::IO_ERROR);
+            }
+            page.dirty = false;
+            wrote_back = true;
+            loggers::VFS::DEBUG("page cache writeback: inode=%u page=%lu len=%lu",
+                                static_cast<unsigned>(_inode->inode_id()),
+                                page_index, page.valid);
         }
-        auto write_res = file->write(static_cast<off_t>(page_index * PAGESIZE),
-                                     convert<KpaAddr>(page.paddr).addr(),
-                                     page.valid);
-        propagate(write_res);
-        if (write_res.value() != page.valid) {
-            unexpect_return(ErrCode::IO_ERROR);
+        if (wrote_back) {
+            GuardedLock cache_guard(page_cache_lock);
+            page_cache_stats.writebacks++;
+            page_cache_stats.backing_writes++;
         }
-        page.dirty = false;
-        page_cache_stats.writebacks++;
-        loggers::VFS::DEBUG("page cache writeback: inode=%u page=%lu len=%lu",
-                            static_cast<unsigned>(_inode->inode_id()),
-                            page_index, page.valid);
     }
     void_return();
 }
 
 Result<bool> VINode::evict_file_page() {
-    if (_file_pages.empty()) {
-        return false;
-    }
-
-    auto it = _file_pages.begin();
-    if (it->second.dirty) {
-        auto file_res = _inode->as_file();
-        propagate(file_res);
-        auto write_res = file_res.value()->write(
-            static_cast<off_t>(it->first * PAGESIZE),
-            convert<KpaAddr>(it->second.paddr).addr(), it->second.valid);
-        propagate(write_res);
-        if (write_res.value() != it->second.valid) {
-            unexpect_return(ErrCode::IO_ERROR);
+    CachedFilePage *page = nullptr;
+    size_t page_index = 0;
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        page = lru_victim();
+        if (page == nullptr || page->owner != this || page->evicting) {
+            return false;
         }
-        page_cache_stats.writebacks++;
+        page->evicting = true;
+        page_index = page->page_index;
+        lru_remove(*page);
     }
 
-    GFP::put_page(it->second.paddr, 1);
-    _file_pages.erase(it);
-    page_cache_stats.cached_pages--;
-    page_cache_stats.evictions++;
-    if (_file_pages.empty()) {
-        unregister_page_cache_vnode(*this);
+    {
+        bool wrote_back = false;
+        {
+            GuardedLock page_guard(page->lock);
+            if (page->dirty) {
+                auto file_res = _inode->as_file();
+                propagate(file_res);
+                auto write_res = file_res.value()->write(
+                    static_cast<off_t>(page_index * PAGESIZE),
+                    convert<KpaAddr>(page->paddr).addr(), page->valid);
+                propagate(write_res);
+                if (write_res.value() != page->valid) {
+                    unexpect_return(ErrCode::IO_ERROR);
+                }
+                wrote_back = true;
+            }
+        }
+        if (wrote_back) {
+            GuardedLock cache_guard(page_cache_lock);
+            page_cache_stats.writebacks++;
+            page_cache_stats.backing_writes++;
+        }
     }
+
+    PhyAddr paddr = page->paddr;
+    synchronize_page_cache_rcu();
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        auto it = _file_pages.find(page_index);
+        if (it != _file_pages.end() && &it->second == page) {
+            _file_pages.erase(it);
+            page_cache_stats.cached_pages--;
+            page_cache_stats.evictions++;
+        }
+    }
+    GFP::put_page(paddr, 1);
     return true;
 }
 
@@ -343,23 +542,45 @@ bool VINode::has_file_pages() const noexcept {
 }
 
 void VINode::invalidate_file_pages() noexcept {
-    if (!_file_pages.empty()) {
-        page_cache_stats.invalidations++;
-        loggers::VFS::DEBUG("page cache invalidate: inode=%u pages=%lu",
-                            _inode.get() == nullptr ? 0U
-                                                    : static_cast<unsigned>(_inode->inode_id()),
-                            _file_pages.size());
+    std::vector<size_t> pages_to_free{};
+    {
+        GuardedLock cache_guard(page_cache_lock);
+        if (!_file_pages.empty()) {
+            page_cache_stats.invalidations++;
+            loggers::VFS::DEBUG("page cache invalidate: inode=%u pages=%lu",
+                                _inode.get() == nullptr ? 0U
+                                                        : static_cast<unsigned>(_inode->inode_id()),
+                                _file_pages.size());
+        }
+        for (auto &[page_index, page] : _file_pages) {
+            if (page.evicting) {
+                continue;
+            }
+            page.evicting = true;
+            page.invalidating = true;
+            lru_remove(page);
+            pages_to_free.push_back(page_index);
+        }
     }
-    for (auto &[_, page] : _file_pages) {
-        GFP::put_page(page.paddr, 1);
+    synchronize_page_cache_rcu();
+
+    for (size_t page_index : pages_to_free) {
+        PhyAddr paddr = PhyAddr::null;
+        {
+            GuardedLock cache_guard(page_cache_lock);
+            auto it = _file_pages.find(page_index);
+            if (it == _file_pages.end() || !it->second.invalidating) {
+                continue;
+            }
+            GuardedLock page_guard(it->second.lock);
+            paddr = it->second.paddr;
+            _file_pages.erase(it);
+            if (page_cache_stats.cached_pages > 0) {
+                page_cache_stats.cached_pages--;
+            }
+        }
+        GFP::put_page(paddr, 1);
     }
-    if (page_cache_stats.cached_pages >= _file_pages.size()) {
-        page_cache_stats.cached_pages -= _file_pages.size();
-    } else {
-        page_cache_stats.cached_pages = 0;
-    }
-    _file_pages.clear();
-    unregister_page_cache_vnode(*this);
 }
 
 VFile::VFile(VINode &vind, const util::Path &mount_path, VFS &vfs)
@@ -420,6 +641,8 @@ void VFS::reset_page_cache_stats() noexcept {
         .evictions     = 0,
         .cached_pages  = cached_pages,
         .max_pages     = kMaxPageCachePages,
+        .backing_reads = 0,
+        .backing_writes = 0,
     };
 }
 
@@ -1622,49 +1845,12 @@ Result<size_t> VFS::read(VFile &vfile, off_t offset, void *buf,
     IFile *file = file_res.value();
 
     if (file->file_cache() != FileCachePolicy::NONE) {
-        auto *dst        = static_cast<char *>(buf);
-        size_t start     = static_cast<size_t>(offset);
-        size_t completed = 0;
-        while (completed < len) {
-            size_t cur_offset = start + completed;
-            if (cur_offset < start) {
-                unexpect_return(ErrCode::OUT_OF_BOUNDARY);
-            }
-
-            size_t page_index = cur_offset / PAGESIZE;
-            size_t in_page    = cur_offset % PAGESIZE;
-            size_t valid      = 0;
-            auto page_res = vfile.vinode()->cached_file_page(*file, page_index,
-                                                             &valid);
-            propagate(page_res);
-
-            if (in_page >= valid) {
-                break;
-            }
-
-            size_t chunk = std::min(len - completed, valid - in_page);
-            memcpy(dst + completed,
-                   static_cast<char *>(convert<KpaAddr>(page_res.value()).addr()) +
-                       in_page,
-                   chunk);
-            completed += chunk;
-            if (valid < PAGESIZE && in_page + chunk >= valid) {
-                break;
-            }
-        }
-        return completed;
+        return vfile.vinode()->read_cached_file(
+            *file, static_cast<size_t>(offset), buf, len);
     }
 
     auto read_res = file->read(offset, buf, len);
     propagate(read_res);
-
-    if (file->file_cache() == FileCachePolicy::NONE) {
-        auto sync_res = file->sync();
-        if (!sync_res.has_value() && sync_res.error() != ErrCode::NOT_SUPPORTED)
-        {
-            propagate_return(sync_res);
-        }
-    }
     return read_res.value();
 }
 

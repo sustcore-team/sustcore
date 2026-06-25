@@ -16,6 +16,7 @@
 #include <arch/loongarch64/callconv.h>
 #endif
 #include <object/task.h>
+#include <env.h>
 #include <sustcore/addr.h>
 #include <sustcore/syscall.h>
 #include <syscall/cap.h>
@@ -219,6 +220,19 @@ namespace syscall {
                 args.syscall_number);
         }
 
+        [[nodiscard]]
+        b64 time_now_ns() noexcept {
+            auto *time_keeper =
+                env::hart_ctx != nullptr ? env::hart_ctx->time_keeper() : nullptr;
+            if (time_keeper == nullptr || time_keeper->source() == nullptr) {
+                return 0;
+            }
+            return static_cast<b64>(
+                time_keeper->source()
+                    ->to_ns(time_keeper->source()->now())
+                    .to_nanoseconds());
+        }
+
     }  // namespace
 
     constexpr size_t MAX_SYSCALL_PATH = 256;
@@ -229,6 +243,7 @@ namespace syscall {
             case SYS_CREATE_PROCESS:      return "SYS_CREATE_PROCESS";
             case SYS_CREATE_POSIX_PROCESS:return "SYS_CREATE_POSIX_PROCESS";
             case SYS_SHUTDOWN:            return "SYS_SHUTDOWN";
+            case SYS_TIME_NOW_NS:         return "SYS_TIME_NOW_NS";
             case SYS_PCB_KILL:            return "SYS_PCB_KILL";
             case SYS_YIELD:               return "SYS_YIELD";
             case SYS_LOG:                 return "SYS_LOG";
@@ -333,6 +348,10 @@ namespace syscall {
             case SYS_SHUTDOWN: {
                 sys_shutdown();
                 __builtin_unreachable();
+            }
+            case SYS_TIME_NOW_NS: {
+                ret.ret0 = time_now_ns();
+                break;
             }
             case SYS_VFS_PAGE_CACHE_STATS: {
                 UBuffer buf((VirAddr)arg0, sizeof(VFSPageCacheStats));

@@ -75,6 +75,8 @@ struct VFSPageCacheStats {
     size_t evictions;
     size_t cached_pages;
     size_t max_pages;
+    size_t backing_reads;
+    size_t backing_writes;
 };
 
 static_assert(sizeof(dir_entry_header) == sizeof(size_t),
