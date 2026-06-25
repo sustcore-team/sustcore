@@ -51,6 +51,7 @@ struct VMAInfo {
 extern "C" {
 void sys_write_serial(size_t __always_zero, const char *str, size_t len);
 void sys_shutdown();
+uint64_t sys_time_now_ns();
 bool sys_pcb_kill(CapIdx pcb_cap, int exit_code);
 bool sys_pcb_map(CapIdx pcb_cap, CapIdx mem_cap, size_t offset, void *vaddr,
                  size_t sz, uint64_t protflg);

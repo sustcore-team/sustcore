@@ -331,3 +331,9 @@ sys_vfs_mount:
 sys_vfs_page_cache_stats:
     li.d $a7, SYS_VFS_PAGE_CACHE_STATS
     do_syscall
+
+    .global sys_time_now_ns
+    .type sys_time_now_ns, @function
+sys_time_now_ns:
+    li.d $a7, SYS_TIME_NOW_NS
+    do_syscall

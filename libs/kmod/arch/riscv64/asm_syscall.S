@@ -427,3 +427,10 @@ sys_vfs_page_cache_stats:
     li a7, SYS_VFS_PAGE_CACHE_STATS
     ecall
     ret
+
+    .global sys_time_now_ns
+    .type sys_time_now_ns, @function
+sys_time_now_ns:
+    li a7, SYS_TIME_NOW_NS
+    ecall
+    ret
