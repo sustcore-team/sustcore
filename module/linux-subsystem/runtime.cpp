@@ -1,6 +1,6 @@
 /**
  * @file runtime.cpp
- * @author OpenAI
+ * @author theflysong
  * @brief linux subsystem 运行时基础支持
  * @version alpha-1.0.0
  * @date 2026-06-23

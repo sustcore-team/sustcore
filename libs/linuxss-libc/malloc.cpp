@@ -1,6 +1,6 @@
 /**
  * @file malloc.cpp
- * @author OpenAI
+ * @author theflysong
  * @brief linux subsystem libc free-list heap allocator
  * @version alpha-1.0.0
  * @date 2026-06-25

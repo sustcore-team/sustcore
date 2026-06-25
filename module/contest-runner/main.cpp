@@ -21,9 +21,10 @@
 namespace {
     constexpr uint64_t PERM_BASIC_MIGRATE_ONCE = 0x0008;
     constexpr uint64_t PERM_PCB_GETPID         = 0x01'0000;
+    constexpr const char *GLIBC_BASIC_ROOT    = "/testing/glibc/basic";
 
     constexpr const char *TEST_ROOTS[] = {
-        "/testing/glibc/basic",
+        GLIBC_BASIC_ROOT,
         "/testing/musl/basic",
         nullptr,
     };
@@ -32,6 +33,10 @@ namespace {
         size_t total  = 0;
         size_t passed = 0;
         size_t failed = 0;
+    };
+
+    struct TestcaseRunOptions {
+        bool print_case_logs = true;
     };
 
     [[nodiscard]]
@@ -185,19 +190,43 @@ namespace {
         return child_pcb;
     }
 
+    [[nodiscard]]
+    CapIdx open_cwd_dir(const char *root, int &cwd_fd) {
+        cwd_fd = kmod_opendir(root);
+        if (cwd_fd < 0) {
+            printf("contest-runner: opendir failed %s\n", root);
+            return cap::error;
+        }
+
+        CapIdx cwd_dir_cap = kmod_getcap(cwd_fd);
+        if (cwd_dir_cap == cap::null || cwd_dir_cap == cap::error) {
+            printf("contest-runner: cwd cap invalid %s\n", root);
+            kmod_fclose(cwd_fd);
+            cwd_fd = -1;
+            return cap::error;
+        }
+
+        return cwd_dir_cap;
+    }
+
     void run_testcase(const char *root, const char *testcase,
                       CapIdx root_dir_cap, CapIdx cwd_dir_cap,
-                      TestRunStats &stats) {
+                      TestRunStats &stats,
+                      const TestcaseRunOptions &options = {}) {
         ++stats.total;
 
         char path[256]{};
         snprintf(path, sizeof(path), "%s/%s", root, testcase);
-        printf("contest-runner: start %s\n", path);
+        if (options.print_case_logs) {
+            printf("contest-runner: start %s\n", path);
+        }
 
         int fd = kmod_fopen(path, "x");
         if (fd < 0) {
             ++stats.failed;
-            printf("contest-runner: open failed %s\n", path);
+            if (options.print_case_logs) {
+                printf("contest-runner: open failed %s\n", path);
+            }
             return;
         }
 
@@ -205,7 +234,9 @@ namespace {
         kmod_fclose(fd);
         if (child_pcb == cap::null || child_pcb == cap::error) {
             ++stats.failed;
-            printf("contest-runner: spawn failed %s\n", path);
+            if (options.print_case_logs) {
+                printf("contest-runner: spawn failed %s\n", path);
+            }
             return;
         }
 
@@ -215,34 +246,52 @@ namespace {
             sys_tcb_wait(__main_tcb_cap, wait_caps, &status, 0);
         if (exited_cap == cap::null || exited_cap == cap::error) {
             ++stats.failed;
-            printf("contest-runner: wait failed %s\n", path);
+            if (options.print_case_logs) {
+                printf("contest-runner: wait failed %s\n", path);
+            }
             return;
         }
 
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             ++stats.failed;
-            printf("contest-runner: failed %s status=0x%x\n", path, status);
+            if (options.print_case_logs) {
+                printf("contest-runner: failed %s status=0x%x\n", path, status);
+            }
             return;
         }
 
         ++stats.passed;
-        printf("contest-runner: passed %s status=0x%x\n", path, status);
+        if (options.print_case_logs) {
+            printf("contest-runner: passed %s status=0x%x\n", path, status);
+        }
+    }
+
+    [[nodiscard]]
+    TestRunStats run_basic(const char *root, CapIdx root_dir_cap) {
+        TestRunStats stats{};
+        int cwd_fd      = -1;
+        CapIdx cwd_dir_cap = open_cwd_dir(root, cwd_fd);
+        if (cwd_dir_cap == cap::null || cwd_dir_cap == cap::error) {
+            return stats;
+        }
+
+        printf("#### OS COMP TEST GROUP START basic-glibc ####\n");
+        for (size_t i = 0; basic::testcases[i] != nullptr; ++i) {
+            printf("Testing %s :\n", basic::testcases[i]);
+            run_testcase(root, basic::testcases[i], root_dir_cap, cwd_dir_cap,
+                         stats, TestcaseRunOptions{.print_case_logs = false});
+        }
+        printf("#### OS COMP TEST GROUP END basic-glibc ####\n");
+        kmod_fclose(cwd_fd);
+        return stats;
     }
 
     [[nodiscard]]
     TestRunStats run_suite(const char *root, CapIdx root_dir_cap) {
         TestRunStats stats{};
-        int cwd_fd = kmod_opendir(root);
-        if (cwd_fd < 0) {
-            printf("contest-runner: opendir failed %s\n", root);
-            stats.total  = 0;
-            stats.failed = 0;
-            return stats;
-        }
-        CapIdx cwd_dir_cap = kmod_getcap(cwd_fd);
+        int cwd_fd      = -1;
+        CapIdx cwd_dir_cap = open_cwd_dir(root, cwd_fd);
         if (cwd_dir_cap == cap::null || cwd_dir_cap == cap::error) {
-            printf("contest-runner: cwd cap invalid %s\n", root);
-            kmod_fclose(cwd_fd);
             return stats;
         }
 
@@ -275,7 +324,9 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
 
     TestRunStats total{};
     for (size_t i = 0; TEST_ROOTS[i] != nullptr; ++i) {
-        auto stats = run_suite(TEST_ROOTS[i], root_dir_cap);
+        auto stats = strcmp(TEST_ROOTS[i], GLIBC_BASIC_ROOT) == 0
+                         ? run_basic(TEST_ROOTS[i], root_dir_cap)
+                         : run_suite(TEST_ROOTS[i], root_dir_cap);
         total.total += stats.total;
         total.passed += stats.passed;
         total.failed += stats.failed;
