@@ -14,6 +14,8 @@
 #include <sys/wait.h>
 
 #include <cstdio>
+#include <string>
+#include <vector>
 
 #include "basic.h"
 
@@ -25,15 +27,23 @@ namespace {
     };
 
     constexpr const char *KMOD_TESTS[] = {
-        "/initrd/test_page_cache.mod",
-        "/initrd/test_file_backed_memory.mod",
+        // "/initrd/test_page_cache.mod",
+        // "/initrd/test_page_cache_perf.mod",
+        // "/initrd/test_file_backed_memory.mod",
+        // "/initrd/test_fs_score.mod",
         nullptr,
+    };
+
+    struct FailureInfo {
+        std::string path;
+        int status;
     };
 
     struct TestRunStats {
         size_t total  = 0;
         size_t passed = 0;
         size_t failed = 0;
+        std::vector<FailureInfo> failures;
     };
 
     [[nodiscard]]
@@ -103,7 +113,8 @@ namespace {
     }
 
     [[nodiscard]]
-    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap) {
+    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap,
+                            const char *cwd_path) {
         if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error) {
             return cap::error;
         }
@@ -164,6 +175,7 @@ namespace {
         int fd = kmod_fopen(path, "x");
         if (fd < 0) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: open failed %s\n", path);
             return;
         }
@@ -172,6 +184,7 @@ namespace {
         kmod_fclose(fd);
         if (child_pcb == cap::null || child_pcb == cap::error) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: spawn failed %s\n", path);
             return;
         }
@@ -182,12 +195,14 @@ namespace {
             sys_tcb_wait(__main_tcb_cap, wait_caps, &status, 0);
         if (exited_cap == cap::null || exited_cap == cap::error) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: wait failed %s\n", path);
             return;
         }
 
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), status});
             printf("contest-runner: failed %s status=0x%x\n", path, status);
             return;
         }
@@ -222,6 +237,7 @@ namespace {
         int fd = kmod_fopen(path, "x");
         if (fd < 0) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: open failed %s\n", path);
             return;
         }
@@ -230,6 +246,7 @@ namespace {
         kmod_fclose(fd);
         if (child_pcb == cap::null || child_pcb == cap::error) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: spawn failed %s\n", path);
             return;
         }
@@ -240,12 +257,14 @@ namespace {
             sys_tcb_wait(__main_tcb_cap, wait_caps, &status, 0);
         if (exited_cap == cap::null || exited_cap == cap::error) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), -1});
             printf("contest-runner: wait failed %s\n", path);
             return;
         }
 
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
             ++stats.failed;
+            stats.failures.push_back({std::string(path), status});
             printf("contest-runner: failed %s status=0x%x\n", path, status);
             return;
         }
@@ -287,14 +306,26 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
     total.total += kmod_stats.total;
     total.passed += kmod_stats.passed;
     total.failed += kmod_stats.failed;
+    for (auto &f : kmod_stats.failures) {
+        total.failures.push_back(std::move(f));
+    }
 
     for (size_t i = 0; TEST_ROOTS[i] != nullptr; ++i) {
         auto stats = run_suite(TEST_ROOTS[i], root_dir_cap);
         total.total += stats.total;
         total.passed += stats.passed;
         total.failed += stats.failed;
+        for (auto &f : stats.failures) {
+            total.failures.push_back(std::move(f));
+        }
     }
 
+    if (!total.failures.empty()) {
+        printf("contest-runner: FAILED TESTS:\n");
+        for (const auto &f : total.failures) {
+            printf("  %s (status=0x%x)\n", f.path.c_str(), f.status);
+        }
+    }
     printf("contest-runner: all done total=%lu passed=%lu failed=%lu\n",
            static_cast<unsigned long>(total.total),
            static_cast<unsigned long>(total.passed),

@@ -418,11 +418,25 @@ size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode) {
     if (pathname == nullptr) {
         return -EINVAL;
     }
-    if (dirfd != AT_FDCWD) {
-        return -ENOSYS;
-    }
 
-    auto abs_path = make_absolute_path(pathname);
+    std::string abs_path{};
+    if (is_absolute_path(pathname) || dirfd == AT_FDCWD) {
+        abs_path = make_absolute_path(pathname);
+    } else {
+        auto *dir_state = find_dir_fd_state(dirfd);
+        if (dir_state == nullptr || dir_state->abs_path == nullptr) {
+            return -EBADF;
+        }
+        std::string joined(*dir_state->abs_path);
+        if (joined.size() > 1 && joined.back() != '/') {
+            joined.push_back('/');
+        }
+        joined += pathname;
+        if (joined.size() >= LINUX_PATH_MAX) {
+            return -ENOENT;
+        }
+        abs_path = normalize_absolute_path(joined);
+    }
     if (abs_path.empty()) {
         return -ENOENT;
     }
