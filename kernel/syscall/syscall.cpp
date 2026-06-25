@@ -16,6 +16,7 @@
 #include <arch/loongarch64/callconv.h>
 #endif
 #include <object/task.h>
+#include <env.h>
 #include <sustcore/addr.h>
 #include <sustcore/syscall.h>
 #include <syscall/cap.h>
@@ -219,6 +220,19 @@ namespace syscall {
                 args.syscall_number);
         }
 
+        [[nodiscard]]
+        b64 time_now_ns() noexcept {
+            auto *time_keeper =
+                env::hart_ctx != nullptr ? env::hart_ctx->time_keeper() : nullptr;
+            if (time_keeper == nullptr || time_keeper->source() == nullptr) {
+                return 0;
+            }
+            return static_cast<b64>(
+                time_keeper->source()
+                    ->to_ns(time_keeper->source()->now())
+                    .to_nanoseconds());
+        }
+
     }  // namespace
 
     constexpr size_t MAX_SYSCALL_PATH = 256;
@@ -229,6 +243,7 @@ namespace syscall {
             case SYS_CREATE_PROCESS:      return "SYS_CREATE_PROCESS";
             case SYS_CREATE_POSIX_PROCESS:return "SYS_CREATE_POSIX_PROCESS";
             case SYS_SHUTDOWN:            return "SYS_SHUTDOWN";
+            case SYS_TIME_NOW_NS:         return "SYS_TIME_NOW_NS";
             case SYS_PCB_KILL:            return "SYS_PCB_KILL";
             case SYS_PCB_FORK:            return "SYS_PCB_FORK";
             case SYS_PCB_GETPID:          return "SYS_PCB_GETPID";
@@ -280,6 +295,8 @@ namespace syscall {
             case SYS_VFS_LSTAT:          return "SYS_VFS_LSTAT";
             case SYS_VFS_READLINK:       return "SYS_VFS_READLINK";
             case SYS_VFS_MOUNT:          return "SYS_VFS_MOUNT";
+            case SYS_VFS_PAGE_CACHE_STATS:
+                return "SYS_VFS_PAGE_CACHE_STATS";
             default:                      return "UNKNOWN_SYSCALL";
         }
     }
@@ -329,6 +346,17 @@ namespace syscall {
             case SYS_SHUTDOWN: {
                 sys_shutdown();
                 __builtin_unreachable();
+            }
+            case SYS_TIME_NOW_NS: {
+                ret.ret0 = time_now_ns();
+                break;
+            }
+            case SYS_VFS_PAGE_CACHE_STATS: {
+                UBuffer buf((VirAddr)arg0, sizeof(VFSPageCacheStats));
+                ret = result_void_ret(
+                    "vfs_page_cache_stats",
+                    vfs_page_cache_stats(std::move(buf), arg1 != 0));
+                break;
             }
             case SYS_CREATE_PROCESS: {
                 StartupArguments startup{};
@@ -738,8 +766,8 @@ namespace syscall {
             case SYS_MEM_CREATE: {
                 ret = result_value_ret(
                     "mem_create",
-                    mem_create(arg0, arg1, arg2,
-                               static_cast<cap::MemoryGrowth>(arg3)));
+                    mem_create(capidx, arg0, arg1, arg2,
+                               static_cast<cap::MemoryGrowth>(arg3), arg4));
                 break;
             }
             case SYS_PCB_MAP: {

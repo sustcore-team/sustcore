@@ -231,7 +231,7 @@ endpoint_reply:
     .global sys_mem_create
     .type sys_mem_create, @function
 sys_mem_create:
-    /* a0 = __always_zero, a1 = memsz, a2 = shared, a3 = continuity, a4 = growth */
+    /* a0 = file cap, a1 = memsz, a2 = shared, a3 = continuity, a4 = growth, a5 = file offset */
     li a7, SYS_MEM_CREATE
     ecall
     ret
@@ -417,5 +417,20 @@ sys_vfs_getdents:
 sys_vfs_sync:
     /* a0 = cap */
     li a7, SYS_VFS_SYNC
+    ecall
+    ret
+
+    .global sys_vfs_page_cache_stats
+    .type sys_vfs_page_cache_stats, @function
+sys_vfs_page_cache_stats:
+    /* a0 = always zero, a1 = VFSPageCacheStats*, a2 = reset */
+    li a7, SYS_VFS_PAGE_CACHE_STATS
+    ecall
+    ret
+
+    .global sys_time_now_ns
+    .type sys_time_now_ns, @function
+sys_time_now_ns:
+    li a7, SYS_TIME_NOW_NS
     ecall
     ret

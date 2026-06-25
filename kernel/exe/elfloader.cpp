@@ -86,7 +86,7 @@ namespace loader::elf {
             auto locate_res = tmm.locate(segvaddr);
             propagate(locate_res);
             VMA *vma = locate_res.value();
-            if (vma == nullptr || vma->memory == nullptr) {
+            if (vma == nullptr || vma->memory_payload() == nullptr) {
                 unexpect_return(ErrCode::NULLPTR);
             }
             size_t vma_offset = segvaddr - vma->varea.begin;
@@ -170,13 +170,14 @@ namespace loader::elf {
          */
         [[nodiscard]]
         Result<void> dump_vma_prefix(const VMA &vma, size_t dump_size) {
-            if (vma.memory == nullptr || vma.varea.nullable() || dump_size == 0) {
+            auto *memory = vma.memory_payload();
+            if (memory == nullptr || vma.varea.nullable() || dump_size == 0) {
                 void_return();
             }
 
             unsigned char buf[16] = {};
             size_t actual_size    = min_size(dump_size, sizeof(buf));
-            auto read_res = vma.memory->read(vma.mem_offset, buf, actual_size);
+            auto read_res = memory->read(vma.mem_offset, buf, actual_size);
             propagate(read_res);
             actual_size = read_res.value();
 
@@ -278,7 +279,7 @@ namespace loader::elf {
             VMA &vma = vma_res.value().get();
             size_t mem_offset = vma.mem_offset + segment.page_prefix;
 
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "加载ELF段: idx=%u map=[%p,%p) vaddr=%p filesz=%lu memsz=%lu "
                 "prefix=%lu mem_off=%lu",
                 segment.index, segment.map_begin.addr(),
@@ -287,8 +288,12 @@ namespace loader::elf {
                 static_cast<unsigned long>(segment.phdr.p_memsz),
                 static_cast<unsigned long>(segment.page_prefix), mem_offset);
 
+            auto *memory = vma.memory_payload();
+            if (memory == nullptr) {
+                unexpect_return(ErrCode::NULLPTR);
+            }
             auto load_res = load_file_into_memory(
-                file, *vma.memory, segment.phdr.p_offset, mem_offset,
+                file, *memory, segment.phdr.p_offset, mem_offset,
                 segment.phdr.p_filesz);
             propagate(load_res);
 
@@ -296,15 +301,14 @@ namespace loader::elf {
                 size_t zero_sz =
                     segment.phdr.p_memsz - segment.phdr.p_filesz;
                 auto zero_res =
-                    zero_fill_memory(*vma.memory,
-                                     mem_offset + segment.phdr.p_filesz,
+                    zero_fill_memory(*memory, mem_offset + segment.phdr.p_filesz,
                                      zero_sz);
                 propagate(zero_res);
             }
-            auto first_page_res = vma.memory->lookup_page(mem_offset);
+            auto first_page_res = memory->lookup_page(mem_offset);
             if (first_page_res.has_value()) {
-                loggers::ELFLOADER::INFO(
-                    "ELF段首物理页: mem=%p mem_off=%lu paddr=%p", vma.memory,
+                loggers::ELFLOADER::DEBUG(
+                    "ELF段首物理页: mem=%p mem_off=%lu paddr=%p", memory,
                     mem_offset, first_page_res.value().addr());
             }
         }
@@ -440,7 +444,7 @@ namespace loader::elf {
                                          add_res.error());
                 while (true);
             }
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "创建ELF VMA: type=%s area=[%p,%p) mem=%p memsz=%lu mem_off=%lu",
                 to_string(vma_type), aligned_segvaddr.addr(), segvend.addr(),
                 segment_mem, static_cast<unsigned long>(map_memsz), 0UL);
@@ -495,7 +499,7 @@ namespace loader::elf {
                                          heap_res.error());
                 propagate_return(heap_res);
             }
-            loggers::ELFLOADER::INFO(
+            loggers::ELFLOADER::DEBUG(
                 "创建HEAP VMA: area=[%p,%p) mem=%p memsz=%lu",
                 heap_start.addr(), heap_start.addr(), heap_mem, 0UL);
             spec.heap_vaddr   = heap_start;

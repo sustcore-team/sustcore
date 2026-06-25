@@ -13,6 +13,7 @@
 #include <mem/vma.h>
 #include <object/memory.h>
 #include <object/perm.h>
+#include <object/vfile.h>
 #include <logger.h>
 #include <sustcore/errcode.h>
 
@@ -134,12 +135,21 @@ namespace {
 
 namespace cap {
     MemoryPayload::MemoryPayload(size_t memsz, bool shared, bool continuity,
-                                 MemoryGrowth growth)
+                                 MemoryGrowth growth,
+                                 util::owner<Capability *> file,
+                                 size_t file_offset)
         : memsz(memsz),
           shared(shared),
           continuity(continuity),
           growth(growth),
+          file(file),
+          file_offset(file_offset),
           phy_pages() {}
+
+    MemoryPayload::~MemoryPayload() {
+        delete file.get();
+        file = util::owner<Capability *>(nullptr);
+    }
 
     void MemoryPayload::destruct() {
         for (auto &page : phy_pages) {
@@ -153,7 +163,11 @@ namespace cap {
             return this;
         }
 
-        auto *cloned = new MemoryPayload(memsz, shared, continuity, growth);
+        auto cloned_file = file_backed()
+                               ? util::owner<Capability *>(file->clone())
+                               : util::owner<Capability *>(nullptr);
+        auto *cloned = new MemoryPayload(memsz, shared, continuity, growth,
+                                         cloned_file, file_offset);
         for (auto &page : phy_pages) {
             GFP::keep_page(page.second.addr, 1);
             page.second.refcount++;
@@ -184,6 +198,23 @@ namespace cap {
         propagate(page_res);
         PhyAddr paddr = page_res.value();
         memset(convert<KpaAddr>(paddr).addr(), 0, PAGESIZE);
+        if (file_backed()) {
+            cap::VFileObject file_obj(util::nnullforce(file.get()));
+            size_t page_file_offset = offvpn_to_offset(offvpn);
+            if (page_file_offset > static_cast<size_t>(-1) - file_offset) {
+                GFP::put_page(paddr, 1);
+                unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+            }
+            // Short reads leave the remaining zero-filled bytes in place, which
+            // matches file-backed mmap semantics for pages extending past EOF.
+            auto read_res = file_obj.read(file_offset + page_file_offset,
+                                          convert<KpaAddr>(paddr).addr(),
+                                          PAGESIZE);
+            if (!read_res.has_value()) {
+                GFP::put_page(paddr, 1);
+                propagate_return(read_res);
+            }
+        }
         phy_pages.insert_or_assign(offvpn, PhyPage{paddr, 1});
         loggers::PAGING::DEBUG(
             "MemoryPayload::ensure_page: mem=%p offvpn=%lu paddr=%p", this,

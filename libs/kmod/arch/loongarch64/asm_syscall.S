@@ -184,7 +184,7 @@ endpoint_reply:
     .global sys_mem_create
     .type sys_mem_create, @function
 sys_mem_create:
-    /* $a0 = __always_zero, $a1 = memsz, $a2 = shared, $a3 = continuity, $a4 = growth */
+    /* $a0 = file cap, $a1 = memsz, $a2 = shared, $a3 = continuity, $a4 = growth, $a5 = file offset */
     li.d $a7, SYS_MEM_CREATE
     do_syscall
 
@@ -324,4 +324,16 @@ sys_vfs_readlink:
     .type sys_vfs_mount, @function
 sys_vfs_mount:
     li.d $a7, SYS_VFS_MOUNT
+    do_syscall
+
+    .global sys_vfs_page_cache_stats
+    .type sys_vfs_page_cache_stats, @function
+sys_vfs_page_cache_stats:
+    li.d $a7, SYS_VFS_PAGE_CACHE_STATS
+    do_syscall
+
+    .global sys_time_now_ns
+    .type sys_time_now_ns, @function
+sys_time_now_ns:
+    li.d $a7, SYS_TIME_NOW_NS
     do_syscall

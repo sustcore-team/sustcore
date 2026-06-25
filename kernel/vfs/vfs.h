@@ -15,10 +15,12 @@
 #include <cap/cholder.h>
 #include <bio/blk.h>
 #include <logger.h>
+#include <spinlock.h>
 #include <sus/nonnull.h>
 #include <sus/owner.h>
 #include <sus/path.h>
 #include <sus/refcount.h>
+#include <sustcore/addr.h>
 #include <sustcore/errcode.h>
 #include <sustcore/files.h>
 #include <vfs/device.h>
@@ -77,7 +79,8 @@ public:
     }
     Result<util::refc_ptr<VINode>> get_vnode(inode_t inode_id);
     Result<void> invalidate_inode(inode_t inode_id);
-    void evict_inode(inode_t inode_id);
+    Result<void> evict_inode(inode_t inode_id);
+    Result<void> flush_file_pages();
     void on_death();
 };
 
@@ -85,10 +88,26 @@ class VINode : public util::refc<VINode> {
 public:
     static constexpr PayloadType IDENTIFIER = PayloadType::VFILE;
 
+    struct CachedFilePage {
+        PhyAddr paddr;
+        size_t valid = 0;
+        bool dirty = false;
+        bool active = false;
+        bool evicting = false;
+        bool invalidating = false;
+        VINode *owner = nullptr;
+        size_t page_index = 0;
+        CachedFilePage *prev = nullptr;
+        CachedFilePage *next = nullptr;
+        SpinLocker lock;
+    };
+
 private:
+
     util::owner<IINode *> _inode;
     util::refc_ptr<VFsDriver> _fsd;
     util::refc_ptr<VSuperblock> _vsb;
+    std::unordered_map<size_t, CachedFilePage> _file_pages;
 
 public:
     void on_death() {
@@ -96,6 +115,23 @@ public:
     }
 
     Result<void> invalidate();
+
+    [[nodiscard]]
+    Result<PhyAddr> cached_file_page(IFile &file, size_t page_index,
+                                     size_t *valid_len);
+    [[nodiscard]]
+    Result<size_t> read_cached_file(IFile &file, size_t offset, void *buf,
+                                    size_t len);
+    [[nodiscard]]
+    Result<size_t> write_cached_file(IFile &file, size_t offset,
+                                     const void *buf, size_t len);
+    [[nodiscard]]
+    Result<void> flush_file_pages();
+    [[nodiscard]]
+    Result<bool> evict_file_page();
+    [[nodiscard]]
+    bool has_file_pages() const noexcept;
+    void invalidate_file_pages() noexcept;
 
     constexpr IINode *inode() const {
         return _inode.get();
@@ -107,10 +143,17 @@ public:
         return *_vsb;
     }
 
-    constexpr VINode(util::owner<IINode *> inode, VFsDriver &fsd,
-                     VSuperblock &vsb)
+    VINode(util::owner<IINode *> inode, VFsDriver &fsd,
+           VSuperblock &vsb)
         : _inode(inode), _fsd(&fsd), _vsb(&vsb) {}
-    constexpr virtual ~VINode() {
+    virtual ~VINode() {
+        auto flush_res = flush_file_pages();
+        if (!flush_res.has_value()) {
+            loggers::VFS::ERROR("VINode 析构回写页缓存失败: inode=%u err=%s",
+                                _inode.get() == nullptr ? 0U : static_cast<unsigned>(_inode->inode_id()),
+                                to_cstring(flush_res.error()));
+        }
+        invalidate_file_pages();
         delete _inode;
     }
 };
@@ -271,6 +314,9 @@ public:
     static void init();
     static bool initialized();
     static VFS &inst();
+
+    static VFSPageCacheStats page_cache_stats() noexcept;
+    static void reset_page_cache_stats() noexcept;
 
     VFS() = default;
     ~VFS();

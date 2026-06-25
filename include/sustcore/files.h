@@ -67,6 +67,18 @@ struct NodeMeta {
     size_t inode;
 };
 
+struct VFSPageCacheStats {
+    size_t hits;
+    size_t misses;
+    size_t invalidations;
+    size_t writebacks;
+    size_t evictions;
+    size_t cached_pages;
+    size_t max_pages;
+    size_t backing_reads;
+    size_t backing_writes;
+};
+
 static_assert(sizeof(dir_entry_header) == sizeof(size_t),
               "dir_entry_header must match next_offset size");
 

@@ -16,6 +16,8 @@
 #include <mem/gfp.h>
 #include <mem/vma.h>
 #include <object/memory.h>
+#include <object/perm.h>
+#include <object/vfile.h>
 #include <syscall/memory.h>
 #include <cstring>
 
@@ -73,13 +75,40 @@ namespace {
 }  // namespace
 
 namespace syscall {
-    Result<CapIdx> mem_create(size_t memsz, bool shared, bool continuity,
-                              cap::MemoryGrowth growth) {
+    Result<CapIdx> mem_create(CapIdx file_cap, size_t memsz, bool shared,
+                              bool continuity, cap::MemoryGrowth growth,
+                              size_t file_offset) {
         if (shared && growth != cap::MemoryGrowth::FIXED) {
             unexpect_return(ErrCode::INVALID_PARAM);
         }
-        auto payload =
-            new cap::MemoryPayload(memsz, shared, continuity, growth);
+        util::owner<cap::Capability *> backing_file(nullptr);
+        if (cap::valid(file_cap)) {
+            if (shared) {
+                unexpect_return(ErrCode::NOT_SUPPORTED);
+            }
+            auto holder_res = current_holder();
+            propagate(holder_res);
+            auto file_cap_res = holder_res.value()->lookup(file_cap);
+            propagate(file_cap_res);
+            if (file_cap_res.value()->payload_as<VFile>() == nullptr) {
+                unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+            }
+            if (!file_cap_res.value()->imply(perm::vfile::READ)) {
+                unexpect_return(ErrCode::INSUFFICIENT_PERMISSIONS);
+            }
+            backing_file =
+                util::owner<cap::Capability *>(file_cap_res.value()->clone());
+            auto downgrade_res = backing_file->downgrade(perm::vfile::READ);
+            if (!downgrade_res.has_value()) {
+                delete backing_file.get();
+                propagate_return(downgrade_res);
+            }
+        } else if (file_offset != 0) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+
+        auto payload = new cap::MemoryPayload(memsz, shared, continuity, growth,
+                                              backing_file, file_offset);
         auto holder_res = current_holder();
         propagate(holder_res);
         auto insert_res = holder_res.value()->insert_to_free(payload);

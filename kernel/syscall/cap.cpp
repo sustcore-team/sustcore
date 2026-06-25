@@ -101,13 +101,6 @@ namespace syscall {
         loggers::SYSCALL::DEBUG("移除能力 capability idx=%lu, type=%s", idx,
                                  to_string(cap_res.value()->payload()->type_id()));
 
-        auto *memory = cap_res.value()->payload_as<cap::MemoryPayload>();
-        auto *tmm    = env::inst().tmm();
-        if (memory != nullptr && tmm != nullptr &&
-            tmm->has_memory_mapping(memory))
-        {
-            unexpect_return(ErrCode::BUSY);
-        }
         auto remove_res = holder_res.value()->remove(idx);
         propagate(remove_res);
         return true;

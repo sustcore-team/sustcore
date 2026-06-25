@@ -92,8 +92,9 @@ struct VMA {
     Type type                  = Type::NONE;
     Growth growth              = Growth::FIXED;
     TaskMemoryManager *tm      = nullptr;
-    /// 该 VMA 关联的 Memory payload. 所有 VMA 都必须持有有效 Memory. 
-    cap::MemoryPayload *memory = nullptr;
+    /// 该 VMA 持有的 Memory capability. 所有 VMA 都必须持有有效 Memory.
+    /// Capability 负责维护其指向的 Memory payload 生命周期.
+    util::owner<cap::Capability *> memory{nullptr};
     /// 该 VMA 映射时使用的权限位掩码. 
     Prot prot                  = 0;
     /// VMA 起始地址对应的 Memory 内偏移. 
@@ -105,7 +106,7 @@ struct VMA {
     /**
      * @brief 构造一个 Memory-backed VMA. 
      *
-     * 构造时会增加 memory 的引用计数, 析构时释放引用. 
+     * 构造时会创建 VMA 独立持有的 Memory capability, 析构时释放该 capability.
      *
      * @param tm 所属任务内存管理器. 
      * @param t VMA 类型. 
@@ -120,40 +121,50 @@ struct VMA {
         : type(t),
           growth(g),
           tm(tm),
-          memory(memory),
+          memory(util::owner(new cap::Capability(memory, 0))),
           prot(prot),
           mem_offset(mem_offset),
           varea(varea),
           list_head({}) {
         assert(memory != nullptr);
-        memory->keep();
     }
     /**
      * @brief 从已有 VMA 克隆元数据并绑定到指定 Memory. 
      *
-     * 用于 fork/COW 复制 VMA. 构造时会增加 memory 引用计数. 
+     * 用于 fork/COW 复制 VMA. 构造时会创建 VMA 独立持有的 Memory capability.
      */
     VMA(TaskMemoryManager *tm, Growth g, const VMA &other,
         cap::MemoryPayload *memory)
         : type(other.type),
           growth(g),
           tm(tm),
-          memory(memory),
+          memory(util::owner(new cap::Capability(memory, 0))),
           prot(other.prot),
           mem_offset(other.mem_offset),
           varea(other.varea),
           list_head({}) {
         assert(memory != nullptr);
-        memory->keep();
     }
-    constexpr VMA(VMA &&other) = delete;
+    VMA(const VMA &other)            = delete;
+    VMA &operator=(const VMA &other) = delete;
+    VMA(VMA &&other)                 = delete;
+    VMA &operator=(VMA &&other)      = delete;
     /**
-     * @brief 析构 VMA 并释放对 Memory payload 的引用. 
+     * @brief 析构 VMA 并释放持有的 Memory capability. 
      */
     ~VMA() {
         if (memory != nullptr) {
-            memory->release();
+            delete memory.get();
+            memory = util::owner<cap::Capability *>(nullptr);
         }
+    }
+
+    [[nodiscard]]
+    cap::MemoryPayload *memory_payload() const {
+        if (memory == nullptr) {
+            return nullptr;
+        }
+        return memory->payload_as<cap::MemoryPayload>();
     }
 
     [[nodiscard]]

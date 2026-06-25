@@ -51,6 +51,7 @@ struct VMAInfo {
 extern "C" {
 void sys_write_serial(size_t __always_zero, const char *str, size_t len);
 void sys_shutdown();
+uint64_t sys_time_now_ns();
 bool sys_pcb_kill(CapIdx pcb_cap, int exit_code);
 bool sys_pcb_map(CapIdx pcb_cap, CapIdx mem_cap, size_t offset, void *vaddr,
                  size_t sz, uint64_t protflg);
@@ -126,6 +127,8 @@ size_t sys_vfs_size(CapIdx file_cap);
 size_t sys_vfs_getdents(CapIdx dir_cap, void *buf, size_t buflen,
                         size_t offset);
 bool sys_vfs_sync(CapIdx capidx);
+bool sys_vfs_page_cache_stats(size_t __always_zero, VFSPageCacheStats *out,
+                              bool reset);
 
 CapIdx sys_cap_clone(CapIdx src);
 bool sys_cap_downgrade(CapIdx idx, uint64_t new_perm);
@@ -172,8 +175,8 @@ void endpoint_call(CapIdx endpoint, MsgPacket *sendmsg, MsgPacket *replymsg);
  */
 void endpoint_reply(CapIdx reply_cap, MsgPacket *replymsg);
 
-CapIdx sys_mem_create(size_t __always_zero, size_t memsz, bool shared,
-                      bool continuity, uint64_t growth);
+CapIdx sys_mem_create(CapIdx file_cap, size_t memsz, bool shared,
+                      bool continuity, uint64_t growth, size_t file_offset);
 bool sys_mem_map(CapIdx idx, void *vaddr, uint64_t rwx, uint64_t growth);
 bool sys_mem_unmap(CapIdx idx, void *vaddr);
 bool sys_mem_resize(CapIdx idx, size_t newsz);

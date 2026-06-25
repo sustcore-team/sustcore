@@ -29,8 +29,9 @@ namespace syscall {
      * @param growth 允许的增长/收缩方式. 
      * @return true 创建成功; false 创建失败. 
      */
-    Result<CapIdx> mem_create(size_t memsz, bool shared, bool continuity,
-                              cap::MemoryGrowth growth);
+    Result<CapIdx> mem_create(CapIdx file_cap, size_t memsz, bool shared,
+                              bool continuity, cap::MemoryGrowth growth,
+                              size_t file_offset);
     /**
      * @brief 取消当前进程中某 Memory 的映射. 
      *
