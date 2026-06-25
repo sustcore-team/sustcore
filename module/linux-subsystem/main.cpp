@@ -228,6 +228,21 @@ void dump_bsargv(size_t bsargc, const bsheader *const *bsargv) {
                     vaddr_view.vaddr.addr(), vaddr_view.vaddr_desc);
                 continue;
             }
+            case boot::TYPE_PATHEXP: {
+                BootstrapPathExplainView path_view{};
+                if (!bootstrap_parse_path_explain(view, path_view)) {
+                    printf(
+                        "bsargv[%u] = { type=TYPE_PATHEXP, size=%u, "
+                        "parse_error=true }\n",
+                        static_cast<unsigned>(i), record->size);
+                    continue;
+                }
+                printf(
+                    "bsargv[%u] = { type=TYPE_PATHEXP, size=%u, path_desc=%s }\n",
+                    static_cast<unsigned>(i), record->size,
+                    path_view.path_desc);
+                continue;
+            }
             default:
                 printf(
                     "bsargv[%u] = { type=%u, size=%u, raw_data=%p, "
@@ -395,6 +410,10 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
             return linux_sys_getcwd(reinterpret_cast<char *>(a0), a1);
         case __NR_exit: linux_sys_exit(a0); return 0;
         case __NR_close: return linux_sys_close(static_cast<int>(a0));
+        case __NR_dup: return linux_sys_dup(static_cast<int>(a0));
+        case __NR_dup3:
+            return linux_sys_dup3(static_cast<int>(a0), static_cast<int>(a1),
+                                  static_cast<int>(a2));
         case __NR_lseek:
             return linux_sys_lseek(static_cast<int>(a0), a1,
                                    static_cast<int>(a2));

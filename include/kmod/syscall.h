@@ -187,6 +187,7 @@ void *sbrk(ptrdiff_t increment);
 void exit(int exit_code);
 
 int kmod_fopen(const char *path, const char *options);
+int kmod_opendir(const char *path);
 size_t kmod_fread(int fd, void *buf, size_t len);
 size_t kmod_fwrite(int fd, const void *buf, size_t len);
 int kmod_mkdir(const char *path);

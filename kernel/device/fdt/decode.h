@@ -38,6 +38,7 @@ namespace fdt {
     constexpr const char *INTERRUPT_CELLS_PROP  = "#interrupt-cells";
     constexpr const char *CPU_MAP_NODE          = "cpu-map";
     constexpr const char *RISCV_NDEV_PROP       = "riscv,ndev";
+    constexpr const char *STDOUT_PATH_PROP      = "stdout-path";
     constexpr const char *LOONGARCH_CPUIC_COMPATIBLE =
         "loongson,cpu-interrupt-controller";
 
@@ -48,6 +49,8 @@ namespace fdt {
 
     constexpr const char *RESERVED_MEMORY_PATH = "/reserved-memory";
     constexpr const char *CPUS_PATH            = "/cpus";
+    constexpr const char *CHOSEN_PATH          = "/chosen";
+    constexpr const char *ALIASES_PATH         = "/aliases";
 
     [[nodiscard]]
     std::optional<driver::IrqTrigger> decode_trigger_cell(

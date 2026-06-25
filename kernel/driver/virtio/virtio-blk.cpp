@@ -257,7 +257,7 @@ namespace virtio {
         propagate(lookup_res);
         auto &dircap = *lookup_res.value();
 
-        auto mkres = vfs.mkfile(dircap, "blk", flags::O_READ, holder());
+        auto mkres = vfs.mkfile(dircap, "vblk", flags::O_READ, holder());
         propagate(mkres);
 
         lookup_res = holder().lookup(mkres.value());

@@ -37,17 +37,11 @@ namespace devfs {
     }
 
     Result<size_t> CharDevFile::read(off_t offset, void *buf, size_t len) {
-        if (offset != 0) {
-            unexpect_return(ErrCode::INVALID_PARAM);
-        }
         return read(buf, len);
     }
 
     Result<size_t> CharDevFile::write(off_t offset, const void *buf,
                                       size_t len) {
-        if (offset != 0) {
-            unexpect_return(ErrCode::INVALID_PARAM);
-        }
         return write(buf, len);
     }
 

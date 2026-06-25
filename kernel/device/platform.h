@@ -15,6 +15,8 @@
 #include <driver/base.h>
 #include <sus/rtti.h>
 
+#include <string>
+
 namespace device {
     enum class PlatformType {
         RISCV64,
@@ -49,7 +51,17 @@ namespace device {
             }
         }
 
+        [[nodiscard]]
+        const std::string &stdout_device_dir() const noexcept {
+            return _stdout_device_dir;
+        }
+
+        void set_stdout_device_dir(std::string path) noexcept {
+            _stdout_device_dir = std::move(path);
+        }
+
     private:
         driver::IShutdownDriver *_shutdown_driver = nullptr;
+        std::string _stdout_device_dir{};
     };
 }  // namespace device

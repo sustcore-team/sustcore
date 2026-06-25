@@ -70,8 +70,17 @@ namespace task {
         }
 
         [[nodiscard]]
-        bool valid_cwd_path(const char *cwd_path) noexcept {
-            return cwd_path != nullptr && cwd_path[0] != '\0';
+        bool valid_path_explain(const char *path_desc) noexcept {
+            if (path_desc == nullptr || path_desc[0] != '#') {
+                return false;
+            }
+            if (strncmp(path_desc, "#cwd:", 5) == 0) {
+                return path_desc[5] == '/';
+            }
+            if (strncmp(path_desc, "#stdout:", 8) == 0) {
+                return path_desc[8] == '/';
+            }
+            return false;
         }
 
         [[nodiscard]]
@@ -175,10 +184,10 @@ namespace task {
             {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
-        } else if (header->type == boot::TYPE_CWDPATH) {
-            const char *cwd_path = nullptr;
-            if (!bootstrap_parse_cwd_path(view, cwd_path) ||
-                !valid_cwd_path(cwd_path))
+        } else if (header->type == boot::TYPE_PATHEXP) {
+            BootstrapPathExplainView path_view{};
+            if (!bootstrap_parse_path_explain(view, path_view) ||
+                !valid_path_explain(path_view.path_desc))
             {
                 unexpect_return(ErrCode::INVALID_PARAM);
             }
@@ -222,6 +231,17 @@ namespace task {
                strlen(vaddr_desc) + 1);
         spec.bsargv.push_back(make_bootstrap_record(
             boot::TYPE_VADDREXP, payload.data(), payload.size()));
+        void_return();
+    }
+
+    Result<void> TaskManager::append_bootstrap_path_explain_record(
+        TaskSpec &spec, const char *path_desc) {
+        if (!valid_path_explain(path_desc)) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+
+        spec.bsargv.push_back(make_bootstrap_record(
+            boot::TYPE_PATHEXP, path_desc, strlen(path_desc) + 1));
         void_return();
     }
 

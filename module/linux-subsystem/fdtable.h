@@ -39,6 +39,7 @@ public:
 
 // fd table operations (protected by FdTableLock)
 int         alloc_fd(CapIdx cap);
+bool        bind_fd(int fd, CapIdx cap);
 void        free_fd(int fd);
 FdEntry*    lookup_fd(int fd);       // returns nullptr if out of bounds or cap==null
 CapIdx      fd_to_cap(int fd);        // returns cap::error on invalid

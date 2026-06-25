@@ -17,6 +17,7 @@
 #include <device/fdt/decode.h>
 #include <device/fdt/internal.h>
 #include <driver/model.h>
+#include <logger.h>
 
 namespace {
     constexpr driver::FDTDeviceId LOONGARCH_CPUIC_IDS[] = {
@@ -195,17 +196,10 @@ namespace la64::fdt {
                 auto parent_phandle_res =
                     _provider->resolve_interrupt_parent(fdt_node->raw_node());
                 if (!parent_phandle_res.has_value()) {
+                    loggers::DEVICE::ERROR("无法解析节点 %s 的 interrupt parent", node.name());
                     unexpect_return(parent_phandle_res.error());
                 }
-                auto virq_values_res =
-                    _provider->parse_interrupt_virqs_view(
-                        fdt_node->raw_node(), model.interrupt());
-                propagate(virq_values_res);
                 std::vector<util::owner<device::VIrqResource *>> virqs;
-                virqs.reserve(virq_values_res.value().size());
-                for (auto virq : virq_values_res.value()) {
-                    virqs.push_back(device::VIrqResource::make(virq));
-                }
 
                 auto device_owner_res = ::la64::PlaticChip::create(
                     driver::DriverBase::DevRes(

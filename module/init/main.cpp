@@ -51,6 +51,28 @@ CapIdx bootstrap_root_dir() {
     return ok && found ? cap : cap::null;
 }
 
+[[nodiscard]]
+const char *bootstrap_stdout_device_dir() {
+    const char *path = nullptr;
+    bool found       = false;
+    bool ok          = bootstrap_foreach_record(
+        __bsargv, __bsargc, [&](const BootstrapRecordView &view) {
+            if (found || view.header->type != boot::TYPE_PATHEXP) {
+                return;
+            }
+            BootstrapPathExplainView path_view{};
+            if (!bootstrap_parse_path_explain(view, path_view)) {
+                return;
+            }
+            if (strncmp(path_view.path_desc, "#stdout:", 8) != 0) {
+                return;
+            }
+            path  = path_view.path_desc + 8;
+            found = true;
+        });
+    return ok && found ? path : nullptr;
+}
+
 struct SpawnRequest {
     const char *path;
     const char *dispname;
@@ -291,7 +313,7 @@ void create_blk_linkings(CapIdx root_dir_cap) {
         return;
     }
 
-    const char *sd_paths[] = {"/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"};
+    const char *vd_paths[] = {"/dev/vda", "/dev/vdb", "/dev/vdc", "/dev/vdd"};
     auto dev_names         = get_alldents(sysdev_cap);
     size_t blk_count       = 0;
 
@@ -307,25 +329,24 @@ void create_blk_linkings(CapIdx root_dir_cap) {
         }
 
         auto child_names = get_alldents(device_dir);
-        bool has_blk     = false;
+        bool has_vblk    = false;
         for (const auto &child_name : child_names) {
-            if (child_name == "blk") {
-                has_blk = true;
+            if (child_name == "vblk") {
+                has_vblk = true;
                 break;
             }
         }
         sys_cap_remove(device_dir);
-        if (!has_blk) {
+        if (!has_vblk) {
             continue;
         }
 
-        char source_path[512]{};
-        snprintf(source_path, sizeof(source_path), "/sys/dev/%s/blk",
-                 device_name.c_str());
-        if (force_symlink(sd_paths[blk_count], source_path)) {
-            printf("init: link %s -> %s\n", sd_paths[blk_count], source_path);
+        std::string source_path = "/sys/dev/" + device_name + "/vblk";
+        if (force_symlink(vd_paths[blk_count], source_path.c_str())) {
+            printf("init: link %s -> %s\n", vd_paths[blk_count],
+                   source_path.c_str());
         } else {
-            printf("init: create %s failed\n", sd_paths[blk_count]);
+            printf("init: create %s failed\n", vd_paths[blk_count]);
         }
         ++blk_count;
     }
@@ -339,9 +360,9 @@ void mount_testing_ext4(CapIdx root_dir_cap) {
         return;
     }
 
-    CapIdx blk_cap = sys_vfs_open(root_dir_cap, "dev/sda", flags::O_READ);
+    CapIdx blk_cap = sys_vfs_open(root_dir_cap, "dev/vda", flags::O_READ);
     if (blk_cap == cap::null || blk_cap == cap::error) {
-        printf("init: open /dev/sda failed\n");
+        printf("init: open /dev/vda failed\n");
         return;
     }
 
@@ -360,6 +381,20 @@ void mount_testing_ext4(CapIdx root_dir_cap) {
         printf("init: mount /testing failed\n");
     }
     sys_cap_remove(blk_cap);
+}
+
+void setup_stdout_link() {
+    const char *stdout_device_dir = bootstrap_stdout_device_dir();
+    if (stdout_device_dir == nullptr || stdout_device_dir[0] == '\0') {
+        return;
+    }
+
+    std::string stdout_target = std::string(stdout_device_dir) + "/serial";
+    if (force_symlink("/dev/stdout", stdout_target.c_str())) {
+        printf("init: link /dev/stdout -> %s\n", stdout_target.c_str());
+    } else {
+        printf("init: create /dev/stdout failed\n");
+    }
 }
 
 void run_requests(const std::vector<SpawnRequest> &requests,
@@ -430,6 +465,7 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
     }
 
     create_blk_linkings(root_dir_cap);
+    setup_stdout_link();
     mount_testing_ext4(root_dir_cap);
 
     std::vector<SpawnRequest> requests{
@@ -470,17 +506,28 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
         },
     };
 
-    // try write file /sys/dev/serial@10000000/serial
-    // fd = kmod_fopen("/sys/dev/serial@10000000/serial", "w");
-    // if (fd >= 0) {
-    //     kmod_fwrite(fd, "Hello, World!\n", 14);
-    //     printf(
-    //         "init: write \"Hello, World!\" to "
-    //         "/sys/dev/serial@10000000/serial\n");
-    //     kmod_fclose(fd);
-    // } else {
-    //     printf("init: can't open `/sys/dev/serial@10000000/serial` !\n");
-    // }
+    // try write file /sys/dev/serial@1fe001e0/serial
+    int fd = kmod_fopen("/sys/dev/serial@1fe001e0/serial", "w");
+    if (fd >= 0) {
+        kmod_fwrite(fd, "Hello, World!\n", 14);
+        printf(
+            "init: write \"Hello, World!\" to "
+            "/sys/dev/serial@1fe001e0/serial\n");
+        kmod_fclose(fd);
+    } else {
+        printf("init: can't open `/sys/dev/serial@1fe001e0/serial` !\n");
+    }
+
+    fd = kmod_fopen("/dev/stdout", "w");
+    if (fd >= 0) {
+        kmod_fwrite(fd, "Hello, World!\n", 14);
+        printf(
+            "init: write \"Hello, World!\" to "
+            "/dev/stdout\n");
+        kmod_fclose(fd);
+    } else {
+        printf("init: can't open `/dev/stdout` !\n");
+    }
 
     printf("init: 初始化, 开始启动\n");
     run_requests(requests, root_dir_cap);

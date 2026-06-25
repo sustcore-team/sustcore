@@ -10,6 +10,8 @@
  */
 
 #include <logger.h>
+#include <fdtable.h>
+#include <file.h>
 #include <prm.h>
 #include <prog.h>
 #include <syscall.h>
@@ -22,6 +24,7 @@
 namespace {
     constexpr size_t INVALID_VALUE      = 0xFFFF'FFFF'FFFF'FFFF;
     constexpr size_t UTSNAME_FIELD_SIZE = 65;
+    constexpr int LINUX_O_WRONLY        = 1;
 
     struct linux_utsname {
         char sysname[UTSNAME_FIELD_SIZE];
@@ -167,14 +170,24 @@ void init_prog_data(size_t bsargc, const bsheader *bsargv[]) {
             continue;
         }
 
-        if (view.header->type == boot::TYPE_CWDPATH) {
-            const char *cwd_path = nullptr;
-            if (!bootstrap_parse_cwd_path(view, cwd_path)) {
+        if (view.header->type == boot::TYPE_PATHEXP) {
+            BootstrapPathExplainView path_view{};
+            if (!bootstrap_parse_path_explain(view, path_view)) {
                 continue;
             }
-            __prog_cwd = cwd_path;
+            if (strncmp(path_view.path_desc, "#cwd:", 5) == 0) {
+                __prog_cwd = path_view.path_desc + 5;
+            }
         }
     }
+
+    if (__prog_cwd_dir_cap == cap::null || __prog_cwd_dir_cap == cap::error) {
+        (void)linux_opendir_fd(__prog_cwd.c_str(), CWD_FD);
+        __prog_cwd_dir_cap = fd_to_cap(CWD_FD);
+    }
+
+    (void)linux_open_fd("/dev/stdout", 1, LINUX_O_WRONLY);
+    (void)linux_open_fd("/dev/stdout", 2, LINUX_O_WRONLY);
 }
 
 size_t linux_sys_brk(size_t newbrk) {

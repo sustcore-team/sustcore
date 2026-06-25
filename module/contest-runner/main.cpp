@@ -61,8 +61,11 @@ namespace {
     }
 
     [[nodiscard]]
-    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap, const char *cwd_path) {
-        if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error) {
+    CapIdx spawn_linux_test(int fd, CapIdx root_dir_cap, CapIdx cwd_dir_cap,
+                            const char *cwd_path) {
+        if (fd < 0 || root_dir_cap == cap::null || root_dir_cap == cap::error ||
+            cwd_dir_cap == cap::null || cwd_dir_cap == cap::error)
+        {
             return cap::error;
         }
         if (cwd_path == nullptr || cwd_path[0] == '\0') {
@@ -73,14 +76,7 @@ namespace {
         if (child_root_cap == cap::null || child_root_cap == cap::error) {
             return cap::error;
         }
-        int cwd_fd = kmod_fopen(cwd_path, "r");
-        if (cwd_fd < 0) {
-            sys_cap_remove(child_root_cap);
-            return cap::error;
-        }
-        CapIdx cwd_cap = kmod_getcap(cwd_fd);
-        CapIdx child_cwd_dir_cap = sys_cap_clone(cwd_cap);
-        kmod_fclose(cwd_fd);
+        CapIdx child_cwd_dir_cap = sys_cap_clone(cwd_dir_cap);
         if (child_cwd_dir_cap == cap::null || child_cwd_dir_cap == cap::error) {
             sys_cap_remove(child_root_cap);
             return cap::error;
@@ -153,18 +149,24 @@ namespace {
             .desc = "#parent",
         };
 
-        const size_t cwd_path_len = strlen(cwd_path) + 1;
-        alignas(bsheader) char cwd_bootstrap[sizeof(bsheader) + 256]{};
-        if (cwd_path_len > sizeof(cwd_bootstrap) - sizeof(bsheader)) {
+        char cwd_desc[256]{};
+        int cwd_desc_len = snprintf(cwd_desc, sizeof(cwd_desc), "#cwd:%s",
+                                    cwd_path);
+        if (cwd_desc_len <= 0 ||
+            static_cast<size_t>(cwd_desc_len) >= sizeof(cwd_desc))
+        {
             sys_cap_remove(child_root_cap);
             sys_cap_remove(child_cwd_dir_cap);
             sys_cap_remove(child_parent_pcb_cap);
             return cap::error;
         }
+
+        alignas(bsheader) char cwd_bootstrap[sizeof(bsheader) + sizeof(cwd_desc)]{};
         auto *cwd_header = reinterpret_cast<bsheader *>(cwd_bootstrap);
-        cwd_header->size = sizeof(bsheader) + cwd_path_len;
-        cwd_header->type = boot::TYPE_CWDPATH;
-        memcpy(cwd_bootstrap + sizeof(bsheader), cwd_path, cwd_path_len);
+        cwd_header->size = sizeof(bsheader) + static_cast<size_t>(cwd_desc_len) + 1;
+        cwd_header->type = boot::TYPE_PATHEXP;
+        memcpy(cwd_bootstrap + sizeof(bsheader), cwd_desc,
+               static_cast<size_t>(cwd_desc_len) + 1);
 
         CapIdx initial_caps[] = {child_root_cap, child_cwd_dir_cap,
                                  child_parent_pcb_cap, cap::null};
@@ -184,7 +186,7 @@ namespace {
     }
 
     void run_testcase(const char *root, const char *testcase,
-                      CapIdx root_dir_cap,
+                      CapIdx root_dir_cap, CapIdx cwd_dir_cap,
                       TestRunStats &stats) {
         ++stats.total;
 
@@ -199,7 +201,7 @@ namespace {
             return;
         }
 
-        CapIdx child_pcb = spawn_linux_test(fd, root_dir_cap, root);
+        CapIdx child_pcb = spawn_linux_test(fd, root_dir_cap, cwd_dir_cap, root);
         kmod_fclose(fd);
         if (child_pcb == cap::null || child_pcb == cap::error) {
             ++stats.failed;
@@ -230,10 +232,26 @@ namespace {
     [[nodiscard]]
     TestRunStats run_suite(const char *root, CapIdx root_dir_cap) {
         TestRunStats stats{};
+        int cwd_fd = kmod_opendir(root);
+        if (cwd_fd < 0) {
+            printf("contest-runner: opendir failed %s\n", root);
+            stats.total  = 0;
+            stats.failed = 0;
+            return stats;
+        }
+        CapIdx cwd_dir_cap = kmod_getcap(cwd_fd);
+        if (cwd_dir_cap == cap::null || cwd_dir_cap == cap::error) {
+            printf("contest-runner: cwd cap invalid %s\n", root);
+            kmod_fclose(cwd_fd);
+            return stats;
+        }
+
         printf("contest-runner: suite begin %s\n", root);
         for (size_t i = 0; basic::testcases[i] != nullptr; ++i) {
-            run_testcase(root, basic::testcases[i], root_dir_cap, stats);
+            run_testcase(root, basic::testcases[i], root_dir_cap, cwd_dir_cap,
+                         stats);
         }
+        kmod_fclose(cwd_fd);
         printf("contest-runner: suite done %s total=%lu passed=%lu failed=%lu\n",
                root, static_cast<unsigned long>(stats.total),
                static_cast<unsigned long>(stats.passed),

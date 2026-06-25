@@ -253,6 +253,9 @@ namespace task {
         [[nodiscard]]
         Result<void> append_bootstrap_vaddr_explain_record(
             TaskSpec &spec, VirAddr vaddr, const char *vaddr_desc);
+        [[nodiscard]]
+        Result<void> append_bootstrap_path_explain_record(
+            TaskSpec &spec, const char *path_desc);
         /**
          * @brief 复制启动缓冲区、预加载并装载 ELF 到 TaskSpec.
          */

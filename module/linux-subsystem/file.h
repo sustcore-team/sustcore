@@ -16,6 +16,10 @@
 size_t linux_sys_write(size_t fd, const void *buf, size_t len);
 size_t linux_sys_read(int fd, void *buf, size_t count);
 size_t linux_sys_close(int fd);
+size_t linux_sys_dup(int oldfd);
+size_t linux_sys_dup3(int oldfd, int newfd, int flags);
+size_t linux_open_fd(const char *pathname, int fd, int flags);
+size_t linux_opendir_fd(const char *pathname, int fd);
 size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode);
 size_t linux_sys_lseek(int fd, size_t offset, int whence);
 size_t linux_sys_getcwd(char *buf, size_t size);

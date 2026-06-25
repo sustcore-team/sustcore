@@ -10,6 +10,7 @@
  */
 
 #include <cap/permission.h>
+#include <device/model.h>
 #include <elf.h>
 #include <env.h>
 #include <guard.h>
@@ -959,6 +960,36 @@ namespace task {
             header->type = boot::TYPE_CAPEXP;
             memcpy(bsargv.back().bytes.data() + sizeof(bsheader),
                    payload.data(), payload.size());
+        }
+        {
+            constexpr char CWD_DESC[] = "#cwd:/";
+            bsargv.push_back(TaskSpec::BootstrapRecordData{
+                .type  = boot::TYPE_PATHEXP,
+                .bytes = std::vector<char>(sizeof(bsheader) + sizeof(CWD_DESC)),
+            });
+            auto *header =
+                reinterpret_cast<bsheader *>(bsargv.back().bytes.data());
+            header->size = bsargv.back().bytes.size();
+            header->type = boot::TYPE_PATHEXP;
+            memcpy(bsargv.back().bytes.data() + sizeof(bsheader), CWD_DESC,
+                   sizeof(CWD_DESC));
+        }
+        auto *platform = device::DeviceModel::inst().platform();
+        if (platform != nullptr && !platform->stdout_device_dir().empty()) {
+            char stdout_desc[256]{};
+            snprintf(stdout_desc, sizeof(stdout_desc), "#stdout:%s",
+                     platform->stdout_device_dir().c_str());
+            bsargv.push_back(TaskSpec::BootstrapRecordData{
+                .type  = boot::TYPE_PATHEXP,
+                .bytes = std::vector<char>(sizeof(bsheader) +
+                                           strlen(stdout_desc) + 1),
+            });
+            auto *header =
+                reinterpret_cast<bsheader *>(bsargv.back().bytes.data());
+            header->size = bsargv.back().bytes.size();
+            header->type = boot::TYPE_PATHEXP;
+            memcpy(bsargv.back().bytes.data() + sizeof(bsheader), stdout_desc,
+                   strlen(stdout_desc) + 1);
         }
         auto loaded_spec_res = load_task_spec_impl(
             *this, &TaskManager::load_task_spec, image_res.value(), holder,

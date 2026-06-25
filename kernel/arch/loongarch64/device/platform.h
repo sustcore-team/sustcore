@@ -17,6 +17,8 @@
 #include <sus/owner.h>
 #include <sus/units.h>
 
+#include <utility>
+
 namespace la64 {
     class LoongArch64Platform : public device::Platform {
     public:

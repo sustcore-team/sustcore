@@ -33,6 +33,29 @@
 
 namespace {
     constexpr uint64_t LOONGARCH_TIMER_FREQ_HZ = 100000000ULL;
+
+    [[nodiscard]]
+    std::string trim_stdout_path_suffix(std::string path) {
+        auto colon = path.find(':');
+        if (colon != std::string::npos) {
+            path.resize(colon);
+        }
+        return path;
+    }
+
+    [[nodiscard]]
+    bool node_is_serial_candidate(const ::fdt::Node &node) {
+        auto compat_it = node.properties.find("compatible");
+        if (compat_it == node.properties.end()) {
+            return false;
+        }
+        for (const auto &compat : compat_it->second->as_string_list()) {
+            if (compat == "ns16550a") {
+                return true;
+            }
+        }
+        return false;
+    }
 }  // namespace
 
 namespace fdt {
@@ -57,6 +80,13 @@ namespace fdt {
     Result<std::vector<phandle_t>> interrupt_parent_phandles_for_node(
         const FDTProvider &provider, const Node &node) {
         std::vector<phandle_t> parents;
+
+        if (has_property(node, INTC_PROP)) {
+            auto direct_parent = provider.maybe_interrupt_parent(node);
+            if (direct_parent.has_value()) {
+                parents.push_back(direct_parent.value());
+            }
+        }
 
         auto ext_refs_res = provider.parse_interrupts_extended_view(node);
         if (ext_refs_res.has_value()) {
@@ -528,6 +558,11 @@ namespace fdt {
 
     Result<std::vector<FDTProvider::InterruptRef>>
     FDTProvider::parse_interrupts(const Node &node) const {
+        auto prop_it = node.properties.find(INTERRUPTS_PROP);
+        if (prop_it == node.properties.end()) {
+            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
+        }
+
         auto parent_res = resolve_interrupt_parent(node);
         propagate(parent_res);
         phandle_t parent_phandle = parent_res.value();
@@ -535,11 +570,6 @@ namespace fdt {
         auto cell_count_res = interrupt_cells_for_controller(parent_phandle);
         propagate(cell_count_res);
         size_t cell_count = cell_count_res.value();
-
-        auto prop_it = node.properties.find(INTERRUPTS_PROP);
-        if (prop_it == node.properties.end()) {
-            unexpect_return(ErrCode::ENTRY_NOT_FOUND);
-        }
 
         auto cells = parse_u32_cells(*prop_it->second);
         if (cells.empty() || cells.size() % cell_count != 0) {
@@ -749,18 +779,64 @@ namespace fdt {
         }
 
         auto freq = units::frequency::from_hz(timebase_freq);
-        model.set_platform(util::owner<device::Platform *>(
-            new riscv::Riscv64Platform(freq)));
+        auto platform_owner =
+            util::owner<device::Platform *>(new riscv::Riscv64Platform(freq));
+        model.set_platform(std::move(platform_owner));
         loggers::DEVICE::INFO("已创建 Riscv64Platform, timebase-frequency=%lluHz",
                               static_cast<unsigned long long>(freq.to_hz()));
 #elif defined(__ARCH_loongarch64__)
         auto freq = units::frequency::from_hz(LOONGARCH_TIMER_FREQ_HZ);
-        model.set_platform(util::owner<device::Platform *>(
-            new la64::LoongArch64Platform(freq)));
+        auto platform_owner =
+            util::owner<device::Platform *>(new la64::LoongArch64Platform(freq));
+        model.set_platform(std::move(platform_owner));
         loggers::DEVICE::INFO(
             "已创建 LoongArch64Platform, timer-frequency=%lluHz",
             static_cast<unsigned long long>(freq.to_hz()));
 #endif
+
+        auto *platform = model.platform();
+        if (platform == nullptr) {
+            return;
+        }
+
+        auto *chosen_node = _config.get_node_by_path(CHOSEN_PATH);
+        if (chosen_node == nullptr) {
+            return;
+        }
+        auto stdout_it = chosen_node->properties.find(STDOUT_PATH_PROP);
+        if (stdout_it == chosen_node->properties.end()) {
+            return;
+        }
+
+        auto stdout_path = trim_stdout_path_suffix(stdout_it->second->as_string());
+        if (stdout_path.empty()) {
+            return;
+        }
+
+        Node *target = nullptr;
+        if (stdout_path[0] == '/') {
+            target = _config.get_node_by_path(stdout_path);
+        } else {
+            auto *aliases_node = _config.get_node_by_path(ALIASES_PATH);
+            if (aliases_node != nullptr) {
+                auto alias_it = aliases_node->properties.find(stdout_path);
+                if (alias_it != aliases_node->properties.end()) {
+                    auto resolved_path =
+                        trim_stdout_path_suffix(alias_it->second->as_string());
+                    if (!resolved_path.empty() && resolved_path[0] == '/') {
+                        target = _config.get_node_by_path(resolved_path);
+                    }
+                }
+            }
+        }
+
+        if (target == nullptr || !node_is_serial_candidate(*target)) {
+            return;
+        }
+
+        std::string stdout_device_dir = "/sys/dev/";
+        stdout_device_dir += target->name;
+        platform->set_stdout_device_dir(std::move(stdout_device_dir));
     }
 
     void FDTProvider::register_cpus(device::DeviceModel &model) const {
@@ -1048,6 +1124,24 @@ namespace fdt {
             panic("中断控制器拓扑排序失败");
         }
         auto ordered = std::move(ordered_res.value());
+
+        loggers::DEVICE::INFO("IRQ 控制器拓扑序列表 begin count=%u",
+                              static_cast<unsigned>(ordered.size()));
+        for (size_t index = 0; index < ordered.size(); ++index) {
+            auto *device_node = ordered[index];
+            if (device_node == nullptr) {
+                loggers::DEVICE::INFO("IRQ topo[%u]: <null>",
+                                      static_cast<unsigned>(index));
+                continue;
+            }
+            auto *fdt_node = static_cast<FDTDeviceNode *>(device_node);
+            loggers::DEVICE::INFO(
+                "IRQ topo[%u]: node=%s phandle=%u",
+                static_cast<unsigned>(index),
+                fdt_node->raw_node().name.c_str(),
+                static_cast<unsigned>(fdt_node->raw_node().phandle));
+        }
+        loggers::DEVICE::INFO("IRQ 控制器拓扑序列表 end");
 
         for (auto *device_node : ordered) {
             if (device_node == nullptr) {

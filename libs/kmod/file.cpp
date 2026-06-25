@@ -232,6 +232,30 @@ int kmod_fopen(const char *path, const char *options) {
     return fd;
 }
 
+int kmod_opendir(const char *path) {
+    auto base = resolve_open_base(path);
+    if (base.cap == cap::null || base.relpath == nullptr ||
+        *base.relpath == '\0')
+    {
+        return -1;
+    }
+
+    int fd = alloc_fd();
+    if (fd < 0) {
+        return -1;
+    }
+
+    CapIdx cap = sys_vfs_opendir(base.cap, base.relpath, flags::O_READ);
+    if (cap == cap::error || cap == cap::null) {
+        g_files[fd] = {};
+        return -1;
+    }
+
+    g_files[fd].cap    = cap;
+    g_files[fd].offset = 0;
+    return fd;
+}
+
 size_t kmod_fread(int fd, void *buf, size_t len) {
     auto *file = lookup_fd(fd);
     if (file == nullptr || buf == nullptr) {

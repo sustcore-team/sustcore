@@ -65,6 +65,13 @@ namespace {
         std::string relative_path{};
     };
 
+    enum class ResolvedNodeType {
+        FILE,
+        DIRECTORY,
+        MISSING,
+        ERROR,
+    };
+
     DirFdState g_dir_fd_states[MAX_DIR_FDS]{};
 
     [[nodiscard]]
@@ -191,10 +198,24 @@ namespace {
             return false;
         }
 
-        if (fd_to_cap(CWD_FD) != cap::error) {
-            free_fd(CWD_FD);
+        auto current_cap = fd_to_cap(CWD_FD);
+        auto *entry      = lookup_fd(CWD_FD);
+        auto *state      = find_dir_fd_state(CWD_FD);
+        if (current_cap == __prog_cwd_dir_cap && entry != nullptr &&
+            state != nullptr && state->abs_path != nullptr &&
+            *state->abs_path == __prog_cwd)
+        {
+            entry->offset = 0;
+            state->next_index = 0;
+            state->pinned     = true;
+            return true;
         }
-        auto *entry = lookup_fd(CWD_FD);
+
+        if (!bind_fd(CWD_FD, __prog_cwd_dir_cap)) {
+            return false;
+        }
+
+        entry = lookup_fd(CWD_FD);
         if (entry == nullptr) {
             return false;
         }
@@ -336,6 +357,74 @@ namespace {
         return ensure_cwd_fd_bound();
     }
 
+    [[nodiscard]]
+    ResolvedNodeType stat_resolved_path(const ResolvedPath &resolved,
+                                        NodeMeta &meta) {
+        if (resolved.parent_cap == cap::null || resolved.parent_cap == cap::error ||
+            resolved.relative_path.empty())
+        {
+            return ResolvedNodeType::ERROR;
+        }
+        if (!sys_vfs_stat(resolved.parent_cap, resolved.relative_path.c_str(),
+                          &meta))
+        {
+            return ResolvedNodeType::MISSING;
+        }
+        switch (meta.type) {
+            case EntryType::DIR:  return ResolvedNodeType::DIRECTORY;
+            case EntryType::FILE:
+            case EntryType::SYMLINK:
+                return ResolvedNodeType::FILE;
+            default: return ResolvedNodeType::ERROR;
+        }
+    }
+
+    void copy_dir_fd_state(int oldfd, int newfd, bool pinned) {
+        auto *old_state = find_dir_fd_state(oldfd);
+        if (old_state == nullptr || old_state->abs_path == nullptr) {
+            clear_dir_fd_state(newfd);
+            return;
+        }
+
+        auto register_res =
+            register_dir_fd_state(newfd, *old_state->abs_path, pinned);
+        if (register_res == static_cast<size_t>(-1)) {
+            return;
+        }
+        auto *new_state = find_dir_fd_state(newfd);
+        if (new_state != nullptr) {
+            new_state->next_index = old_state->next_index;
+            new_state->pinned     = pinned;
+        }
+    }
+
+    size_t bind_open_result(int fd, CapIdx cap, size_t offset,
+                            const std::string *dir_path, bool pinned) {
+        if (fd < 0 || fd >= MAX_FDS) {
+            if (cap != cap::null && cap != cap::error) {
+                sys_cap_remove(cap);
+            }
+            return -EBADF;
+        }
+
+        clear_dir_fd_state(fd);
+        if (!bind_fd(fd, cap)) {
+            if (cap != cap::null && cap != cap::error) {
+                sys_cap_remove(cap);
+            }
+            return -EBADF;
+        }
+        set_fd_offset(fd, offset);
+        if (dir_path != nullptr &&
+            register_dir_fd_state(fd, *dir_path, pinned) ==
+                static_cast<size_t>(-1))
+        {
+            free_fd(fd);
+            return -EMFILE;
+        }
+        return static_cast<size_t>(fd);
+    }
+
     size_t do_open_resolved(const ResolvedPath &resolved, int flags) {
         if (resolved.parent_cap == cap::null || resolved.parent_cap == cap::error ||
             resolved.relative_path.empty())
@@ -345,27 +434,29 @@ namespace {
 
         flags::oflg_t sustcore_flags = linux_oflags_to_sustcore(flags);
         bool want_directory          = (flags & LINUX_O_DIRECTORY) != 0;
-        CapIdx file_cap              = want_directory
-                                           ? sys_vfs_opendir(resolved.parent_cap,
-                                                             resolved.relative_path.c_str(),
-                                                             sustcore_flags)
-                                           : sys_vfs_open(resolved.parent_cap,
-                                                          resolved.relative_path.c_str(),
-                                                          sustcore_flags);
-        if (file_cap == cap::null || file_cap == cap::error) {
-            if (!want_directory) {
-                auto dir_cap = sys_vfs_opendir(resolved.parent_cap,
-                                               resolved.relative_path.c_str(),
-                                               sustcore_flags);
-                if (dir_cap != cap::null && dir_cap != cap::error) {
-                    want_directory = true;
-                    file_cap       = dir_cap;
-                }
-            }
+        NodeMeta meta{};
+        auto node_type               = stat_resolved_path(resolved, meta);
+        if (node_type == ResolvedNodeType::ERROR) {
+            return -EIO;
         }
+        if (node_type == ResolvedNodeType::DIRECTORY) {
+            want_directory = true;
+        } else if (node_type == ResolvedNodeType::MISSING &&
+                   (flags & LINUX_O_CREAT) == 0)
+        {
+            return -ENOENT;
+        }
+
+        CapIdx file_cap = want_directory
+                              ? sys_vfs_opendir(resolved.parent_cap,
+                                                resolved.relative_path.c_str(),
+                                                sustcore_flags)
+                              : sys_vfs_open(resolved.parent_cap,
+                                             resolved.relative_path.c_str(),
+                                             sustcore_flags);
         if (file_cap == cap::null || file_cap == cap::error) {
             loggers::LXSC::ERROR("Invalid path: %s", resolved.absolute_path.c_str());
-            return -ENOENT;
+            return want_directory ? -ENOTDIR : -ENOENT;
         }
 
         if (want_directory && register_dir_fd_state(CWD_FD, resolved.absolute_path, true),
@@ -388,12 +479,41 @@ namespace {
     }
 }  // namespace
 
-size_t linux_sys_write(size_t fd, const void *buf, size_t len) {
-    if (fd == 1 || fd == 2) {
-        sys_write_serial(0, reinterpret_cast<const char *>(buf), len);
-        return len;
+size_t linux_open_fd(const char *pathname, int fd, int flags) {
+    auto resolved = resolve_path_at(AT_FDCWD, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
     }
 
+    flags::oflg_t sustcore_flags = linux_oflags_to_sustcore(flags);
+    CapIdx file_cap =
+        sys_vfs_open(resolved.parent_cap, resolved.relative_path.c_str(),
+                     sustcore_flags);
+    if (file_cap == cap::null || file_cap == cap::error) {
+        return -ENOENT;
+    }
+
+    return bind_open_result(fd, file_cap, 0, nullptr, false);
+}
+
+size_t linux_opendir_fd(const char *pathname, int fd) {
+    auto resolved = resolve_path_at(AT_FDCWD, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
+    }
+
+    CapIdx dir_cap =
+        sys_vfs_opendir(resolved.parent_cap, resolved.relative_path.c_str(),
+                        flags::O_READ);
+    if (dir_cap == cap::null || dir_cap == cap::error) {
+        return -ENOTDIR;
+    }
+
+    return bind_open_result(fd, dir_cap, 0, &resolved.absolute_path,
+                            fd == CWD_FD);
+}
+
+size_t linux_sys_write(size_t fd, const void *buf, size_t len) {
     if (buf == nullptr) {
         return -EFAULT;
     }
@@ -415,9 +535,6 @@ size_t linux_sys_write(size_t fd, const void *buf, size_t len) {
 }
 
 size_t linux_sys_read(int fd, void *buf, size_t count) {
-    if (fd == 0) {
-        return -EBADF;
-    }
     if (find_dir_fd_state(fd) != nullptr) {
         return -EISDIR;
     }
@@ -454,6 +571,70 @@ size_t linux_sys_close(int fd) {
     clear_dir_fd_state(fd);
     free_fd(fd);
     return 0;
+}
+
+size_t linux_sys_dup(int oldfd) {
+    if (oldfd < 0) {
+        return -EBADF;
+    }
+
+    CapIdx old_cap = fd_to_cap(oldfd);
+    if (old_cap == cap::error) {
+        return -EBADF;
+    }
+
+    CapIdx new_cap = sys_cap_clone(old_cap);
+    if (new_cap == cap::null || new_cap == cap::error) {
+        return -EBADF;
+    }
+
+    int newfd = alloc_fd(new_cap);
+    if (newfd < 0) {
+        sys_cap_remove(new_cap);
+        return -EMFILE;
+    }
+
+    set_fd_offset(newfd, fd_offset(oldfd));
+    copy_dir_fd_state(oldfd, newfd, false);
+    return static_cast<size_t>(newfd);
+}
+
+size_t linux_sys_dup3(int oldfd, int newfd, int flags) {
+    if (flags != 0) {
+        return -EINVAL;
+    }
+    if (oldfd < 0 || newfd < 0) {
+        return -EBADF;
+    }
+    if (oldfd == newfd) {
+        return -EINVAL;
+    }
+    if (newfd >= MAX_FDS) {
+        return -EBADF;
+    }
+    if (newfd == CWD_FD) {
+        return -EBADF;
+    }
+
+    CapIdx old_cap = fd_to_cap(oldfd);
+    if (old_cap == cap::error) {
+        return -EBADF;
+    }
+
+    CapIdx new_cap = sys_cap_clone(old_cap);
+    if (new_cap == cap::null || new_cap == cap::error) {
+        return -EBADF;
+    }
+
+    clear_dir_fd_state(newfd);
+    if (!bind_fd(newfd, new_cap)) {
+        sys_cap_remove(new_cap);
+        return -EBADF;
+    }
+
+    set_fd_offset(newfd, fd_offset(oldfd));
+    copy_dir_fd_state(oldfd, newfd, false);
+    return static_cast<size_t>(newfd);
 }
 
 size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode) {

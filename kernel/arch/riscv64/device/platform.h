@@ -16,6 +16,8 @@
 #include <sus/owner.h>
 #include <sus/units.h>
 
+#include <utility>
+
 namespace riscv {
     class Riscv64Platform : public device::Platform {
     public:
