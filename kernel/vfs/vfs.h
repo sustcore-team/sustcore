@@ -15,6 +15,7 @@
 #include <cap/cholder.h>
 #include <bio/blk.h>
 #include <logger.h>
+#include <spinlock.h>
 #include <sus/nonnull.h>
 #include <sus/owner.h>
 #include <sus/path.h>
@@ -87,12 +88,21 @@ class VINode : public util::refc<VINode> {
 public:
     static constexpr PayloadType IDENTIFIER = PayloadType::VFILE;
 
-private:
     struct CachedFilePage {
         PhyAddr paddr;
         size_t valid = 0;
         bool dirty = false;
+        bool active = false;
+        bool evicting = false;
+        bool invalidating = false;
+        VINode *owner = nullptr;
+        size_t page_index = 0;
+        CachedFilePage *prev = nullptr;
+        CachedFilePage *next = nullptr;
+        SpinLocker lock;
     };
+
+private:
 
     util::owner<IINode *> _inode;
     util::refc_ptr<VFsDriver> _fsd;
@@ -109,6 +119,9 @@ public:
     [[nodiscard]]
     Result<PhyAddr> cached_file_page(IFile &file, size_t page_index,
                                      size_t *valid_len);
+    [[nodiscard]]
+    Result<size_t> read_cached_file(IFile &file, size_t offset, void *buf,
+                                    size_t len);
     [[nodiscard]]
     Result<size_t> write_cached_file(IFile &file, size_t offset,
                                      const void *buf, size_t len);

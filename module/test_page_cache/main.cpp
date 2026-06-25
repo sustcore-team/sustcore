@@ -42,12 +42,14 @@ namespace {
     }
 
     void print_stats(const char *stage, const VFSPageCacheStats &value) {
-        printf("test_page_cache: %s hits=%u misses=%u invalidations=%u writebacks=%u evictions=%u cached=%u/%u\n",
+        printf("test_page_cache: %s hits=%u misses=%u invalidations=%u writebacks=%u evictions=%u backing_reads=%u backing_writes=%u cached=%u/%u\n",
                stage, static_cast<unsigned>(value.hits),
                static_cast<unsigned>(value.misses),
                static_cast<unsigned>(value.invalidations),
                static_cast<unsigned>(value.writebacks),
                static_cast<unsigned>(value.evictions),
+               static_cast<unsigned>(value.backing_reads),
+               static_cast<unsigned>(value.backing_writes),
                static_cast<unsigned>(value.cached_pages),
                static_cast<unsigned>(value.max_pages));
     }
@@ -124,14 +126,34 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
     check(after_hot.misses == after_reads.misses,
           "rereading resident hot page should not miss");
 
+    memset(g_read, 0, sizeof(g_read));
+    got = sys_vfs_read(file_cap, 0, g_read, sizeof(g_read));
+    check(got == sizeof(g_read), "cold page refill failed");
+    check(memcmp(g_read, g_data, sizeof(g_read)) == 0,
+          "cold page refill data mismatch");
+
+    memset(g_read, 0, sizeof(g_read));
+    got = sys_vfs_read(file_cap, hot_page * PAGE_SIZE, g_read,
+                       sizeof(g_read));
+    check(got == sizeof(g_read), "active hot page read failed");
+    check(memcmp(g_read, g_data + hot_page * PAGE_SIZE, sizeof(g_read)) == 0,
+          "active hot page data mismatch");
+
+    VFSPageCacheStats after_lru = stats();
+    print_stats("after lru check", after_lru);
+    check(after_lru.misses == after_hot.misses + 1,
+          "cold refill should miss once");
+    check(after_lru.hits == after_hot.hits + 1,
+          "active hot page should survive cold refill");
+
     check(sys_vfs_sync(file_cap), "sync should flush dirty page");
 
     VFSPageCacheStats after_sync = stats();
     print_stats("after sync", after_sync);
     check_cache_bound(after_sync, "sync should keep cache within bound");
-    check(after_sync.writebacks >= after_hot.writebacks,
+    check(after_sync.writebacks >= after_lru.writebacks,
           "sync should not lose writeback accounting");
-    check(after_sync.invalidations == after_hot.invalidations,
+    check(after_sync.invalidations == after_lru.invalidations,
           "sync should keep clean cached page");
 
     kmod_fclose(fd);
