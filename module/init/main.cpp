@@ -373,8 +373,14 @@ void mount_testing_ext4(CapIdx root_dir_cap) {
         sys_cap_remove(testing_dir);
     }
 
-    bool mounted =
-        sys_vfs_mount(root_dir_cap, "ext4", blk_cap, "testing/", 0, nullptr);
+    CapIdx mnt_cap = sys_mnt_create(blk_cap, "ext4", 0, nullptr);
+    bool mounted = false;
+    if (mnt_cap == cap::null || mnt_cap == cap::error) {
+        printf("init: create ext4 mount failed\n");
+    } else {
+        mounted = sys_mnt_mount(mnt_cap, root_dir_cap, "testing/", 0);
+        sys_cap_remove(mnt_cap);
+    }
     if (mounted) {
         printf("init: mount /testing succeeded\n");
     } else {

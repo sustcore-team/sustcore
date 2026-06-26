@@ -34,6 +34,7 @@ class VSuperblock;
 class VINode;
 class VFile;
 class VDirectory;
+class VMount;
 class VFS;
 
 class VFsDriver : public util::refc<VFsDriver> {
@@ -209,6 +210,135 @@ public:
     }
 };
 
+class VMount : public cap::_PayloadHelper<PayloadType::VMOUNT> {
+private:
+    std::string _fs_name;
+    uint64_t _superflags;
+    std::string _options;
+    bool _has_device;
+    size_t _devno;
+    MountStatus _status;
+    VSuperblock *_active_vsb;
+    VINode *_parent_vinode;
+    std::string _entry_name;
+    util::Path _mount_path;
+    bool _is_block_mount;
+    size_t _active_files;
+
+public:
+    VMount(std::string fs_name, uint64_t superflags, std::string options,
+           bool has_device, size_t devno)
+        : _fs_name(std::move(fs_name)),
+          _superflags(superflags),
+          _options(std::move(options)),
+          _has_device(has_device),
+          _devno(devno),
+          _status(MountStatus::UMOUNTED),
+          _active_vsb(nullptr),
+          _parent_vinode(nullptr),
+          _is_block_mount(false),
+          _active_files(0) {}
+    ~VMount() override = default;
+    void destruct() override;
+
+    [[nodiscard]]
+    const std::string &fs_name() const {
+        return _fs_name;
+    }
+
+    [[nodiscard]]
+    uint64_t superflags() const noexcept {
+        return _superflags;
+    }
+
+    [[nodiscard]]
+    const std::string &options() const {
+        return _options;
+    }
+
+    [[nodiscard]]
+    bool has_device() const noexcept {
+        return _has_device;
+    }
+
+    [[nodiscard]]
+    size_t devno() const noexcept {
+        return _devno;
+    }
+
+    [[nodiscard]]
+    MountStatus status() const noexcept {
+        return _status;
+    }
+
+    void set_status(MountStatus status) noexcept {
+        _status = status;
+    }
+
+    [[nodiscard]]
+    VSuperblock *active_vsb() const noexcept {
+        return _active_vsb;
+    }
+
+    void set_active_vsb(VSuperblock *vsb) noexcept {
+        _active_vsb = vsb;
+    }
+
+    [[nodiscard]]
+    VINode *parent_vinode() const noexcept {
+        return _parent_vinode;
+    }
+
+    void set_parent_vinode(VINode *parent_vinode) noexcept {
+        _parent_vinode = parent_vinode;
+    }
+
+    [[nodiscard]]
+    const std::string &entry_name() const noexcept {
+        return _entry_name;
+    }
+
+    void set_entry_name(std::string entry_name) {
+        _entry_name = std::move(entry_name);
+    }
+
+    [[nodiscard]]
+    const util::Path &mount_path() const noexcept {
+        return _mount_path;
+    }
+
+    void set_mount_path(util::Path mount_path) {
+        _mount_path = std::move(mount_path);
+    }
+
+    [[nodiscard]]
+    bool is_block_mount() const noexcept {
+        return _is_block_mount;
+    }
+
+    void set_is_block_mount(bool is_block_mount) noexcept {
+        _is_block_mount = is_block_mount;
+    }
+
+    [[nodiscard]]
+    size_t active_files() const noexcept {
+        return _active_files;
+    }
+
+    void set_active_files(size_t active_files) noexcept {
+        _active_files = active_files;
+    }
+
+    void reset_active_mount_state() noexcept {
+        _active_vsb = nullptr;
+        _parent_vinode = nullptr;
+        _entry_name.clear();
+        _mount_path = {};
+        _is_block_mount = false;
+        _active_files = 0;
+    }
+};
+
 enum class MountFlags { NONE = 0 };
 
 class VFS {
@@ -238,6 +368,7 @@ private:
         size_t devno = 0;
         bool is_block_mount = false;
         size_t active_files = 0;
+        VMount *owner_mount = nullptr;
     };
 
     std::unordered_map<std::string, util::owner<VFsDriver *>> fs_table;
@@ -341,6 +472,14 @@ public:
     Result<void> mount(const char *fs_name, const char *mountpoint,
                        const char *options);
     Result<void> umount(const char *mountpoint);
+    Result<util::owner<VMount *>> create_mount(const char *fs_name,
+                                               bool has_device, size_t devno,
+                                               uint64_t superflags,
+                                               const char *options);
+    Result<void> mount_attach(VMount &mount, VDirectory &parent,
+                              const char *mntpath, uint64_t attachflags);
+    Result<void> mount_detach(VMount &mount, uint64_t flags);
+    Result<CapIdx> mount_root(VMount &mount, cap::CHolder &holder);
     // 打开文件并直接插入到指定 holder 中
     Result<CapIdx> open(const char *filepath, cap::CHolder &holder);
     [[nodiscard]]

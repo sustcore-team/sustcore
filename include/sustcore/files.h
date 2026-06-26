@@ -61,6 +61,12 @@ enum class EntryType : uint64_t {
     SYMLINK = 2,
 };
 
+enum class MountStatus : uint64_t {
+    MOUNTED  = 0,
+    UMOUNTED = 1,
+    INVALID  = 2,
+};
+
 struct NodeMeta {
     EntryType type;
     size_t size;

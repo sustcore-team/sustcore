@@ -12,6 +12,7 @@
 #include <cap/cholder.h>
 #include <object/vdir.h>
 #include <object/vfile.h>
+#include <object/vmount.h>
 #include <syscall/syscall.h>
 #include <syscall/vfs.h>
 #include <task/scheduler.h>
@@ -342,40 +343,115 @@ namespace syscall {
         return out.commit_to_user(sizeof(stats));
     }
 
-    Result<bool> vfs_mount(CapIdx parent_dir_cap, const UString &fs_name,
-                           CapIdx devfile_cap, const UString &mountpoint,
-                           uint64_t flags, const UString *options) {
+    Result<CapIdx> mnt_create(CapIdx devfile_cap, const UString &fs_name,
+                              uint64_t superflags, const UString *options) {
+        auto holder_res = current_holder_for_vfs();
+        propagate(holder_res);
+
+        bool has_device = devfile_cap != cap::null;
+        size_t devno    = 0;
+        if (has_device) {
+            auto devfile_res = lookup_current_cap(devfile_cap);
+            propagate(devfile_res);
+            auto *vfile = devfile_res.value()->payload_as<VFile>();
+            if (vfile == nullptr) {
+                unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+            }
+            auto *inode = vfile->vinode()->inode();
+            auto *meta = static_cast<devfs::DevFileMetadata *>(&inode->metadata());
+            if (meta == nullptr || !meta->is_blk) {
+                unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+            }
+            auto *blk_file = static_cast<devfs::BlockDevFile *>(inode);
+            devno = blk_file->devno();
+        }
+
+        auto mount_res = VFS::inst().create_mount(
+            fs_name.kbuf(), has_device, devno, superflags,
+            options == nullptr ? nullptr : options->kbuf());
+        propagate(mount_res);
+        auto mount_owner = mount_res.value();
+        auto *mount_ptr = mount_owner.get();
+        auto idx_res =
+            holder_res.value()->insert_to_free(mount_ptr, perm::allperm());
+        if (!idx_res.has_value()) {
+            delete mount_ptr;
+            propagate_return(idx_res);
+        }
+        mount_owner = util::owner<VMount *>(nullptr);
+        return idx_res.value();
+    }
+
+    Result<bool> mnt_mount(CapIdx mntcap, CapIdx parent_dir_cap,
+                           const UString &mountpoint, uint64_t attachflags) {
+        auto mnt_res = lookup_current_cap(mntcap);
+        propagate(mnt_res);
         auto parent_res = lookup_current_cap(parent_dir_cap);
         propagate(parent_res);
-        auto devfile_res = lookup_current_cap(devfile_cap);
-        propagate(devfile_res);
 
-        auto *parent_dir = parent_res.value()->payload_as<VDirectory>();
-        auto *vfile      = devfile_res.value()->payload_as<VFile>();
-        if (parent_dir == nullptr || vfile == nullptr) {
+        auto *mount_payload = mnt_res.value()->payload_as<VMount>();
+        auto *parent_dir    = parent_res.value()->payload_as<VDirectory>();
+        if (mount_payload == nullptr || parent_dir == nullptr) {
             unexpect_return(ErrCode::TYPE_NOT_MATCHED);
         }
 
-        auto *inode = vfile->vinode()->inode();
-        auto *meta = static_cast<devfs::DevFileMetadata *>(&inode->metadata());
-        if (meta == nullptr || !meta->is_blk) {
-            unexpect_return(ErrCode::TYPE_NOT_MATCHED);
-        }
-        auto *blk_file = static_cast<devfs::BlockDevFile *>(inode);
-
-        util::Path base_path = parent_dir->global_path();
-        util::Path rel_path  = util::Path::normalize(mountpoint.kbuf());
-        if (rel_path.is_absolute()) {
-            unexpect_return(ErrCode::INVALID_PARAM);
-        }
-        util::Path full_mount_path = base_path / rel_path;
-        const char *opt_str = options == nullptr ? nullptr : options->kbuf();
-
-        auto mount_res = VFS::inst().mount(
-            fs_name.kbuf(), blk_file->devno(), full_mount_path.c_str(),
-            static_cast<MountFlags>(flags), opt_str);
+        cap::VMountObject mount_obj(util::nnullforce(mnt_res.value()));
+        auto mount_res =
+            mount_obj.mount(*parent_dir, mountpoint.kbuf(), attachflags);
         propagate(mount_res);
         return true;
+    }
+
+    Result<bool> mnt_umount(CapIdx mntcap, uint64_t flags) {
+        auto mnt_res = lookup_current_cap(mntcap);
+        propagate(mnt_res);
+
+        auto *mount_payload = mnt_res.value()->payload_as<VMount>();
+        if (mount_payload == nullptr) {
+            unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+        }
+
+        cap::VMountObject mount_obj(util::nnullforce(mnt_res.value()));
+        auto umount_res = mount_obj.umount(flags);
+        propagate(umount_res);
+        return true;
+    }
+
+    Result<CapIdx> mnt_root(CapIdx mntcap) {
+        auto holder_res = current_holder_for_vfs();
+        propagate(holder_res);
+        auto mnt_res = lookup_current_cap(mntcap);
+        propagate(mnt_res);
+
+        auto *mount_payload = mnt_res.value()->payload_as<VMount>();
+        if (mount_payload == nullptr) {
+            unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+        }
+
+        cap::VMountObject mount_obj(util::nnullforce(mnt_res.value()));
+        return mount_obj.root(*holder_res.value());
+    }
+
+    MountStatus mnt_state(CapIdx mntcap) {
+        auto holder_res = current_holder_for_vfs();
+        if (!holder_res.has_value()) {
+            return MountStatus::INVALID;
+        }
+        auto mnt_res = holder_res.value()->lookup(mntcap);
+        if (!mnt_res.has_value()) {
+            return MountStatus::INVALID;
+        }
+        auto *mount_payload = mnt_res.value()->payload_as<VMount>();
+        if (mount_payload == nullptr) {
+            return MountStatus::INVALID;
+        }
+
+        cap::VMountObject mount_obj(util::nnullforce(mnt_res.value()));
+        auto state_res = mount_obj.state();
+        if (!state_res.has_value()) {
+            return MountStatus::INVALID;
+        }
+        return state_res.value();
     }
 
 }  // namespace syscall

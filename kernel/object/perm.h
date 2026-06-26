@@ -129,3 +129,9 @@ namespace perm::vdir {
     constexpr b64 WRITE = 0x02'0000;
     constexpr b64 EXEC  = 0x04'0000;
 }  // namespace perm::vdir
+
+namespace perm::mount {
+    constexpr b64 MOUNT = 0x01'0000;
+    constexpr b64 QUERY = 0x02'0000;
+    constexpr b64 ROOT  = 0x04'0000;
+}  // namespace perm::mount

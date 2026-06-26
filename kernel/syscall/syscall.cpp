@@ -294,7 +294,11 @@ namespace syscall {
             case SYS_VFS_STAT:           return "SYS_VFS_STAT";
             case SYS_VFS_LSTAT:          return "SYS_VFS_LSTAT";
             case SYS_VFS_READLINK:       return "SYS_VFS_READLINK";
-            case SYS_VFS_MOUNT:          return "SYS_VFS_MOUNT";
+            case SYS_MNT_CREATE:         return "SYS_MNT_CREATE";
+            case SYS_MNT_MOUNT:          return "SYS_MNT_MOUNT";
+            case SYS_MNT_UMOUNT:         return "SYS_MNT_UMOUNT";
+            case SYS_MNT_ROOT:           return "SYS_MNT_ROOT";
+            case SYS_MNT_STATE:          return "SYS_MNT_STATE";
             case SYS_VFS_PAGE_CACHE_STATS:
                 return "SYS_VFS_PAGE_CACHE_STATS";
             default:                      return "UNKNOWN_SYSCALL";
@@ -630,17 +634,36 @@ namespace syscall {
                     vfs_readlink(capidx, path, std::move(buf), arg2));
                 break;
             }
-            case SYS_VFS_MOUNT: {
+            case SYS_MNT_CREATE: {
                 UString fs_name((VirAddr)arg0, MAX_SYSCALL_PATH);
-                UString mountpoint((VirAddr)arg2, MAX_SYSCALL_PATH);
                 std::optional<UString> options;
-                if (arg4 != 0) {
-                    options.emplace(VirAddr(arg4), MAX_SYSCALL_PATH);
+                if (arg2 != 0) {
+                    options.emplace(VirAddr(arg2), MAX_SYSCALL_PATH);
                 }
-                ret = result_bool_ret(
-                    "mount",
-                    vfs_mount(capidx, fs_name, arg1, mountpoint, arg3,
-                              options ? &*options : nullptr));
+                ret = result_value_ret(
+                    "mnt_create",
+                    mnt_create(capidx, fs_name, arg1,
+                               options ? &*options : nullptr));
+                break;
+            }
+            case SYS_MNT_MOUNT: {
+                UString mountpoint((VirAddr)arg1, MAX_SYSCALL_PATH);
+                ret = result_bool_ret("mnt_mount",
+                                      mnt_mount(capidx, arg0, mountpoint, arg2));
+                break;
+            }
+            case SYS_MNT_UMOUNT: {
+                ret = result_bool_ret("mnt_umount", mnt_umount(capidx, arg0));
+                break;
+            }
+            case SYS_MNT_ROOT: {
+                ret = result_value_ret("mnt_root", mnt_root(capidx));
+                break;
+            }
+            case SYS_MNT_STATE: {
+                ret = RetPack{.processed = true,
+                              .ret0      = static_cast<b64>(mnt_state(capidx)),
+                              .ret1      = static_cast<b64>(ErrCode::SUCCESS)};
                 break;
             }
             case SYS_VFS_READ: {

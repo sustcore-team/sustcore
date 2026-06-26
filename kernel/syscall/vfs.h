@@ -75,8 +75,16 @@ namespace syscall {
     [[nodiscard]]
     Result<void> vfs_page_cache_stats(UBuffer &&out, bool reset);
     [[nodiscard]]
-    Result<bool> vfs_mount(CapIdx parent_dir_cap, const UString &fs_name,
-                           CapIdx devfile_cap, const UString &mountpoint,
-                           uint64_t flags, const UString *options);
+    Result<CapIdx> mnt_create(CapIdx devfile_cap, const UString &fs_name,
+                              uint64_t superflags, const UString *options);
+    [[nodiscard]]
+    Result<bool> mnt_mount(CapIdx mntcap, CapIdx parent_dir_cap,
+                           const UString &mountpoint, uint64_t attachflags);
+    [[nodiscard]]
+    Result<bool> mnt_umount(CapIdx mntcap, uint64_t flags);
+    [[nodiscard]]
+    Result<CapIdx> mnt_root(CapIdx mntcap);
+    [[nodiscard]]
+    MountStatus mnt_state(CapIdx mntcap);
 
 }  // namespace syscall

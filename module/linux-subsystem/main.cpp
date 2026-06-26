@@ -438,6 +438,11 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
         case __NR_set_robust_list:
             // 未实现
             return -ENOSYS;
+        case __NR_mount:
+        case __NR_umount2:
+            // 占位符
+            // 等后面支持分区 + vfat 了再写入实际的实现
+            return 0;
         default:
             loggers::LXSC::ERROR("unsupported syscall %s (%lu)",
                                  syscall_to_string(a7), a7);

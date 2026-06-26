@@ -609,6 +609,10 @@ void VDirectory::destruct() {
     delete this;
 }
 
+void VMount::destruct() {
+    delete this;
+}
+
 void VFS::init() {
     // call the constructor explicitly to ensure the instance is initialized
     // before use
@@ -747,6 +751,7 @@ Result<void> VFS::mount(const char *fs_name, size_t devno,
                 .devno          = devno,
                 .is_block_mount = true,
                 .active_files   = 0,
+                .owner_mount    = nullptr,
             };
             if (record.parent_vinode != nullptr) {
                 record.parent_vinode->keep();
@@ -791,6 +796,7 @@ Result<void> VFS::mount(const char *fs_name, const char *mountpoint,
                 .devno          = 0,
                 .is_block_mount = false,
                 .active_files   = 0,
+                .owner_mount    = nullptr,
             };
             auto *vsb = record.superblock.get();
             if (record.parent_vinode != nullptr) {
@@ -846,6 +852,210 @@ Result<void> VFS::umount(const char *mountpoint) {
     Result<void> ret = vsb->vfsd().fsd()->unmount(vsb->sb());
     delete vsb.get();
     return ret;
+}
+
+Result<util::owner<VMount *>> VFS::create_mount(const char *fs_name,
+                                                bool has_device, size_t devno,
+                                                uint64_t superflags,
+                                                const char *options) {
+    if (fs_name == nullptr || fs_name[0] == '\0') {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    auto lookup_result = fs_table.at_nt(fs_name);
+    if (!lookup_result.has_value()) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    VFsDriver *fsd = lookup_result.value()->get();
+    if (fsd == nullptr || fsd->fsd() == nullptr) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    if (fsd->fsd()->is_pseudo()) {
+        if (has_device) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+    } else {
+        if (!has_device) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        auto dev_res = blk::BlkManager::inst().lookup(devno);
+        propagate(dev_res);
+    }
+
+    return util::owner(new VMount(fs_name, superflags,
+                                  options == nullptr ? "" : options,
+                                  has_device, devno));
+}
+
+Result<void> VFS::mount_attach(VMount &mount, VDirectory &parent,
+                               const char *mntpath, uint64_t attachflags) {
+    if (attachflags != 0) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (mount.status() != MountStatus::UMOUNTED) {
+        unexpect_return(ErrCode::BUSY);
+    }
+    if (mntpath == nullptr || mntpath[0] == '\0') {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    util::Path rel_path = util::Path::normalize(mntpath);
+    if (rel_path.is_absolute()) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    util::Path full_mount_path = parent.global_path() / rel_path;
+    auto ensure_res            = _ensure_mountpoint_path(full_mount_path);
+    propagate(ensure_res);
+    auto key_res = _build_mount_key(full_mount_path);
+    propagate(key_res);
+    MountKey mount_key    = std::move(key_res.value().first);
+    util::Path mount_path = std::move(key_res.value().second);
+    if (mount_table.contains(mount_key)) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    auto lookup_result = fs_table.at_nt(mount.fs_name());
+    if (!lookup_result.has_value()) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    VFsDriver *fsd = lookup_result.value()->get();
+    if (fsd == nullptr || fsd->fsd() == nullptr) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    bool is_block_mount = !fsd->fsd()->is_pseudo();
+    util::owner<ISuperblock *> isb;
+    if (is_block_mount) {
+        IFsDriver *driver = fsd->fsd();
+        auto mount_result = driver->mount(mount.devno(), mount.options().c_str());
+        propagate(mount_result);
+        isb = std::move(mount_result.value());
+    } else {
+        auto *pseudo = static_cast<IPesudoFsDriver *>(fsd->fsd());
+        auto mount_result =
+            pseudo->mount(mount.fs_name().c_str(), mount.options().c_str());
+        propagate(mount_result);
+        isb = std::move(mount_result.value());
+    }
+
+    auto active_vsb = util::owner(new VSuperblock(isb, *fsd));
+    VSuperblock *vsb_raw = active_vsb.get();
+    MountRecord record{
+        .parent_vinode  = parent.vinode().get(),
+        .entry_name     = mount_key.entry,
+        .mount_path     = mount_path,
+        .superblock     = util::owner<VSuperblock *>(nullptr),
+        .devno          = mount.devno(),
+        .is_block_mount = is_block_mount,
+        .active_files   = 0,
+        .owner_mount    = &mount,
+    };
+    if (record.parent_vinode != nullptr) {
+        record.parent_vinode->keep();
+    }
+    record.superblock = util::owner(vsb_raw);
+    active_vsb = util::owner<VSuperblock *>(nullptr);
+
+    if (!is_block_mount) {
+        pseudo_mounts.insert_or_assign(mount.fs_name(), vsb_raw);
+    }
+    mount_table.insert_or_assign(mount_key, std::move(record));
+
+    mount.set_active_vsb(vsb_raw);
+    mount.set_parent_vinode(parent.vinode().get());
+    if (mount.parent_vinode() != nullptr) {
+        mount.parent_vinode()->keep();
+    }
+    mount.set_entry_name(mount_key.entry);
+    mount.set_mount_path(mount_path);
+    mount.set_is_block_mount(is_block_mount);
+    mount.set_active_files(0);
+    mount.set_status(MountStatus::MOUNTED);
+    void_return();
+}
+
+Result<void> VFS::mount_detach(VMount &mount, uint64_t flags) {
+    if (flags != 0) {
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    if (mount.status() != MountStatus::MOUNTED) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+    if (mount.active_files() != 0) {
+        unexpect_return(ErrCode::BUSY);
+    }
+
+    auto key_res = _build_mount_key(mount.mount_path());
+    propagate(key_res);
+    auto lookup_result = mount_table.at_nt(key_res.value().first);
+    if (!lookup_result.has_value()) {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    MountRecord &record = *lookup_result.value();
+    auto page_cache_flush_res = record.superblock->flush_file_pages();
+    propagate(page_cache_flush_res);
+
+    auto super_sync_res = record.superblock->sb()->sync();
+    if (!super_sync_res.has_value() &&
+        super_sync_res.error() != ErrCode::NOT_SUPPORTED)
+    {
+        propagate_return(super_sync_res);
+    }
+    if (record.is_block_mount) {
+        auto cache_res = blk::BlkManager::inst().lookup_cache(record.devno);
+        propagate(cache_res);
+        auto cache_sync_future = cache_res.value()->sync_all();
+        auto cache_sync_res = wait::blocking_wait_for(cache_sync_future);
+        propagate(cache_sync_res);
+    }
+
+    util::owner<VSuperblock *> vsb = record.superblock;
+    if (!record.is_block_mount) {
+        pseudo_mounts.erase(vsb->vfsd().fsd()->name());
+    }
+    VINode *parent_vinode = record.parent_vinode;
+    mount_table.erase(key_res.value().first);
+    if (parent_vinode != nullptr) {
+        parent_vinode->release();
+    }
+
+    auto ret = vsb->vfsd().fsd()->unmount(vsb->sb());
+    delete vsb.get();
+    propagate(ret);
+
+    if (mount.parent_vinode() != nullptr) {
+        mount.parent_vinode()->release();
+    }
+    mount.reset_active_mount_state();
+    mount.set_status(MountStatus::UMOUNTED);
+    void_return();
+}
+
+Result<CapIdx> VFS::mount_root(VMount &mount, cap::CHolder &holder) {
+    if (mount.status() != MountStatus::MOUNTED ||
+        mount.active_vsb() == nullptr)
+    {
+        unexpect_return(ErrCode::INVALID_PARAM);
+    }
+
+    auto root_res = mount.active_vsb()->sb()->root();
+    propagate(root_res);
+    auto vnode_res = mount.active_vsb()->get_vnode(root_res.value());
+    propagate(vnode_res);
+
+    auto *dir = new VDirectory(*vnode_res.value().get(), mount.mount_path(),
+                               mount.mount_path(), *this);
+    auto idx_res = holder.insert_to_free(dir, perm::allperm());
+    if (!idx_res.has_value()) {
+        delete dir;
+        propagate_return(idx_res);
+    }
+
+    mount.set_active_files(mount.active_files() + 1);
+    return idx_res.value();
 }
 
 namespace {
@@ -1833,6 +2043,9 @@ void VFS::_on_vfile_destroy(const util::Path &mount_path) noexcept {
         return;
     }
     record.active_files--;
+    if (record.owner_mount != nullptr) {
+        record.owner_mount->set_active_files(record.active_files);
+    }
 }
 
 Result<size_t> VFS::read(VFile &vfile, off_t offset, void *buf,

@@ -372,11 +372,43 @@ sys_vfs_readlink:
     ecall
     ret
 
-    .global sys_vfs_mount
-    .type sys_vfs_mount, @function
-sys_vfs_mount:
-    /* a0 = parent_dir_cap, a1 = fs_name, a2 = devfile_cap, a3 = mountpoint, a4 = flags, a5 = options */
-    li a7, SYS_VFS_MOUNT
+    .global sys_mnt_create
+    .type sys_mnt_create, @function
+sys_mnt_create:
+    /* a0 = devcap, a1 = fs_name, a2 = superflags, a3 = options */
+    li a7, SYS_MNT_CREATE
+    ecall
+    ret
+
+    .global sys_mnt_mount
+    .type sys_mnt_mount, @function
+sys_mnt_mount:
+    /* a0 = mntcap, a1 = parent_dir_cap, a2 = mountpoint, a3 = attachflags */
+    li a7, SYS_MNT_MOUNT
+    ecall
+    ret
+
+    .global sys_mnt_umount
+    .type sys_mnt_umount, @function
+sys_mnt_umount:
+    /* a0 = mntcap, a1 = flags */
+    li a7, SYS_MNT_UMOUNT
+    ecall
+    ret
+
+    .global sys_mnt_root
+    .type sys_mnt_root, @function
+sys_mnt_root:
+    /* a0 = mntcap */
+    li a7, SYS_MNT_ROOT
+    ecall
+    ret
+
+    .global sys_mnt_state
+    .type sys_mnt_state, @function
+sys_mnt_state:
+    /* a0 = mntcap */
+    li a7, SYS_MNT_STATE
     ecall
     ret
 

@@ -320,10 +320,34 @@ sys_vfs_readlink:
     li.d $a7, SYS_VFS_READLINK
     do_syscall
 
-    .global sys_vfs_mount
-    .type sys_vfs_mount, @function
-sys_vfs_mount:
-    li.d $a7, SYS_VFS_MOUNT
+    .global sys_mnt_create
+    .type sys_mnt_create, @function
+sys_mnt_create:
+    li.d $a7, SYS_MNT_CREATE
+    do_syscall
+
+    .global sys_mnt_mount
+    .type sys_mnt_mount, @function
+sys_mnt_mount:
+    li.d $a7, SYS_MNT_MOUNT
+    do_syscall
+
+    .global sys_mnt_umount
+    .type sys_mnt_umount, @function
+sys_mnt_umount:
+    li.d $a7, SYS_MNT_UMOUNT
+    do_syscall
+
+    .global sys_mnt_root
+    .type sys_mnt_root, @function
+sys_mnt_root:
+    li.d $a7, SYS_MNT_ROOT
+    do_syscall
+
+    .global sys_mnt_state
+    .type sys_mnt_state, @function
+sys_mnt_state:
+    li.d $a7, SYS_MNT_STATE
     do_syscall
 
     .global sys_vfs_page_cache_stats
