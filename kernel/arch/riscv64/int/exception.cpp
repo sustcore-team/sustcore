@@ -757,6 +757,13 @@ namespace exception {
                         break;
                     }
 
+                    bool updated = false;
+
+                    if (!pte->a) {
+                        pte->a    = true;
+                        updated   = true;
+                    }
+
                     PageMan::RWX rwx = PageMan::rwx(*pte);
                     loggers::EXCEPTION::ERROR(
                         "A/D 位异常不可恢复: addr=%p, A=%d, D=%d, rwx=0x%lx",
@@ -765,8 +772,16 @@ namespace exception {
                     if ((scause.cause == STORE_PAGE_FAULT) &&
                         PageMan::is_writable(rwx))
                     {
-                        loggers::EXCEPTION::ERROR(
-                            "可写页发生 D 位异常: addr=%p", fault_addr.addr());
+                        pte->d    = true;
+                        updated   = true;
+                    }
+
+                    processed = updated;
+                    if (updated) {
+                        PageMan::flush_tlb();
+                        loggers::EXCEPTION::DEBUG(
+                            "修复 A/D 位后重试: addr=%p, A=%d, D=%d",
+                            fault_addr.addr(), pte->a, pte->d);
                     }
                     break;
                 }

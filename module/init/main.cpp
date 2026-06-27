@@ -540,11 +540,11 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
         //     .dispname   = "write",
         //     .is_linuxproc = true,
         // },
-        SpawnRequest{
-            .path         = "/initrd/test_ext4_symlink.mod",
-            .dispname     = "test_ext4_symlink",
-            .is_linuxproc = false,
-        },
+        // SpawnRequest{
+        //     .path         = "/initrd/test_ext4_symlink.mod",
+        //     .dispname     = "test_ext4_symlink",
+        //     .is_linuxproc = false,
+        // },
         SpawnRequest{
             .path         = "/initrd/contest-runner.mod",
             .dispname     = "contest-runner",
