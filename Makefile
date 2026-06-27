@@ -50,7 +50,7 @@ arg-basic :=  q=$(q) build-mode=$(build-mode) architecture=$(architecture) \
 library-components := sbi basecpp kmod linuxss-libc rpc libfdt
 module-components := default init contest-runner linux-subsystem test-linux test_endpoint_master test_endpoint_slave test_call_service test_call_user \
 	test_fork test_execve test_thread test_rpc_server test_rpc_client \
-	test_file_rw_a test_file_rw_b test_ext4_read test_ext4_create test_ext4_rw \
+	test_file_rw_a test_file_rw_b test_ext4_read test_ext4_create test_ext4_rw test_ext4_symlink \
 	test_fs_score test_page_cache test_page_cache_perf test_file_backed_memory test-elf-demand test-elf-demand-perf test-elf-demand-perf-child
 
 library-component-makefile.sbi := $(path-e)/libs/sbi/Makefile
@@ -79,6 +79,7 @@ module-component-makefile.test_file_rw_b := $(path-e)/module/test_file_rw_b/Make
 module-component-makefile.test_ext4_read := $(path-e)/module/test_ext4_read/Makefile
 module-component-makefile.test_ext4_create := $(path-e)/module/test_ext4_create/Makefile
 module-component-makefile.test_ext4_rw := $(path-e)/module/test_ext4_rw/Makefile
+module-component-makefile.test_ext4_symlink := $(path-e)/module/test_ext4_symlink/Makefile
 module-component-makefile.test_fs_score := $(path-e)/module/test_fs_score/Makefile
 module-component-makefile.test_page_cache := $(path-e)/module/test_page_cache/Makefile
 module-component-makefile.test_page_cache_perf := $(path-e)/module/test_page_cache_perf/Makefile
@@ -131,6 +132,7 @@ build-mods: make-initrd build-libs
 	$(q)$(MAKE) -f $(module-component-makefile.test_ext4_read) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_ext4_create) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_ext4_rw) $(arg-basic) build
+	$(q)$(MAKE) -f $(module-component-makefile.test_ext4_symlink) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_fs_score) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_page_cache) $(arg-basic) build
 	$(q)$(MAKE) -f $(module-component-makefile.test_page_cache_perf) $(arg-basic) build

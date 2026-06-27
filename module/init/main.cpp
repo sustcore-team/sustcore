@@ -121,9 +121,7 @@ CapIdx spawn_with_root_dir(int fd, size_t sched_class, CapIdx root_dir_cap) {
         .envp      = nullptr,
         .bsargv    = bsargv,
     };
-    auto child_pcb_res =
-        sys_create_process(sched_class, &request)
-            .to_result();
+    auto child_pcb_res = sys_create_process(sched_class, &request).to_result();
     (void)sys_cap_remove(child_root_cap).to_result();
     return child_pcb_res.has_value() ? child_pcb_res.value() : cap::error;
 }
@@ -172,8 +170,7 @@ CapIdx spawn_linux_with_root_dir(int fd, size_t sched_class,
         .bsargv    = bsargv,
     };
     auto child_pcb_res =
-        sys_create_linux_process(sched_class, &request)
-            .to_result();
+        sys_create_linux_process(sched_class, &request).to_result();
     (void)sys_cap_remove(child_root_cap).to_result();
     return child_pcb_res.has_value() ? child_pcb_res.value() : cap::error;
 }
@@ -544,6 +541,11 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
         //     .is_linuxproc = true,
         // },
         SpawnRequest{
+            .path         = "/initrd/test_ext4_symlink.mod",
+            .dispname     = "test_ext4_symlink",
+            .is_linuxproc = false,
+        },
+        SpawnRequest{
             .path         = "/initrd/contest-runner.mod",
             .dispname     = "contest-runner",
             .is_linuxproc = false,
@@ -552,7 +554,7 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
 
     // try write file /dev/stdout
     int fd = 0;
-    fd = kmod_fopen("/dev/stdout", "w");
+    fd     = kmod_fopen("/dev/stdout", "w");
     if (fd >= 0) {
         kmod_fwrite(fd, "Hello, STDOUT!\n", 15);
         printf(

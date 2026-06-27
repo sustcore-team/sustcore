@@ -1,6 +1,6 @@
 /**
  * @file ext4.cpp
- * @author Codex
+ * @author jeromeyao (yaoshengqi726@outlook.com)
  * @brief Ext4 block filesystem implementation
  * @version alpha-1.0.0
  * @date 2026-06-15
@@ -272,6 +272,25 @@ namespace ext4 {
         return FileCachePolicy::SHARED;
     }
 
+    Ext4Symlink::Ext4Symlink(Ext4Superblock &sb, inode_t inode_id) noexcept
+        : _sb(&sb), _inode_id(inode_id) {}
+
+    Result<std::string> Ext4Symlink::target() {
+        return _sb->readlink(_inode_id);
+    }
+
+    IMetadata &Ext4Symlink::metadata() {
+        return _metadata;
+    }
+
+    inode_t Ext4Symlink::inode_id() const {
+        return _inode_id;
+    }
+
+    INodeCachePolicy Ext4Symlink::inode_cache() const {
+        return INodeCachePolicy::SHARED;
+    }
+
     Ext4Directory::Ext4Directory(Ext4Superblock &sb, inode_t inode_id) noexcept
         : _sb(&sb), _inode_id(inode_id) {}
 
@@ -314,6 +333,12 @@ namespace ext4 {
         (void)options;
         _entries_cached = false;
         return _sb->create_directory(_inode_id, name);
+    }
+
+    Result<inode_t> Ext4Directory::symlink(std::string_view name,
+                                           std::string_view target) {
+        _entries_cached = false;
+        return _sb->create_symlink(_inode_id, name, target);
     }
 
     Result<size_t> Ext4Directory::entry_count() {
@@ -577,8 +602,7 @@ namespace ext4 {
             // 后续再完善
             if (unsupported_bits != EXT4_FEATURE_INCOMPAT_RECOVER) {
                 unexpect_return(ErrCode::NOT_SUPPORTED);
-            }
-            else {
+            } else {
                 loggers::VFS::ERROR("只有 RECOVER, 先放行");
             }
         }
@@ -2905,7 +2929,14 @@ namespace ext4 {
             }
             return util::owner<IINode *>(dir);
         }
-        if (type == EXT4_S_IFREG || type == EXT4_S_IFLNK) {
+        if (type == EXT4_S_IFLNK) {
+            auto *symlink = new Ext4Symlink(*this, inode_id);
+            if (symlink == nullptr) {
+                unexpect_return(ErrCode::OUT_OF_MEMORY);
+            }
+            return util::owner<IINode *>(symlink);
+        }
+        if (type == EXT4_S_IFREG) {
             auto *file = new Ext4File(*this, inode_id);
             if (file == nullptr) {
                 unexpect_return(ErrCode::OUT_OF_MEMORY);

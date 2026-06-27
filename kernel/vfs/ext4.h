@@ -1,6 +1,6 @@
 /**
  * @file ext4.h
- * @author Codex
+ * @author jeromeyao (yaoshengqi726@outlook.com)
  * @brief Ext4 block filesystem
  * @version alpha-1.0.0
  * @date 2026-06-15
@@ -68,6 +68,26 @@ namespace ext4 {
         FileCachePolicy file_cache() const final;
     };
 
+    class Ext4Symlink final : public ISymlink {
+    private:
+        Ext4Superblock *_sb;
+        inode_t _inode_id;
+        Ext4Metadata _metadata {};
+
+    public:
+        Ext4Symlink(Ext4Superblock &sb, inode_t inode_id) noexcept;
+        ~Ext4Symlink() final = default;
+
+        [[nodiscard]]
+        Result<std::string> target() final;
+        [[nodiscard]]
+        IMetadata &metadata() final;
+        [[nodiscard]]
+        inode_t inode_id() const final;
+        [[nodiscard]]
+        INodeCachePolicy inode_cache() const final;
+    };
+
     class Ext4Directory final : public IDirectory {
     private:
         Ext4Superblock *_sb;
@@ -101,6 +121,9 @@ namespace ext4 {
         Result<void> unlink(std::string_view name) final;
         [[nodiscard]]
         Result<void> rmdir(std::string_view name) final;
+        [[nodiscard]]
+        Result<inode_t> symlink(std::string_view name,
+                                std::string_view target) final;
         [[nodiscard]]
         Result<void> rename(std::string_view old_name,
                             IDirectory &new_parent,
@@ -274,6 +297,7 @@ namespace ext4 {
         size_t sb_id() const final;
 
         friend class Ext4File;
+        friend class Ext4Symlink;
         friend class Ext4Directory;
     };
 
