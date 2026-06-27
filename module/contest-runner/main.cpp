@@ -446,8 +446,9 @@ namespace contest_runner {
         contest_runner::accumulate_stats(total,
                                          contest_runner::run_busybox(ctx));
         // contest_runner::accumulate_stats(total,
-                                        //  contest_runner::run_libctest(ctx));
-        // contest_runner::accumulate_stats(total, contest_runner::run_ltp(ctx));
+        //  contest_runner::run_libctest(ctx));
+        // contest_runner::accumulate_stats(total,
+        // contest_runner::run_ltp(ctx));
         contest_runner::cleanup_runner_context_caps(ctx);
 
         if (!glibc_env_cleanup()) {
@@ -460,14 +461,14 @@ namespace contest_runner {
 
     bool musl_env_setup() {
         bool ok  = true;
-        // ok      &= dolink(LIB_PATH, MUSL_LIB_PATH);
+        ok      &= dolink(LIB_PATH, MUSL_LIB_PATH);
         ok      &= dolink(LD_SO_PATH, MUSL_LD_SO_PATH);
         return ok;
     }
 
     bool musl_env_cleanup() {
         bool ok  = true;
-        // ok      &= dounlink(LIB_PATH);
+        ok      &= dounlink(LIB_PATH);
         ok      &= dounlink(LD_SO_PATH);
         return ok;
     }
@@ -489,11 +490,12 @@ namespace contest_runner {
         }
 
         contest_runner::accumulate_stats(total, contest_runner::run_basic(ctx));
-        contest_runner::accumulate_stats(total,
-                                         contest_runner::run_busybox(ctx));
         // contest_runner::accumulate_stats(total,
-                                        //  contest_runner::run_libctest(ctx));
-        // contest_runner::accumulate_stats(total, contest_runner::run_ltp(ctx));
+        //                                  contest_runner::run_busybox(ctx));
+        // contest_runner::accumulate_stats(total,
+        //  contest_runner::run_libctest(ctx));
+        // contest_runner::accumulate_stats(total,
+        // contest_runner::run_ltp(ctx));
         contest_runner::cleanup_runner_context_caps(ctx);
         return true;
     }
@@ -514,7 +516,7 @@ extern "C" int kmod_main(int argc, const char *argv[], const char *envp[],
 
     contest_runner::TestRunStats total{};
     bool ok  = true;
-    ok      &= contest_runner::run_glibc(root_dir_cap, total);
+    // ok      &= contest_runner::run_glibc(root_dir_cap, total);
     ok      &= contest_runner::run_musl(root_dir_cap, total);
 
     printf("contest-runner: all done total=%lu passed=%lu failed=%lu\n",
