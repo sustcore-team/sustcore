@@ -649,6 +649,34 @@ namespace syscall {
         return true;
     }
 
+    Result<bool> pcb_execve_linux(CapIdx pcb_cap, CapIdx image_cap,
+                                  const StartupArguments &startup) {
+        cap::Capability *cap = nullptr;
+        auto pcb_res         = lookup_pcb(pcb_cap, &cap);
+        propagate(pcb_res);
+        cap::PCBObject obj(util::nnullforce(cap));
+        auto target_res = obj.require_execute();
+        propagate(target_res);
+        auto image_res = lookup_vfile(image_cap);
+        propagate(image_res);
+
+        task::PCB *target_pcb = target_res.value();
+        if (target_pcb->cholder == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+
+        auto subsystem_cap_res =
+            VFS::inst().open(POSIX_SUBSYSTEM_IMAGE, *target_pcb->cholder);
+        propagate(subsystem_cap_res);
+
+        auto exec_res = task::TaskManager::inst().exec_linux_pcb(
+            util::nnullforce(target_pcb), image_cap, subsystem_cap_res.value(),
+            startup.caps.data(), startup.caps.size(), startup.argv,
+            startup.envp, startup.bsargv, startup.execfn);
+        propagate(exec_res);
+        return true;
+    }
+
     bool pcb_is_current(CapIdx pcb_cap) {
         auto current_tcb_res = running_tcb();
         if (!current_tcb_res.has_value()) {

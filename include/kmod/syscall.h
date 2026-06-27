@@ -79,6 +79,8 @@ SysRet<CapIdx> sys_tcb_wait(CapIdx tcb_cap, CapIdx pcbs_idx[], int *status,
 SysRet<size_t> sys_pcb_fork(CapIdx pcb_cap, CapIdx *child_pcb_cap);
 SysRet<size_t> fork(CapIdx *child_pcb_cap);
 SysRet<void> sys_pcb_execve(CapIdx pcb_cap, const ExecveRequest *request);
+SysRet<void> sys_pcb_execve_linux(CapIdx pcb_cap,
+                                  const ExecveRequest *request);
 SysRet<void> sys_execve(const ExecveRequest *request);
 SysRet<void> execve(const ExecveRequest *request);
 

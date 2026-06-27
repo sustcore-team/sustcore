@@ -589,8 +589,9 @@ namespace task {
                        builder.auxv_entries.size() * 2 + 1 +
                        builder.bsargv_ptrs.size() + 1);
         const size_t argc        = builder.argv_ptrs.size();
-        const size_t argv_offset = layout.size();
         layout.push_back(argc);
+        // layout[0] 是 argc，argv 必须指向紧随其后的 argv[0] 指针表。push 以后再取 size。
+        const size_t argv_offset = layout.size();
         for (auto ptr : builder.argv_ptrs) {
             layout.push_back(ptr.arith());
         }
@@ -1325,6 +1326,106 @@ namespace task {
 
         loggers::SUSTCORE::DEBUG("execve成功: image_cap=%p pid=%d", image_cap,
                                  pcb->pid);
+        void_return();
+    }
+
+    Result<void> TaskManager::exec_linux_pcb(
+        util::nonnull<PCB *> target, CapIdx image_cap, CapIdx subsystem_image_cap,
+        const CapIdx *reserved_caps, size_t reserved_count,
+        const std::vector<std::string> &argv,
+        const std::vector<std::string> &envp,
+        const std::vector<TaskSpec::BootstrapRecordData> &bsargv,
+        const std::string &execfn) {
+        PCB *pcb = target.get();
+        if (pcb->is_kernel) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        if (pcb->tmm == nullptr || pcb->cholder == nullptr) {
+            unexpect_return(ErrCode::NULLPTR);
+        }
+        auto *current_tcb = schd::Scheduler::inst().current_tcb();
+        bool target_current =
+            current_tcb != nullptr && current_tcb->task == pcb;
+        schd::ClassType schd_class =
+            exec_sched_class(pcb, current_tcb, target_current);
+        TCB *reuse_tcb = target_current ? current_tcb : nullptr;
+
+        auto subsystem_cap_guard = util::Guard([&]() {
+            auto remove_res = pcb->cholder->remove(subsystem_image_cap);
+            (void)remove_res;
+        });
+
+        auto reserved_res = collect_reserved_caps(
+            pcb->cholder, pcb->pcb_cap, reserved_caps, reserved_count);
+        propagate(reserved_res);
+        auto reserved = std::move(reserved_res.value());
+
+        TaskSpec spec = make_empty_task_spec();
+        TaskSpecGuard spec_guard(spec);
+        LoadPrm load_prm{};
+        auto load_spec_res =
+            load_linux_task_spec(image_cap, pcb->cholder, subsystem_image_cap,
+                                 argv, envp, bsargv, execfn, spec, load_prm);
+        propagate(load_spec_res);
+        if (spec.heap_mem_cap != cap::null && spec.heap_mem_cap != cap::error) {
+            reserved.caps.insert(spec.heap_mem_cap);
+        }
+        if (spec.linuxss_heap_mem_cap != cap::null &&
+            spec.linuxss_heap_mem_cap != cap::error)
+        {
+            reserved.caps.insert(spec.linuxss_heap_mem_cap);
+        }
+
+        auto prune_res = remove_unreserved_caps(pcb->cholder, reserved);
+        propagate(prune_res);
+        subsystem_cap_guard.release();
+
+        TaskMemoryManager *old_tmm = pcb->tmm;
+        while (!pcb->threads.empty()) {
+            TCB *tcb = &pcb->threads.front();
+            pcb->threads.pop_front();
+            if (tcb == reuse_tcb) {
+                continue;
+            }
+            if (tcb->basic_entity.state == ThreadState::READY) {
+                auto dequeue_res =
+                    schd::Scheduler::inst().dequeue(util::nnullforce(tcb));
+                propagate(dequeue_res);
+            }
+            auto recycle_res = recycle_tcb(util::nnullforce(tcb));
+            propagate(recycle_res);
+        }
+        pcb->tmm          = util::owner<TaskMemoryManager *>(nullptr);
+        pcb->entrypoint   = VirAddr::null;
+        pcb->main_tcb_cap = cap::null;
+
+        auto populate_res =
+            populate_task(util::nnullforce(pcb), spec, schd_class, reuse_tcb);
+        propagate(populate_res);
+
+        if (target_current) {
+            current_tcb->basic_entity.state = ThreadState::RUNNING;
+            current_tcb->basic_entity.flags = 0;
+            current_tcb->rr_entity          = {};
+        } else if (!schd::Scheduler::inst().wakeup_new(populate_res.value())) {
+            unexpect_return(ErrCode::CREATION_FAILED);
+        }
+
+        spec_guard.release();
+
+        if (target_current) {
+            schd::switch_pgd(pcb->tmm);
+        }
+
+        TaskSpec old_spec{
+            .tmm        = util::owner(old_tmm),
+            .holder     = nullptr,
+            .entrypoint = VirAddr::null,
+        };
+        cleanup_task_spec(old_spec);
+
+        loggers::SUSTCORE::DEBUG("POSIX execve成功: image_cap=%p pid=%d",
+                                 image_cap, pcb->pid);
         void_return();
     }
 }  // namespace task

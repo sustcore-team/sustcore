@@ -77,6 +77,12 @@ sys_pcb_execve:
     li.d $a7, SYS_PCB_EXECVE
     do_syscall
 
+    .global sys_pcb_execve_linux
+    .type sys_pcb_execve_linux, @function
+sys_pcb_execve_linux:
+    li.d $a7, SYS_PCB_EXECVE_POSIX
+    do_syscall
+
     .global sys_notif_wait
     .type sys_notif_wait, @function
 sys_notif_wait:

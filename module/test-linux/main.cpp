@@ -25,6 +25,7 @@ namespace {
     constexpr size_t __NR_read          = 63;
     constexpr size_t __NR_write         = 64;
     constexpr size_t __NR_getcwd        = 17;
+    constexpr size_t __NR_execve        = 221;
 
     // open flags
     constexpr int O_RDONLY              = 0;
@@ -46,6 +47,23 @@ namespace {
 
     void puts(const char *s) {
         linux_write(STDOUT_FD, s, strlen(s));
+    }
+
+    int strcmp(const char *lhs, const char *rhs) {
+        if (lhs == nullptr || rhs == nullptr) {
+            return lhs == rhs ? 0 : (lhs == nullptr ? -1 : 1);
+        }
+        size_t i = 0;
+        while (lhs[i] != '\0' && rhs[i] != '\0') {
+            if (lhs[i] != rhs[i]) {
+                return lhs[i] < rhs[i] ? -1 : 1;
+            }
+            ++i;
+        }
+        if (lhs[i] == rhs[i]) {
+            return 0;
+        }
+        return lhs[i] < rhs[i] ? -1 : 1;
     }
 
     // Test counters
@@ -99,7 +117,37 @@ static long linux_getcwd(char *buf, size_t size) {
                          __NR_getcwd);
 }
 
-extern "C" [[noreturn]] void test_linux_main() {
+static long linux_execve(const char *path, const char *const argv[],
+                         const char *const envp[]) {
+    return linux_syscall(reinterpret_cast<size_t>(path),
+                         reinterpret_cast<size_t>(argv),
+                         reinterpret_cast<size_t>(envp),
+                         0, 0, 0, __NR_execve);
+}
+
+extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
+                                             const char *envp[]) {
+    if (argc >= 3 && argv != nullptr && strcmp(argv[1], "after-exec") == 0) {
+        puts("Test 10: execve resumed image...\n");
+        if (strcmp(argv[0], "/initrd/test-linux.mod") == 0 &&
+            strcmp(argv[2], "payload") == 0 && envp != nullptr &&
+            strcmp(envp[0], "EXECVE_TEST=1") == 0)
+        {
+            test_pass("execve argv/envp");
+        } else {
+            test_fail("execve argv/envp", "unexpected startup arguments");
+        }
+
+        puts("\n=== TEST SUMMARY ===\n");
+        if (g_tests_failed == 0) {
+            puts("ALL TESTS PASSED\n");
+        } else {
+            puts("SOME TESTS FAILED\n");
+        }
+        while (true) {
+        }
+    }
+
     // Original test: write hello three times
     const char *msg = "Hello, linux subsystem!\n";
     puts(msg);
@@ -247,6 +295,18 @@ extern "C" [[noreturn]] void test_linux_main() {
         }
     } else {
         test_fail("create file", "expected fd >= 3");
+    }
+
+    puts("Test 10: execve self...\n");
+    const char *exec_argv[] = {"/initrd/test-linux.mod", "after-exec",
+                               "payload", nullptr};
+    const char *exec_envp[] = {"EXECVE_TEST=1", nullptr};
+    long exec_ret = linux_execve("/initrd/test-linux.mod", exec_argv,
+                                 exec_envp);
+    if (exec_ret < 0) {
+        test_fail("execve self", "execve returned error");
+    } else {
+        test_fail("execve self", "execve unexpectedly returned success");
     }
 
     // Summary

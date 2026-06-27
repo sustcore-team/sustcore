@@ -412,6 +412,14 @@ namespace task {
                               const std::vector<TaskSpec::BootstrapRecordData>
                                   &bsargv = {},
                               const std::string &execfn = {});
+        Result<void> exec_linux_pcb(
+            util::nonnull<PCB *> pcb, CapIdx image_cap,
+            CapIdx subsystem_image_cap, const CapIdx *reserved_caps,
+            size_t reserved_count,
+            const std::vector<std::string> &argv = {},
+            const std::vector<std::string> &envp = {},
+            const std::vector<TaskSpec::BootstrapRecordData> &bsargv = {},
+            const std::string &execfn = {});
         /**
          * @brief 将已完成的 PCB 加入回收队列, 以便稍后统一回收.
          *

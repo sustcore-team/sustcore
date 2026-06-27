@@ -89,6 +89,14 @@ sys_pcb_execve:
     ecall
     ret
 
+    .global sys_pcb_execve_linux
+    .type   sys_pcb_execve_linux, @function
+sys_pcb_execve_linux:
+    /* a0 = pcb cap slot, a1 = ExecveRequest ptr */
+    li a7, SYS_PCB_EXECVE_POSIX
+    ecall
+    ret
+
     .global sys_notif_wait
     .type sys_notif_wait, @function
 sys_notif_wait:

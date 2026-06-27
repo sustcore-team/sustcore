@@ -94,6 +94,13 @@ sys_pcb_execve:
     ecall
     ret
 
+    .global sys_pcb_execve_linux
+    .type   sys_pcb_execve_linux, @function
+sys_pcb_execve_linux:
+    li a7, SYS_PCB_EXECVE_POSIX
+    ecall
+    ret
+
     .global sys_yield
     .type   sys_yield, @function
 sys_yield:

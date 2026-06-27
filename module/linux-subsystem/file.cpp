@@ -14,10 +14,13 @@
 #include <file.h>
 #include <logger.h>
 #include <prog.h>
+#include <sustcore/bootstrap.h>
+#include <sustcore/capability.h>
 #include <sus/path.h>
 #include <syscall.h>
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -33,6 +36,7 @@ namespace {
     constexpr int LINUX_O_DIRECTORY = 0200000;  // octal
     constexpr int AT_REMOVEDIR      = 0x200;
     constexpr size_t MAX_DIR_FDS    = 128;
+    constexpr size_t MAX_EXEC_ARGS   = 256;
     constexpr uint8_t DT_REG        = 8;
     constexpr uint8_t DT_DIR        = 4;
     constexpr uint8_t DT_LNK        = 10;
@@ -138,6 +142,17 @@ namespace {
     struct ReadlinkTarget {
         CapIdx parent_cap = cap::null;
         std::string relative_path{};
+    };
+
+    struct CapExplainBootstrap {
+        bsheader header;
+        BootstrapCapExplainPayloadHead explain;
+        char desc[8];
+    };
+
+    struct PathBootstrap {
+        bsheader header;
+        char desc[LINUX_PATH_MAX + 5];
     };
 
     enum class ResolvedNodeType {
@@ -721,6 +736,63 @@ namespace {
         }
         return static_cast<size_t>(fd);
     }
+
+    [[nodiscard]]
+    bool copy_exec_strings(const char *const src[], std::vector<std::string> &dst) {
+        dst.clear();
+        if (src == nullptr) {
+            return true;
+        }
+
+        for (size_t i = 0; src[i] != nullptr; ++i) {
+            if (i >= MAX_EXEC_ARGS || strlen(src[i]) >= LINUX_PATH_MAX) {
+                return false;
+            }
+            dst.emplace_back(src[i]);
+        }
+        return true;
+    }
+
+    void make_exec_ptrs(const std::vector<std::string> &items,
+                        std::vector<const char *> &ptrs) {
+        ptrs.clear();
+        for (const auto &item : items) {
+            ptrs.push_back(item.c_str());
+        }
+        ptrs.push_back(nullptr);
+    }
+
+    void fill_cap_bootstrap(CapExplainBootstrap &record, CapIdx cap_idx,
+                            PayloadType type, b64 perm, const char *desc) {
+        memset(&record, 0, sizeof(record));
+        record.header.size = sizeof(bsheader) +
+                             sizeof(BootstrapCapExplainPayloadHead) +
+                             strlen(desc) + 1;
+        record.header.type      = boot::TYPE_CAPEXP;
+        record.explain.cap_idx  = cap_idx;
+        record.explain.cap_type = type;
+        record.explain.cap_perm = perm;
+        strcpy(record.desc, desc);
+    }
+
+    [[nodiscard]]
+    bool fill_cwd_path_bootstrap(PathBootstrap &record) {
+        memset(&record, 0, sizeof(record));
+        int written = snprintf(record.desc, sizeof(record.desc), "#cwd:%s",
+                               __prog_cwd.c_str());
+        if (written <= 0 ||
+            static_cast<size_t>(written) >= sizeof(record.desc)) {
+            return false;
+        }
+        record.header.size = sizeof(bsheader) + static_cast<size_t>(written) + 1;
+        record.header.type = boot::TYPE_PATHEXP;
+        return true;
+    }
+
+    size_t fail_execve_after_open(int image_fd, size_t err) {
+        linux_sys_close(image_fd);
+        return err;
+    }
 }  // namespace
 
 size_t linux_open_fd(const char *pathname, int fd, int flags) {
@@ -1030,6 +1102,126 @@ size_t linux_sys_chdir(const char *pathname) {
     (void)sys_cap_remove(dir_cap);
 
     return refresh_cwd_dir_cap(resolved.absolute_path) ? 0 : -EIO;
+}
+
+size_t linux_sys_execve(const char *pathname, const char *const argv[],
+                        const char *const envp[]) {
+    if (pathname == nullptr) {
+        return -EFAULT;
+    }
+
+    auto resolved = resolve_path_at(AT_FDCWD, pathname);
+    if (resolved.parent_cap == cap::null || resolved.relative_path.empty()) {
+        return -ENOENT;
+    }
+
+    SysRet<CapIdx> image_cap_ret = sys_vfs_open(resolved.parent_cap,
+        resolved.relative_path.c_str(),
+        flags::O_EXECUTE);
+
+    if (image_cap_ret.is_error()) {
+        return -ENOENT;
+    }
+
+    CapIdx image_cap = image_cap_ret.value();
+
+    int image_fd = alloc_fd(image_cap);
+    if (image_fd < 0) {
+        sys_cap_remove(image_cap);
+        return -EMFILE;
+    }
+
+    CapIdx root_cap = __prog_root_dir_cap;
+    if (root_cap == cap::null || root_cap == cap::error) {
+        linux_sys_close(image_fd);
+        return -EIO;
+    }
+
+    CapIdx cwd_cap = __prog_cwd_dir_cap;
+    if (cwd_cap == cap::null || cwd_cap == cap::error) {
+        linux_sys_close(image_fd);
+        return -EIO;
+    }
+
+    CapIdx parent_cap = __prog_parent_cap;
+    if (parent_cap == cap::error) {
+        parent_cap = cap::null;
+    }
+
+    CapIdx reserved_caps[] = {root_cap, cwd_cap, parent_cap, cap::null};
+
+    CapExplainBootstrap root_bootstrap{};
+    CapExplainBootstrap cwd_bootstrap{};
+    CapExplainBootstrap parent_bootstrap{};
+    PathBootstrap cwd_path_bootstrap{};
+
+    fill_cap_bootstrap(root_bootstrap, root_cap, PayloadType::VDIR, ~b64(0),
+                       "#/");
+    fill_cap_bootstrap(cwd_bootstrap, cwd_cap, PayloadType::VDIR, ~b64(0),
+                       "#cwd");
+    if (parent_cap != cap::null && parent_cap != cap::error) {
+        fill_cap_bootstrap(parent_bootstrap, parent_cap, PayloadType::PCB,
+                           ~b64(0), "#parent");
+    }
+    if (!fill_cwd_path_bootstrap(cwd_path_bootstrap)) {
+        return fail_execve_after_open(image_fd, -ENAMETOOLONG);
+    }
+
+    std::vector<std::string> argv_storage{};
+    std::vector<std::string> envp_storage{};
+    if (!copy_exec_strings(argv, argv_storage) ||
+        !copy_exec_strings(envp, envp_storage))
+    {
+        return fail_execve_after_open(image_fd, -E2BIG);
+    }
+
+    if (argv_storage.empty()) {
+        argv_storage.emplace_back(pathname);
+    }
+
+    std::vector<const char *> argv_ptrs{};
+    std::vector<const char *> envp_ptrs{};
+    make_exec_ptrs(argv_storage, argv_ptrs);
+    make_exec_ptrs(envp_storage, envp_ptrs);
+
+    const char *bsargv_with_parent[] = {
+        reinterpret_cast<const char *>(&root_bootstrap),
+        reinterpret_cast<const char *>(&cwd_bootstrap),
+        reinterpret_cast<const char *>(&parent_bootstrap),
+        reinterpret_cast<const char *>(&cwd_path_bootstrap),
+        nullptr,
+    };
+    const char *bsargv_without_parent[] = {
+        reinterpret_cast<const char *>(&root_bootstrap),
+        reinterpret_cast<const char *>(&cwd_bootstrap),
+        reinterpret_cast<const char *>(&cwd_path_bootstrap),
+        nullptr,
+    };
+    const char **bsargv = parent_cap != cap::null && parent_cap != cap::error
+                              ? bsargv_with_parent
+                              : bsargv_without_parent;
+
+    CapIdx exec_cap = fd_to_cap(image_fd);
+    if (exec_cap == cap::error) {
+        return fail_execve_after_open(image_fd, -EBADF);
+    }
+
+    ExecveRequest request{
+        .image_cap = exec_cap,
+        .execfn    = pathname,
+        .caps      = reserved_caps,
+        .argv      = argv_ptrs.data(),
+        .envp      = envp_ptrs.data(),
+        .bsargv    = bsargv,
+    };
+
+    if (!sys_pcb_execve_linux(__prog_pcb_cap, &request)) {
+        linux_sys_close(image_fd);
+        return -EIO;
+    }
+
+    while (true) {
+    }
 }
 
 size_t linux_sys_mkdirat(int dirfd, const char *pathname, int mode) {

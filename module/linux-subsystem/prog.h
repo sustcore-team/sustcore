@@ -49,6 +49,8 @@ size_t linux_sys_gettimeofday(void *tv, void *tz);
 size_t linux_sys_nanosleep(const void *req, void *rem);
 size_t linux_sys_times(void *buf);
 size_t linux_sys_getrandom(void *buf, size_t buflen, unsigned flags);
+size_t linux_sys_execve(const char *pathname, const char *const argv[],
+                        const char *const envp[]);
 size_t linux_sys_wait4(int pid, int *status, int options, void *rusage);
 size_t linux_sys_clone(size_t flags, addr_t newsp, int *parent_tid,
                        int *child_tid, addr_t tls,
