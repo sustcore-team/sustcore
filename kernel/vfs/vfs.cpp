@@ -14,6 +14,7 @@
 #include <env.h>
 #include <mem/gfp.h>
 #include <sus/path.h>
+#include <sustcore/attr.h>
 #include <sustcore/errcode.h>
 #include <sustcore/files.h>
 #include <task/scheduler.h>
@@ -2183,6 +2184,34 @@ Result<void> VFS::_stat_from_vinode(VINode &vnode, NodeMeta &out) const {
         }
     }
 
+    // Try getattr first
+    AttrSet attr{};
+    auto attr_res = vnode.inode()->getattr(attr);
+    if (attr_res.has_value()) {
+        // getattr succeeded — use it
+        const uint16_t mode_type = static_cast<uint16_t>(attr.mode & 0xF000);
+        if (mode_type == 0x8000) {      // S_IFREG
+            out.type = EntryType::FILE;
+        } else if (mode_type == 0x4000) { // S_IFDIR
+            out.type = EntryType::DIR;
+        } else if (mode_type == 0xA000) { // S_IFLNK
+            out.type = EntryType::SYMLINK;
+        } else {
+            // Fallback: try dynamic_cast approach
+            if (vnode.inode()->as_file().has_value()) {
+                out.type = EntryType::FILE;
+            } else if (vnode.inode()->as_directory().has_value()) {
+                out.type = EntryType::DIR;
+            } else {
+                unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+            }
+        }
+        out.size  = attr.size;
+        out.links = attr.nlink;
+        void_return();
+    }
+
+    // getattr returned NOT_SUPPORTED — fallback to existing logic
     auto symlink_res = vnode.superblock().sb()->is_symlink(out.inode);
     propagate(symlink_res);
     if (symlink_res.value()) {
@@ -2384,6 +2413,29 @@ Result<void> VFS::fstat(cap::Capability &cap, NodeMeta &out) const {
         return _stat_from_vinode(*vdir->vinode().get(), out);
     }
     unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+}
+
+Result<void> VFS::setattr(cap::Capability &parent_dir_cap,
+                         const char *relpath, AttrMask mask,
+                         const AttrSet &attrs, uint32_t flags) const {
+    constexpr uint32_t AT_SYMLINK_NOFOLLOW = 0x100;
+    auto *parent = parent_dir_cap.payload_as<VDirectory>();
+    if (parent == nullptr) {
+        unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+    }
+    auto global_res = _global_target_path(*parent, relpath);
+    propagate(global_res);
+    util::Path mount_path;
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        auto vnode_res = _resolve_inode_no_follow(global_res.value().second,
+                                                  mount_path);
+        propagate(vnode_res);
+        return vnode_res.value()->inode()->setattr(mask, attrs);
+    } else {
+        auto vnode_res = _resolve_inode(global_res.value().second, mount_path);
+        propagate(vnode_res);
+        return vnode_res.value()->inode()->setattr(mask, attrs);
+    }
 }
 
 Result<size_t> VFS::readlink(cap::Capability &parent_dir_cap,

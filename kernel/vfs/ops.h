@@ -17,6 +17,8 @@
 #include <sus/types.h>
 #include <sustcore/errcode.h>
 
+#include <sustcore/attr.h>
+
 #include <concepts>
 #include <cstddef>
 #include <string_view>
@@ -125,6 +127,11 @@ public:
     virtual INodeCachePolicy inode_cache() const {
         return INodeCachePolicy::SHARED;
     }
+
+    [[nodiscard]]
+    virtual Result<void> getattr(AttrSet &out) const = 0;
+    [[nodiscard]]
+    virtual Result<void> setattr(AttrMask mask, const AttrSet &attrs) = 0;
 };
 
 /**
@@ -191,6 +198,18 @@ public:
     virtual FileCachePolicy file_cache() const {
         return FileCachePolicy::SHARED;
     }
+
+    [[nodiscard]]
+    Result<void> getattr(AttrSet &out) const override {
+        (void)out;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    [[nodiscard]]
+    Result<void> setattr(AttrMask mask, const AttrSet &attrs) override {
+        (void)mask;
+        (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
 };
 
 class ISymlink : public IINode {
@@ -205,6 +224,18 @@ public:
 
     [[nodiscard]]
     virtual Result<std::string> target() = 0;
+
+    [[nodiscard]]
+    Result<void> getattr(AttrSet &out) const override {
+        (void)out;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    [[nodiscard]]
+    Result<void> setattr(AttrMask mask, const AttrSet &attrs) override {
+        (void)mask;
+        (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
 };
 
 /**
@@ -273,6 +304,18 @@ public:
      */
     [[nodiscard]]
     virtual Result<void> sync() = 0;
+
+    [[nodiscard]]
+    Result<void> getattr(AttrSet &out) const override {
+        (void)out;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+    [[nodiscard]]
+    Result<void> setattr(AttrMask mask, const AttrSet &attrs) override {
+        (void)mask;
+        (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
 };
 
 /**

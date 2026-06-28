@@ -552,6 +552,10 @@ public:
     Result<void> lstat(cap::Capability &parent_dir_cap, const char *relpath,
                        NodeMeta &out) const;
     [[nodiscard]]
+    Result<void> setattr(cap::Capability &parent_dir_cap, const char *relpath,
+                         AttrMask mask, const AttrSet &attrs,
+                         uint32_t flags) const;
+    [[nodiscard]]
     Result<size_t> readlink(cap::Capability &parent_dir_cap, const char *relpath,
                             char *buf, size_t bufsiz) const;
     [[nodiscard]]
