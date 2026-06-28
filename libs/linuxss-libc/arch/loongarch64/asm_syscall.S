@@ -440,3 +440,10 @@ sys_vfs_sync:
     li.d $a7, SYS_VFS_SYNC
     syscall 0
     ret
+
+    .global sys_vfs_fchownat
+    .type sys_vfs_fchownat, @function
+sys_vfs_fchownat:
+    li.d $a7, SYS_VFS_FCHOWNAT
+    syscall 0
+    ret

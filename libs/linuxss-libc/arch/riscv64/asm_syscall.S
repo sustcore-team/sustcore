@@ -439,3 +439,10 @@ sys_vfs_sync:
     li a7, SYS_VFS_SYNC
     ecall
     ret
+
+    .global sys_vfs_fchownat
+    .type   sys_vfs_fchownat, @function
+sys_vfs_fchownat:
+    li a7, SYS_VFS_FCHOWNAT
+    ecall
+    ret

@@ -124,3 +124,6 @@ extern "C" SysRet<size_t> sys_vfs_size(CapIdx file_cap);
 extern "C" SysRet<size_t> sys_vfs_getdents(CapIdx dir_cap, void *buf, size_t buflen,
                                            size_t offset);
 extern "C" SysRet<void> sys_vfs_sync(CapIdx capidx);
+extern "C" SysRet<void> sys_vfs_fchownat(CapIdx dirfd, uint32_t uid,
+                                         uint32_t gid, uint32_t flags,
+                                         const char *pathname);
