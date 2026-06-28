@@ -272,6 +272,14 @@ namespace ext4 {
         return FileCachePolicy::SHARED;
     }
 
+    Result<void> Ext4File::getattr(AttrSet &out) const {
+        return _sb->fill_attr(_inode_id, out);
+    }
+
+    Result<void> Ext4File::setattr(AttrMask mask, const AttrSet &attrs) {
+        return _sb->apply_attr(_inode_id, mask, attrs);
+    }
+
     Ext4Symlink::Ext4Symlink(Ext4Superblock &sb, inode_t inode_id) noexcept
         : _sb(&sb), _inode_id(inode_id) {}
 
@@ -289,6 +297,14 @@ namespace ext4 {
 
     INodeCachePolicy Ext4Symlink::inode_cache() const {
         return INodeCachePolicy::SHARED;
+    }
+
+    Result<void> Ext4Symlink::getattr(AttrSet &out) const {
+        return _sb->fill_attr(_inode_id, out);
+    }
+
+    Result<void> Ext4Symlink::setattr(AttrMask mask, const AttrSet &attrs) {
+        return _sb->apply_attr(_inode_id, mask, attrs);
     }
 
     Ext4Directory::Ext4Directory(Ext4Superblock &sb, inode_t inode_id) noexcept
@@ -441,6 +457,14 @@ namespace ext4 {
 
     INodeCachePolicy Ext4Directory::inode_cache() const {
         return INodeCachePolicy::SHARED;
+    }
+
+    Result<void> Ext4Directory::getattr(AttrSet &out) const {
+        return _sb->fill_attr(_inode_id, out);
+    }
+
+    Result<void> Ext4Directory::setattr(AttrMask mask, const AttrSet &attrs) {
+        return _sb->apply_attr(_inode_id, mask, attrs);
     }
 
     Ext4Superblock::Ext4Superblock(Ext4Driver &fs, blk::BufferCache &cache,
@@ -1026,6 +1050,64 @@ namespace ext4 {
             hi = read_le_at<uint32_t>(raw_res.value(), 108);
         }
         return lo | (hi << 32);
+    }
+
+    Result<void> Ext4Superblock::fill_attr(inode_t inode_id, AttrSet &out) {
+        auto raw_res = read_inode_raw(inode_id);
+        propagate(raw_res);
+        auto valid_res = validate_inode_raw(raw_res.value());
+        propagate(valid_res);
+        const auto &raw = raw_res.value();
+
+        out.mode    = read_le_at<uint16_t>(raw, 0);
+        out.uid     = read_le_at<uint16_t>(raw, 2);
+        out.gid     = read_le_at<uint16_t>(raw, 24);
+        auto size_res = inode_size(inode_id);
+        propagate(size_res);
+        out.size    = size_res.value();
+        out.inode   = inode_id;
+        out.nlink   = read_le_at<uint16_t>(raw, 26);
+        out.atime   = read_le_at<uint32_t>(raw, 8);
+        out.ctime   = read_le_at<uint32_t>(raw, 12);
+        out.mtime   = read_le_at<uint32_t>(raw, 16);
+        out.blksize = 512;
+        out.blocks  = read_le_at<uint64_t>(raw, 108) >> 9;
+        void_return();
+    }
+
+    Result<void> Ext4Superblock::apply_attr(inode_t inode_id, AttrMask mask,
+                                            const AttrSet &attrs) {
+        if (_read_only) {
+            unexpect_return(ErrCode::NOT_SUPPORTED);
+        }
+        auto raw_res = read_inode_raw(inode_id);
+        propagate(raw_res);
+        auto valid_res = validate_inode_raw(raw_res.value());
+        propagate(valid_res);
+        auto &raw = raw_res.value();
+
+        if (mask & AttrMask::MODE) {
+            write_le_at<uint16_t>(raw, 0, static_cast<uint16_t>(attrs.mode & 0xFFFF));
+        }
+        if (mask & AttrMask::UID) {
+            write_le_at<uint16_t>(raw, 2, static_cast<uint16_t>(attrs.uid & 0xFFFF));
+        }
+        if (mask & AttrMask::GID) {
+            write_le_at<uint16_t>(raw, 24, static_cast<uint16_t>(attrs.gid & 0xFFFF));
+        }
+        if (mask & AttrMask::ATIME) {
+            write_le_at<uint32_t>(raw, 8, static_cast<uint32_t>(attrs.atime & 0xFFFFFFFF));
+        }
+        if (mask & AttrMask::MTIME) {
+            write_le_at<uint32_t>(raw, 16, static_cast<uint32_t>(attrs.mtime & 0xFFFFFFFF));
+        }
+        if (mask & AttrMask::CTIME) {
+            write_le_at<uint32_t>(raw, 12, static_cast<uint32_t>(attrs.ctime & 0xFFFFFFFF));
+        }
+
+        auto write_res = write_inode_raw(inode_id, raw);
+        propagate(write_res);
+        void_return();
     }
 
     Result<inode_t> Ext4Superblock::alloc_file_inode() {

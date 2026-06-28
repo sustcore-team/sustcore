@@ -66,6 +66,10 @@ namespace ext4 {
         INodeCachePolicy inode_cache() const final;
         [[nodiscard]]
         FileCachePolicy file_cache() const final;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const final;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) final;
     };
 
     class Ext4Symlink final : public ISymlink {
@@ -86,6 +90,10 @@ namespace ext4 {
         inode_t inode_id() const final;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const final;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const final;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) final;
     };
 
     class Ext4Directory final : public IDirectory {
@@ -136,6 +144,10 @@ namespace ext4 {
         inode_t inode_id() const final;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const final;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const final;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) final;
     };
 
     class Ext4Superblock final : public ISuperblock {
@@ -295,6 +307,11 @@ namespace ext4 {
         IMetadata &metadata() final;
         [[nodiscard]]
         size_t sb_id() const final;
+        [[nodiscard]]
+        Result<void> fill_attr(inode_t inode_id, AttrSet &out);
+        [[nodiscard]]
+        Result<void> apply_attr(inode_t inode_id, AttrMask mask,
+                                 const AttrSet &attrs);
 
         friend class Ext4File;
         friend class Ext4Symlink;
