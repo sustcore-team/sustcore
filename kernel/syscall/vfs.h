@@ -88,5 +88,8 @@ namespace syscall {
     Result<CapIdx> mnt_root(CapIdx mntcap);
     [[nodiscard]]
     MountStatus mnt_state(CapIdx mntcap);
+    [[nodiscard]]
+    Result<void> vfs_fchownat(CapIdx dirfd, const UString &relpath,
+                              uint32_t uid, uint32_t gid, uint32_t flags);
 
 }  // namespace syscall

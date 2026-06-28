@@ -467,4 +467,19 @@ namespace syscall {
         return state_res.value();
     }
 
+    Result<void> vfs_fchownat(CapIdx dirfd, const UString &relpath,
+                              uint32_t uid, uint32_t gid, uint32_t flags) {
+        auto parent_res = lookup_current_cap(dirfd);
+        propagate(parent_res);
+        AttrSet attrs{};
+        attrs.uid = uid;
+        attrs.gid = gid;
+        auto setattr_res = VFS::inst().setattr(*parent_res.value(),
+                                               relpath.kbuf(),
+                                               AttrMask(attr::OWNER),
+                                               attrs, flags);
+        propagate(setattr_res);
+        void_return();
+    }
+
 }  // namespace syscall

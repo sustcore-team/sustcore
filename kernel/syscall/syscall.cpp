@@ -347,6 +347,7 @@ namespace syscall {
             case SYS_VFS_PAGE_CACHE_STATS:
                 return "SYS_VFS_PAGE_CACHE_STATS";
             case SYS_PCB_EXECVE_POSIX:  return "SYS_PCB_EXECVE_POSIX";
+            case SYS_VFS_FCHOWNAT:      return "SYS_VFS_FCHOWNAT";
             default:                      return "UNKNOWN_SYSCALL";
         }
     }
@@ -802,6 +803,16 @@ namespace syscall {
                 ret = result_value_ret(
                     "readlink",
                     vfs_readlink(capidx, path, std::move(buf), arg2));
+                break;
+            }
+            case SYS_VFS_FCHOWNAT: {
+                UString relpath((VirAddr)arg3, MAX_SYSCALL_PATH);
+                ret = result_void_ret(
+                    "fchownat",
+                    vfs_fchownat(capidx, relpath,
+                                 static_cast<uint32_t>(arg0),
+                                 static_cast<uint32_t>(arg1),
+                                 static_cast<uint32_t>(arg2)));
                 break;
             }
             case SYS_MNT_CREATE: {
