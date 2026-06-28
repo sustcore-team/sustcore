@@ -27,6 +27,8 @@
 
 namespace procfs {
     namespace {
+        constexpr uint16_t S_IFDIR = 0x4000;
+        constexpr uint16_t S_IFLNK = 0xA000;
         bool _initialized = false;
         alignas(ProcFSDriver) byte _INSTANCE_STORAGE[sizeof(ProcFSDriver)];
         ProcFSDriver *_INSTANCE = nullptr;
@@ -294,6 +296,28 @@ namespace procfs {
     MeminfoFile::MeminfoFile(ProcFSSuperblock &sb, ProcNode &node) noexcept
         : _sb(&sb), _node(&node) {}
 
+    Result<void> MeminfoFile::getattr(AttrSet &out) const {
+        out.mode    = 0444;
+        out.uid     = 0;
+        out.gid     = 0;
+        auto size_res = const_cast<MeminfoFile *>(this)->size();
+        if (!size_res.has_value()) { propagate_return(size_res); }
+        out.size    = size_res.value();
+        out.inode   = _node->inode_id;
+        out.nlink   = 1;
+        out.atime   = 0;
+        out.mtime   = 0;
+        out.ctime   = 0;
+        out.blksize = 512;
+        out.blocks  = (out.size + 511) / 512;
+        void_return();
+    }
+
+    Result<void> MeminfoFile::setattr(AttrMask mask, const AttrSet &attrs) {
+        (void)mask; (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
     Result<void> ProcFileNode::sync() {
         void_return();
     }
@@ -310,6 +334,28 @@ namespace procfs {
         return INodeCachePolicy::NONE;
     }
 
+    Result<void> ProcFileNode::getattr(AttrSet &out) const {
+        out.mode    = 0444;
+        out.uid     = 0;
+        out.gid     = 0;
+        auto size_res = const_cast<ProcFileNode *>(this)->size();
+        if (!size_res.has_value()) { propagate_return(size_res); }
+        out.size    = size_res.value();
+        out.inode   = _node->inode_id;
+        out.nlink   = 1;
+        out.atime   = 0;
+        out.mtime   = 0;
+        out.ctime   = 0;
+        out.blksize = 512;
+        out.blocks  = (out.size + 511) / 512;
+        void_return();
+    }
+
+    Result<void> ProcFileNode::setattr(AttrMask mask, const AttrSet &attrs) {
+        (void)mask; (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
+    }
+
     ProcSymlinkNode::ProcSymlinkNode(ProcFSSuperblock &sb,
                                      ProcNode &node) noexcept
         : _sb(&sb), _node(&node) {}
@@ -324,6 +370,28 @@ namespace procfs {
 
     INodeCachePolicy ProcSymlinkNode::inode_cache() const {
         return INodeCachePolicy::NONE;
+    }
+
+    Result<void> ProcSymlinkNode::getattr(AttrSet &out) const {
+        out.mode    = S_IFLNK | 0777;
+        out.uid     = 0;
+        out.gid     = 0;
+        auto target_res = const_cast<ProcSymlinkNode *>(this)->target();
+        if (!target_res.has_value()) { propagate_return(target_res); }
+        out.size    = target_res.value().size();
+        out.inode   = _node->inode_id;
+        out.nlink   = 1;
+        out.atime   = 0;
+        out.mtime   = 0;
+        out.ctime   = 0;
+        out.blksize = 512;
+        out.blocks  = 0;
+        void_return();
+    }
+
+    Result<void> ProcSymlinkNode::setattr(AttrMask mask, const AttrSet &attrs) {
+        (void)mask; (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
     ProcDirectoryNode::ProcDirectoryNode(ProcFSSuperblock &sb,
@@ -352,6 +420,26 @@ namespace procfs {
 
     INodeCachePolicy ProcDirectoryNode::inode_cache() const {
         return INodeCachePolicy::NONE;
+    }
+
+    Result<void> ProcDirectoryNode::getattr(AttrSet &out) const {
+        out.mode    = S_IFDIR | 0755;
+        out.uid     = 0;
+        out.gid     = 0;
+        out.size    = 0;
+        out.inode   = _node->inode_id;
+        out.nlink   = 2;
+        out.atime   = 0;
+        out.mtime   = 0;
+        out.ctime   = 0;
+        out.blksize = 512;
+        out.blocks  = 0;
+        void_return();
+    }
+
+    Result<void> ProcDirectoryNode::setattr(AttrMask mask, const AttrSet &attrs) {
+        (void)mask; (void)attrs;
+        unexpect_return(ErrCode::NOT_SUPPORTED);
     }
 
     ProcFSSuperblock::ProcFSSuperblock(ProcFSDriver &fs, size_t sb_id)

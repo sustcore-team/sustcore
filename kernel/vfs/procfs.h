@@ -113,6 +113,10 @@ namespace procfs {
         inode_t inode_id() const override;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const override;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const override;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) override;
     };
 
     class ProcSymlinkNode final : public ISymlink {
@@ -132,6 +136,10 @@ namespace procfs {
         inode_t inode_id() const override;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const override;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const override;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) override;
     };
 
     class ProcDirectoryNode final : public IDirectory {
@@ -163,6 +171,10 @@ namespace procfs {
         inode_t inode_id() const override;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const override;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const override;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) override;
     };
 
     class MeminfoFile final : public IFile {
@@ -192,6 +204,10 @@ namespace procfs {
         inode_t inode_id() const override;
         [[nodiscard]]
         INodeCachePolicy inode_cache() const override;
+        [[nodiscard]]
+        Result<void> getattr(AttrSet &out) const override;
+        [[nodiscard]]
+        Result<void> setattr(AttrMask mask, const AttrSet &attrs) override;
     };
 
     class ProcFSSuperblock final : public ISuperblock {
