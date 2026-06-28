@@ -32,6 +32,11 @@ struct VMAInfo {
     CapIdx mem_cap;
 };
 
+struct PipeCreateRet {
+    CapIdx read_cap;
+    CapIdx write_cap;
+};
+
 extern "C" SysRet<void> sys_write_serial(size_t __always_zero, const char *str,
                                          size_t len);
 extern "C" SysRet<size_t> sys_time_now_ns();
@@ -127,3 +132,9 @@ extern "C" SysRet<void> sys_vfs_sync(CapIdx capidx);
 extern "C" SysRet<void> sys_vfs_fchownat(CapIdx dirfd, uint32_t uid,
                                          uint32_t gid, uint32_t flags,
                                          const char *pathname);
+extern "C" SysRet<void> sys_pipe_create(size_t nonblock,
+                                        PipeCreateRet *out);
+extern "C" SysRet<size_t> sys_pipe_read(CapIdx read_cap, void *buf,
+                                        size_t len);
+extern "C" SysRet<size_t> sys_pipe_write(CapIdx write_cap, const void *buf,
+                                         size_t len);

@@ -136,3 +136,8 @@ namespace perm::mount {
     constexpr b64 QUERY = 0x02'0000;
     constexpr b64 ROOT  = 0x04'0000;
 }  // namespace perm::mount
+
+namespace perm::pipe {
+    constexpr b64 READ  = 0x01'0000;
+    constexpr b64 WRITE = 0x02'0000;
+}  // namespace perm::pipe

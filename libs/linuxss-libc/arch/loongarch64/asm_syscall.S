@@ -447,3 +447,27 @@ sys_vfs_fchownat:
     li.d $a7, SYS_VFS_FCHOWNAT
     syscall 0
     ret
+
+    .global sys_pipe_create
+    .type sys_pipe_create, @function
+sys_pipe_create:
+    /* $a0 = nonblock, $a1 = out */
+    li.d $a7, SYS_PIPE_CREATE
+    syscall 0
+    ret
+
+    .global sys_pipe_read
+    .type sys_pipe_read, @function
+sys_pipe_read:
+    /* $a0 = read cap, $a1 = buf, $a2 = len */
+    li.d $a7, SYS_PIPE_READ
+    syscall 0
+    ret
+
+    .global sys_pipe_write
+    .type sys_pipe_write, @function
+sys_pipe_write:
+    /* $a0 = write cap, $a1 = buf, $a2 = len */
+    li.d $a7, SYS_PIPE_WRITE
+    syscall 0
+    ret

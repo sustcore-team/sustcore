@@ -446,3 +446,27 @@ sys_vfs_fchownat:
     li a7, SYS_VFS_FCHOWNAT
     ecall
     ret
+
+    .global sys_pipe_create
+    .type   sys_pipe_create, @function
+sys_pipe_create:
+    /* a0 = nonblock, a1 = out */
+    li a7, SYS_PIPE_CREATE
+    ecall
+    ret
+
+    .global sys_pipe_read
+    .type   sys_pipe_read, @function
+sys_pipe_read:
+    /* a0 = read cap, a1 = buf, a2 = len */
+    li a7, SYS_PIPE_READ
+    ecall
+    ret
+
+    .global sys_pipe_write
+    .type   sys_pipe_write, @function
+sys_pipe_write:
+    /* a0 = write cap, a1 = buf, a2 = len */
+    li a7, SYS_PIPE_WRITE
+    ecall
+    ret

@@ -27,6 +27,7 @@
 
 #include "fdtable.h"
 #include "file.h"
+#include "pipe.h"
 
 extern "C" bool g_linux_initialized = false;
 
@@ -664,6 +665,9 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
         case __NR_read:
             return linux_sys_read(static_cast<int>(a0),
                                   reinterpret_cast<void *>(a1), a2);
+        case __NR_pipe2:
+            return linux_sys_pipe2(reinterpret_cast<int *>(a0),
+                                   static_cast<int>(a1));
         case __NR_writev:
             return linux_sys_writev(static_cast<int>(a0),
                                     reinterpret_cast<const void *>(a1),

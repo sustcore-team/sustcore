@@ -50,6 +50,8 @@ enum class ErrCode : int {
     ENTRY_NOT_FOUND          = FS_ERROR | 0x0001,
     // io errors
     IO_ERROR                 = 0x03'0000,
+    WOULD_BLOCK              = IO_ERROR | 0x0001,
+    BROKEN_PIPE              = IO_ERROR | 0x0002,
     // task errors
     TASK_ERROR               = 0x04'0000,
     NO_RUNNABLE_THREAD       = TASK_ERROR | 0x0001,
@@ -90,6 +92,8 @@ constexpr const char *to_cstring(ErrCode err) {
         case ErrCode::INVALID_TOKEN:      return "INVALID_TOKEN";
         case ErrCode::NO_FREE_SLOT:       return "NO_FREE_SLOT";
         case ErrCode::ENTRY_NOT_FOUND:    return "ENTRY_NOT_FOUND";
+        case ErrCode::WOULD_BLOCK:        return "WOULD_BLOCK";
+        case ErrCode::BROKEN_PIPE:        return "BROKEN_PIPE";
         case ErrCode::NO_RUNNABLE_THREAD: return "NO_RUNNABLE_THREAD";
         case ErrCode::NO_MESSAGE:         return "NO_MESSAGE";
         case ErrCode::PAGE_NOT_PRESENT:   return "PAGE_NOT_PRESENT";

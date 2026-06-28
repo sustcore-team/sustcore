@@ -32,6 +32,8 @@ enum class PayloadType : b64 {
     MEMORY   = 0x00A,
     REPLY    = 0x00B,
     VMOUNT   = 0x00C,
+    PIPE_READ_END  = 0x00D,
+    PIPE_WRITE_END = 0x00E,
 };
 
 constexpr bool operator&(PayloadType a, PayloadType b) {
@@ -53,6 +55,8 @@ constexpr const char *to_string(PayloadType type) {
         case PayloadType::MEMORY:   return "MEMORY";
         case PayloadType::REPLY:    return "REPLY";
         case PayloadType::VMOUNT:   return "VMOUNT";
+        case PayloadType::PIPE_READ_END:  return "PIPE_READ_END";
+        case PayloadType::PIPE_WRITE_END: return "PIPE_WRITE_END";
         default:                    return "UNKNOWN";
     }
 }

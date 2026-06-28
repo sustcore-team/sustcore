@@ -24,6 +24,9 @@ namespace {
     constexpr size_t __NR_lseek         = 62;
     constexpr size_t __NR_read          = 63;
     constexpr size_t __NR_write         = 64;
+    constexpr size_t __NR_pipe2         = 59;
+    constexpr size_t __NR_clone         = 220;
+    constexpr size_t __NR_wait4         = 260;
     constexpr size_t __NR_getcwd        = 17;
     constexpr size_t __NR_execve        = 221;
 
@@ -31,6 +34,7 @@ namespace {
     constexpr int O_RDONLY              = 0;
     constexpr int O_WRONLY              = 1;
     constexpr int O_CREAT               = 0100;
+    constexpr int O_NONBLOCK            = 00004000;
 
     // lseek whence
     constexpr int SEEK_SET              = 0;
@@ -105,6 +109,30 @@ static long linux_read(int fd, void *buf, size_t count) {
                          count, 0, 0, 0, __NR_read);
 }
 
+static long linux_write_sys(int fd, const void *buf, size_t count) {
+    return linux_syscall(static_cast<size_t>(fd),
+                         reinterpret_cast<size_t>(buf),
+                         count, 0, 0, 0, __NR_write);
+}
+
+static long linux_pipe2(int pipefd[2], int flags) {
+    return linux_syscall(reinterpret_cast<size_t>(pipefd),
+                         static_cast<size_t>(flags),
+                         0, 0, 0, 0, __NR_pipe2);
+}
+
+static long linux_clone(size_t flags) {
+    return linux_syscall(flags, 0, 0, 0, 0, 0, __NR_clone);
+}
+
+static long linux_wait4(int pid, int *status, int options, void *rusage) {
+    return linux_syscall(static_cast<size_t>(pid),
+                         reinterpret_cast<size_t>(status),
+                         static_cast<size_t>(options),
+                         reinterpret_cast<size_t>(rusage),
+                         0, 0, __NR_wait4);
+}
+
 static long linux_lseek(int fd, long offset, int whence) {
     return linux_syscall(static_cast<size_t>(fd),
                          static_cast<size_t>(offset),
@@ -123,6 +151,117 @@ static long linux_execve(const char *path, const char *const argv[],
                          reinterpret_cast<size_t>(argv),
                          reinterpret_cast<size_t>(envp),
                          0, 0, 0, __NR_execve);
+}
+
+static void test_pipe_basic() {
+    puts("Test 9.1: pipe basic read/write...\n");
+    int fds[2] = {-1, -1};
+    long ret = linux_pipe2(fds, 0);
+    if (ret == 0 && fds[0] >= 3 && fds[1] >= 3) {
+        test_pass("pipe2 create");
+    } else {
+        test_fail("pipe2 create", "expected two fds");
+        return;
+    }
+
+    const char *msg = "pipe-data";
+    long wn = linux_write_sys(fds[1], msg, 9);
+    char buf[16]{};
+    long rn = linux_read(fds[0], buf, 9);
+    if (wn == 9 && rn == 9 && strcmp(buf, "pipe-data") == 0) {
+        test_pass("pipe read/write");
+    } else {
+        test_fail("pipe read/write", "unexpected payload");
+    }
+    linux_close(fds[0]);
+    linux_close(fds[1]);
+}
+
+static void test_pipe_eof_and_epipe() {
+    puts("Test 9.2: pipe EOF and EPIPE...\n");
+    int fds[2] = {-1, -1};
+    if (linux_pipe2(fds, 0) != 0) {
+        test_fail("pipe EOF setup", "pipe2 failed");
+        return;
+    }
+
+    linux_close(fds[1]);
+    char b = 0;
+    long rn = linux_read(fds[0], &b, 1);
+    if (rn == 0) {
+        test_pass("pipe EOF after writer close");
+    } else {
+        test_fail("pipe EOF after writer close", "expected zero read");
+    }
+    linux_close(fds[0]);
+
+    if (linux_pipe2(fds, 0) != 0) {
+        test_fail("pipe EPIPE setup", "pipe2 failed");
+        return;
+    }
+    linux_close(fds[0]);
+    long wn = linux_write_sys(fds[1], "x", 1);
+    if (wn < 0) {
+        test_pass("pipe EPIPE after reader close");
+    } else {
+        test_fail("pipe EPIPE after reader close", "expected negative write");
+    }
+    linux_close(fds[1]);
+}
+
+static void test_pipe_nonblock() {
+    puts("Test 9.3: pipe nonblocking empty read...\n");
+    int fds[2] = {-1, -1};
+    if (linux_pipe2(fds, O_NONBLOCK) != 0) {
+        test_fail("pipe nonblock setup", "pipe2 failed");
+        return;
+    }
+    char b = 0;
+    long rn = linux_read(fds[0], &b, 1);
+    if (rn == -11) {
+        test_pass("pipe nonblock empty read EAGAIN");
+    } else {
+        test_fail("pipe nonblock empty read EAGAIN", "expected -EAGAIN");
+    }
+    linux_close(fds[0]);
+    linux_close(fds[1]);
+}
+
+static void test_pipe_fork() {
+    puts("Test 9.4: pipe fork communication...\n");
+    int fds[2] = {-1, -1};
+    if (linux_pipe2(fds, 0) != 0) {
+        test_fail("pipe fork setup", "pipe2 failed");
+        return;
+    }
+
+    long pid = linux_clone(17);
+    if (pid < 0) {
+        test_fail("pipe fork clone", "clone failed");
+        linux_close(fds[0]);
+        linux_close(fds[1]);
+        return;
+    }
+    if (pid == 0) {
+        linux_close(fds[0]);
+        (void)linux_write_sys(fds[1], "child", 5);
+        linux_close(fds[1]);
+        linux_syscall(0, 0, 0, 0, 0, 0, 94);
+        while (true) {
+        }
+    }
+
+    linux_close(fds[1]);
+    char buf[8]{};
+    long rn = linux_read(fds[0], buf, 5);
+    int status = 0;
+    long waited = linux_wait4(static_cast<int>(pid), &status, 0, nullptr);
+    if (rn == 5 && strcmp(buf, "child") == 0 && waited == pid) {
+        test_pass("pipe fork communication");
+    } else {
+        test_fail("pipe fork communication", "unexpected child message");
+    }
+    linux_close(fds[0]);
 }
 
 extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
@@ -296,6 +435,11 @@ extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
     } else {
         test_fail("create file", "expected fd >= 3");
     }
+
+    test_pipe_basic();
+    test_pipe_eof_and_epipe();
+    test_pipe_nonblock();
+    test_pipe_fork();
 
     puts("Test 10: execve self...\n");
     const char *exec_argv[] = {"/initrd/test-linux.mod", "after-exec",

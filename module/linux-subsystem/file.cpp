@@ -13,6 +13,7 @@
 #include <fdtable.h>
 #include <file.h>
 #include <logger.h>
+#include <pipe.h>
 #include <prog.h>
 #include <sustcore/bootstrap.h>
 #include <sustcore/capability.h>
@@ -875,6 +876,12 @@ size_t linux_sys_write(size_t fd, const void *buf, size_t len) {
         printf("linux_sys_write: invalid fd %u, parsed to invalid cap idx\n", fd);
         return -EBADF;
     }
+    if (linux_cap_is_pipe_write_end(file_cap)) {
+        return linux_pipe_write(file_cap, buf, len);
+    }
+    if (linux_cap_is_pipe_read_end(file_cap)) {
+        return -EBADF;
+    }
 
     size_t offset  = fd_offset(static_cast<int>(fd));
     auto write_res = sys_vfs_write(file_cap, offset,
@@ -933,6 +940,12 @@ size_t linux_sys_read(int fd, void *buf, size_t count) {
 
     CapIdx file_cap = fd_to_cap(fd);
     if (file_cap == cap::error) {
+        return -EBADF;
+    }
+    if (linux_cap_is_pipe_read_end(file_cap)) {
+        return linux_pipe_read(file_cap, buf, count);
+    }
+    if (linux_cap_is_pipe_write_end(file_cap)) {
         return -EBADF;
     }
 

@@ -24,6 +24,7 @@
 #include <syscall/endpoint.h>
 #include <syscall/memory.h>
 #include <syscall/notif.h>
+#include <syscall/pipe.h>
 #include <syscall/shutdown.h>
 #include <syscall/syscall.h>
 #include <syscall/task.h>
@@ -344,6 +345,9 @@ namespace syscall {
             case SYS_MNT_UMOUNT:         return "SYS_MNT_UMOUNT";
             case SYS_MNT_ROOT:           return "SYS_MNT_ROOT";
             case SYS_MNT_STATE:          return "SYS_MNT_STATE";
+            case SYS_PIPE_CREATE:        return "SYS_PIPE_CREATE";
+            case SYS_PIPE_READ:          return "SYS_PIPE_READ";
+            case SYS_PIPE_WRITE:         return "SYS_PIPE_WRITE";
             case SYS_VFS_PAGE_CACHE_STATS:
                 return "SYS_VFS_PAGE_CACHE_STATS";
             case SYS_PCB_EXECVE_POSIX:  return "SYS_PCB_EXECVE_POSIX";
@@ -862,6 +866,30 @@ namespace syscall {
                 }
                 ret = result_value_ret(
                     "write", vfs_write(capidx, arg0, std::move(buf), arg2));
+                break;
+            }
+            case SYS_PIPE_CREATE: {
+                UBuffer out_buf((VirAddr)arg0, sizeof(PipeCreateRet));
+                ret = result_void_ret("pipe_create",
+                                      pipe_create(capidx != 0,
+                                                  std::move(out_buf)));
+                break;
+            }
+            case SYS_PIPE_READ: {
+                UBuffer buf((VirAddr)arg0, arg1);
+                ret = result_value_ret(
+                    "pipe_read", pipe_read(capidx, std::move(buf), arg1));
+                break;
+            }
+            case SYS_PIPE_WRITE: {
+                UBuffer buf((VirAddr)arg0, arg1);
+                auto sync_res = buf.sync_from_user();
+                if (!sync_res.has_value()) {
+                    ret = result_void_ret("同步pipe write缓冲区", sync_res);
+                    break;
+                }
+                ret = result_value_ret(
+                    "pipe_write", pipe_write(capidx, std::move(buf), arg1));
                 break;
             }
             case SYS_VFS_SIZE: {
