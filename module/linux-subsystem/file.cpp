@@ -1753,10 +1753,8 @@ size_t linux_sys_ftruncate(int fd, size_t length) {
 size_t linux_sys_fallocate(int fd, int mode, size_t offset, size_t len) {
     constexpr int FALLOC_FL_KEEP_SIZE  = 0x01;
     constexpr int FALLOC_FL_PUNCH_HOLE = 0x02;
+    constexpr off_t OFF_T_MAX = static_cast<off_t>(INVALID_VALUE >> 1);
 
-    if (offset > INVALID_VALUE - len) {
-        return -EFBIG;
-    }
     if ((mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE)) != 0) {
         return -EOPNOTSUPP;
     }
@@ -1767,6 +1765,16 @@ size_t linux_sys_fallocate(int fd, int mode, size_t offset, size_t len) {
     CapIdx cap = fd_to_cap(fd);
     if (cap == cap::error || cap == cap::null) {
         return -EBADF;
+    }
+
+    off_t soff = static_cast<off_t>(offset);
+    off_t slen = static_cast<off_t>(len);
+    if (soff < 0 || slen <= 0) {
+        return -EINVAL;
+    }
+
+    if (soff > OFF_T_MAX - slen) {
+        return -EFBIG;
     }
 
     if ((mode & FALLOC_FL_KEEP_SIZE) != 0) {
