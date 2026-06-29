@@ -1750,6 +1750,32 @@ size_t linux_sys_ftruncate(int fd, size_t length) {
     return 0;
 }
 
+size_t linux_sys_fallocate(int fd, int mode, size_t offset, size_t len) {
+    constexpr int FALLOC_FL_KEEP_SIZE  = 0x01;
+    constexpr int FALLOC_FL_PUNCH_HOLE = 0x02;
+
+    if (offset > INVALID_VALUE - len) {
+        return -EFBIG;
+    }
+    if ((mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE)) != 0) {
+        return -EOPNOTSUPP;
+    }
+    if ((mode & FALLOC_FL_PUNCH_HOLE) != 0) {
+        return -EOPNOTSUPP;
+    }
+
+    CapIdx cap = fd_to_cap(fd);
+    if (cap == cap::error || cap == cap::null) {
+        return -EBADF;
+    }
+
+    if ((mode & FALLOC_FL_KEEP_SIZE) != 0) {
+        return 0;
+    }
+
+    return 0;
+}
+
 size_t linux_sys_fchmodat(int dirfd, const char *pathname, uint32_t mode) {
     if (pathname == nullptr) {
         return -EFAULT;

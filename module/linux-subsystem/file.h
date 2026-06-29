@@ -28,6 +28,7 @@ size_t linux_bind_cap_fd(CapIdx cap, int fd, bool append);
 size_t linux_sys_openat(int dirfd, const char *pathname, int flags, int mode);
 size_t linux_sys_lseek(int fd, size_t offset, int whence);
 size_t linux_sys_ftruncate(int fd, size_t length);
+size_t linux_sys_fallocate(int fd, int mode, size_t offset, size_t len);
 size_t linux_sys_getcwd(char *buf, size_t size);
 size_t linux_sys_chdir(const char *pathname);
 size_t linux_sys_readlinkat(int dirfd, const char *pathname, char *buf,

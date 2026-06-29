@@ -771,6 +771,9 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
                                    static_cast<int>(a2));
         case __NR_ftruncate:
             return linux_sys_ftruncate(static_cast<int>(a0), a1);
+        case __NR_fallocate:
+            return linux_sys_fallocate(static_cast<int>(a0),
+                                       static_cast<int>(a1), a2, a3);
         case __NR_openat:
             return linux_sys_openat(static_cast<int>(a0),
                                     reinterpret_cast<const char *>(a1),
