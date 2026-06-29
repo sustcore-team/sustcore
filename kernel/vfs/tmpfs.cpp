@@ -81,6 +81,11 @@ namespace tmpfs {
                 void_return();
             }
 
+            constexpr size_t MAX_TMPFS_FILE = 64 * 1024 * 1024;
+            if (new_size > MAX_TMPFS_FILE) {
+                unexpect_return(ErrCode::OUT_OF_BOUNDARY);
+            }
+
             char *new_content = nullptr;
             if (new_size != 0) {
                 new_content = new char[new_size];
