@@ -26,10 +26,17 @@ namespace {
     constexpr size_t __NR_read          = 63;
     constexpr size_t __NR_write         = 64;
     constexpr size_t __NR_pipe2         = 59;
+    constexpr size_t __NR_statfs        = 43;
+    constexpr size_t __NR_fstatfs       = 44;
     constexpr size_t __NR_clone         = 220;
     constexpr size_t __NR_wait4         = 260;
     constexpr size_t __NR_getcwd        = 17;
     constexpr size_t __NR_execve        = 221;
+    constexpr size_t __NR_exit_group    = 94;
+
+    constexpr long TMPFS_MAGIC          = 0x01021994;
+    constexpr long PROC_SUPER_MAGIC     = 0x9FA0;
+    constexpr long TARFS_SUPER_MAGIC    = 0x74617266;
 
     // open flags
     constexpr int O_RDONLY              = 0;
@@ -44,6 +51,59 @@ namespace {
     constexpr int SEEK_SET              = 0;
     constexpr int SEEK_CUR              = 1;
     constexpr int SEEK_END              = 2;
+
+    struct linux_fsid_t {
+        int val[2];
+    };
+
+    struct linux_statfs {
+        long f_type;
+        long f_bsize;
+        unsigned long f_blocks;
+        unsigned long f_bfree;
+        unsigned long f_bavail;
+        unsigned long f_files;
+        unsigned long f_ffree;
+        linux_fsid_t f_fsid;
+        long f_namelen;
+        long f_frsize;
+        long f_flags;
+        long f_spare[4];
+    };
+
+    void clear_statfs(linux_statfs &st) {
+        st.f_type   = 0;
+        st.f_bsize  = 0;
+        st.f_blocks = 0;
+        st.f_bfree  = 0;
+        st.f_bavail = 0;
+        st.f_files  = 0;
+        st.f_ffree  = 0;
+        st.f_fsid.val[0] = 0;
+        st.f_fsid.val[1] = 0;
+        st.f_namelen     = 0;
+        st.f_frsize      = 0;
+        st.f_flags       = 0;
+        for (int i = 0; i < 4; ++i) {
+            st.f_spare[i] = 0;
+        }
+    }
+
+    bool statfs_unsupported_zero(const linux_statfs &st) {
+        if (st.f_bfree != 0 || st.f_bavail != 0 || st.f_files != 0 ||
+            st.f_ffree != 0 || st.f_fsid.val[0] != 0 ||
+            st.f_fsid.val[1] != 0 || st.f_namelen != 0 ||
+            st.f_flags != 0)
+        {
+            return false;
+        }
+        for (int i = 0; i < 4; ++i) {
+            if (st.f_spare[i] != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     size_t strlen(const char *s) {
         size_t len = 0;
@@ -92,6 +152,20 @@ namespace {
         puts(detail);
         puts("\n");
         g_tests_failed++;
+    }
+
+    [[noreturn]]
+    void finish_tests() {
+        puts("\n=== TEST SUMMARY ===\n");
+        if (g_tests_failed == 0) {
+            puts("ALL TESTS PASSED\n");
+        } else {
+            puts("SOME TESTS FAILED\n");
+        }
+        linux_syscall(static_cast<size_t>(g_tests_failed == 0 ? 0 : 1),
+                      0, 0, 0, 0, 0, __NR_exit_group);
+        while (true) {
+        }
     }
 }  // namespace
 
@@ -165,6 +239,79 @@ static long linux_fchownat(int dirfd, const char *path, unsigned uid,
                          static_cast<size_t>(gid),
                          static_cast<size_t>(flags),
                          0, __NR_fchownat);
+}
+
+static long linux_statfs_sys(const char *path, linux_statfs *buf) {
+    return linux_syscall(reinterpret_cast<size_t>(path),
+                         reinterpret_cast<size_t>(buf),
+                         0, 0, 0, 0, __NR_statfs);
+}
+
+static long linux_fstatfs_sys(int fd, linux_statfs *buf) {
+    return linux_syscall(static_cast<size_t>(fd),
+                         reinterpret_cast<size_t>(buf),
+                         0, 0, 0, 0, __NR_fstatfs);
+}
+
+static void test_statfs_basic(int tar_fd) {
+    puts("Test 8.75: statfs/fstatfs filesystem types...\n");
+
+    linux_statfs st;
+    clear_statfs(st);
+    long root_ret = linux_statfs_sys("/", &st);
+    if (root_ret == 0 && st.f_type == TMPFS_MAGIC && st.f_blocks != 0 &&
+        st.f_bsize == 4096 && st.f_frsize == 4096)
+    {
+        test_pass("statfs tmpfs root");
+    } else {
+        test_fail("statfs tmpfs root", "unexpected root fs data");
+    }
+    if (root_ret == 0 && statfs_unsupported_zero(st)) {
+        test_pass("statfs unsupported fields zero");
+    } else {
+        test_fail("statfs unsupported fields zero", "expected zero fields");
+    }
+
+    clear_statfs(st);
+    long proc_ret = linux_statfs_sys("/proc", &st);
+    if (proc_ret == 0 && st.f_type == PROC_SUPER_MAGIC && st.f_blocks != 0) {
+        test_pass("statfs procfs");
+    } else {
+        test_fail("statfs procfs", "unexpected procfs data");
+    }
+
+    clear_statfs(st);
+    long initrd_ret = linux_statfs_sys("/initrd", &st);
+    if (initrd_ret == 0 && st.f_type == TARFS_SUPER_MAGIC &&
+        st.f_blocks == 0)
+    {
+        test_pass("statfs tarfs");
+    } else {
+        test_fail("statfs tarfs", "unexpected tarfs data");
+    }
+
+    clear_statfs(st);
+    long fd_ret = linux_fstatfs_sys(tar_fd, &st);
+    if (fd_ret == 0 && st.f_type == TARFS_SUPER_MAGIC) {
+        test_pass("fstatfs opened file");
+    } else {
+        test_fail("fstatfs opened file", "unexpected fstatfs type");
+    }
+
+    clear_statfs(st);
+    long missing_ret = linux_statfs_sys("/missing-statfs-path", &st);
+    if (missing_ret == -2) {
+        test_pass("statfs missing path");
+    } else {
+        test_fail("statfs missing path", "expected -ENOENT");
+    }
+
+    long bad_fd_ret = linux_fstatfs_sys(999, &st);
+    if (bad_fd_ret == -9) {
+        test_pass("fstatfs invalid fd");
+    } else {
+        test_fail("fstatfs invalid fd", "expected -EBADF");
+    }
 }
 
 static void test_pipe_basic() {
@@ -260,7 +407,7 @@ static void test_pipe_fork() {
         linux_close(fds[0]);
         (void)linux_write_sys(fds[1], "child", 5);
         linux_close(fds[1]);
-        linux_syscall(0, 0, 0, 0, 0, 0, 94);
+        linux_syscall(0, 0, 0, 0, 0, 0, __NR_exit_group);
         while (true) {
         }
     }
@@ -333,15 +480,7 @@ extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
         } else {
             test_fail("execve argv/envp", "unexpected startup arguments");
         }
-
-        puts("\n=== TEST SUMMARY ===\n");
-        if (g_tests_failed == 0) {
-            puts("ALL TESTS PASSED\n");
-        } else {
-            puts("SOME TESTS FAILED\n");
-        }
-        while (true) {
-        }
+        finish_tests();
     }
 
     // Original test: write hello three times
@@ -372,6 +511,7 @@ extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
                                O_RDONLY, 0));
     if (fd >= 3) {
         test_pass("open existing file");
+        test_statfs_basic(fd);
     } else {
         test_fail("open existing file", "expected fd >= 3");
     }
@@ -510,15 +650,5 @@ extern "C" [[noreturn]] void test_linux_main(size_t argc, const char *argv[],
     } else {
         test_fail("execve self", "execve unexpectedly returned success");
     }
-
-    // Summary
-    puts("\n=== TEST SUMMARY ===\n");
-    if (g_tests_failed == 0) {
-        puts("ALL TESTS PASSED\n");
-    } else {
-        puts("SOME TESTS FAILED\n");
-    }
-
-    while (true) {
-    }
+    finish_tests();
 }

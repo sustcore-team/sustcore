@@ -125,6 +125,7 @@ SysRet<void> sys_vfs_link(CapIdx parent_dir_cap, const char *name, CapIdx target
 SysRet<void> sys_vfs_stat(CapIdx parent_dir_cap, const char *name, NodeMeta *out);
 SysRet<void> sys_vfs_lstat(CapIdx parent_dir_cap, const char *name, NodeMeta *out);
 SysRet<void> sys_vfs_fstat(CapIdx file_cap, NodeMeta *out);
+SysRet<void> sys_vfs_statfs(CapIdx capidx, VFSStatFS *out);
 SysRet<void> sys_vfs_ioctl(CapIdx file_cap, size_t cmd, void *arg, size_t arg_len);
 SysRet<void> sys_vfs_getattr(CapIdx capidx, AttrSet *out);
 SysRet<void> sys_vfs_getattr_at(CapIdx parent_dir_cap, const char *name,

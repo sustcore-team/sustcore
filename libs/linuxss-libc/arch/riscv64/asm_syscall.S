@@ -440,6 +440,13 @@ sys_vfs_fstat:
     ecall
     ret
 
+    .global sys_vfs_statfs
+    .type   sys_vfs_statfs, @function
+sys_vfs_statfs:
+    li a7, SYS_VFS_STATFS
+    ecall
+    ret
+
     .global sys_vfs_ioctl
     .type   sys_vfs_ioctl, @function
 sys_vfs_ioctl:

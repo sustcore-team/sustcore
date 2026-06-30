@@ -388,6 +388,7 @@ namespace syscall {
             case SYS_VFS_LSTAT:          return "SYS_VFS_LSTAT";
             case SYS_VFS_READLINK:       return "SYS_VFS_READLINK";
             case SYS_VFS_FSTAT:          return "SYS_VFS_FSTAT";
+            case SYS_VFS_STATFS:         return "SYS_VFS_STATFS";
             case SYS_MNT_CREATE:         return "SYS_MNT_CREATE";
             case SYS_MNT_MOUNT:          return "SYS_MNT_MOUNT";
             case SYS_MNT_UMOUNT:         return "SYS_MNT_UMOUNT";
@@ -894,6 +895,12 @@ namespace syscall {
                 UBuffer buf((VirAddr)arg0, sizeof(NodeMeta));
                 ret = result_void_ret("fstat",
                                       vfs_fstat(capidx, std::move(buf)));
+                break;
+            }
+            case SYS_VFS_STATFS: {
+                UBuffer buf((VirAddr)arg0, sizeof(VFSStatFS));
+                ret = result_void_ret("statfs",
+                                      vfs_statfs(capidx, std::move(buf)));
                 break;
             }
             case SYS_VFS_READLINK: {

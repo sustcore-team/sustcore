@@ -87,6 +87,11 @@ struct VFSPageCacheStats {
     size_t backing_writes;
 };
 
+struct VFSStatFS {
+    uint64_t f_type;
+    uint64_t f_blocks;
+};
+
 static_assert(sizeof(dir_entry_header) == sizeof(size_t),
               "dir_entry_header must match next_offset size");
 

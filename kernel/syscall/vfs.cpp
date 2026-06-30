@@ -341,6 +341,19 @@ namespace syscall {
         return out.commit_to_user(sizeof(st));
     }
 
+    Result<void> vfs_statfs(CapIdx capidx, UBuffer &&out) {
+        if (out.kbuf() == nullptr || out.len() < sizeof(VFSStatFS)) {
+            unexpect_return(ErrCode::INVALID_PARAM);
+        }
+        auto cap_res = lookup_current_cap(capidx);
+        propagate(cap_res);
+        VFSStatFS st{};
+        auto statfs_res = VFS::inst().statfs(*cap_res.value(), st);
+        propagate(statfs_res);
+        memcpy(out.kbuf(), &st, sizeof(st));
+        return out.commit_to_user(sizeof(st));
+    }
+
     Result<void> vfs_getattr(CapIdx capidx, UBuffer &&out) {
         if (out.kbuf() == nullptr || out.len() < sizeof(AttrSet)) {
             unexpect_return(ErrCode::INVALID_PARAM);

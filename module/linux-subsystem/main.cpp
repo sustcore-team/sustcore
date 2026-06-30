@@ -879,6 +879,12 @@ extern "C" size_t linux_dispatch(size_t a0, size_t a1, size_t a2, size_t a3,
         case __NR_fstat:
             return linux_sys_fstat(static_cast<int>(a0),
                                    reinterpret_cast<void *>(a1));
+        case __NR_statfs:
+            return linux_sys_statfs(reinterpret_cast<const char *>(a0),
+                                    reinterpret_cast<void *>(a1));
+        case __NR_fstatfs:
+            return linux_sys_fstatfs(static_cast<int>(a0),
+                                     reinterpret_cast<void *>(a1));
         case __NR_newfstatat:
             return linux_sys_newfstatat(
                 static_cast<int>(a0), reinterpret_cast<const char *>(a1),

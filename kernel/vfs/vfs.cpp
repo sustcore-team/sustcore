@@ -52,6 +52,54 @@ namespace {
     static VINode::CachedFilePage *active_head   = nullptr;
     static VINode::CachedFilePage *active_tail   = nullptr;
 
+    constexpr uint64_t EXT4_SUPER_MAGIC  = 0xEF53;
+    constexpr uint64_t TMPFS_MAGIC       = 0x01021994;
+    constexpr uint64_t PROC_SUPER_MAGIC  = 0x9FA0;
+    constexpr uint64_t DEVFS_SUPER_MAGIC = 0x1373;
+    constexpr uint64_t TARFS_SUPER_MAGIC = 0x74617266;
+    constexpr uint64_t PSEUDO_FS_BLOCKS  = 1;
+
+    [[nodiscard]]
+    uint64_t statfs_magic_from_name(const char *name) noexcept {
+        if (name == nullptr) {
+            return 0;
+        }
+        if (strcmp(name, "ext4") == 0) {
+            return EXT4_SUPER_MAGIC;
+        }
+        if (strcmp(name, "tmpfs") == 0) {
+            return TMPFS_MAGIC;
+        }
+        if (strcmp(name, "procfs") == 0) {
+            return PROC_SUPER_MAGIC;
+        }
+        if (strcmp(name, "devfs") == 0) {
+            return DEVFS_SUPER_MAGIC;
+        }
+        if (strcmp(name, "tarfs") == 0) {
+            return TARFS_SUPER_MAGIC;
+        }
+        return 0;
+    }
+
+    [[nodiscard]]
+    bool statfs_is_pseudo_name(const char *name) noexcept {
+        if (name == nullptr) {
+            return false;
+        }
+        return strcmp(name, "tmpfs") == 0 || strcmp(name, "procfs") == 0 ||
+               strcmp(name, "devfs") == 0;
+    }
+
+    void fill_statfs_from_vinode(VINode &vnode, VFSStatFS &out) noexcept {
+        memset(&out, 0, sizeof(out));
+        const char *fs_name = vnode.superblock().sb()->fs().name();
+        out.f_type          = statfs_magic_from_name(fs_name);
+        if (statfs_is_pseudo_name(fs_name)) {
+            out.f_blocks = PSEUDO_FS_BLOCKS;
+        }
+    }
+
     class PageCacheReadGuard {
     public:
         PageCacheReadGuard() {
@@ -2492,6 +2540,33 @@ Result<void> VFS::fstat(cap::Capability &cap, NodeMeta &out) const {
         return _stat_from_vinode(*vdir->vinode().get(), out);
     }
     unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+}
+
+Result<void> VFS::statfs(cap::Capability &cap, VFSStatFS &out) const {
+    if (auto *vfile = cap.payload_as<VFile>(); vfile != nullptr) {
+        fill_statfs_from_vinode(*vfile->vinode().get(), out);
+        void_return();
+    }
+    if (auto *vdir = cap.payload_as<VDirectory>(); vdir != nullptr) {
+        fill_statfs_from_vinode(*vdir->vinode().get(), out);
+        void_return();
+    }
+    unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+}
+
+Result<void> VFS::statfs_at(cap::Capability &parent_dir_cap,
+                            const char *relpath, VFSStatFS &out) const {
+    auto *parent = parent_dir_cap.payload_as<VDirectory>();
+    if (parent == nullptr) {
+        unexpect_return(ErrCode::TYPE_NOT_MATCHED);
+    }
+    auto global_res = _global_target_path(*parent, relpath);
+    propagate(global_res);
+    util::Path mount_path;
+    auto vnode_res = _resolve_inode(global_res.value().second, mount_path);
+    propagate(vnode_res);
+    fill_statfs_from_vinode(*vnode_res.value().get(), out);
+    void_return();
 }
 
 Result<void> VFS::getattr(cap::Capability &cap, AttrSet &out) const {

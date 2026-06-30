@@ -133,6 +133,25 @@ namespace {
         unsigned __unused[2];
     };
 
+    struct linux_fsid_t {
+        int val[2];
+    };
+
+    struct linux_statfs {
+        long f_type;
+        long f_bsize;
+        uint64_t f_blocks;
+        uint64_t f_bfree;
+        uint64_t f_bavail;
+        uint64_t f_files;
+        uint64_t f_ffree;
+        linux_fsid_t f_fsid;
+        long f_namelen;
+        long f_frsize;
+        long f_flags;
+        long f_spare[4];
+    };
+
     constexpr uint32_t STATX_TYPE   = 0x0001U;
     constexpr uint32_t STATX_MODE   = 0x0002U;
     constexpr uint32_t STATX_NLINK  = 0x0004U;
@@ -669,6 +688,49 @@ namespace {
         kst.st_atime_sec = static_cast<long>(attrs.atime);
         kst.st_mtime_sec = static_cast<long>(attrs.mtime);
         kst.st_ctime_sec = static_cast<long>(attrs.ctime);
+    }
+
+    void fill_statfs_from_vfs(const VFSStatFS &src, linux_statfs &dst) {
+        memset(&dst, 0, sizeof(dst));
+        dst.f_type   = static_cast<long>(src.f_type);
+        dst.f_bsize  = 4096;
+        dst.f_blocks = src.f_blocks;
+        dst.f_frsize = 4096;
+    }
+
+    [[nodiscard]]
+    size_t statfs_err_to_linux(ErrCode err) {
+        switch (err) {
+            case ErrCode::ENTRY_NOT_FOUND:      return -ENOENT;
+            case ErrCode::INVALID_CAPABILITY:   return -EBADF;
+            case ErrCode::TYPE_NOT_MATCHED:     return -EIO;
+            case ErrCode::INVALID_PARAM:        return -EINVAL;
+            case ErrCode::NULLPTR:              return -EFAULT;
+            case ErrCode::INSUFFICIENT_PERMISSIONS:
+                return -EACCES;
+            default:                            return -EIO;
+        }
+    }
+
+    [[nodiscard]]
+    size_t statfs_cap_to_user(CapIdx cap, void *buf) {
+        if (buf == nullptr) {
+            return -EFAULT;
+        }
+        if (cap == cap::null || cap == cap::error) {
+            return -EBADF;
+        }
+
+        VFSStatFS vfs_st{};
+        auto statfs_res = sys_vfs_statfs(cap, &vfs_st).to_result();
+        if (!statfs_res.has_value()) {
+            return statfs_err_to_linux(statfs_res.error());
+        }
+
+        linux_statfs st{};
+        fill_statfs_from_vfs(vfs_st, st);
+        memcpy(buf, &st, sizeof(st));
+        return 0;
     }
 
     [[nodiscard]]
@@ -1730,6 +1792,67 @@ size_t linux_sys_fstat(int fd, void *statbuf) {
     fill_kstat_from_attrs(attrs, kst);
     memcpy(statbuf, &kst, sizeof(kst));
     return 0;
+}
+
+size_t linux_sys_fstatfs(int fd, void *buf) {
+    CapIdx cap = fd_to_cap(fd);
+    if (cap == cap::error || cap == cap::null) {
+        return -EBADF;
+    }
+    return statfs_cap_to_user(cap, buf);
+}
+
+size_t linux_sys_statfs(const char *pathname, void *buf) {
+    if (buf == nullptr) {
+        return -EFAULT;
+    }
+    if (pathname == nullptr) {
+        return -EFAULT;
+    }
+    if (pathname[0] == '\0') {
+        return -ENOENT;
+    }
+
+    auto resolved = resolve_path_at(AT_FDCWD, pathname);
+    if (resolved.parent_cap == cap::null || resolved.parent_cap == cap::error ||
+        resolved.relative_path.empty())
+    {
+        return -ENOENT;
+    }
+
+    NodeMeta meta{};
+    auto node_type = stat_resolved_path(resolved, meta);
+    if (node_type == ResolvedNodeType::MISSING) {
+        return -ENOENT;
+    }
+    if (node_type == ResolvedNodeType::ERROR) {
+        return -EIO;
+    }
+
+    CapIdx cap = cap::error;
+    if (node_type == ResolvedNodeType::DIRECTORY) {
+        auto dir_res =
+            sys_vfs_opendir(resolved.parent_cap, resolved.relative_path.c_str(),
+                            flags::O_READ)
+                .to_result();
+        if (!dir_res.has_value()) {
+            return statfs_err_to_linux(dir_res.error());
+        }
+        cap = dir_res.value();
+    } else {
+        auto file_res =
+            sys_vfs_open(resolved.parent_cap, resolved.relative_path.c_str(),
+                         flags::O_READ)
+                .to_result();
+        if (!file_res.has_value()) {
+            return statfs_err_to_linux(file_res.error());
+        }
+        cap = file_res.value();
+    }
+
+    size_t ret = statfs_cap_to_user(cap, buf);
+    (void)sys_cap_remove(cap).to_result();
+    return ret;
 }
 
 size_t linux_sys_ftruncate(int fd, size_t length) {

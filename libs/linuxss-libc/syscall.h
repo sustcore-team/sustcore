@@ -139,6 +139,7 @@ extern "C" SysRet<void> sys_vfs_stat(CapIdx parent_dir_cap, const char *name,
 extern "C" SysRet<void> sys_vfs_lstat(CapIdx parent_dir_cap, const char *name,
                                       NodeMeta *out);
 extern "C" SysRet<void> sys_vfs_fstat(CapIdx file_cap, NodeMeta *out);
+extern "C" SysRet<void> sys_vfs_statfs(CapIdx capidx, VFSStatFS *out);
 extern "C" SysRet<void> sys_vfs_ioctl(CapIdx file_cap, size_t cmd, void *arg,
                                       size_t arg_len);
 extern "C" SysRet<void> sys_vfs_getattr(CapIdx capidx, AttrSet *out);

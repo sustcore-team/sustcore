@@ -75,6 +75,8 @@ namespace syscall {
     [[nodiscard]]
     Result<void> vfs_fstat(CapIdx file_cap, UBuffer &&out);
     [[nodiscard]]
+    Result<void> vfs_statfs(CapIdx capidx, UBuffer &&out);
+    [[nodiscard]]
     Result<void> vfs_getattr(CapIdx capidx, UBuffer &&out);
     [[nodiscard]]
     Result<void> vfs_getattr_at(CapIdx parent_dir_cap, const UString &relpath,

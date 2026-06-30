@@ -94,6 +94,7 @@
 #define SYS_PCB_SIGACTION       (SYSCALL_BASE + 0x4B)
 #define SYS_PCB_SIGNAL          (SYSCALL_BASE + 0x4C)
 #define SYS_PCB_WAITSIG         (SYSCALL_BASE + 0x4D)
+#define SYS_VFS_STATFS          (SYSCALL_BASE + 0x4E)
 
 // 以SYS_UNSTABLE_BASE开头的系统调用为不稳定接口, 可能会在后续版本中更改或移除
 #define SYS_UNSTABLE_BASE        (0xFFC00000)

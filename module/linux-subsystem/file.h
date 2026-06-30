@@ -41,6 +41,8 @@ size_t linux_sys_renameat2(int olddirfd, const char *oldpath, int newdirfd,
                            const char *newpath, unsigned int flags);
 size_t linux_sys_getdents64(int fd, void *dirp, size_t count);
 size_t linux_sys_fstat(int fd, void *statbuf);
+size_t linux_sys_statfs(const char *pathname, void *buf);
+size_t linux_sys_fstatfs(int fd, void *buf);
 size_t linux_sys_fchmodat(int dirfd, const char *pathname, uint32_t mode);
 size_t linux_sys_fchownat(int dirfd, const char *pathname, uint32_t uid,
                           uint32_t gid, int flags);

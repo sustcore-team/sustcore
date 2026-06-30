@@ -569,6 +569,11 @@ public:
     Result<void> lstat(cap::Capability &parent_dir_cap, const char *relpath,
                        NodeMeta &out) const;
     [[nodiscard]]
+    Result<void> statfs(cap::Capability &cap, VFSStatFS &out) const;
+    [[nodiscard]]
+    Result<void> statfs_at(cap::Capability &parent_dir_cap, const char *relpath,
+                           VFSStatFS &out) const;
+    [[nodiscard]]
     Result<void> getattr(cap::Capability &cap, AttrSet &out) const;
     [[nodiscard]]
     Result<void> getattr_at(cap::Capability &parent_dir_cap,
