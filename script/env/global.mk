@@ -12,4 +12,5 @@ path-cache       := $(path-s)/.cache
 include $(path-s)/env/q.mk
 include $(path-s)/env/shell.mk
 include $(path-s)/env/scripts.mk
+-include $(path-cache)/config.mk
 include $(path-s)/py/init.mk

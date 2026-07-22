@@ -1,15 +1,15 @@
-# 使用的 clang++ 可以通过配置 toolchain.toml 的 (arch).clang++ 字段指定
-riscv-comp-cpp ?= clang++
+# 使用的 clang++ 可以通过配置 clang.toml 的 (arch).clang++ 字段指定
+riscv64-comp-cpp ?= clang++
 loongarch64-comp-cpp ?= clang++
 
-# riscv flags
-riscv-flags-cpp ?=
-riscv-flags-cpp += -target riscv64-unknown-elf
+# riscv64 flags, 可以通过配置 clang.toml 的 flags.clang++.(arch) 字段指定
+riscv64-flags-cpp ?=
+riscv64-flags-cpp += -target riscv64-unknown-elf
 
-# loongarch flags
+# loongarch64 flags, 可以通过配置 clang.toml 的 flags.clang++.(arch) 字段指定
 loongarch64-flags-cpp ?=
 loongarch64-flags-cpp += -target loongarch64-linux-gnusf
 
-# common flags
+# common flags, 可以通过配置 clang.toml 的 flags.clang++ 字段指定
 flags-cpp ?=
 flags-cpp += -ffreestanding -nostdlib++
