@@ -1,23 +1,15 @@
+# 这个文件一定要在每个 Makefile 的最前面 include, 保证各个变量的正确性
+
 path-e := $(shell pwd)
-path-script := $(path-e)/script
-path-tools := $(path-e)/tools
-path-mount ?= /mnt/sustcore
-path-img ?= $(path-e)/sustcore.img
-path-ext4-img ?= $(path-e)/alpine-linux-riscv64-ext4fs.img
-path-lib := $(path-e)/libs
-path-include := $(path-e)/include
+path-s := $(path-e)/script
+
+path-tools       := $(path-e)/tools
+path-lib         := $(path-e)/libs
+path-include     := $(path-e)/include
 path-third_party := $(path-e)/third_party
-build-mode ?= release
-build-arch ?= $(architecture)
-path-build := $(path-e)/build/$(build-mode)/$(build-arch)
-path-bin ?= $(path-build)/bin
-path-objects ?= $(path-build)/objects
-path-attach ?= $(path-bin)/attachment
-path-initrd ?= $(path-bin)/initrd
-path-kernel ?= $(path-bin)/kernel/sustcore.bin
-path-kernel-phy ?= $(path-bin)/kernel/sustcore-phy.bin
+path-cache       := $(path-s)/.cache
 
-#TODO
-offset-kernel ?= 1048576
-
-q ?= @
+include $(path-s)/env/q.mk
+include $(path-s)/env/shell.mk
+include $(path-s)/env/scripts.mk
+include $(path-s)/py/init.mk

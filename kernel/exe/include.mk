@@ -1,1 +1,0 @@
-sources += elfloader.cpp
