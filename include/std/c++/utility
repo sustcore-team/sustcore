@@ -1,0 +1,149 @@
+/**
+ * @file utility
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief utility 工具
+ * @version alpha-1.0.0
+ * @date 2026-01-20
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <bits/move.h>
+#include <type_traits>
+
+namespace std {
+    template <class T>
+    constexpr void swap(T& a, T& b) {
+        T temp = std::move(a);
+        a      = std::move(b);
+        b      = std::move(temp);
+    }
+
+    // interger_sequence
+    template <typename T, T... Ints>
+    struct integer_sequence {
+        using value_type = T;
+
+        static constexpr std::size_t size() noexcept {
+            return sizeof...(Ints);
+        }
+    };
+
+    template <std::size_t... Ints>
+    using index_sequence = integer_sequence<std::size_t, Ints...>;
+
+    // 简单的make_index_sequence实现
+    template <std::size_t N, std::size_t... Ints>
+    struct make_index_sequence : make_index_sequence<N - 1, N - 1, Ints...> {};
+
+    template <std::size_t... Ints>
+    struct make_index_sequence<0, Ints...> {
+        using type = index_sequence<Ints...>;
+    };
+
+    template <class _T1, class _T2>
+    struct pair {
+        using first_type = _T1;
+        using second_type = _T2;
+
+        _T1 first;
+        _T2 second;
+
+        pair() : first(), second() {}
+
+        pair(const _T1& __a, const _T2& __b) : first(__a), second(__b) {}
+
+        template <class _U1, class _U2>
+        pair(_U1&& __x, _U2&& __y)
+            : first(std::forward<_U1>(__x)), second(std::forward<_U2>(__y)) {}
+
+        pair(pair&& __p)
+            : first(std::move(__p.first)), second(std::move(__p.second)) {}
+
+        pair& operator=(pair&& __p) {
+            first  = std::move(__p.first);
+            second = std::move(__p.second);
+            return *this;
+        }
+
+        template <class _U1, class _U2>
+        pair& operator=(pair<_U1, _U2>&& __p) {
+            first  = std::move(__p.first);
+            second = std::move(__p.second);
+            return *this;
+        }
+
+        void swap(pair&& __p) {
+            using std::swap;
+            swap(first, __p.first);
+            swap(second, __p.second);
+        }
+    };
+
+    /// Two pairs of the same type are equal iff their members are equal.
+    template <class _T1, class _T2>
+    inline bool operator==(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return __x.first == __y.first && __x.second == __y.second;
+    }
+
+    /// <http://gcc.gnu.org/onlinedocs/libstdc++/20_util/howto.html#pairlt>
+    template <class _T1, class _T2>
+    inline bool operator<(const pair<_T1, _T2>& __x,
+                          const pair<_T1, _T2>& __y) {
+        return __x.first < __y.first ||
+               (!(__y.first < __x.first) && __x.second < __y.second);
+    }
+
+    /// Uses @c operator== to find the result.
+    template <class _T1, class _T2>
+    inline bool operator!=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__x == __y);
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator>(const pair<_T1, _T2>& __x,
+                          const pair<_T1, _T2>& __y) {
+        return __y < __x;
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator<=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__y < __x);
+    }
+
+    /// Uses @c operator< to find the result.
+    template <class _T1, class _T2>
+    inline bool operator>=(const pair<_T1, _T2>& __x,
+                           const pair<_T1, _T2>& __y) {
+        return !(__x < __y);
+    }
+
+    /// See std::pair::swap().
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>& __x, pair<_T1, _T2>& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>&& __x, pair<_T1, _T2>& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline void swap(pair<_T1, _T2>& __x, pair<_T1, _T2>&& __y) {
+        __x.swap(__y);
+    }
+
+    template <class _T1, class _T2>
+    inline pair<_T1, _T2> make_pair(_T1 __x, _T2 __y) {
+        return pair<_T1, _T2>(__x, __y);
+    };
+}  // namespace std

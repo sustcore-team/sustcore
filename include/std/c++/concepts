@@ -1,0 +1,39 @@
+/**
+ * @file concept
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief C++概念
+ * @version alpha-1.0.0
+ * @date 2026-01-19
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <type_traits>
+
+namespace std {
+    template <typename _Tp, typename _Up>
+    concept same_as = is_same_v<_Tp, _Up> && is_same_v<_Up, _Tp>;
+
+    template <typename From, typename To>
+    concept convertible_to = requires {
+        // 隐式转换
+        []() -> To { return declval<From>(); };
+    } && requires(From (&f)()) {
+        // 显式转换
+        static_cast<To>(f());
+    } && requires {
+        // static_cast有效
+        static_cast<To>(declval<From>());
+    } && is_convertible_v<From, To>;
+
+    template <class Derived, class Base>
+    concept derived_from =
+        std::is_base_of_v<Base, Derived> &&
+        std::is_convertible_v<const volatile Derived *, const volatile Base *>;
+
+    template <class T, class... Args>
+    concept constructible_from = is_constructible_v<T, Args...>;
+}  // namespace std

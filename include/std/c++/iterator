@@ -1,0 +1,123 @@
+/**
+ * @file iterator
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 迭代器
+ * @version alpha-1.0.0
+ * @date 2026-01-28
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstddef>
+#include <type_traits>
+#include <compare>
+
+namespace std {
+    struct input_iterator_tag {};
+    struct output_iterator_tag {};
+    struct forward_iterator_tag : input_iterator_tag {};
+    struct bidirectional_iterator_tag : forward_iterator_tag {};
+    struct random_access_iterator_tag : bidirectional_iterator_tag {};
+    struct contiguous_iterator_tag : random_access_iterator_tag {};
+
+    template <typename Iter>
+    struct iterator_traits;
+
+    template <typename _Iterator, typename = void_t<>>
+    struct __iterator_traits {};
+
+    template <typename Iter>
+    struct iterator_traits : public __iterator_traits<Iter> {};
+
+    template <typename _Tp>
+        requires is_object_v<_Tp>
+    struct iterator_traits<_Tp *> {
+        using iterator_concept  = contiguous_iterator_tag;
+        using iterator_category = random_access_iterator_tag;
+        using value_type        = remove_cv_t<_Tp>;
+        using difference_type   = ptrdiff_t;
+        using pointer           = _Tp *;
+        using reference         = _Tp &;
+    };
+
+    template <typename _InputIterator>
+    constexpr typename iterator_traits<_InputIterator>::difference_type
+    __distance(_InputIterator __first, _InputIterator __last, input_iterator_tag) {
+        typename iterator_traits<_InputIterator>::difference_type __result = 0;
+        while (__first != __last) {
+            ++__first;
+            ++__result;
+        }
+        return __result;
+    }
+
+    template <typename _RandomIterator>
+    constexpr typename iterator_traits<_RandomIterator>::difference_type
+    __distance(_RandomIterator __first, _RandomIterator __last, random_access_iterator_tag) {
+        return __last - __first;
+    }
+
+    template <typename _InputIterator>
+    constexpr typename iterator_traits<_InputIterator>::difference_type
+    distance(_InputIterator __first, _InputIterator __last) {
+        // concept requirements -- taken care of in __distance
+        return std::__distance(__first, __last,
+                               typename iterator_traits<_InputIterator>::iterator_category{});
+    }
+
+    // 这是一个辅助用处的迭代器
+    // 其对应于一个常函数f(i) = c
+    template <typename T>
+    class __constant_function_iterator {
+    public:
+        using iterator_concept  = input_iterator_tag;
+        using iterator_category = input_iterator_tag;
+        using value_type        = T;
+        using difference_type   = ptrdiff_t;
+        using pointer           = const T *;
+        using reference         = const T &;
+        using comparison_category = strong_ordering;
+    private:
+        T _value;
+        size_t _begin;
+        size_t _end;
+        size_t _current;
+    public:
+        constexpr __constant_function_iterator() = default;
+        constexpr __constant_function_iterator(const T &value, size_t cur)
+            : _value(value), _begin(cur) {}
+        constexpr reference operator*() const {
+            return _value;
+        }
+        constexpr pointer operator->() const {
+            return &_value;
+        }
+        constexpr __constant_function_iterator &operator++() {
+            ++_current;
+            return *this;
+        }
+        constexpr __constant_function_iterator operator++(int) {
+            __constant_function_iterator temp = *this;
+            ++*this;
+            return temp;
+        }
+        constexpr __constant_function_iterator &operator--() {
+            --_current;
+            return *this;
+        }
+        constexpr __constant_function_iterator operator--(int) {
+            __constant_function_iterator temp = *this;
+            --*this;
+            return temp;
+        }
+        constexpr bool operator==(const __constant_function_iterator &other) const {
+            return _current == other._current;
+        }
+        constexpr strong_ordering operator<=>(const __constant_function_iterator &other) const {
+            return _current <=> other._current;
+        }
+    };
+}  // namespace std

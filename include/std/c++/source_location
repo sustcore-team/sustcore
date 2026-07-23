@@ -1,0 +1,68 @@
+/**
+ * @file source_location
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief source_location
+ * @version alpha-1.0.0
+ * @date 2026-05-19
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstdint>
+
+namespace std {
+    class source_location {
+    private:
+        uint_least32_t D_line;
+        uint_least32_t D_column;
+        const char* D_file_name;
+        const char* D_function_name;
+
+        constexpr source_location(uint_least32_t line, uint_least32_t column,
+                                  const char* file_name,
+                                  const char* function_name) noexcept
+            : D_line(line),
+              D_column(column),
+              D_file_name(file_name),
+              D_function_name(function_name) {}
+
+    public:
+        constexpr source_location() noexcept
+            : D_line(0),
+              D_column(0),
+              D_file_name(""),
+              D_function_name("") {}
+
+        [[nodiscard]]
+        static constexpr source_location current(
+            uint_least32_t line = __builtin_LINE(),
+            uint_least32_t column = 0,
+            const char* file_name = __builtin_FILE(),
+            const char* function_name = __builtin_FUNCTION()) noexcept {
+            return source_location(line, column, file_name, function_name);
+        }
+
+        [[nodiscard]]
+        constexpr uint_least32_t line() const noexcept {
+            return D_line;
+        }
+
+        [[nodiscard]]
+        constexpr uint_least32_t column() const noexcept {
+            return D_column;
+        }
+
+        [[nodiscard]]
+        constexpr const char* file_name() const noexcept {
+            return D_file_name;
+        }
+
+        [[nodiscard]]
+        constexpr const char* function_name() const noexcept {
+            return D_function_name;
+        }
+    };
+}  // namespace std

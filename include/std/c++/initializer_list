@@ -1,0 +1,53 @@
+/**
+ * @file initializer_list
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief initializer_list
+ * @version alpha-1.0.0
+ * @date 2026-02-11
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstddef>
+
+namespace std {
+    template <typename _Tp>
+    class initializer_list {
+    public:
+        using value_type      = _Tp;
+        using reference       = const _Tp&;
+        using const_reference = const _Tp&;
+        using size_type       = std::size_t;
+        using iterator        = const _Tp*;
+        using const_iterator  = const _Tp*;
+
+    private:
+        const _Tp* D_array;
+        size_type D_size;
+
+    public:
+        constexpr initializer_list(const _Tp* array, size_type size) noexcept
+            : D_array(array), D_size(size) {}
+
+        constexpr initializer_list() noexcept : initializer_list(nullptr, 0) {}
+
+        constexpr const _Tp& operator[](size_type index) const {
+            return D_array[index];
+        }
+
+        constexpr size_type size() const noexcept {
+            return D_size;
+        }
+
+        constexpr const_iterator begin() const noexcept {
+            return D_array;
+        }
+
+        constexpr const_iterator end() const noexcept {
+            return D_array + D_size;
+        }
+    };
+}  // namespace std
