@@ -40,7 +40,7 @@ flags-c += $($(arch)-flags-c)
 flags-cpp += $($(arch)-flags-cpp)
 flags-asm += $($(arch)-flags-c)
 
-libraries += $(or $(kernel-libraries-$(arch)),$(kernel-libraries))
+archives += $(or $(kernel-dep-archives-$(arch)),$(kernel-dep-archives))
 includes-c += $(or $(kernel-includes-c-$(arch)),$(kernel-includes-c))
 includes-cpp += $(or $(kernel-includes-cpp-$(arch)),$(kernel-includes-cpp))
 includes-asm += $(or $(kernel-includes-asm-$(arch)),$(kernel-includes-asm))

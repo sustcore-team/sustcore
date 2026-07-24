@@ -8,6 +8,7 @@ endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
+-include $(path-cache)/deps-mini-cstd.mk
 
 minicstd-root := $(path-e)/libs/mincstd
 minicstd-obj-root := $(path-obj)/libs/mincstd
@@ -22,6 +23,10 @@ include $(path-s)/toolchain/ar.mk
 
 comp-c ?= $($(arch)-comp-c)
 flags-c += $($(arch)-flags-c)
+
+includes-c += $(or $(mini-cstd-includes-c-$(arch)),$(mini-cstd-includes-c))
+includes-cpp += $(or $(mini-cstd-includes-cpp-$(arch)),$(mini-cstd-includes-cpp))
+includes-asm += $(or $(mini-cstd-includes-asm-$(arch)),$(mini-cstd-includes-asm))
 
 include $(minicstd-root)/flags.mk
 include $(minicstd-root)/include.mk

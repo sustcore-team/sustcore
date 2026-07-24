@@ -1,5 +1,6 @@
 [[libmeta]]
 id = "sbi"
+libname = "libsbi.a"
 makefile = "Makefile"
 target = "build-static"
 version = "0.0.1"

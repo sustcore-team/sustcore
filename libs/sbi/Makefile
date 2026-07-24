@@ -8,6 +8,7 @@ endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
+-include $(path-cache)/deps-sbi.mk
 
 libsbi-root := $(path-e)/libs/sbi
 libsbi-obj-root := $(path-obj)/libs/sbi
@@ -22,6 +23,10 @@ include $(path-s)/toolchain/ar.mk
 
 comp-c ?= $($(arch)-comp-c)
 flags-c += $($(arch)-flags-c)
+
+includes-c += $(or $(sbi-includes-c-$(arch)),$(sbi-includes-c))
+includes-cpp += $(or $(sbi-includes-cpp-$(arch)),$(sbi-includes-cpp))
+includes-asm += $(or $(sbi-includes-asm-$(arch)),$(sbi-includes-asm))
 
 include $(libsbi-root)/flags.mk
 include $(libsbi-root)/include.mk

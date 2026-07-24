@@ -10,6 +10,13 @@ from libregistry import KNOWN_ARCHITECTURES, scan_libraries
 
 def emit(root: Path) -> str:
     libraries = scan_libraries(root)
+    seen_ids: dict[str, str] = {}
+    for library in libraries:
+        if library.id in seen_ids:
+            raise ValueError(
+                f"duplicate library id {library.id!r}: {seen_ids[library.id]} and {library.metadata_path}"
+            )
+        seen_ids[library.id] = library.metadata_path
     libraries_by_arch = {
         arch: [
             library
@@ -30,8 +37,13 @@ def emit(root: Path) -> str:
         lines.append("")
         for library in libraries:
             lines.append(f"library-{library.id}-version := {library.version}")
+            lines.append(f"library-{library.id}-libname := {library.libname}")
             lines.append(f"library-{library.id}-makefile := {library.makefile}")
             lines.append(f"library-{library.id}-target := {library.target}")
+            lines.append(f"library-{library.id}-archive := {library.archive_path}")
+            lines.append(
+                f"library-{library.id}-is-header-only := {'y' if library.is_header_only else 'n'}"
+            )
             lines.append(f"library-{library.id}-include-c := {library.include_c}")
             lines.append(f"library-{library.id}-include-cpp := {library.include_cpp}")
             lines.append(f"library-{library.id}-include-asm := {library.include_asm}")
@@ -44,19 +56,25 @@ def emit(root: Path) -> str:
         lines.append(f".PHONY: {phony_targets} build-libs")
         lines.append("")
         for library in libraries:
+            lines.append(f".PHONY: build-lib-{library.id}")
             lines.append(f"build-lib-{library.id}:")
-            lines.append(
-                "\t$(q)$(MAKE) -f {makefile} global-env=$(global-env) "
-                "arch=$(arch) q=$(q) {target}".format(
-                    makefile=library.makefile,
-                    target=library.target,
+            if not library.is_header_only:
+                lines.append(
+                    "\t$(q)$(MAKE) -f {makefile} global-env=$(global-env) "
+                    "arch=$(arch) q=$(q) {target}".format(
+                        makefile=library.makefile,
+                        target=library.target,
+                    )
                 )
-            )
             lines.append("")
         for arch, arch_libraries in libraries_by_arch.items():
             lines.append(
                 f"build-lib-targets-{arch} := "
-                + " ".join(f"build-lib-{library.id}" for library in arch_libraries)
+                + " ".join(
+                    f"build-lib-{library.id}"
+                    for library in arch_libraries
+                    if not library.is_header_only
+                )
             )
         lines.append("")
         lines.append(".SECONDEXPANSION:")

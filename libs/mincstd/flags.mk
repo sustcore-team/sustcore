@@ -2,7 +2,8 @@
 
 flags-c += -fPIC
 
-includes-c += -I$(path-include)
-includes-c += -I$(path-include)/std
-includes-c += -I$(path-third_party)/include
-includes-c += -I$(path-third_party)/include/std
+minicstd-root ?= $(path-e)/libs/mincstd
+gcccheaders-root ?= $(path-e)/third_party/libs/gcc-cheaders
+
+includes-c += -I$(minicstd-root)/include
+includes-c += -I$(gcccheaders-root)/include

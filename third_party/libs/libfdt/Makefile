@@ -8,6 +8,7 @@ endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
+-include $(path-cache)/deps-fdt.mk
 
 libfdt-root := $(path-e)/third_party/libs/libfdt
 libfdt-obj-root := $(path-obj)/third_party/libs/libfdt
@@ -22,6 +23,10 @@ include $(path-s)/toolchain/ar.mk
 
 comp-c ?= $($(arch)-comp-c)
 flags-c += $($(arch)-flags-c)
+
+includes-c += $(or $(fdt-includes-c-$(arch)),$(fdt-includes-c))
+includes-cpp += $(or $(fdt-includes-cpp-$(arch)),$(fdt-includes-cpp))
+includes-asm += $(or $(fdt-includes-asm-$(arch)),$(fdt-includes-asm))
 
 include $(libfdt-root)/flags.mk
 include $(libfdt-root)/include.mk

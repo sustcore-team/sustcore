@@ -6,6 +6,10 @@ version="*.*.*"
 lib="fdt"
 version="*.*.*"
 
+[[dependencies]]
+lib="gcc-cheaders"
+version="*.*.*"
+
 [[riscv64.dependencies]]
 lib="sbi"
 version="*.*.*"

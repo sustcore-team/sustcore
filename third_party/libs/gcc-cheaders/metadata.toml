@@ -1,0 +1,6 @@
+[[libmeta]]
+id = "gcc-cheaders"
+libname = ""
+version = "0.0.1"
+
+include-c = ["include"]
