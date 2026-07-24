@@ -1,4 +1,4 @@
-#include <arch/loongarch64/csrnum.h>
+#include <arch/loongarch64/csrdef.h>
 #include <boot/laboot/bootinfo.h>
 
     .section .laboot.text, "ax", @progbits

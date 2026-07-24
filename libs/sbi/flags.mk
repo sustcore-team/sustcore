@@ -1,0 +1,8 @@
+# libsbi compile flags and include paths.
+
+flags-c += -fPIC
+
+includes-c += -I$(libsbi-root)/include
+includes-c += -I$(path-include)
+includes-c += -I$(path-third_party)/include
+includes-c += -I$(path-third_party)/include/std

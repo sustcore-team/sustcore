@@ -1,0 +1,10 @@
+sources-c += src/fdt.c
+sources-c += src/fdt_wip.c
+sources-c += src/fdt_sw.c
+sources-c += src/fdt_strerror.c
+sources-c += src/fdt_rw.c
+sources-c += src/fdt_ro.c
+sources-c += src/fdt_overlay.c
+sources-c += src/fdt_empty_tree.c
+sources-c += src/fdt_check.c
+sources-c += src/fdt_addresses.c

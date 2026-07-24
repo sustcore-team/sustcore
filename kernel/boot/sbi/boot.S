@@ -2,7 +2,7 @@
 .section .sbi_boot.text, "ax", @progbits
 
 .extern _sbi_setup
-.extern _sbi_post_start
+.extern __sbi_post_entry_ptr
 .extern __sbi_reclaimable_cursor
 
 .global _sbi_start
@@ -39,8 +39,9 @@ _sbi_trampoline:
     mv a1, s1
     la t1, __sbi_reclaimable_cursor
     ld a2, 0(t1)
-    la ra, _sbi_post_start
-    jr ra
+    la t1, __sbi_post_entry_ptr
+    ld t1, 0(t1)
+    jr t1
 
 // _sbi_write
 .global _sbi_write

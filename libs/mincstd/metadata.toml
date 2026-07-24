@@ -1,0 +1,5 @@
+[[libmeta]]
+id = "mini-cstd"
+makefile = "Makefile"
+target = "build-static"
+version = "0.0.1"

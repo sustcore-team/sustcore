@@ -33,6 +33,14 @@ SECTIONS
         KEEP(*(.sbi_boot .sbi_boot.*))
     }
 
+    . = ALIGN(8);
+    .sbi_boot.data : {
+        KEEP(*(.sbi_boot.data .sbi_boot.data.*))
+        . = ALIGN(8);
+        __sbi_post_entry_ptr = .;
+        QUAD(ABSOLUTE(_sbi_post_start))
+    }
+
     /* SBI 后初始化程序内存 */
     . += KVA_START;
     .sbi_post : AT(ADDR(.sbi_post) - KVA_START) {

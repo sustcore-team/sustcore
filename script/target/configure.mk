@@ -2,4 +2,4 @@
 config ?= default
 
 configure:
-	$(q)$(s-configure) config=$(config)
+	$(q)$(s-configure) config=$(config) arch=$(arch)

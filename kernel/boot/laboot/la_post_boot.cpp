@@ -489,7 +489,7 @@ namespace laboot {
         return header;
     }
 
-    extern "C" void _start(size_t hart_id, BootInfoHeader *bootinfo);
+    // extern "C" void _start(size_t hart_id, BootInfoHeader *bootinfo);
 
     extern "C" _LABOOT_POST_FUNCTION [[noreturn]]
     void _laboot_post_start(addr_t boot_ptr, addr_t reclaimable_cursor) {
@@ -501,7 +501,7 @@ namespace laboot {
         serial_puts(FDT_FOUND_MSG);
         serial_puts(KERNEL_ENTRY_MSG);
         // TODO: figure out how to get the correct hart id
-        _start(0, bootinfo);
+        // _start(0, bootinfo);
         while (true) {
         }
     }

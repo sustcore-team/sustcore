@@ -1,0 +1,9 @@
+[[libmeta]]
+id = "fdt"
+makefile = "Makefile"
+target = "build-static"
+version = "0.0.1"
+
+include-c = ["include"]
+include-cpp = ["include"]
+include-asm = ["include"]

@@ -48,8 +48,3 @@ $(error exactly one boot method must be enabled: enable-sbi=y or enable-laboot=y
 endif
 
 boot-link-script ?= $(kernel-root)/boot/$(if $(filter y,$(enable-sbi)),sbi/sbi.ld,laboot/laboot.ld)
-boot-libraries := fdt
-
-ifeq ($(enable-sbi),y)
-boot-libraries += sbi
-endif

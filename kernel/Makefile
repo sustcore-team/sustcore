@@ -2,13 +2,16 @@
 ifeq ($(origin global-env), undefined)
 $(error kernel/Makefile must be invoked with global-env from the top-level Makefile)
 endif
+ifeq ($(origin kernel-path), undefined)
+$(error kernel/Makefile must be invoked with kernel-path from the top-level Makefile)
+endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
+-include $(path-cache)/deps-kernel.mk
 
 kernel-root := $(path-e)/kernel
 kernel-obj-root := $(path-obj)/kernel
-kernel-target ?= $(path-bin)/kernel/sustcore.bin
 
 # Load the architecture defaults first, then normalize the externally selected
 # boot method.
@@ -17,7 +20,7 @@ include $(kernel-root)/enable.mk
 
 src-root := $(kernel-root)
 obj-root := $(kernel-obj-root)
-target := $(kernel-target)
+target := $(kernel-path)
 link-script ?= $(boot-link-script)
 
 include $(kernel-root)/flags.mk
@@ -36,7 +39,11 @@ comp-ld ?= $($(arch)-comp-ld)
 flags-c += $($(arch)-flags-c)
 flags-cpp += $($(arch)-flags-cpp)
 flags-asm += $($(arch)-flags-c)
-libraries += $(boot-libraries)
+
+libraries += $(or $(kernel-libraries-$(arch)),$(kernel-libraries))
+includes-c += $(or $(kernel-includes-c-$(arch)),$(kernel-includes-c))
+includes-cpp += $(or $(kernel-includes-cpp-$(arch)),$(kernel-includes-cpp))
+includes-asm += $(or $(kernel-includes-asm-$(arch)),$(kernel-includes-asm))
 
 # The generic build driver will consume these variables in the next layer.
 sources-asm := $(strip $(sources-y-asm))
@@ -61,6 +68,7 @@ build: $(target)
 
 kernel-vars:
 	$(q)$(echo) "kernel arch=$(arch) boot=$(if $(filter y,$(enable-sbi)),sbi,laboot)"
+	$(q)$(echo) "kernel path=$(kernel-path)"
 	$(q)$(echo) "kernel target=$(target)"
 	$(q)$(echo) "kernel link-script=$(link-script)"
 	$(q)$(echo) "kernel asm sources=$(sources-asm)"
