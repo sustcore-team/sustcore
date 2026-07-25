@@ -1,0 +1,20 @@
+[[libmeta]]
+id = "kmod"
+kind = "c-library"
+libname = "libkmod.a"
+makefile = "Makefile"
+target = "build-static"
+version = "0.1.0"
+support-archs = ["riscv64", "loongarch64"]
+
+[arch.riscv64]
+ldscript = "arch/riscv64/libc.ld"
+crt0 = "arch/riscv64/crt0.o"
+crti = "arch/riscv64/crti.o"
+crtn = "arch/riscv64/crtn.o"
+
+[arch.loongarch64]
+ldscript = "arch/loongarch64/libc.ld"
+crt0 = "arch/loongarch64/crt0.o"
+crti = "arch/loongarch64/crti.o"
+crtn = "arch/loongarch64/crtn.o"

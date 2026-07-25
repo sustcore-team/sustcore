@@ -24,4 +24,12 @@ build-kernel: build-libs
 		kernel-path=$(kernel-path) \
 		build
 
+.PHONY: build-init
+build-init: build-libs
+	$(q)$(MAKE) -f $(path-e)/module/init/Makefile \
+		global-env=$(global-env) \
+		arch=$(arch) \
+		q=$(q) \
+		build
+
 include $(path-s)/target/switch.mk

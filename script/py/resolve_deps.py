@@ -175,7 +175,13 @@ def _resolve_scope(
 def _archive_path_for_arch(library: LibraryMeta, arch: str) -> str:
     if not library.libname:
         return ""
-    return f"$(path-bin)/libs/{arch}/{library.libname}"
+    return f"$(path-bin)/libs/{library.libname}"
+
+
+def _object_path_for_crt(library: LibraryMeta, relative_object: str) -> str:
+    if not relative_object:
+        return ""
+    return f"$(path-obj)/libs/{library.id}/{relative_object}"
 
 
 def _emit_scope_lines(owner_id: str, suffix: str, libraries: list[LibraryMeta], arch: str) -> list[str]:
@@ -193,6 +199,107 @@ def _emit_scope_lines(owner_id: str, suffix: str, libraries: list[LibraryMeta], 
         f"{owner_id}-includes-c{suffix} := {includes_c}",
         f"{owner_id}-includes-cpp{suffix} := {includes_cpp}",
         f"{owner_id}-includes-asm{suffix} := {includes_asm}",
+        "",
+    ]
+
+
+def _empty_c_library_lines(owner_id: str, suffix: str) -> list[str]:
+    return [
+        f"{owner_id}-c-library-id{suffix} :=",
+        f"{owner_id}-c-library-archive{suffix} :=",
+        f"{owner_id}-c-library-includes-c{suffix} :=",
+        f"{owner_id}-c-library-includes-cpp{suffix} :=",
+        f"{owner_id}-c-library-includes-asm{suffix} :=",
+        f"{owner_id}-c-library-ldscript{suffix} :=",
+        f"{owner_id}-c-library-crt0{suffix} :=",
+        f"{owner_id}-c-library-crti{suffix} :=",
+        f"{owner_id}-c-library-crtn{suffix} :=",
+        "",
+    ]
+
+
+def _require_arch_value(values: dict[str, str], library: LibraryMeta, arch: str, field: str) -> str:
+    value = values.get(arch, "")
+    if not value:
+        raise ValueError(
+            f"{library.metadata_path}: c-library {library.id!r} is missing arch.{arch}.{field}"
+        )
+    return value
+
+
+def _select_c_library(
+    owner: OwnerMeta,
+    libraries: list[LibraryMeta],
+    arch: str,
+    scope_name: str,
+) -> LibraryMeta | None:
+    if owner.kind != "program" or not owner.c_library:
+        return None
+
+    selected = [library for library in libraries if library.id == owner.c_library]
+    if not selected:
+        dependency_path = Path(owner.root) / "dependencies.toml"
+        raise ValueError(
+            f"{dependency_path}: program {owner.id!r} selects c-library {owner.c_library!r} "
+            f"but does not declare it as a direct dependency in scope {scope_name!r}"
+        )
+    if len(selected) != 1:
+        raise ValueError(
+            f"{owner.metadata_path}: c-library {owner.c_library!r} resolved ambiguously in scope {scope_name!r}"
+        )
+
+    library = selected[0]
+    if not library.is_c_library:
+        raise ValueError(
+            f"{owner.metadata_path}: program {owner.id!r} selects {owner.c_library!r} as c-library, "
+            f"but {library.metadata_path} has kind {library.kind!r}"
+        )
+    if not owner.ldscript:
+        _require_arch_value(library.arch_ldscripts, library, arch, "ldscript")
+    _require_arch_value(library.arch_crt0, library, arch, "crt0")
+    _require_arch_value(library.arch_crti, library, arch, "crti")
+    _require_arch_value(library.arch_crtn, library, arch, "crtn")
+    return library
+
+
+def _emit_c_library_lines(
+    owner: OwnerMeta,
+    suffix: str,
+    library: LibraryMeta | None,
+    arch: str,
+) -> list[str]:
+    if owner.kind != "program":
+        return []
+    if library is None:
+        return _empty_c_library_lines(owner.id, suffix)
+
+    ldscript = ""
+    if owner.ldscript:
+        ldscript = str((Path(owner.root) / owner.ldscript).resolve())
+    else:
+        ldscript = str((Path(library.root) / _require_arch_value(library.arch_ldscripts, library, arch, "ldscript")).resolve())
+
+    return [
+        f"{owner.id}-c-library-id{suffix} := {library.id}",
+        f"{owner.id}-c-library-archive{suffix} := {_archive_path_for_arch(library, arch)}",
+        f"{owner.id}-c-library-includes-c{suffix} := {library.include_c}",
+        f"{owner.id}-c-library-includes-cpp{suffix} := {library.include_cpp}",
+        f"{owner.id}-c-library-includes-asm{suffix} := {library.include_asm}",
+        f"{owner.id}-c-library-ldscript{suffix} := {ldscript}",
+        f"{owner.id}-c-library-crt0{suffix} := {_object_path_for_crt(library, _require_arch_value(library.arch_crt0, library, arch, 'crt0'))}",
+        f"{owner.id}-c-library-crti{suffix} := {_object_path_for_crt(library, _require_arch_value(library.arch_crti, library, arch, 'crti'))}",
+        f"{owner.id}-c-library-crtn{suffix} := {_object_path_for_crt(library, _require_arch_value(library.arch_crtn, library, arch, 'crtn'))}",
+        "",
+    ]
+
+
+def _emit_program_lines(owner: OwnerMeta) -> list[str]:
+    if owner.kind != "program":
+        return []
+    ldscript = str((Path(owner.root) / owner.ldscript).resolve()) if owner.ldscript else ""
+    return [
+        f"{owner.id}-output := {owner.output}",
+        f"{owner.id}-ldscript := {ldscript}",
         "",
     ]
 
@@ -218,16 +325,35 @@ def emit(root: Path, owner: OwnerMeta, current_arch: str | None) -> str:
         f"# Generated by script/py/resolve_deps.py for {owner.id}. Do not edit this file directly.",
         "",
     ]
+    lines.extend(_emit_program_lines(owner))
     lines.extend(_emit_scope_lines(owner.id, "", default_resolved, "$(arch)"))
 
+    arch_resolved: dict[str, list[LibraryMeta]] = {}
+    for arch in sorted(set(KNOWN_ARCHITECTURES) | set(arch_entries)):
+        entries = common_deps + arch_entries.get(arch, [])
+        if not entries:
+            arch_resolved[arch] = []
+            continue
+        arch_resolved[arch] = _resolve_scope(root, owner, entries, arch, arch)
+
+    if owner.kind == "program":
+        if owner.c_library and current_arch:
+            generic_c_library = _select_c_library(
+                owner,
+                arch_resolved.get(current_arch, default_resolved),
+                current_arch,
+                current_arch,
+            )
+            lines.extend(_emit_c_library_lines(owner, "", generic_c_library, current_arch))
+        else:
+            lines.extend(_empty_c_library_lines(owner.id, ""))
+
+        for arch in KNOWN_ARCHITECTURES:
+            c_library = _select_c_library(owner, arch_resolved[arch], arch, arch)
+            lines.extend(_emit_c_library_lines(owner, f"-{arch}", c_library, arch))
+
     for arch in sorted(arch_entries):
-        resolved_arch = _resolve_scope(
-            root,
-            owner,
-            common_deps + arch_entries[arch],
-            arch,
-            arch,
-        )
+        resolved_arch = arch_resolved[arch]
         lines.extend(_emit_scope_lines(owner.id, f"-{arch}", resolved_arch, arch))
 
     return "\n".join(lines)

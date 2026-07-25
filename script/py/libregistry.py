@@ -17,6 +17,7 @@ class LibraryMeta:
     id: str
     version: str
     root: str
+    kind: str
     libname: str
     makefile: str
     target: str
@@ -24,17 +25,25 @@ class LibraryMeta:
     include_cpp: str
     include_asm: str
     support_archs: tuple[str, ...]
+    arch_ldscripts: dict[str, str]
+    arch_crt0: dict[str, str]
+    arch_crti: dict[str, str]
+    arch_crtn: dict[str, str]
     metadata_path: str
 
     @property
     def archive_path(self) -> str:
         if not self.libname:
             return ""
-        return f"$(path-bin)/libs/$(arch)/{self.libname}"
+        return f"$(path-bin)/libs/{self.libname}"
 
     @property
     def is_header_only(self) -> bool:
         return self.libname == ""
+
+    @property
+    def is_c_library(self) -> bool:
+        return self.kind == "c-library"
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,9 @@ class OwnerMeta:
     root: str
     metadata_path: str
     kind: str
+    output: str = ""
+    c_library: str = ""
+    ldscript: str = ""
 
 
 def scan_metadata_files(root: Path) -> list[Path]:
@@ -95,6 +107,63 @@ def normalize_libname(raw_value: object, field: str) -> str:
     return raw_value
 
 
+def normalize_kind(raw_value: object, field: str) -> str:
+    if raw_value is None:
+        return "library"
+    if raw_value not in {"library", "c-library"}:
+        raise ValueError(f"{field} must be 'library' or 'c-library'")
+    return raw_value
+
+
+def normalize_relative_path(raw_value: object, field: str, *, required: bool = False) -> str:
+    if raw_value is None:
+        if required:
+            raise ValueError(f"{field} must be a non-empty string")
+        return ""
+    if not isinstance(raw_value, str) or (required and not raw_value):
+        raise ValueError(f"{field} must be a non-empty string")
+    if not raw_value:
+        return ""
+    path = Path(raw_value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"{field} must be a relative path inside the metadata directory")
+    return raw_value
+
+
+def normalize_arch_paths(
+    metadata_path: Path,
+    arch_data: object,
+    field: str,
+) -> dict[str, str]:
+    if arch_data is None:
+        return {}
+    if not isinstance(arch_data, dict):
+        raise ValueError(f"{metadata_path}: arch must be a table")
+
+    result: dict[str, str] = {}
+    for arch, values in arch_data.items():
+        if not isinstance(arch, str) or not arch:
+            raise ValueError(f"{metadata_path}: arch names must be non-empty strings")
+        if not isinstance(values, dict):
+            raise ValueError(f"{metadata_path}: arch.{arch} must be a table")
+        result[arch] = normalize_relative_path(
+            values.get(field), f"{metadata_path}: arch.{arch}.{field}"
+        )
+    return {arch: value for arch, value in result.items() if value}
+
+
+def _arch_data_for_entry(metadata_path: Path, data: dict, entry: dict, entry_count: int) -> object:
+    if "arch" in entry:
+        return entry.get("arch")
+    if "arch" in data:
+        if entry_count != 1:
+            raise ValueError(
+                f"{metadata_path}: top-level arch table is only supported with one libmeta entry"
+            )
+        return data.get("arch")
+    return None
+
+
 def parse_kernel_owner(root: Path) -> OwnerMeta:
     metadata_path = root / "kernel" / "metadata.toml"
     if not metadata_path.is_file():
@@ -134,6 +203,7 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                 raise ValueError(f"{metadata_path}: each libmeta entry must be a table")
 
             library_id = validate_global_id(entry.get("id"), f"{metadata_path}: id")
+            kind = normalize_kind(entry.get("kind"), f"{metadata_path}: kind")
             version = entry.get("version")
             if not isinstance(version, str) or not version:
                 raise ValueError(f"{metadata_path}: version must be a non-empty string")
@@ -166,11 +236,13 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                     )
                 makefile_path = str(resolved_makefile)
 
+            arch_data = _arch_data_for_entry(metadata_path, data, entry, len(entries))
             libraries.append(
                 LibraryMeta(
                     id=library_id,
                     version=version,
                     root=str(metadata_path.parent.resolve()),
+                    kind=kind,
                     libname=libname,
                     makefile=makefile_path,
                     target=raw_target,
@@ -186,11 +258,63 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                     support_archs=normalize_support_archs(
                         entry.get("support-archs"), f"{metadata_path}: support-archs"
                     ),
+                    arch_ldscripts=normalize_arch_paths(metadata_path, arch_data, "ldscript"),
+                    arch_crt0=normalize_arch_paths(metadata_path, arch_data, "crt0"),
+                    arch_crti=normalize_arch_paths(metadata_path, arch_data, "crti"),
+                    arch_crtn=normalize_arch_paths(metadata_path, arch_data, "crtn"),
                     metadata_path=str(metadata_path),
                 )
             )
 
     return libraries
+
+
+def scan_program_metadata_files(root: Path) -> list[Path]:
+    metadata_files = []
+    for relative_root in ("module", "program"):
+        scan_root = root / relative_root
+        if not scan_root.is_dir():
+            continue
+        metadata_files.extend(sorted(scan_root.rglob("metadata.toml")))
+    return metadata_files
+
+
+def scan_programs(root: Path) -> list[OwnerMeta]:
+    programs: list[OwnerMeta] = []
+
+    for metadata_path in scan_program_metadata_files(root):
+        with metadata_path.open("rb") as metadata_file:
+            data = tomllib.load(metadata_file)
+
+        entries = data.get("progmeta")
+        if not isinstance(entries, list) or not entries:
+            raise ValueError(f"{metadata_path}: progmeta must be a non-empty array of tables")
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError(f"{metadata_path}: each progmeta entry must be a table")
+
+            program_id = validate_global_id(entry.get("id"), f"{metadata_path}: id")
+            output = entry.get("output")
+            if not isinstance(output, str) or not output:
+                raise ValueError(f"{metadata_path}: output must be a non-empty string")
+            c_library = entry.get("c-library", "")
+            if not isinstance(c_library, str):
+                raise ValueError(f"{metadata_path}: c-library must be a string")
+
+            programs.append(
+                OwnerMeta(
+                    id=program_id,
+                    root=str(metadata_path.parent.resolve()),
+                    metadata_path=str(metadata_path),
+                    kind="program",
+                    output=output,
+                    c_library=c_library,
+                    ldscript=normalize_relative_path(entry.get("ldscript"), f"{metadata_path}: ldscript"),
+                )
+            )
+
+    return programs
 
 
 def scan_dependency_owners(root: Path) -> list[OwnerMeta]:
@@ -212,6 +336,13 @@ def scan_dependency_owners(root: Path) -> list[OwnerMeta]:
                 kind="library",
             )
         )
+    for program in scan_programs(root):
+        if program.id in seen_ids:
+            raise ValueError(
+                f"duplicate owner id {program.id!r}: {seen_ids[program.id]} and {program.metadata_path}"
+            )
+        seen_ids[program.id] = program.metadata_path
+        owners.append(program)
     return owners
 
 

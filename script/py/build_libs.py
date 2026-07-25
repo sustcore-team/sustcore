@@ -37,6 +37,7 @@ def emit(root: Path) -> str:
         lines.append("")
         for library in libraries:
             lines.append(f"library-{library.id}-version := {library.version}")
+            lines.append(f"library-{library.id}-kind := {library.kind}")
             lines.append(f"library-{library.id}-libname := {library.libname}")
             lines.append(f"library-{library.id}-makefile := {library.makefile}")
             lines.append(f"library-{library.id}-target := {library.target}")
@@ -47,6 +48,13 @@ def emit(root: Path) -> str:
             lines.append(f"library-{library.id}-include-c := {library.include_c}")
             lines.append(f"library-{library.id}-include-cpp := {library.include_cpp}")
             lines.append(f"library-{library.id}-include-asm := {library.include_asm}")
+            for arch in KNOWN_ARCHITECTURES:
+                lines.append(
+                    f"library-{library.id}-ldscript-{arch} := {library.arch_ldscripts.get(arch, '')}"
+                )
+                lines.append(f"library-{library.id}-crt0-{arch} := {library.arch_crt0.get(arch, '')}")
+                lines.append(f"library-{library.id}-crti-{arch} := {library.arch_crti.get(arch, '')}")
+                lines.append(f"library-{library.id}-crtn-{arch} := {library.arch_crtn.get(arch, '')}")
             lines.append("")
 
         for arch, arch_libraries in libraries_by_arch.items():

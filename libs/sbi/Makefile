@@ -12,7 +12,7 @@ include $(path-s)/env/buildpath.mk
 
 libsbi-root := $(path-e)/libs/sbi
 libsbi-obj-root := $(path-obj)/libs/sbi
-libsbi-target ?= $(path-bin)/libs/$(arch)/libsbi.a
+libsbi-target ?= $(path-bin)/libs/libsbi.a
 
 src-root := $(libsbi-root)
 obj-root := $(libsbi-obj-root)

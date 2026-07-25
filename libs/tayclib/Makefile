@@ -12,7 +12,7 @@ include $(path-s)/env/buildpath.mk
 
 tayclib-root := $(path-e)/libs/tayclib
 tayclib-obj-root := $(path-obj)/libs/tayclib
-tayclib-target ?= $(path-bin)/libs/$(arch)/libtayclib.a
+tayclib-target ?= $(path-bin)/libs/libtayclib.a
 
 src-root := $(tayclib-root)
 obj-root := $(tayclib-obj-root)

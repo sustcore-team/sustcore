@@ -1,0 +1,4 @@
+[[progmeta]]
+id = "init"
+output = "init.mod"
+c-library = "kmod"

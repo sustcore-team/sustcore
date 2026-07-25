@@ -12,7 +12,7 @@ include $(path-s)/env/buildpath.mk
 
 libfdt-root := $(path-e)/third_party/libs/libfdt
 libfdt-obj-root := $(path-obj)/third_party/libs/libfdt
-libfdt-target ?= $(path-bin)/libs/$(arch)/libfdt.a
+libfdt-target ?= $(path-bin)/libs/libfdt.a
 
 src-root := $(libfdt-root)
 obj-root := $(libfdt-obj-root)

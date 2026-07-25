@@ -12,7 +12,7 @@ include $(path-s)/env/buildpath.mk
 
 minicstd-root := $(path-e)/libs/mincstd
 minicstd-obj-root := $(path-obj)/libs/mincstd
-minicstd-target ?= $(path-bin)/libs/$(arch)/libmini-cstd.a
+minicstd-target ?= $(path-bin)/libs/libmini-cstd.a
 
 src-root := $(minicstd-root)
 obj-root := $(minicstd-obj-root)
