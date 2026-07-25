@@ -7,7 +7,19 @@ lib="mini-cstd"
 version="*.*.*"
 
 [[dependencies]]
+lib="mini-cppstd"
+version="*.*.*"
+
+[[dependencies]]
 lib="tayclib"
+version="*.*.*"
+
+[[dependencies]]
+lib="taycpplib"
+version="*.*.*"
+
+[[dependencies]]
+lib="sustcore-headers"
 version="*.*.*"
 
 [[dependencies]]

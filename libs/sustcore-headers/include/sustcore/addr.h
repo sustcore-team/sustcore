@@ -12,7 +12,7 @@
 #pragma once
 
 #include <tay/bits.h>
-#include <sus/range.h>
+#include <tay/range.h>
 #include <sustcore/addrspace.h>
 
 #include <cassert>

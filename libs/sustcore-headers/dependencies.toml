@@ -1,0 +1,19 @@
+[[dependencies]]
+lib = "gcc-cheaders"
+version = "*.*.*"
+
+[[dependencies]]
+lib = "mini-cstd"
+version = "*.*.*"
+
+[[dependencies]]
+lib = "mini-cppstd"
+version = "*.*.*"
+
+[[dependencies]]
+lib = "tayclib"
+version = "*.*.*"
+
+[[dependencies]]
+lib = "taycpplib"
+version = "*.*.*"

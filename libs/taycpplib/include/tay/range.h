@@ -13,7 +13,7 @@
 
 #include <compare>
 #include <cstddef>
-#include <sus/algobase.h>
+#include <tay/algobase.h>
 
 namespace util {
     template <typename T>
