@@ -4,8 +4,8 @@ Sustcore 是一个面向 RISC-V 与 LoongArch64 的 Capability-based 混合内�
 作为一个混合内核, Sustcore 将 VFS, 内存管理, 进程管理以及部分重要的驱动与文件系统等功能收归内核, 以提高效率, 降低复杂度并增强安全性,
 而将网络协议栈, 文件系统, 驱动等功能放在用户态(未实现), 以兼备微内核的安全性与模块化, 以及宏内核的效率与易用性.
 
-Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核, 目前除了 libfdt 与部分头文件外也未使用其余的第三方库.
-因此, 例如 ext4 文件系统, elf 加载器, riscv64与loongarch64架构支持, 自旋锁等功能都是自己实现的.
+Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核. 项目主体代码自行实现, 同时通过依赖系统使用 libfdt、ELF、Multiboot 及部分 C/C++ 与 Linux 头文件等第三方组件.
+因此, 例如 ext4 文件系统, riscv64与loongarch64架构支持, 自旋锁等功能都是自己实现的.
 
 在本系统的编写过程中, 我们大量参考了以下的操作系统与书记
 
@@ -39,7 +39,7 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核, �
 15. [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
     > C++ 的官方规范, 对本内核的 C++ 代码风格有着重要的指导作用, 同时也启发了本内核中 util::owner, util::nonnull 等零成本类型标注的设计
 
-此外, 本内核同时支持 C++26 中的反射机制, 并通过反射机制来优化 RPC 中胶水代码的编写, 以提高效率与可维护性. 由于比赛时提供的编译器版本过低, 目前暂时没有使用反射机制, 但只要使用了 GCC 16 或以上版本, 就可以取消 Makefile 中例如 test-rpc 等使用到反射机制的测试的注释, 并使用反射机制来优化 RPC 中胶水代码的编写.
+此外, 项目曾探索使用 C++ 反射机制优化 RPC 胶水代码的编写, 以提高效率与可维护性. 当前构建系统默认使用 Clang/LLVM，内核构建流程尚未启用依赖反射的功能或测试目标.
 
 本项目的 github 链接是 [sustcore-team/sustcore](https://github.com/sustcore-team/sustcore)
 演示视频文件, 文档与ppt见该 github 仓库的 release 页面.
@@ -50,20 +50,26 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核, �
 
 ## 编译
 
-首先, 请确保你拥有riscv64与loongarch64的交叉编译器, 并且版本为GCC 15.
-目标三元组分别为riscv64-unknown-elf与loongarch64-unknown-elf.
+当前构建系统默认使用 Clang/LLVM：`clang`、`clang++`、`ld.lld`、`llvm-ar` 和 `llvm-objcopy`；运行时还需要相应架构的 QEMU（`qemu-system-riscv64` 或 `qemu-system-loongarch64`）。工具路径和编译选项可在配置集的 `clang.toml` 中覆盖。
 
-输入 `make build` 即可编译
-请勿使用 `make setup_workspace` 等命令, 这是为了把内核写到磁盘映像里的, 但是我们现在可以直接使用 `qemu` 的 `-kernel` 参数来加载内核.
+首次构建时，依次执行：
+
+```sh
+make init
+make switch arch=riscv64 mode=debug
+make configure config=default arch=riscv64
+make build-kernel
+```
+
+`arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`build-kernel` 会先构建当前架构可见的库和 initrd，再调用 `kernel/Makefile` 链接内核；只构建库时可使用 `make build-libs`。
 
 ## 运行
 
-输入 `make run` 即可编译并运行. 如果只想启动已有内核, 使用 `make run-only`.
+在内核已构建后，使用 `make runonly` 启动 QEMU。该目标不会重新构建内核，并通过 QEMU 的 `-kernel` 参数加载当前 `kernel-path`。
 
 ## 调试
 
-输入 `make dbg` 即可编译并启动调试. 如果只想调试启动已有内核, 使用 `make dbg-only`.
-需要用 gdb 连接到 `localhost:1234` 上. 可参考我给出的配置文件在VSCode上进行配置.
+在内核已构建后，使用 `make dbgonly` 以 QEMU 的 `-s -S` 选项启动调试。随后可用 GDB 连接到 `localhost:1234`；可参考仓库中的 VS Code 配置进行调试。
 
 # 代码规范
 
@@ -91,9 +97,9 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核, �
 可考虑使用fileHeaderComment插件自动生成文件头注释.
 
 无参数的函数应写作 `return_type func_name(void)`.
-注意注释含量. 可使用 `make stat_code` 统计代码的注释含量与密度.
+注意注释含量与密度.
 命名应采用语义化命名方案, 可采用熟知缩写.
 
 # 环境配置
 
-参见 [config-ref](./config-ref/README.md)
+构建配置位于 `config/<name>/*.toml`，通过 `make configure config=<name> [arch=<arch>]` 生成 `script/.cache/` 下的 Make 片段。当前默认配置集为 `config/default/`；构建系统说明见 [构建系统概览](./aidoc/buildsystem/overview.md) 与 [配置流程](./aidoc/buildsystem/configuration.md)。
