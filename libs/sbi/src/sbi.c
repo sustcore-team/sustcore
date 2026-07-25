@@ -2,7 +2,7 @@
  * @file sbi.c
  * @author theflysong (song_of_the_fly@163.com)
  * @brief SBI接口实现
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2025-11-17
  * 
  * @copyright Copyright (c) 2025

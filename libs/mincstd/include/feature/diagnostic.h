@@ -2,7 +2,7 @@
  * @file diagnostic.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief 诊断消息控制
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-03-07
  *
  * @copyright Copyright (c) 2026

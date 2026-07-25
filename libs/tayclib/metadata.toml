@@ -1,0 +1,10 @@
+[[libmeta]]
+id = "tayclib"
+libname = "libtayclib.a"
+makefile = "Makefile"
+target = "build-static"
+version = "0.0.1"
+
+include-c = ["include"]
+include-cpp = ["include"]
+include-asm = ["include"]

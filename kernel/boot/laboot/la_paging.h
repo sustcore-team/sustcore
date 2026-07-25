@@ -2,7 +2,7 @@
  * @file la_paging.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief laboot 引导阶段分页辅助
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-06-15
  *
  * @copyright Copyright (c) 2026
@@ -12,7 +12,7 @@
 #pragma once
 
 #include <arch/loongarch64/pagedef.h>
-#include <sus/types.h>
+#include <tay/bits.h>
 #include <sustcore/addr.h>
 
 #define _LABOOT_RECLAIMABLE SECTION(".laboot_reclaimable")

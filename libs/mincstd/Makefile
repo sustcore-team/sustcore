@@ -29,9 +29,10 @@ includes-cpp += $(or $(mini-cstd-includes-cpp-$(arch)),$(mini-cstd-includes-cpp)
 includes-asm += $(or $(mini-cstd-includes-asm-$(arch)),$(mini-cstd-includes-asm))
 
 include $(minicstd-root)/flags.mk
-include $(minicstd-root)/include.mk
+component-root := $(minicstd-root)
+include $(path-s)/build/collector.mk
 
-sources-c := $(strip $(sources-c))
+sources-c := $(strip $(sources-y-c))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
 objects := $(objects-c)
 deps := $(objects:.o=.d)

@@ -2,7 +2,7 @@
  * @file sbi_paging.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief sbi 引导分页相关代码
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-06-02
  *
  * @copyright Copyright (c) 2026

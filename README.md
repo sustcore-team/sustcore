@@ -80,7 +80,7 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核, �
  * @file filename
  * @author author (email)
  * @brief A brief description of the file
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date the date
  *
  * @copyright Copyright (c) 2026

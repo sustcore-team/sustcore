@@ -2,7 +2,7 @@
  * @file sbi_post_boot.cpp
  * @author theflysong (song_of_the_fly@163.com)
  * @brief SBI 启动代码第二部分
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-06-02
  *
  * @copyright Copyright (c) 2026
@@ -13,6 +13,7 @@
 #include <boot/sbi/sbi_paging.h>
 #include <libfdt.h>
 #include <sbi/sbi.h>
+#include <tay/attribute.h>
 
 #include <cstring>
 

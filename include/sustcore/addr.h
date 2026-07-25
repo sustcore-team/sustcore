@@ -2,7 +2,7 @@
  * @file addr.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief 内核虚拟地址
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-01-21
  *
  * @copyright Copyright (c) 2026
@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <sus/types.h>
+#include <tay/bits.h>
 #include <sus/range.h>
 #include <sustcore/addrspace.h>
 

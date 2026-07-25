@@ -2,7 +2,7 @@
  * @file sbi.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief SBI接口
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2025-11-17
  *
  * @copyright Copyright (c) 2025
@@ -12,11 +12,12 @@
 #pragma once
 
 #ifdef __cplusplus
+#define restrict __restrict__
 extern "C" {
 #endif
 
 #include <sbi/sbi_enum.h>
-#include <sus/types.h>
+#include <tay/bits.h>
 
 /**
  * @brief SBI调用返回结构体
@@ -369,4 +370,5 @@ SBIRet sbi_remote_hfence_vvma(xlen_t hart_mask, xlen_t hart_mask_base,
 
 #ifdef __cplusplus
 }
+#undef restrict
 #endif

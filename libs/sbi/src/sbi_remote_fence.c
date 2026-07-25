@@ -2,7 +2,7 @@
  * @file sbi_remote_fence.c
  * @author hyj0824 (2417179808@qq.com)
  * @brief 
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2025-11-21
  * 
  * @copyright Copyright (c) 2025

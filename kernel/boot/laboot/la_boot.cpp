@@ -2,7 +2,7 @@
  * @file la_boot.cpp
  * @author theflysong (song_of_the_fly@163.com)
  * @brief laboot 启动第一阶段: 构造页表并准备分页切换描述
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-06-16
  *
  * @copyright Copyright (c) 2026
@@ -11,7 +11,7 @@
 
 #include <arch/loongarch64/csrdef.h>
 #include <boot/laboot/la_paging.h>
-#include <sus/types.h>
+#include <tay/bits.h>
 
 #include <cstddef>
 #include <cstdint>

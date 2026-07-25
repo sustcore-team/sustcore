@@ -2,7 +2,7 @@
  * @file range.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief 区间相关操作
- * @version alpha-1.0.0
+ * @version 1.0.0
  * @date 2026-04-06
  *
  * @copyright Copyright (c) 2026

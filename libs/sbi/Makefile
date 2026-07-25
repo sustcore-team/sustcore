@@ -29,9 +29,10 @@ includes-cpp += $(or $(sbi-includes-cpp-$(arch)),$(sbi-includes-cpp))
 includes-asm += $(or $(sbi-includes-asm-$(arch)),$(sbi-includes-asm))
 
 include $(libsbi-root)/flags.mk
-include $(libsbi-root)/include.mk
+component-root := $(libsbi-root)
+include $(path-s)/build/collector.mk
 
-sources-c := $(strip $(sources-c))
+sources-c := $(strip $(sources-y-c))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
 objects := $(objects-c)
 deps := $(objects:.o=.d)

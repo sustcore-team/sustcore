@@ -1,0 +1,11 @@
+[[dependencies]]
+lib="gcc-cheaders"
+version="*.*.*"
+
+[[dependencies]]
+lib="mini-cstd"
+version="*.*.*"
+
+[[dependencies]]
+lib="tayclib"
+version="*.*.*"

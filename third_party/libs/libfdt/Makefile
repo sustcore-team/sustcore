@@ -29,9 +29,10 @@ includes-cpp += $(or $(fdt-includes-cpp-$(arch)),$(fdt-includes-cpp))
 includes-asm += $(or $(fdt-includes-asm-$(arch)),$(fdt-includes-asm))
 
 include $(libfdt-root)/flags.mk
-include $(libfdt-root)/include.mk
+component-root := $(libfdt-root)
+include $(path-s)/build/collector.mk
 
-sources-c := $(strip $(sources-c))
+sources-c := $(strip $(sources-y-c))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
 objects := $(objects-c)
 deps := $(objects:.o=.d)

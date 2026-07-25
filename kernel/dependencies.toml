@@ -1,13 +1,17 @@
 [[dependencies]]
+lib="gcc-cheaders"
+version="*.*.*"
+
+[[dependencies]]
 lib="mini-cstd"
 version="*.*.*"
 
 [[dependencies]]
-lib="fdt"
+lib="tayclib"
 version="*.*.*"
 
 [[dependencies]]
-lib="gcc-cheaders"
+lib="fdt"
 version="*.*.*"
 
 [[riscv64.dependencies]]

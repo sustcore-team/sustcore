@@ -10,6 +10,7 @@
 #include <fdt.h>
 
 #ifdef __cplusplus
+#define restrict __restrict__
 extern "C" {
 #endif
 
@@ -2535,6 +2536,7 @@ const char *fdt_strerror(int errval);
 
 #ifdef __cplusplus
 }
+#undef restrict
 #endif
 
 #endif /* LIBFDT_H */
