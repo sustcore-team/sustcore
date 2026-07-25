@@ -10,13 +10,15 @@ kernel-path ?= $(path-bin)/kernel/sustcore.bin
 include $(path-s)/target/init.mk
 include $(path-s)/target/configure.mk
 include $(path-s)/target/run.mk
+include $(path-s)/target/clean.mk
+include $(path-s)/target/initrd.mk
 
 .PHONY: init
 init: init-build-system
 	$(q)$(echo) "Initialization done!"
 
 .PHONY: build-kernel
-build-kernel: build-libs
+build-kernel: build-initrd
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile \
 		global-env=$(global-env) \
 		arch=$(arch) \

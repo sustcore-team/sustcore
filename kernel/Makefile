@@ -31,10 +31,16 @@ include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/cpp.mk
 include $(path-s)/toolchain/ld.mk
 
+riscv64-objcopy-output := elf64-littleriscv
+riscv64-objcopy-arch := riscv
+loongarch64-objcopy-output := elf64-loongarch
+loongarch64-objcopy-arch := loongarch
+
 comp-c ?= $($(arch)-comp-c)
 comp-cpp ?= $($(arch)-comp-cpp)
 comp-asm ?= $(comp-c)
 comp-ld ?= $($(arch)-comp-ld)
+comp-objcopy ?= llvm-objcopy
 
 flags-c += $($(arch)-flags-c)
 flags-cpp += $($(arch)-flags-cpp)
@@ -53,7 +59,8 @@ sources-cpp := $(strip $(sources-y-cpp))
 objects-asm := $(addprefix $(obj-root)/,$(sources-asm:.S=.o))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
 objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))
-objects := $(objects-asm) $(objects-c) $(objects-cpp)
+objects-attachment := $(path-initrd-obj)
+objects := $(objects-asm) $(objects-c) $(objects-cpp) $(objects-attachment)
 deps := $(objects:.o=.d)
 
 include $(path-s)/rules/asm.mk
@@ -62,6 +69,10 @@ include $(path-s)/rules/cpp.mk
 include $(path-s)/rules/ld.mk
 
 -include $(deps)
+
+$(path-initrd-obj): $(path-initrd)
+	$(mkdir) $(@D)
+	$(q)$(comp-objcopy) -I binary -O $($(arch)-objcopy-output) -B $($(arch)-objcopy-arch) --rename-section .data=.attach.initrd $< $@
 
 .PHONY: build kernel-vars
 build: $(target)

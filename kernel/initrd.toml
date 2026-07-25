@@ -1,0 +1,11 @@
+[[initrd.file]]
+src="LICENSE"
+dst="license"
+
+[[initrd.file]]
+src="README.md"
+dst="readme.md"
+
+[[initrd.module]]
+mod="init"
+dst="/modules/init.mod"

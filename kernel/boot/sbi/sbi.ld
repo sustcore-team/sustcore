@@ -43,8 +43,8 @@ SECTIONS
 
     /* SBI 后初始化程序内存 */
     . += KVA_START;
-    .sbi_post : AT(ADDR(.sbi_post) - KVA_START) {
-        KEEP(*(.sbi_post .sbi_post.*))
+    .sbi_post_boot : AT(ADDR(.sbi_post_boot) - KVA_START) {
+        KEEP(*(.sbi_post_boot .sbi_post_boot.*))
     }
 
     /* SBI 可回收内存 */

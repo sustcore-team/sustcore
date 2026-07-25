@@ -1,0 +1,8 @@
+[[libmeta]]
+id = "linux-headers"
+libname = ""
+version = "0.0.1"
+
+include-c = ["include"]
+include-cpp = ["include"]
+include-asm = ["include"]

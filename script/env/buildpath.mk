@@ -12,5 +12,8 @@ path-build-root ?= $(path-e)/build
 path-build := $(path-build-root)/$(mode)/$(arch)
 path-bin ?= $(path-build)/bin
 path-obj ?= $(path-build)/obj
+path-initrd-root ?= $(path-build)/initrd
+path-initrd ?= $(path-build)/bin/initrd.cpio
+path-initrd-obj ?= $(path-obj)/kernel/attachment/initrd.o
 
 include $(path-s)/env/q.mk

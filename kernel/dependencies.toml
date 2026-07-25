@@ -26,6 +26,18 @@ version="*.*.*"
 lib="fdt"
 version="*.*.*"
 
+[[dependencies]]
+lib="elf"
+version="*.*.*"
+
+[[dependencies]]
+lib="linux-headers"
+version="*.*.*"
+
+[[dependencies]]
+lib="multiboot"
+version="*.*.*"
+
 [[riscv64.dependencies]]
 lib="sbi"
 version="*.*.*"
