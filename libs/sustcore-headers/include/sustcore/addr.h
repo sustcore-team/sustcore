@@ -41,7 +41,7 @@ enum class AddrType {
     VADDR,  // 任意地址类型
 };
 
-using addrscope = util::range<addr_t>;
+using addrscope = tay::range<addr_t>;
 
 constexpr addrscope KVA_SCOPE   = {KVA_START, MAX_ADDR};
 constexpr addrscope KPA_SCOPE   = {KPA_START, KVA_START - 1};
@@ -236,11 +236,11 @@ constexpr bool is_user_vaddr(VirAddr vaddr) {
            !within(get_scope(AddrType::KPA), vaddr.arith());
 }
 
-using VirArea = util::range<VirAddr>;
-using PhyArea = util::range<PhyAddr>;
+using VirArea = tay::range<VirAddr>;
+using PhyArea = tay::range<PhyAddr>;
 
 template <typename AddrT>
-inline static util::range<AddrT> page_align_inward(util::range<AddrT> area)
+inline static tay::range<AddrT> page_align_inward(tay::range<AddrT> area)
 {
     return {
         area.begin.page_align_up(),
@@ -249,7 +249,7 @@ inline static util::range<AddrT> page_align_inward(util::range<AddrT> area)
 }
 
 template <typename AddrT>
-inline static util::range<AddrT> page_align_outward(util::range<AddrT> area)
+inline static tay::range<AddrT> page_align_outward(tay::range<AddrT> area)
 {
     return {
         area.begin.page_align_down(),

@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <tay/algobase.h>
 
-namespace util {
+namespace tay {
     template <typename T>
     struct range {
         T begin;
@@ -82,4 +82,4 @@ namespace util {
     {
         return r.begin <= s.begin && s.end <= r.end;
     }
-}  // namespace util::range
+}  // namespace tay

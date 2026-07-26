@@ -37,7 +37,7 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核. �
 14. [Rust Book](https://doc.rust-lang.org/stable/book/)
     > 虽然本内核是使用 C++ 实现的, 但是 Rust Book 中提及的 Result<T, E> 错误处理机制对本内核的错误处理机制有着重要的启发作用, 也因此在本内核中实现了类似的错误处理机制以代替C++的异常机制, 以提高效率与可控性.
 15. [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
-    > C++ 的官方规范, 对本内核的 C++ 代码风格有着重要的指导作用, 同时也启发了本内核中 util::owner, util::nonnull 等零成本类型标注的设计
+    > C++ 的官方规范, 对本内核的 C++ 代码风格有着重要的指导作用, 同时也启发了本内核中 tay::owner, tay::nonnull 等零成本类型标注的设计
 
 此外, 项目曾探索使用 C++ 反射机制优化 RPC 胶水代码的编写, 以提高效率与可维护性. 当前构建系统默认使用 Clang/LLVM，内核构建流程尚未启用依赖反射的功能或测试目标.
 

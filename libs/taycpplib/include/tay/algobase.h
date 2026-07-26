@@ -11,7 +11,7 @@
 
 #pragma once
 
-namespace util {
+namespace tay {
     /**
      * @brief 返回两个值中的较小者.
      *
@@ -63,4 +63,4 @@ namespace util {
     constexpr T clamp(const T& value, const T& low, const T& high) {
         return max(low, min(value, high));
     }
-}  // namespace util
+}  // namespace tay
