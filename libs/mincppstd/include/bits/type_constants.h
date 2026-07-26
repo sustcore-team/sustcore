@@ -2,7 +2,7 @@
  * @file type_constants.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief type constants (true_type, false_type and etc.)
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2026-06-08
  *
  * @copyright Copyright (c) 2026

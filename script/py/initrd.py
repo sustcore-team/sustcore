@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 import tomllib
 
+from libregistry import scan_programs, validate_global_id
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -82,25 +83,43 @@ def _read_config(config_path: Path) -> tuple[list[tuple[Path, Path]], list[tuple
         files.append((source_path, _clean_relative_path(entry.get("dst"), f"{config_path}: initrd.file[{index}].dst")))
 
     modules: list[tuple[str, Path]] = []
+    seen_modules: set[str] = set()
     for index, entry in enumerate(module_entries):
         if not isinstance(entry, dict):
             raise ValueError(f"{config_path}: initrd.module[{index}] must be a table")
         mod = entry.get("mod")
-        if not isinstance(mod, str) or not mod:
-            raise ValueError(f"{config_path}: initrd.module[{index}].mod must be a non-empty string")
-        modules.append((mod, _clean_relative_path(entry.get("dst"), f"{config_path}: initrd.module[{index}].dst")))
+        module_id = validate_global_id(mod, f"{config_path}: initrd.module[{index}].mod")
+        if module_id in seen_modules:
+            raise ValueError(f"{config_path}: duplicate initrd module {module_id!r}")
+        seen_modules.add(module_id)
+        modules.append((module_id, _clean_relative_path(entry.get("dst"), f"{config_path}: initrd.module[{index}].dst")))
 
     return files, modules
 
 
-def list_modules(config_path: Path) -> list[str]:
+def _program_index(root: Path) -> dict[str, object]:
+    return {program.id: program for program in scan_programs(root)}
+
+
+def _resolve_modules(config_path: Path, root: Path) -> tuple[list[tuple[Path, Path]], list[tuple[Path, Path]]]:
+    files, modules = _read_config(config_path)
+    programs = _program_index(root)
+    resolved_modules: list[tuple[Path, Path]] = []
+    for module_id, destination in modules:
+        program = programs.get(module_id)
+        if program is None:
+            raise ValueError(f"{config_path}: initrd module {module_id!r} is not registered")
+        resolved_modules.append((Path(program.output), destination))
+    return files, resolved_modules
+
+
+def list_modules(config_path: Path, root: Path = ROOT) -> list[str]:
     _, modules = _read_config(config_path)
-    result: list[str] = []
-    seen: set[str] = set()
+    programs = _program_index(root)
+    result = []
     for module_id, _ in modules:
-        if module_id in seen:
-            continue
-        seen.add(module_id)
+        if module_id not in programs:
+            raise ValueError(f"{config_path}: initrd module {module_id!r} is not registered")
         result.append(module_id)
     return result
 
@@ -110,10 +129,6 @@ def _copy_file(source: Path, destination: Path) -> None:
         raise ValueError(f"initrd source file does not exist: {source}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
-
-
-def _module_source(path_bin: Path, module_id: str) -> Path:
-    return path_bin / "module" / f"{module_id}.mod"
 
 
 def _pad4(size: int) -> bytes:
@@ -188,8 +203,14 @@ def _write_archive(root: Path, archive_path: Path) -> None:
         _write_svr4_newc_entry(archive, "TRAILER!!!", inode, 0, 1, 0, b"")
 
 
-def build(config_path: Path, path_bin: Path, path_initrd_root: Path, path_initrd: Path) -> None:
-    files, modules = _read_config(config_path)
+def build(
+    config_path: Path,
+    path_bin: Path,
+    path_initrd_root: Path,
+    path_initrd: Path,
+    root: Path = ROOT,
+) -> None:
+    files, modules = _resolve_modules(config_path, root)
 
     if path_initrd_root.exists():
         shutil.rmtree(path_initrd_root)
@@ -198,8 +219,8 @@ def build(config_path: Path, path_bin: Path, path_initrd_root: Path, path_initrd
     for source, destination in files:
         _copy_file(source, path_initrd_root / destination)
 
-    for module_id, destination in modules:
-        _copy_file(_module_source(path_bin, module_id), path_initrd_root / destination)
+    for output, destination in modules:
+        _copy_file(path_bin / output, path_initrd_root / destination)
 
     _write_archive(path_initrd_root, path_initrd)
 

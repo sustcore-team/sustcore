@@ -86,7 +86,7 @@ make build-kernel
  * @file filename
  * @author author (email)
  * @brief A brief description of the file
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date the date
  *
  * @copyright Copyright (c) 2026

@@ -6,18 +6,16 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(init-dir)))))
 global-env := $(repo-root)/script/env/global.mk
 endif
 
+ifeq ($(origin build-header), undefined)
+$(error module/init/Makefile must be invoked with build-header from the top-level Makefile)
+endif
+
 include $(global-env)
 include $(path-s)/env/buildpath.mk
--include $(path-cache)/deps-init.mk
+include $(build-header)
+-include $(path-cache)/deps-$(owner-id).mk
 
-init-root := $(path-e)/module/init
-init-obj-root := $(path-obj)/module/init
-init-target ?= $(path-bin)/module/$(or $(init-output),init.mod)
-
-program-id := init
-src-root := $(init-root)
-obj-root := $(init-obj-root)
-target := $(init-target)
+src-root := $(owner-root)
 
 include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/cpp.mk
@@ -32,9 +30,12 @@ flags-c += $($(arch)-flags-c)
 flags-cpp += $($(arch)-flags-cpp)
 flags-asm += $($(arch)-flags-c)
 
+include $(owner-root)/flags.mk
+include $(owner-root)/collect.mk
+
 include $(path-s)/rules/program-ld.mk
 
-sources-cpp := main.cpp
+sources-cpp := $(strip $(sources-y-cpp))
 objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))
 objects := $(objects-cpp)
 deps := $(objects:.o=.d)

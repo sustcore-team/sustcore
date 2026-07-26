@@ -11,7 +11,9 @@ from pathlib import Path
 
 import tomllib
 
+import build_headers
 import build_libs
+import build_programs
 from libregistry import scan_dependency_owners
 import resolve_deps
 
@@ -86,6 +88,12 @@ def write_text_if_changed(path: Path, content: str) -> None:
         raise
 
 
+def remove_stale_build_headers(expected_names: set[str]) -> None:
+    for header_path in CACHE_ROOT.glob("build-header-*.mk"):
+        if header_path.name not in expected_names:
+            header_path.unlink()
+
+
 def generate(config_name: str, arch: str | None) -> None:
     config_dir = (CONFIG_ROOT / config_name).resolve()
     if CONFIG_ROOT not in config_dir.parents or not config_dir.is_dir():
@@ -108,11 +116,35 @@ def generate(config_name: str, arch: str | None) -> None:
         generated.append(generated_name)
 
     libraries_name = "libraries.mk"
+    build_libraries_name = "build-libs.mk"
+    libraries_content, build_libraries_content = build_libs.emit(ROOT)
     write_text_if_changed(
         CACHE_ROOT / libraries_name,
-        build_libs.emit(ROOT),
+        libraries_content,
     )
-    generated.append(libraries_name)
+    write_text_if_changed(
+        CACHE_ROOT / build_libraries_name,
+        build_libraries_content,
+    )
+    generated.extend((libraries_name, build_libraries_name))
+
+    component_headers = build_libs.emit_headers(ROOT)
+
+    programs_name = "programs.mk"
+    write_text_if_changed(CACHE_ROOT / programs_name, build_programs.emit(ROOT))
+    generated.append(programs_name)
+    component_headers.update(build_programs.emit_headers(ROOT))
+
+    kernel_header_name = "build-header-kernel.mk"
+    component_headers[kernel_header_name] = build_headers.emit(
+        "kernel",
+        str((ROOT / "kernel").resolve()),
+        "$(path-obj)/kernel",
+        "$(kernel-path)",
+    )
+    for header_name, header_content in component_headers.items():
+        write_text_if_changed(CACHE_ROOT / header_name, header_content)
+    remove_stale_build_headers(set(component_headers))
 
     for owner in scan_dependency_owners(ROOT):
         deps_name = f"deps-{owner.id}.mk"

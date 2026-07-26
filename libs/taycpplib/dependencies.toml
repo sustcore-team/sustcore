@@ -1,15 +1,15 @@
 [[dependencies]]
 lib = "gcc-cheaders"
-version = "*.*.*"
+version = ">=0.1.0-dev.0 <0.1.0"
 
 [[dependencies]]
 lib = "mini-cstd"
-version = "*.*.*"
+version = ">=0.1.0-dev.0 <0.1.0"
 
 [[dependencies]]
 lib = "mini-cppstd"
-version = "*.*.*"
+version = ">=0.1.0-dev.0 <0.1.0"
 
 [[dependencies]]
 lib = "tayclib"
-version = "*.*.*"
+version = ">=0.1.0-dev.0 <0.1.0"

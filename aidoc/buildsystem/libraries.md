@@ -13,7 +13,7 @@ id = "sbi"
 libname = "libsbi.a"
 makefile = "Makefile"
 target = "build-static"
-version = "0.0.1"
+version = "0.1.0-dev.1"
 support-archs = ["riscv64"]
 
 include-c = ["include"]
@@ -32,7 +32,7 @@ include-asm = ["include"]
 - `target`
   - sub-make target used to build that library
 - `version`
-  - semver-like version string
+  - concrete SemVer 2.0 library release version
 - `support-archs`
   - allow-list of supported architectures
 - `include-c/cpp/asm`
@@ -46,6 +46,31 @@ include-asm = ["include"]
 - missing `include-*` means “export nothing”
 - `libname = ""` means “header-only”
 
+## Version Naming And Requirements
+
+`metadata.toml` uses `version` for the concrete version provided by a library.
+It must use a full SemVer 2.0 form without a `v` prefix, for example:
+
+```toml
+version = "0.1.0"
+version = "0.2.0-rc.1"
+version = "0.2.0-dev.3+git.abc1234"
+```
+
+`dependencies.toml` uses `version` as a version-range requirement rather than
+the dependency's concrete version. Supported forms include:
+
+- `*` for any version
+- exact and partial versions such as `1.2.3`, `1.2`, and `1.x`
+- comparator and conjunction ranges such as `>=1.2.0 <2.0.0`
+- compatibility ranges such as `^0.2.0`, `~1.2`, and `1.2 - 2.0`
+- logical OR, for example `^1.2 || ^2.0`
+
+Build metadata is retained for traceability but ignored for version precedence
+and range matching. Ranges exclude prerelease versions by default; a range
+clause must explicitly contain a prerelease comparator for the same
+`MAJOR.MINOR.PATCH` core version to match one.
+
 ## Registry Generation
 
 The shared registry is built by:
@@ -57,7 +82,7 @@ Generated output:
 
 - `script/.cache/libraries.mk`
 
-This file currently contains:
+This registry fragment contains:
 
 - `library-ids`
 - `library-ids-riscv64`
@@ -71,8 +96,35 @@ This file currently contains:
 - `library-<id>-include-c`
 - `library-<id>-include-cpp`
 - `library-<id>-include-asm`
+
+Generated build-target output:
+
+- `script/.cache/build-libs.mk`
+
+This build-target fragment contains:
+
 - `build-lib-<id>`
+- `build-lib-targets-<arch>`
 - `build-libs`
+
+Each non-header-only target passes its matching
+`build-header-lib-<id>.mk` file to the library sub-make. The header declares
+the library owner and source root, with defaults for its object directory
+(`$(path-obj)/libs/<id>`) and final archive
+(`$(path-bin)/libs/<libname>`). Header-only libraries still receive a header
+with an empty `target`.
+
+## Component Build Fragments
+
+Each buildable library or module uses three root fragments:
+
+- `Makefile` loads the component header, flags, collection result, and rules.
+- `flags.mk` declares component-local compiler flags and include paths.
+- `collect.mk` invokes `script/build/collector.mk` for the component root.
+
+Source selection belongs exclusively in `include.mk`. The collector reads the
+root and all nested `include.mk` files, classifies their `src-y` and `src-n`
+entries by language, and prefixes nested paths relative to the component root.
 
 ## Dependency File Schema
 
@@ -81,11 +133,11 @@ Dependency owners use:
 ```toml
 [[dependencies]]
 lib = "mini-cstd"
-version = "*.*.*"
+
 
 [[riscv64.dependencies]]
 lib = "sbi"
-version = "*.*.*"
+
 ```
 
 The resolver:

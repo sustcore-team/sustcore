@@ -2,7 +2,7 @@
  * @file la_boot.cpp
  * @author theflysong (song_of_the_fly@163.com)
  * @brief laboot 启动第一阶段: 构造页表并准备分页切换描述
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2026-06-16
  *
  * @copyright Copyright (c) 2026

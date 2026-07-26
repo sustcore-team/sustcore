@@ -47,10 +47,11 @@ settings, and kernel boot-mode configuration.
 Loaded explicitly by top-level or target-local Makefiles:
 
 - `libraries.mk`
+- `build-libs.mk`
 - `deps-kernel.mk`
 
-These files describe registered libraries, build targets, and resolved
-dependencies for the kernel.
+These files describe the global library registry, generated library build
+targets, and resolved dependencies for the kernel.
 
 ## Current Library System
 
@@ -60,9 +61,10 @@ The active schema is:
 ```toml
 [[libmeta]]
 id = "example"
+libname = "libexample.a"
 makefile = "Makefile"
 target = "build-static"
-version = "0.0.1"
+version = "0.1.0-dev.1"
 support-archs = ["riscv64"]
 
 include-c = ["include"]
@@ -74,9 +76,12 @@ Important current rules:
 
 - A single `metadata.toml` may contain multiple `[[libmeta]]` entries.
 - `id` must still be globally unique.
+- `libname` is the generated static archive name; an empty value denotes a
+  header-only library.
 - `support-archs` is an allow-list.
 - `mini-cstd` currently exports no include paths.
-- `build-libs` is generated from library metadata.
+- `build-libs` is generated from library metadata and skips header-only
+  libraries.
 
 ## Current Dependency System
 
@@ -86,28 +91,34 @@ The active shape is:
 ```toml
 [[dependencies]]
 lib = "mini-cstd"
-version = "*.*.*"
+
 
 [[riscv64.dependencies]]
 lib = "sbi"
-version = "*.*.*"
+
 ```
 
 The resolver currently:
 
-- supports exact versions
-- supports semver wildcard expressions
-- supports comparator expressions
-- supports range conjunctions
-- supports logical OR
+- validates library versions as complete SemVer 2.0 versions
+- supports exact, wildcard, and partial version expressions
+- supports comparator expressions, range conjunctions, and logical OR
+- supports caret, tilde, and hyphen ranges
+- follows npm-style prerelease range matching
+- ignores build metadata when comparing versions
 
 It does **not** yet support:
 
-- prerelease matching
-- build metadata matching
-- caret ranges
-- tilde ranges
 - multiple versions under the same `id`
+
+Version naming rules:
+
+- `metadata.toml` uses a concrete library release version such as `0.1.0`,
+  `0.2.0-rc.1`, or `0.2.0-dev.3+git.abc1234`.
+- `dependencies.toml` uses a version range: `*` accepts any version, while
+  `^0.1.0`, `~0.1`, and `1.2 - 2.0` express compatibility ranges.
+- Build metadata is retained for traceability but cannot pin a dependency to a
+  specific build.
 
 ## Current Kernel Build Status
 
@@ -115,6 +126,7 @@ The kernel Makefile stack is now split into:
 
 - `kernel/Makefile`
 - `kernel/flags.mk`
+- `kernel/collect.mk`
 - `kernel/include.mk`
 - `kernel/enable.mk`
 - `kernel/variant.riscv64.mk`
@@ -131,14 +143,10 @@ Current status:
 
 ## Current Known Limitations
 
-- `libraries.mk` currently contains both the global registry and the
-  `build-libs` targets.
 - `build-libs` relies on second expansion and still needs careful validation
   around architecture switching behavior.
 - the kernel tree is still incomplete compared with the legacy repository
 - the C/C++ runtime split is still evolving
-- header-only library modeling is not implemented yet
-- `libname` is still a design direction, not a completed part of the registry
 
 ## Reference Material
 

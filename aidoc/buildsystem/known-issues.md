@@ -2,30 +2,13 @@
 
 ## `build-libs` Second Expansion
 
-`libraries.mk` is now treated as project configuration and is expected to be
+`libraries.mk` contains the global registry, while `build-libs.mk` contains
+the generated library build targets. Both are project configuration fragments
 included explicitly by the top-level Makefile.
 
 The `build-libs` target uses second expansion to select the right per-arch
 build target set. This area should be watched carefully whenever the include
 chain changes.
-
-## Semver Support
-
-Current `script/py/semver.py` supports:
-
-- exact versions
-- wildcard versions
-- comparator expressions
-- range conjunctions
-- logical OR
-
-Not implemented yet:
-
-- prerelease matching
-- build metadata
-- `^`
-- `~`
-- hyphen ranges
 
 ## Library Model Limits
 

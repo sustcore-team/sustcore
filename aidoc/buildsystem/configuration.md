@@ -31,13 +31,27 @@ They are included explicitly by top-level or target-local Makefiles.
 Current members:
 
 - `libraries.mk`
+- `build-libs.mk`
+- `programs.mk`
 - `deps-<id>.mk`
 
 These describe:
 
-- registered libraries
-- `build-libs`
+- global library registration
+- generated `build-libs` targets
+- module makefile and build-target indexes
 - resolved target dependency sets
+
+`make configure` also emits per-component headers, but does not include them
+from either `config.mk` or the top-level Makefile:
+
+- `build-header-lib-<id>.mk`
+- `build-header-module-<id>.mk`
+- `build-header-kernel.mk`
+
+Each header sets `owner-id` and `owner-root`, and defaults `obj-root` and
+`target` with `?=`. Build indexes pass the matching header to the component
+sub-make, keeping those generic variables scoped to one component.
 
 ## `make switch`
 
@@ -57,6 +71,8 @@ It generates:
 
 - build-system configuration fragments
 - library registry fragments
+- module build indexes
+- component build headers
 - owner dependency fragments
 
 ## Why This Split Exists

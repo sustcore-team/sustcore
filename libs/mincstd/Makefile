@@ -6,17 +6,16 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(minicstd-dir)))))
 global-env := $(repo-root)/script/env/global.mk
 endif
 
+ifeq ($(origin build-header), undefined)
+$(error libs/mincstd/Makefile must be invoked with build-header from the top-level Makefile)
+endif
+
 include $(global-env)
 include $(path-s)/env/buildpath.mk
--include $(path-cache)/deps-mini-cstd.mk
+include $(build-header)
+-include $(path-cache)/deps-$(owner-id).mk
 
-minicstd-root := $(path-e)/libs/mincstd
-minicstd-obj-root := $(path-obj)/libs/mincstd
-minicstd-target ?= $(path-bin)/libs/libmini-cstd.a
-
-src-root := $(minicstd-root)
-obj-root := $(minicstd-obj-root)
-target := $(minicstd-target)
+src-root := $(owner-root)
 
 include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/ar.mk
@@ -24,13 +23,12 @@ include $(path-s)/toolchain/ar.mk
 comp-c ?= $($(arch)-comp-c)
 flags-c += $($(arch)-flags-c)
 
-includes-c += $(or $(mini-cstd-includes-c-$(arch)),$(mini-cstd-includes-c))
-includes-cpp += $(or $(mini-cstd-includes-cpp-$(arch)),$(mini-cstd-includes-cpp))
-includes-asm += $(or $(mini-cstd-includes-asm-$(arch)),$(mini-cstd-includes-asm))
+includes-c += $(or $($(owner-id)-includes-c-$(arch)),$($(owner-id)-includes-c))
+includes-cpp += $(or $($(owner-id)-includes-cpp-$(arch)),$($(owner-id)-includes-cpp))
+includes-asm += $(or $($(owner-id)-includes-asm-$(arch)),$($(owner-id)-includes-asm))
 
-include $(minicstd-root)/flags.mk
-component-root := $(minicstd-root)
-include $(path-s)/build/collector.mk
+include $(owner-root)/flags.mk
+include $(owner-root)/collect.mk
 
 sources-c := $(strip $(sources-y-c))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))

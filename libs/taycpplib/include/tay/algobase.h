@@ -2,7 +2,7 @@
  * @file algobase.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief 基础算法
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2026-04-06
  *
  * @copyright Copyright (c) 2026

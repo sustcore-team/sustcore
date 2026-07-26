@@ -6,17 +6,16 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(kmod-dir)))))
 global-env := $(repo-root)/script/env/global.mk
 endif
 
+ifeq ($(origin build-header), undefined)
+$(error libs/kmod/Makefile must be invoked with build-header from the top-level Makefile)
+endif
+
 include $(global-env)
 include $(path-s)/env/buildpath.mk
--include $(path-cache)/deps-kmod.mk
+include $(build-header)
+-include $(path-cache)/deps-$(owner-id).mk
 
-kmod-root := $(path-e)/libs/kmod
-kmod-obj-root := $(path-obj)/libs/kmod
-kmod-target ?= $(path-bin)/libs/libkmod.a
-
-src-root := $(kmod-root)
-obj-root := $(kmod-obj-root)
-target := $(kmod-target)
+src-root := $(owner-root)
 
 include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/cpp.mk
@@ -29,12 +28,15 @@ flags-c += $($(arch)-flags-c)
 flags-cpp += $($(arch)-flags-cpp)
 flags-asm += $($(arch)-flags-c)
 
-includes-c += $(or $(kmod-includes-c-$(arch)),$(kmod-includes-c))
-includes-cpp += $(or $(kmod-includes-cpp-$(arch)),$(kmod-includes-cpp))
-includes-asm += $(or $(kmod-includes-asm-$(arch)),$(kmod-includes-asm))
+includes-c += $(or $($(owner-id)-includes-c-$(arch)),$($(owner-id)-includes-c))
+includes-cpp += $(or $($(owner-id)-includes-cpp-$(arch)),$($(owner-id)-includes-cpp))
+includes-asm += $(or $($(owner-id)-includes-asm-$(arch)),$($(owner-id)-includes-asm))
 
-sources-asm := arch/$(arch)/crt0.S arch/$(arch)/crti.S arch/$(arch)/crtn.S
-sources-cpp := setup.cpp
+include $(owner-root)/flags.mk
+include $(owner-root)/collect.mk
+
+sources-asm := $(strip $(sources-y-asm))
+sources-cpp := $(strip $(sources-y-cpp))
 
 objects-asm := $(addprefix $(obj-root)/,$(sources-asm:.S=.o))
 objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))

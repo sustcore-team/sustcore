@@ -2,7 +2,7 @@
  * @file sbi_enum.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief SBI相关枚举值
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2025-11-17
  * 
  * @copyright Copyright (c) 2025

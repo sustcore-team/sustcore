@@ -47,4 +47,4 @@ ifneq ($(call yes,$(enable-sbi) $(enable-laboot)),1)
 $(error exactly one boot method must be enabled: enable-sbi=y or enable-laboot=y)
 endif
 
-boot-link-script ?= $(kernel-root)/boot/$(if $(filter y,$(enable-sbi)),sbi/sbi.ld,laboot/laboot.ld)
+boot-link-script ?= $(owner-root)/boot/$(if $(filter y,$(enable-sbi)),sbi/sbi.ld,laboot/laboot.ld)

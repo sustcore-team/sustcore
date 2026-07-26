@@ -1,4 +1,6 @@
 [[progmeta]]
 id = "init"
-output = "init.mod"
+makefile = "Makefile"
+target = "build"
+output = "module/init.mod"
 c-library = "kmod"

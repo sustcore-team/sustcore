@@ -2,7 +2,7 @@
  * @file la_post_boot.cpp
  * @author theflysong (song_of_the_fly@163.com)
  * @brief laboot 第二阶段: 构造 BootInfo 并进入内核
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2026-06-16
  *
  * @copyright Copyright (c) 2026

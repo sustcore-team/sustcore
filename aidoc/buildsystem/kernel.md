@@ -6,11 +6,11 @@ The kernel build is currently split into:
 
 - `kernel/Makefile`
 - `kernel/flags.mk`
+- `kernel/collect.mk`
 - `kernel/include.mk`
 - `kernel/enable.mk`
 - `kernel/variant.riscv64.mk`
 - `kernel/variant.loongarch64.mk`
-- `kernel/metadata.toml`
 - `kernel/dependencies.toml`
 
 ## Kernel Entry
@@ -22,6 +22,7 @@ $(MAKE) -f $(path-e)/kernel/Makefile \
     global-env=$(global-env) \
     arch=$(arch) \
     q=$(q) \
+    build-header=$(path-cache)/build-header-kernel.mk \
     kernel-path=$(kernel-path) \
     build
 ```
@@ -36,10 +37,15 @@ The top-level Makefile owns:
 kernel-path ?= $(path-bin)/kernel/sustcore.bin
 ```
 
-The kernel sub-make consumes:
+`make configure` emits `build-header-kernel.mk` for the fixed `kernel` owner.
+The kernel sub-make consumes its root, object directory, and target from that
+header:
 
 ```make
-target := $(kernel-path)
+owner-id := kernel
+owner-root := /.../kernel
+obj-root ?= $(path-obj)/kernel
+target ?= $(kernel-path)
 ```
 
 ## Source Collection
@@ -47,8 +53,12 @@ target := $(kernel-path)
 Kernel source discovery currently uses:
 
 - `script/build/collector.mk`
-- `kernel/include.mk`
-- subdirectory `include.mk`
+- `kernel/collect.mk`
+- root and subdirectory `include.mk`
+
+`collect.mk` only invokes the shared collector. Each `include.mk` declares the
+sources in its own directory through `src-y` and `src-n`; this includes the
+kernel root when it owns sources directly.
 
 Current active source model:
 

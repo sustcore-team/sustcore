@@ -3,7 +3,7 @@
 # Optional:
 #   component-include-mks
 #
-# Subdirectory include.mk files may declare:
+# include.mk files may declare:
 #   src-y
 #   src-n
 #
@@ -11,8 +11,10 @@
 # the contributing include.mk and classifies the result by source language.
 
 component-root := $(patsubst %/,%,$(component-root))
-component-root-include := $(component-root)/include.mk
-component-include-mks ?= $(shell find $(component-root) -mindepth 2 -name include.mk | sort)
+ifeq ($(strip $(component-root)),)
+$(error component-root must be set before including script/build/collector.mk)
+endif
+component-include-mks ?= $(shell find $(component-root) -name include.mk | sort)
 
 sources-y-asm ?=
 sources-y-c ?=
@@ -39,4 +41,4 @@ sources-n-c := $$(sources-n-c) $$(filter %.c,$$(collector-src-n-added))
 sources-n-cpp := $$(sources-n-cpp) $$(filter %.cpp,$$(collector-src-n-added))
 endef
 
-$(foreach include-mk,$(filter-out $(component-root-include),$(component-include-mks)),$(eval $(call collect-component-include,$(include-mk))))
+$(foreach include-mk,$(component-include-mks),$(eval $(call collect-component-include,$(include-mk))))

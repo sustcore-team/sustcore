@@ -2,7 +2,7 @@
  * @file assert.h
  * @author theflysong (song_of_the_fly@163.com)
  * @brief assert.h
- * @version 1.0.0
+ * @version 0.1.0-dev.1
  * @date 2022-12-31
  *
  * @copyright Copyright (c) 2022 TayhuangOS Development Team

@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import tomllib
 
+import semver
+
 KNOWN_ARCHITECTURES = ("riscv64", "loongarch64")
 VALID_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -53,6 +55,8 @@ class OwnerMeta:
     metadata_path: str
     kind: str
     output: str = ""
+    makefile: str = ""
+    target: str = ""
     c_library: str = ""
     ldscript: str = ""
 
@@ -130,6 +134,15 @@ def normalize_relative_path(raw_value: object, field: str, *, required: bool = F
     return raw_value
 
 
+def normalize_output_path(raw_value: object, field: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value:
+        raise ValueError(f"{field} must be a non-empty string")
+    path = Path(raw_value)
+    if path.is_absolute() or ".." in path.parts or str(path) in {"", "."}:
+        raise ValueError(f"{field} must be a relative path inside the binary directory")
+    return raw_value
+
+
 def normalize_arch_paths(
     metadata_path: Path,
     arch_data: object,
@@ -165,24 +178,13 @@ def _arch_data_for_entry(metadata_path: Path, data: dict, entry: dict, entry_cou
 
 
 def parse_kernel_owner(root: Path) -> OwnerMeta:
-    metadata_path = root / "kernel" / "metadata.toml"
-    if not metadata_path.is_file():
-        raise ValueError(f"kernel metadata does not exist: {metadata_path}")
-
-    with metadata_path.open("rb") as metadata_file:
-        data = tomllib.load(metadata_file)
-
-    entries = data.get("kernelmeta")
-    if not isinstance(entries, list) or not entries:
-        raise ValueError(f"{metadata_path}: kernelmeta must be a non-empty array of tables")
-    if len(entries) != 1 or not isinstance(entries[0], dict):
-        raise ValueError(f"{metadata_path}: kernelmeta must contain exactly one table")
-
-    kernel_id = validate_global_id(entries[0].get("id"), f"{metadata_path}: id")
+    kernel_root = (root / "kernel").resolve()
+    if not kernel_root.is_dir():
+        raise ValueError(f"kernel directory does not exist: {kernel_root}")
     return OwnerMeta(
-        id=kernel_id,
-        root=str(metadata_path.parent.resolve()),
-        metadata_path=str(metadata_path),
+        id="kernel",
+        root=str(kernel_root),
+        metadata_path=str(kernel_root / "dependencies.toml"),
         kind="kernel",
     )
 
@@ -207,6 +209,10 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
             version = entry.get("version")
             if not isinstance(version, str) or not version:
                 raise ValueError(f"{metadata_path}: version must be a non-empty string")
+            try:
+                semver.parse_version(version)
+            except ValueError as error:
+                raise ValueError(f"{metadata_path}: invalid library version: {error}") from error
             libname = normalize_libname(entry.get("libname"), f"{metadata_path}: libname")
 
             raw_makefile = entry.get("makefile", "")
@@ -281,6 +287,7 @@ def scan_program_metadata_files(root: Path) -> list[Path]:
 
 def scan_programs(root: Path) -> list[OwnerMeta]:
     programs: list[OwnerMeta] = []
+    seen_ids: dict[str, Path] = {}
 
     for metadata_path in scan_program_metadata_files(root):
         with metadata_path.open("rb") as metadata_file:
@@ -295,9 +302,21 @@ def scan_programs(root: Path) -> list[OwnerMeta]:
                 raise ValueError(f"{metadata_path}: each progmeta entry must be a table")
 
             program_id = validate_global_id(entry.get("id"), f"{metadata_path}: id")
-            output = entry.get("output")
-            if not isinstance(output, str) or not output:
-                raise ValueError(f"{metadata_path}: output must be a non-empty string")
+            if program_id in seen_ids:
+                raise ValueError(
+                    f"duplicate program id {program_id!r}: {seen_ids[program_id]} and {metadata_path}"
+                )
+            seen_ids[program_id] = metadata_path
+            makefile = normalize_relative_path(
+                entry.get("makefile"), f"{metadata_path}: makefile", required=True
+            )
+            makefile_path = (metadata_path.parent / makefile).resolve()
+            if not makefile_path.is_file():
+                raise ValueError(f"{metadata_path}: makefile does not exist: {makefile}")
+            target = entry.get("target")
+            if not isinstance(target, str) or not target:
+                raise ValueError(f"{metadata_path}: target must be a non-empty string")
+            output = normalize_output_path(entry.get("output"), f"{metadata_path}: output")
             c_library = entry.get("c-library", "")
             if not isinstance(c_library, str):
                 raise ValueError(f"{metadata_path}: c-library must be a string")
@@ -309,6 +328,8 @@ def scan_programs(root: Path) -> list[OwnerMeta]:
                     metadata_path=str(metadata_path),
                     kind="program",
                     output=output,
+                    makefile=str(makefile_path),
+                    target=target,
                     c_library=c_library,
                     ldscript=normalize_relative_path(entry.get("ldscript"), f"{metadata_path}: ldscript"),
                 )

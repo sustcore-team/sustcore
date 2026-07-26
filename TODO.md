@@ -4,17 +4,11 @@
 
 ## 构建系统
 
-- [ ] 为 `make switch`、`make configure` 与 `make build-libs` 增加回归验证，覆盖 `riscv64`、`loongarch64` 以及 `debug`、`release` 的连续切换。
-- [ ] 验证并修复 `build-libs` 的二次展开在架构切换、缓存缺失和重新配置后的行为。
-- [ ] 将全局库注册信息与 `build-libs` 生成目标从 `script/.cache/libraries.mk` 中拆分，明确各缓存片段的职责与加载位置。
 - [ ] 明确配置缓存的失效与重建规则，覆盖 `switch`、`configure`、`clean` 和 `cleandist` 的组合使用。
 
 ## 库与依赖
 
-- [ ] 完成 `libname` 的元数据设计和归档文件映射，避免将其作为尚未落地的约定使用。
-- [ ] 实现 header-only 库建模，使其可以导出头文件而无需生成静态归档。
 - [ ] 支持同一 `id` 的多个版本，并让依赖解析器按版本约束选择唯一候选项。
-- [ ] 扩展语义化版本匹配：预发布版本、构建元数据、`^`、`~` 和连字符范围。
 - [ ] 允许同一目录中不同 `[[libmeta]]` 条目拥有独立的依赖声明，消除共享 `dependencies.toml` 的限制。
 - [ ] 完成 C/C++ 标准头文件归属整理，并核对 `mini-cstd` 的导出头文件策略。
 

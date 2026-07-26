@@ -7,11 +7,12 @@ initrd-module-targets := $(addprefix build-module-,$(initrd-module-ids))
 build-modules: build-libs $(initrd-module-targets)
 
 $(initrd-module-targets): build-module-%: build-libs
-	$(q)$(MAKE) -f $(path-e)/module/$*/Makefile \
+	$(q)$(MAKE) -f $(program-$*-makefile) \
 		global-env=$(global-env) \
 		arch=$(arch) \
 		q=$(q) \
-		build
+		build-header=$(path-cache)/build-header-module-$*.mk \
+		$(program-$*-target)
 
 build-initrd: build-modules
 	$(q)$(s-initrd) \

@@ -298,7 +298,6 @@ def _emit_program_lines(owner: OwnerMeta) -> list[str]:
         return []
     ldscript = str((Path(owner.root) / owner.ldscript).resolve()) if owner.ldscript else ""
     return [
-        f"{owner.id}-output := {owner.output}",
         f"{owner.id}-ldscript := {ldscript}",
         "",
     ]

@@ -3,7 +3,8 @@ include $(global-env)
 include $(path-s)/env/buildpath.mk
 
 -include $(path-cache)/libraries.mk
--include $(path-cache)/deps-kernel.mk
+-include $(path-cache)/build-libs.mk
+-include $(path-cache)/programs.mk
 
 kernel-path ?= $(path-bin)/kernel/sustcore.bin
 
@@ -23,15 +24,8 @@ build-kernel: build-initrd
 		global-env=$(global-env) \
 		arch=$(arch) \
 		q=$(q) \
+		build-header=$(path-cache)/build-header-kernel.mk \
 		kernel-path=$(kernel-path) \
-		build
-
-.PHONY: build-init
-build-init: build-libs
-	$(q)$(MAKE) -f $(path-e)/module/init/Makefile \
-		global-env=$(global-env) \
-		arch=$(arch) \
-		q=$(q) \
 		build
 
 include $(path-s)/target/switch.mk

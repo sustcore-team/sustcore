@@ -3,7 +3,7 @@ id = "fdt"
 libname = "libfdt.a"
 makefile = "Makefile"
 target = "build-static"
-version = "0.0.1"
+version = "0.1.0-dev.1"
 
 include-c = ["include"]
 include-cpp = ["include"]
