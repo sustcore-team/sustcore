@@ -63,6 +63,20 @@ make build-kernel
 
 `arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`build-kernel` 会先构建当前架构可见的库和 initrd，再调用 `kernel/Makefile` 链接内核；只构建库时可使用 `make build-libs`。
 
+为 clangd 更新当前配置的编译数据库：
+
+```sh
+make update
+```
+
+也可以只更新指定架构和模式的数据库，而不改变 `make switch` 保存的当前选择：
+
+```sh
+make update arch=loongarch64 mode=release
+```
+
+编译数据库保存在 `build/<mode>/<arch>/compile_commands.json`。`make switch` 与 `make configure` 会将当前选择对应的数据库原子复制到 `build/compile_commands.json`；目标尚未生成时会删除旧副本，避免 clangd 继续使用错误架构的编译参数。VS Code clangd 插件可固定使用 `--compile-commands-dir=build`。
+
 ## 运行
 
 在内核已构建后，使用 `make runonly` 启动 QEMU。该目标不会重新构建内核，并通过 QEMU 的 `-kernel` 参数加载当前 `kernel-path`。

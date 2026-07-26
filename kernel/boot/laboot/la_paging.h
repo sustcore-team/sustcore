@@ -13,6 +13,7 @@
 
 #include <arch/loongarch64/pagedef.h>
 #include <tay/bits.h>
+#include <tay/attribute.h>
 #include <sustcore/addr.h>
 
 #define _LABOOT_RECLAIMABLE SECTION(".laboot_reclaimable")

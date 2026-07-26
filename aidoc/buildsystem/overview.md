@@ -85,6 +85,10 @@ These files assemble:
 5. `build-kernel` invokes `kernel/Makefile`
 6. `runonly` / `dbgonly` launch QEMU
 
+`make update [arch=<arch>] [mode=<mode>]` rebuilds the selected compilation
+database through Bear. Command-line architecture and mode overrides select the
+database to update without changing the values persisted by `make switch`.
+
 ## Current Architecture
 
 The current known architectures are:

@@ -55,11 +55,13 @@ sub-make, keeping those generic variables scoped to one component.
 
 ## `make switch`
 
-`make switch arch=<arch> mode=<mode>` only writes:
+`make switch arch=<arch> mode=<mode>` persists build selection only in:
 
 - `script/.cache/.switch.mk`
 
-It should not regenerate library metadata or dependency caches.
+It does not regenerate library metadata or dependency caches. After persisting
+the build selection, the target also refreshes the ignored clangd compilation
+database copy at `build/compile_commands.json`.
 
 ## `make configure`
 
@@ -74,6 +76,30 @@ It generates:
 - module build indexes
 - component build headers
 - owner dependency fragments
+
+## Compilation Databases
+
+`make update [arch=<arch>] [mode=<mode>]` runs the active `build-kernel` flow
+through Bear and writes:
+
+```text
+build/<mode>/<arch>/compile_commands.json
+```
+
+When `arch` or `mode` is omitted, the value persisted by `make switch` is used.
+Explicit overrides update another database without changing the current build
+selection.
+
+Both `make switch` and `make configure` atomically copy the selected database to
+the stable clangd entry after writing their cache state:
+
+```text
+build/compile_commands.json
+```
+
+If the selected database has not been generated, the old stable copy is removed
+to prevent clangd from using flags for another architecture. clangd can use the
+stable directory through `--compile-commands-dir=build`.
 
 ## Why This Split Exists
 

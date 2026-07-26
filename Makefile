@@ -13,6 +13,7 @@ include $(path-s)/target/configure.mk
 include $(path-s)/target/run.mk
 include $(path-s)/target/clean.mk
 include $(path-s)/target/initrd.mk
+include $(path-s)/target/update.mk
 
 .PHONY: init
 init: init-build-system
