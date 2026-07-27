@@ -1,0 +1,117 @@
+# Host Builds, Tests, And Benchmarks
+
+## Current Scope
+
+Host commands validate a native Clang toolchain, resolve environment-specific
+dependencies, and build isolated libraries, tests, header checks, and
+benchmarks.
+
+Run validation after selecting a configuration:
+
+```text
+make configure config=custom
+make validate-host
+make validate-host host-arch=x86_64
+make build-host-libs
+make host-test [lib=tayclib] [sanitize=address,undefined]
+make bench
+make host-bench [lib=taycpplib]
+make update-host [mode=debug] [sanitize=address,undefined]
+make clangd-host [mode=debug] [sanitize=address,undefined]
+make clangd-target [arch=riscv64] [mode=debug]
+```
+
+Validation never invokes `make switch`, reads no cached target architecture,
+and does not publish host configuration until every probe succeeds.
+
+## Validation Contract
+
+The C and C++ commands must both be Clang and must report the same target
+triple. Its normalized architecture must match both `uname -m` and an optional
+`host-arch` assertion. The archive command must report an LLVM version.
+
+Every compiler probe uses the configured `--sysroot`. Verbose include search
+may use that sysroot, Clang's resource directory, and an explicitly selected
+GCC installation. Other system roots are rejected. C and C++ probes are then
+linked with their matching compiler drivers and run as native executables.
+
+For C++, `cppstdlib=libstdc++` selects `-stdlib=libstdc++`, while
+`cppstdlib=libc++` selects `-stdlib=libc++`. `auto` records whichever provider
+the standard-header probe detects. A GCC installation can be fixed through a
+`--gcc-install-dir=...` entry in `cxxflags`.
+
+## Generated State
+
+Successful validation writes `script/.cache/host.mk` atomically. It records:
+
+- normalized host architecture and full target triple
+- resolved compiler-driver and archiver invocation paths
+- compiler, archiver, and C++ standard library versions
+- sysroot and effective C/C++/link flags
+- a fingerprint covering all validated toolchain inputs
+- optional features discovered by non-fatal compiler probes
+
+Dedicated host sub-makes load `script/env/host-buildpath.mk`, which produces:
+
+```text
+build/<mode>/host/<host-triple>/bin/
+build/<mode>/host/<host-triple>/obj/
+build/<mode>/host/<host-triple>/test/
+build/<mode>/host/<host-triple>/bench/
+```
+
+The freestanding build path remains `build/<mode>/<arch>/`. Shared C++ rules
+force exactly one environment macro at the end of the compiler command:
+`TAY_ENV_HOST=1` or `TAY_ENV_FREESTANDING=1`.
+
+The static `script/toolchain/c.mk`, `cpp.mk`, `ar.mk`, and `ld.mk` fragments are
+shared by both environments. `toolchain/environment.mk` resolves
+`is-host`/`is-freestanding` to `y`/`n`; each toolchain fragment writes its two
+candidates through those computed variable names and consumes only the
+resulting `y-toolchain-*` value. Validated host values still come from the
+generated `script/.cache/host.mk` fragment.
+
+Sanitized builds use
+`build/<mode>/host/<host-triple>/sanitize/<profile>/`; unsanitized paths remain
+unchanged. Supported profiles are `address`, `undefined`, and
+`address,undefined`.
+
+## Command Semantics
+
+- `build-host-libs` builds all non-header-only host libraries.
+- `build-host-lib lib=<id>` runs host header checks for a header-only library.
+- `host-test` builds and runs every matching functionality test, including
+  abort/stderr assertions. It continues after individual failures, reports
+  `PASS`, `FAIL`, and `SKIP` for every selected program, then fails overall if
+  any program failed.
+- `bench` defaults to release and only builds every registered benchmark.
+- `host-bench` defaults to release and sequentially runs every matching
+  performance benchmark through the same aggregate runner.
+- `host-header-check` compiles each applicable public header independently.
+- `update-host` captures host libraries and all test/benchmark translation
+  units through Bear without running the executables.
+- `clangd-host` and `clangd-target` select the stable clangd database without
+  changing the persisted target build selection.
+
+Every host command validates first, resolves `deps/host-<owner>.mk` using the
+validated native architecture, and then enters a recursive host sub-make.
+These steps never update `.switch.mk`.
+
+## Testbench Layout
+
+Library testbenches use separate functionality and performance roots while
+retaining the `kind = "test"|"bench"` metadata interface:
+
+```text
+libs/<library>/testbench/test/metadata.toml
+libs/<library>/testbench/bench/metadata.toml
+```
+
+Each split metadata file may register one or more `[[hostprog]]` entries, but
+their `kind` must match the directory. Header checks belong to the `test`
+metadata. The scanner still accepts the legacy `testbench/metadata.toml`
+layout so out-of-tree libraries can migrate independently.
+
+The aggregate Python runner handles executable testbenches only. Header checks
+and the freestanding panic link check remain under their dedicated targets and
+`check-lib`.

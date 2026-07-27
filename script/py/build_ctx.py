@@ -1,14 +1,22 @@
-"""Emit per-component Make build headers."""
+"""Emit per-component Make build contexts."""
 
 from __future__ import annotations
 
 
 def library_name(owner_id: str) -> str:
-    return f"build-header-lib-{owner_id}.mk"
+    return f"lib-{owner_id}.mk"
 
 
 def module_name(owner_id: str) -> str:
-    return f"build-header-module-{owner_id}.mk"
+    return f"module-{owner_id}.mk"
+
+
+def hostprog_name(owner_id: str) -> str:
+    return f"hostprog-{owner_id}.mk"
+
+
+def kernel_name() -> str:
+    return "kernel.mk"
 
 
 def emit(owner_id: str, owner_root: str, obj_root: str, target: str) -> str:

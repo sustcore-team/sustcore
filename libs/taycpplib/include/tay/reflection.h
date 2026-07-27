@@ -14,6 +14,7 @@
 #include <concepts>
 #include <meta>
 #include <string_view>
+#include <type_traits>
 
 namespace util {
     /**

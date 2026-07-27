@@ -2,6 +2,7 @@
 # build-mode 与 build-arch 变量的值可以通过调用 make 时使用 arch=... mode=... 来指定, 如果不指定则使用默认值
 -include $(path-cache)/.switch.mk
 
+environment := freestanding
 arch ?= $(cached-arch)
 mode ?= $(cached-mode)
 
@@ -16,4 +17,5 @@ path-initrd-root ?= $(path-build)/initrd
 path-initrd ?= $(path-build)/bin/initrd.cpio
 path-initrd-obj ?= $(path-obj)/kernel/attachment/initrd.o
 
+include $(path-s)/env/selection.mk
 include $(path-s)/env/q.mk

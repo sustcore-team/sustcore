@@ -12,7 +12,6 @@
 #pragma once
 
 #include <bits/atomic_base.h>
-#include <features.h>
 
 #include <cstdint>
 #include <type_traits>

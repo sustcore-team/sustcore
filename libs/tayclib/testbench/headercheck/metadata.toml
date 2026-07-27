@@ -1,0 +1,55 @@
+[[headercheck]]
+id = "tayclib-ansi-c"
+header = "tay/ansi.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-attribute-c"
+header = "tay/attribute.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-bits-c"
+header = "tay/bits.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-bool-c"
+header = "tay/bool.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-itoa-c"
+header = "tay/itoa.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-macros-c"
+header = "tay/macros.h"
+language = "c"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-rtti-cpp"
+header = "tay/rtti.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayclib-bits-after-system"
+header = "tay/bits.h"
+language = "c"
+environments = ["host"]
+before-headers = ["sys/types.h"]
+
+[[headercheck]]
+id = "tayclib-bits-before-system"
+header = "tay/bits.h"
+language = "c"
+environments = ["host"]
+after-headers = ["sys/types.h"]

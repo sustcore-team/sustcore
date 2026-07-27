@@ -21,14 +21,14 @@ class BuildProgramsFragmentTests(unittest.TestCase):
         self.assertIn("program-init-target := build", registry)
         self.assertNotIn("program-init-output", registry)
 
-    def test_component_header_defines_module_paths(self) -> None:
-        headers = build_programs.emit_headers(ROOT)
+    def test_component_context_defines_module_paths(self) -> None:
+        contexts = build_programs.emit_ctx(ROOT)
 
-        header = headers["build-header-module-init.mk"]
-        self.assertIn("owner-id := init", header)
-        self.assertIn("owner-root := " + str(ROOT / "module" / "init"), header)
-        self.assertIn("obj-root ?= $(path-obj)/module/init", header)
-        self.assertIn("target ?= $(path-bin)/module/init.mod", header)
+        context = contexts["module-init.mk"]
+        self.assertIn("owner-id := init", context)
+        self.assertIn("owner-root := " + str(ROOT / "module" / "init"), context)
+        self.assertIn("obj-root ?= $(path-obj)/module/init", context)
+        self.assertIn("target ?= $(path-bin)/module/init.mod", context)
 
 
 if __name__ == "__main__":

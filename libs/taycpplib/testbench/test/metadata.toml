@@ -1,0 +1,58 @@
+[[hostprog]]
+id = "taycpplib-behavior-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-behavior-test"
+
+[[hostprog]]
+id = "taycpplib-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-panic-test"
+expect = "abort"
+stderr-contains = "tay panic test"
+
+[[headercheck]]
+id = "taycpplib-algobase"
+header = "tay/algobase.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-owner"
+header = "tay/owner.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-panic"
+header = "tay/panic.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-range"
+header = "tay/range.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-refcount"
+header = "tay/refcount.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-reflection"
+header = "tay/reflection.h"
+language = "c++"
+environments = ["host"]
+requires-features = ["cpp-static-reflection"]
+
+[[headercheck]]
+id = "taycpplib-units"
+header = "tay/units.h"
+language = "c++"
+environments = ["freestanding", "host"]

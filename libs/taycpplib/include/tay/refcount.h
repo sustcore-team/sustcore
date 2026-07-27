@@ -65,8 +65,7 @@ namespace tay {
                 _ptr->keep();
         }
         constexpr refc_ptr(refc_ptr<T> &&other) : _ptr(other._ptr) {
-            if (_ptr)
-                _ptr->keep();
+            other._ptr = nullptr;
         }
         constexpr refc_ptr<T> &operator=(const refc_ptr<T> &other) {
             if (_ptr == other._ptr) {
@@ -76,13 +75,11 @@ namespace tay {
                 _ptr->release();
             }
             _ptr = other._ptr;
-            if (_ptr) {
-                _ptr->keep();
-            }
+            other._ptr = nullptr;
             return *this;
         }
         constexpr refc_ptr<T> &operator=(refc_ptr<T> &&other) {
-            if (_ptr == other._ptr) {
+            if (this == &other) {
                 return *this;
             }
             if (_ptr) {

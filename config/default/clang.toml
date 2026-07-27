@@ -1,0 +1,9 @@
+[host]
+clang = "clang"
+"clang++" = "clang++"
+ar = "llvm-ar"
+sysroot = "/"
+cppstdlib = "auto"
+cflags = []
+cxxflags = []
+ldflags = []

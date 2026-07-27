@@ -6,22 +6,19 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $
 global-env := $(repo-root)/script/env/global.mk
 endif
 
-ifeq ($(origin build-header), undefined)
-$(error third_party/libs/libfdt/Makefile must be invoked with build-header from the top-level Makefile)
+ifeq ($(origin ctx), undefined)
+$(error third_party/libs/libfdt/Makefile must be invoked with ctx from the top-level Makefile)
 endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
-include $(build-header)
--include $(path-cache)/deps-$(owner-id).mk
+include $(ctx)
+-include $(path-deps)/$(owner-id).mk
 
 src-root := $(owner-root)
 
 include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/ar.mk
-
-comp-c ?= $($(arch)-comp-c)
-flags-c += $($(arch)-flags-c)
 
 includes-c += $(or $($(owner-id)-includes-c-$(arch)),$($(owner-id)-includes-c))
 includes-cpp += $(or $($(owner-id)-includes-cpp-$(arch)),$($(owner-id)-includes-cpp))

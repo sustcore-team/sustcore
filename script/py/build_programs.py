@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import build_headers
+import build_ctx
 from libregistry import OwnerMeta, scan_programs
 
 
@@ -28,10 +28,10 @@ def emit(root: Path) -> str:
     return "\n".join(lines)
 
 
-def emit_headers(root: Path) -> dict[str, str]:
-    """Return module build headers keyed by their cache file names."""
+def emit_ctx(root: Path) -> dict[str, str]:
+    """Return module build contexts keyed by their cache file names."""
     return {
-        build_headers.module_name(program.id): build_headers.emit(
+        build_ctx.module_name(program.id): build_ctx.emit(
             program.id,
             program.root,
             f"$(path-obj)/module/{program.id}",

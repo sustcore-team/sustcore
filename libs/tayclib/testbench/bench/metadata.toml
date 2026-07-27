@@ -1,0 +1,6 @@
+[[hostprog]]
+id = "tayclib-itoa-bench"
+kind = "bench"
+makefile = "Makefile"
+target = "build"
+output = "tayclib-itoa-bench"

@@ -11,7 +11,7 @@ $(initrd-module-targets): build-module-%: build-libs
 		global-env=$(global-env) \
 		arch=$(arch) \
 		q=$(q) \
-		build-header=$(path-cache)/build-header-module-$*.mk \
+		ctx=$(path-ctx)/module-$*.mk \
 		$(program-$*-target)
 
 build-initrd: build-modules

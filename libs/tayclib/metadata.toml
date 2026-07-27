@@ -4,6 +4,7 @@ libname = "libtayclib.a"
 makefile = "Makefile"
 target = "build-static"
 version = "0.1.0-dev.1"
+support-environments = ["freestanding", "host"]
 
 include-c = ["include"]
 include-cpp = ["include"]

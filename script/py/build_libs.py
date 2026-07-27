@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import build_headers
+import build_ctx
 from libregistry import KNOWN_ARCHITECTURES, LibraryMeta, scan_libraries
 
 
@@ -22,7 +22,7 @@ def _scan(root: Path) -> tuple[list[LibraryMeta], dict[str, list[LibraryMeta]]]:
         arch: [
             library
             for library in libraries
-            if not library.support_archs or arch in library.support_archs
+            if library.supports("freestanding", arch)
         ]
         for arch in KNOWN_ARCHITECTURES
     }
@@ -43,7 +43,7 @@ def _emit_registry(
     lines = _header()
 
     if libraries:
-        lines.append(f"library-ids := {' '.join(library.id for library in libraries)}")
+        lines.append(f"library-ids-all := {' '.join(library.id for library in libraries)}")
         lines.append("")
         for library in libraries:
             lines.append(f"library-{library.id}-version := {library.version}")
@@ -51,6 +51,19 @@ def _emit_registry(
             lines.append(f"library-{library.id}-libname := {library.libname}")
             lines.append(f"library-{library.id}-makefile := {library.makefile}")
             lines.append(f"library-{library.id}-target := {library.target}")
+            lines.append(
+                f"library-{library.id}-support-environments-all := {' '.join(library.support_environments)}"
+            )
+            for environment in library.support_environments:
+                lines.append(
+                    f"library-{library.id}-support-environments-$(is-{environment}) += {environment}"
+                )
+            lines.append(
+                f"library-{library.id}-support-environments := $(strip $(library-{library.id}-support-environments-y))"
+            )
+            lines.append(
+                f"library-{library.id}-support-archs := {' '.join(library.support_archs)}"
+            )
             lines.append(f"library-{library.id}-archive := {library.archive_path}")
             lines.append(
                 f"library-{library.id}-is-header-only := {'y' if library.is_header_only else 'n'}"
@@ -60,17 +73,40 @@ def _emit_registry(
             lines.append(f"library-{library.id}-include-asm := {library.include_asm}")
             for arch in KNOWN_ARCHITECTURES:
                 lines.append(
-                    f"library-{library.id}-ldscript-{arch} := {library.arch_ldscripts.get(arch, '')}"
+                    f"library-{library.id}-ldscript-$(is-{arch}) := {library.arch_ldscripts.get(arch, '')}"
                 )
-                lines.append(f"library-{library.id}-crt0-{arch} := {library.arch_crt0.get(arch, '')}")
-                lines.append(f"library-{library.id}-crti-{arch} := {library.arch_crti.get(arch, '')}")
-                lines.append(f"library-{library.id}-crtn-{arch} := {library.arch_crtn.get(arch, '')}")
+                lines.append(f"library-{library.id}-crt0-$(is-{arch}) := {library.arch_crt0.get(arch, '')}")
+                lines.append(f"library-{library.id}-crti-$(is-{arch}) := {library.arch_crti.get(arch, '')}")
+                lines.append(f"library-{library.id}-crtn-$(is-{arch}) := {library.arch_crtn.get(arch, '')}")
+            for field in ("ldscript", "crt0", "crti", "crtn"):
+                lines.append(
+                    f"library-{library.id}-{field} := $(library-{library.id}-{field}-y)"
+                )
+            if library.supports("host"):
+                lines.append(
+                    f"library-{library.id}-is-supported-$(is-host) := y"
+                )
+            for arch in KNOWN_ARCHITECTURES:
+                if library.supports("freestanding", arch):
+                    lines.append(
+                        f"library-{library.id}-is-supported-$(is-freestanding-{arch}) := y"
+                    )
+            lines.append(
+                f"library-{library.id}-is-supported := $(library-{library.id}-is-supported-y)"
+            )
             lines.append("")
     else:
-        lines.append("library-ids :=")
+        lines.append("library-ids-all :=")
 
     for arch, arch_libraries in libraries_by_arch.items():
-        lines.append(f"library-ids-{arch} := {' '.join(library.id for library in arch_libraries)}")
+        lines.append(
+            f"library-ids-$(is-freestanding-{arch}) += {' '.join(library.id for library in arch_libraries)}"
+        )
+    host_libraries = [library for library in libraries if library.supports("host")]
+    lines.append(
+        f"library-ids-$(is-host) += {' '.join(library.id for library in host_libraries)}"
+    )
+    lines.append("library-ids := $(strip $(library-ids-y))")
     lines.append("")
     return "\n".join(lines)
 
@@ -94,9 +130,9 @@ def _emit_build_targets(
         if not library.is_header_only:
             lines.append(
                 "\t$(q)$(MAKE) -f {makefile} global-env=$(global-env) "
-                "arch=$(arch) q=$(q) build-header=$(path-cache)/{header} {target}".format(
+                "arch=$(arch) q=$(q) ctx=$(path-ctx)/{ctx} {target}".format(
                     makefile=library.makefile,
-                    header=build_headers.library_name(library.id),
+                    ctx=build_ctx.library_name(library.id),
                     target=library.target,
                 )
             )
@@ -104,7 +140,7 @@ def _emit_build_targets(
 
     for arch, arch_libraries in libraries_by_arch.items():
         lines.append(
-            f"build-lib-targets-{arch} := "
+            f"build-lib-targets-$(is-freestanding-{arch}) += "
             + " ".join(
                 f"build-lib-{library.id}"
                 for library in arch_libraries
@@ -113,8 +149,49 @@ def _emit_build_targets(
         )
     lines.append("")
     lines.append(".SECONDEXPANSION:")
-    lines.append("build-libs: $$(build-lib-targets-$(arch))")
+    lines.append("build-lib-targets := $(strip $(build-lib-targets-y))")
+    lines.append("build-libs: $$(build-lib-targets)")
     lines.append('\t$(q)$(echo) "All libraries built"')
+
+    host_libraries = [library for library in libraries if library.supports("host")]
+    host_archive_libraries = [
+        library for library in host_libraries if not library.is_header_only
+    ]
+    lines.append("")
+    lines.append(
+        ".PHONY: "
+        + " ".join(f"host-build-lib-{library.id}" for library in host_libraries)
+    )
+    for library in host_libraries:
+        lines.append(f"host-build-lib-{library.id}:")
+        if library.is_header_only:
+            lines.append(
+                "\t$(q)$(MAKE) --no-print-directory _host-header-check "
+                f"lib={library.id} mode=$(mode) sanitize=$(sanitize)"
+            )
+        else:
+            lines.append(
+                "\t$(q)$(MAKE) -f {makefile} global-env=$(global-env) "
+                "environment=host allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) q=$(q) "
+                "ctx=$(path-ctx)/{ctx} "
+                "deps-file=$(path-deps)/host-{owner}.mk {target}".format(
+                    makefile=library.makefile,
+                    ctx=build_ctx.library_name(library.id),
+                    owner=library.id,
+                    target=library.target,
+                )
+            )
+        lines.append("")
+    lines.append(
+        "host-build-lib-targets-$(is-host) += "
+        + " ".join(
+            f"host-build-lib-{library.id}" for library in host_archive_libraries
+        )
+    )
+    lines.append("host-build-lib-targets := $(strip $(host-build-lib-targets-y))")
+    lines.append(".PHONY: _build-host-libs")
+    lines.append("_build-host-libs: $(host-build-lib-targets)")
+    lines.append('\t$(q)$(echo) "All host libraries built"')
 
     lines.append("")
     return "\n".join(lines)
@@ -129,11 +206,11 @@ def emit(root: Path) -> tuple[str, str]:
     )
 
 
-def emit_headers(root: Path) -> dict[str, str]:
-    """Return component build headers keyed by their cache file names."""
+def emit_ctx(root: Path) -> dict[str, str]:
+    """Return library build contexts keyed by their cache file names."""
     libraries, _ = _scan(root)
     return {
-        build_headers.library_name(library.id): build_headers.emit(
+        build_ctx.library_name(library.id): build_ctx.emit(
             library.id,
             library.root,
             f"$(path-obj)/libs/{library.id}",

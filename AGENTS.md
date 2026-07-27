@@ -14,13 +14,25 @@ reference, but it does not describe the current live behavior.
 - `make switch arch=<arch> mode=<mode>`
   - Updates `script/.cache/.switch.mk`.
   - Its job is only to persist the selected architecture and mode.
-- `make configure config=<name> [arch=<arch>]`
+- `make configure config=<name>`
   - Reads `config/<name>/*.toml`.
-  - Generates `.cache/*.mk`.
+  - Generates `.cache/*.mk` and all freestanding architecture dependencies.
+  - Legacy `arch=` and `mode=` arguments are ignored with a warning.
+- `make validate-host [host-arch=<arch>]`
+  - Validates the configured native Clang/Clang++/LLVM ar toolchain.
+  - Generates `script/.cache/host.mk` without changing `.switch.mk`.
 - `make build-libs`
   - Builds the currently visible libraries for the selected architecture.
 - `make build-kernel`
   - Builds the kernel through `kernel/Makefile`.
+- `make build-host-libs` / `make build-host-lib lib=<id>`
+  - Builds validated native archives or header checks.
+- `make host-test [lib=<id>]` / `make host-bench [lib=<id>]`
+  - Builds and runs registered native tests or benchmarks.
+- `make bench`
+  - Builds all registered native benchmarks in release mode without running them.
+- `make check-lib lib=<id>` / `make build-lib-matrix lib=<id>`
+  - Checks one variant or every supported freestanding/native variant.
 - `make runonly`
   - Runs QEMU without rebuilding the kernel.
 - `make dbgonly`
@@ -48,10 +60,21 @@ Loaded explicitly by top-level or target-local Makefiles:
 
 - `libraries.mk`
 - `build-libs.mk`
-- `deps-kernel.mk`
+- `deps/*.mk`
+- `ctx/*.mk`
 
 These files describe the global library registry, generated library build
 targets, and resolved dependencies for the kernel.
+
+The registry keeps `library-ids-all` only for cross-environment validation and
+matrix enumeration. Active library lists, architecture-specific CRT/linker
+fields, build targets, host programs, and header checks are selected through
+`is-host`, `is-freestanding`, `is-<arch>`, and combined environment/architecture
+selectors, then consumed from their `*-y` buckets.
+
+Freestanding dependency fragments contain every known target architecture and
+select the active values through `is-<arch>` variables. They are not regenerated
+by `make switch`.
 
 ## Current Library System
 
@@ -79,7 +102,6 @@ Important current rules:
 - `libname` is the generated static archive name; an empty value denotes a
   header-only library.
 - `support-archs` is an allow-list.
-- `mini-cstd` currently exports no include paths.
 - `build-libs` is generated from library metadata and skips header-only
   libraries.
 
@@ -137,7 +159,7 @@ Current status:
 
 - object compilation is wired through `script/rules/*.mk`
 - static libraries are built through per-library Makefiles and `llvm-ar`
-- the kernel links against resolved libraries from `deps-kernel.mk`
+- the kernel links against resolved libraries from `deps/kernel.mk`
 - `kernel-path` is controlled by the top-level Makefile and passed to the
   kernel sub-make
 
@@ -147,6 +169,23 @@ Current status:
   around architecture switching behavior.
 - the kernel tree is still incomplete compared with the legacy repository
 - the C/C++ runtime split is still evolving
+- host libraries, tests, header checks, benchmarks, sanitizers, and library
+  matrices are available through the dedicated host/check targets
+
+## Current Host System
+
+- Host configuration lives under `[host]` in `clang.toml`.
+- `host.sysroot` is mandatory and is used for every compile/link probe.
+- Only native Clang, Clang++, and LLVM ar configurations are accepted.
+- Host architecture comes from the compiler triple and `uname`, never from
+  the target architecture cached by `make switch`.
+- Validated host paths are rooted at
+  `build/<mode>/host/<host-triple>/`.
+- Host dependencies are resolved after validation from the public,
+  environment, and native-architecture sections.
+- Sanitizer profiles use isolated subdirectories below the host triple.
+- C++ compilation receives exactly one of `TAY_ENV_HOST=1` and
+  `TAY_ENV_FREESTANDING=1` from the selected toolchain environment.
 
 ## Reference Material
 

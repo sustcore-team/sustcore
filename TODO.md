@@ -2,9 +2,9 @@
 
 本清单以当前 `script/` 驱动的 Make/TOML 构建流程为准；`.vscode/sustcore/` 仅作为迁移时的参考。
 
-## 构建系统
+## Host 构建与 Testbench
 
-- [ ] 明确配置缓存的失效与重建规则，覆盖 `switch`、`configure`、`clean` 和 `cleandist` 的组合使用。
+- [ ] 将 host tests、sanitizer profile、header checks 和双架构 library matrix 接入持续集成。
 
 ## 库与依赖
 
@@ -21,13 +21,10 @@
 
 ## 模块与 Initrd
 
-- [ ] 将模块构建目标和产物路径从 `module/<id>/Makefile`、`<id>.mod` 的固定约定中解耦，改为由模块元数据统一描述。
-- [ ] 让 initrd 打包过程读取模块元数据中的实际输出文件名，并对缺失、重复和无效模块条目给出明确诊断。
 - [ ] 为 `kernel/initrd.toml`、模块构建和 CPIO 产物增加集成校验，覆盖普通文件、多个模块和路径安全性。
 - [ ] 明确模块 ABI、加载流程及内核侧模块管理接口，并据此扩展现有 `init` 模块。
 
 ## 文档与验证
 
-- [ ] 将 `aidoc/buildsystem/` 的库模型说明与实际实现同步，避免将 `libname`、header-only 等规划能力描述为已完成能力。
 - [ ] 维护从初始化、配置、构建到 `runonly` / `dbgonly` 的可复现验证流程，并记录两种架构的前置工具要求。
 - [ ] 建立自动化验证矩阵：配置生成、依赖解析、库构建、内核链接和可用时的 QEMU 启动冒烟测试。

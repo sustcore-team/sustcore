@@ -19,11 +19,13 @@ Defines the shared environment:
 - cache path
 - shell helper variables
 - selected `arch` / `mode`
+- explicit `freestanding` / `host` build environment
 
 Key files:
 
 - `script/env/global.mk`
 - `script/env/buildpath.mk`
+- `script/env/host-buildpath.mk`
 - `script/env/shell.mk`
 - `script/env/q.mk`
 
@@ -36,6 +38,7 @@ Defines compiler, linker, archiver, and QEMU-facing tool variables:
 - `ld.mk`
 - `ar.mk`
 - `qemu.mk`
+- `host/*.mk`
 
 ### `script/rules`
 
@@ -79,15 +82,26 @@ These files assemble:
 ## High-Level Flow
 
 1. `make switch` stores `arch/mode`
-2. `make configure` generates cache fragments from TOML and project metadata
+2. `make configure` generates cache fragments and all freestanding architecture
+   dependencies from TOML and project metadata
 3. top-level Make reads shared cache fragments
 4. `build-libs` builds visible static libraries for the current architecture
 5. `build-kernel` invokes `kernel/Makefile`
-6. `runonly` / `dbgonly` launch QEMU
+6. `build-host-libs`, `host-test`, and `bench` use the validated native toolchain
+7. `update-host` captures native library and testbench compile commands
+8. `runonly` / `dbgonly` launch QEMU
+
+The host foundation is deliberately separate from this target flow.
+`make validate-host [host-arch=<arch>]` validates the configured native
+Clang toolchain and emits `script/.cache/host.mk`; it does not read or update
+the architecture selected by `make switch`.
 
 `make update [arch=<arch>] [mode=<mode>]` rebuilds the selected compilation
 database through Bear. Command-line architecture and mode overrides select the
 database to update without changing the values persisted by `make switch`.
+`make update-host` generates the corresponding native database without running
+tests or benchmarks. `clangd-host` and `clangd-target` switch the stable
+`build/compile_commands.json` copy between those environments.
 
 ## Current Architecture
 
@@ -97,3 +111,15 @@ The current known architectures are:
 - `loongarch64`
 
 Library visibility can vary by architecture through `support-archs`.
+Changing `arch` or `mode` with `make switch` selects from the generated cache;
+it does not rerun dependency resolution.
+
+Host builds use three independent dimensions:
+
+- `environment=host`
+- `arch` detected from the native compiler and checked against `uname`
+- `mode=debug|release`
+
+Their output root is `build/<mode>/host/<host-triple>/`. Sanitizer builds add a
+separate `sanitize/<profile>/` subtree. Host libraries, tests, header checks,
+and benchmarks keep independent archive, object, test, and benchmark outputs.

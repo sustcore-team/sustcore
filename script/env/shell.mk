@@ -6,3 +6,6 @@ cp     := cp -rf
 mv     := mv -f
 cd     := cd
 chmode := chmod
+
+# Quote one argument for the POSIX shell.
+shq = '$(subst ','"'"',$(1))'

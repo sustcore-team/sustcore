@@ -9,5 +9,5 @@
 #   mkdir
 
 $(obj-root)/%.o: $(src-root)/%.S
-	$(mkdir) $(@D)
+	$(q)$(mkdir) $(@D)
 	$(q)$(comp-asm) -x assembler-with-cpp -c -o $@ $(flags-asm) $(macros-asm) $(includes-asm) $<

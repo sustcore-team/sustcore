@@ -28,6 +28,80 @@ class CompileCommandsTests(unittest.TestCase):
             )
             self.assertTrue(path.parent.is_dir())
 
+    def test_host_database_path_includes_triple_and_sanitizer_profile(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            build_root = Path(temporary_directory)
+
+            plain = compile_commands.prepare_host_database(
+                build_root, "x86_64-pc-linux-gnu", "debug"
+            )
+            sanitized = compile_commands.prepare_host_database(
+                build_root, "x86_64-pc-linux-gnu", "release", "address,undefined"
+            )
+
+            self.assertEqual(
+                plain,
+                build_root / "debug" / "host" / "x86_64-pc-linux-gnu"
+                / "compile_commands.json",
+            )
+            self.assertEqual(
+                sanitized,
+                build_root / "release" / "host" / "x86_64-pc-linux-gnu"
+                / "sanitize" / "address-undefined" / "compile_commands.json",
+            )
+
+    def test_publish_host_database_replaces_only_after_validation(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            build_root = Path(temporary_directory)
+            target = compile_commands.prepare_host_database(
+                build_root, "x86_64-pc-linux-gnu", "debug"
+            )
+            target.write_text('[{"file": "old.cpp"}]\n', encoding="utf-8")
+            invalid = target.parent / ".invalid.json"
+            invalid.write_text("{}\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "JSON array"):
+                compile_commands.publish_database(invalid, target)
+
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), [
+                {"file": "old.cpp"}
+            ])
+
+            valid = target.parent / ".valid.json"
+            valid.write_text('[{"file": "host.cpp"}]\n', encoding="utf-8")
+            compile_commands.publish_database(valid, target)
+            self.assertFalse(valid.exists())
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), [
+                {"file": "host.cpp"}
+            ])
+
+    def test_select_host_database_copies_to_stable_entry(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            build_root = Path(temporary_directory)
+            target = compile_commands.prepare_host_database(
+                build_root, "x86_64-pc-linux-gnu", "debug"
+            )
+            target.write_text('[{"file": "host.cpp"}]\n', encoding="utf-8")
+
+            current, selected_target, selected = (
+                compile_commands.select_host_database(
+                    build_root, "x86_64-pc-linux-gnu", "debug"
+                )
+            )
+
+            self.assertTrue(selected)
+            self.assertEqual(selected_target, target)
+            self.assertEqual(json.loads(current.read_text(encoding="utf-8")), [
+                {"file": "host.cpp"}
+            ])
+
+    def test_rejects_unsafe_host_triple(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            with self.assertRaisesRegex(ValueError, "invalid host triple"):
+                compile_commands.host_database_path(
+                    Path(temporary_directory), "../host", "debug"
+                )
+
     def test_select_copies_database_to_build_root(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             build_root = Path(temporary_directory)

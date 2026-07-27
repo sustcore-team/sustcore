@@ -6,14 +6,14 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(init-dir)))))
 global-env := $(repo-root)/script/env/global.mk
 endif
 
-ifeq ($(origin build-header), undefined)
-$(error module/init/Makefile must be invoked with build-header from the top-level Makefile)
+ifeq ($(origin ctx), undefined)
+$(error module/init/Makefile must be invoked with ctx from the top-level Makefile)
 endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
-include $(build-header)
--include $(path-cache)/deps-$(owner-id).mk
+include $(ctx)
+-include $(path-deps)/$(owner-id).mk
 
 src-root := $(owner-root)
 

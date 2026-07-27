@@ -52,7 +52,7 @@ namespace tay {
         constexpr owner(owner&& other)            = default;
         constexpr owner& operator=(owner&& other) = default;
         // 禁止直接从裸指针转换为 owner
-        constexpr owner& operator=(pointer*)      = delete;
+        constexpr owner& operator=(pointer)       = delete;
 
         pointer get() const {
             return ptr;

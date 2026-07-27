@@ -22,7 +22,7 @@ $(MAKE) -f $(path-e)/kernel/Makefile \
     global-env=$(global-env) \
     arch=$(arch) \
     q=$(q) \
-    build-header=$(path-cache)/build-header-kernel.mk \
+    ctx=$(path-ctx)/kernel.mk \
     kernel-path=$(kernel-path) \
     build
 ```
@@ -37,9 +37,9 @@ The top-level Makefile owns:
 kernel-path ?= $(path-bin)/kernel/sustcore.bin
 ```
 
-`make configure` emits `build-header-kernel.mk` for the fixed `kernel` owner.
+`make configure` emits `ctx/kernel.mk` for the fixed `kernel` owner.
 The kernel sub-make consumes its root, object directory, and target from that
-header:
+context:
 
 ```make
 owner-id := kernel
@@ -88,7 +88,7 @@ Current rules:
 The kernel no longer hardcodes most library dependencies.
 Instead it consumes:
 
-- `deps-kernel.mk`
+- `deps/kernel.mk`
 
 Current injection points in `kernel/Makefile`:
 

@@ -1,0 +1,6 @@
+[[hostprog]]
+id = "taycpplib-bench"
+kind = "bench"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-bench"

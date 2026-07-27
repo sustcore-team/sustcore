@@ -6,26 +6,23 @@ repo-root := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(minicstd-dir)))))
 global-env := $(repo-root)/script/env/global.mk
 endif
 
-ifeq ($(origin build-header), undefined)
-$(error libs/mincstd/Makefile must be invoked with build-header from the top-level Makefile)
+ifeq ($(origin ctx), undefined)
+$(error libs/mincstd/Makefile must be invoked with ctx from the top-level Makefile)
 endif
 
 include $(global-env)
 include $(path-s)/env/buildpath.mk
-include $(build-header)
--include $(path-cache)/deps-$(owner-id).mk
+include $(ctx)
+-include $(path-deps)/$(owner-id).mk
 
 src-root := $(owner-root)
 
 include $(path-s)/toolchain/c.mk
 include $(path-s)/toolchain/ar.mk
 
-comp-c ?= $($(arch)-comp-c)
-flags-c += $($(arch)-flags-c)
-
-includes-c += $(or $($(owner-id)-includes-c-$(arch)),$($(owner-id)-includes-c))
-includes-cpp += $(or $($(owner-id)-includes-cpp-$(arch)),$($(owner-id)-includes-cpp))
-includes-asm += $(or $($(owner-id)-includes-asm-$(arch)),$($(owner-id)-includes-asm))
+includes-c += $($(owner-id)-includes-c)
+includes-cpp += $($(owner-id)-includes-cpp)
+includes-asm += $($(owner-id)-includes-asm)
 
 include $(owner-root)/flags.mk
 include $(owner-root)/collect.mk

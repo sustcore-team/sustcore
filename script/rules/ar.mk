@@ -6,5 +6,5 @@
 #   mkdir
 
 $(target): $(objects)
-	$(mkdir) $(@D)
+	$(q)$(mkdir) $(@D)
 	$(q)$(comp-ar) $(flags-ar) $@ $(objects)

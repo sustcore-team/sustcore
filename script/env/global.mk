@@ -8,6 +8,8 @@ path-lib         := $(path-e)/libs
 path-include     := $(path-e)/include
 path-third_party := $(path-e)/third_party
 path-cache       := $(path-s)/.cache
+path-deps        := $(path-cache)/deps
+path-ctx         := $(path-cache)/ctx
 
 include $(path-s)/env/q.mk
 include $(path-s)/env/shell.mk

@@ -10,20 +10,20 @@
 #   crt-head
 #   crt-tail
 
-program-dep-archives := $(or $($(owner-id)-dep-archives-$(arch)),$($(owner-id)-dep-archives))
-program-c-library-id := $(or $($(owner-id)-c-library-id-$(arch)),$($(owner-id)-c-library-id))
-program-c-library-archive := $(or $($(owner-id)-c-library-archive-$(arch)),$($(owner-id)-c-library-archive))
-program-c-library-ldscript := $(or $($(owner-id)-c-library-ldscript-$(arch)),$($(owner-id)-c-library-ldscript))
-program-c-library-crt0 := $(or $($(owner-id)-c-library-crt0-$(arch)),$($(owner-id)-c-library-crt0))
-program-c-library-crti := $(or $($(owner-id)-c-library-crti-$(arch)),$($(owner-id)-c-library-crti))
-program-c-library-crtn := $(or $($(owner-id)-c-library-crtn-$(arch)),$($(owner-id)-c-library-crtn))
+program-dep-archives := $($(owner-id)-dep-archives)
+program-c-library-id := $($(owner-id)-c-library-id)
+program-c-library-archive := $($(owner-id)-c-library-archive)
+program-c-library-ldscript := $($(owner-id)-c-library-ldscript)
+program-c-library-crt0 := $($(owner-id)-c-library-crt0)
+program-c-library-crti := $($(owner-id)-c-library-crti)
+program-c-library-crtn := $($(owner-id)-c-library-crtn)
 
-includes-c += $(or $($(owner-id)-includes-c-$(arch)),$($(owner-id)-includes-c))
-includes-cpp += $(or $($(owner-id)-includes-cpp-$(arch)),$($(owner-id)-includes-cpp))
-includes-asm += $(or $($(owner-id)-includes-asm-$(arch)),$($(owner-id)-includes-asm))
-includes-c += $(or $($(owner-id)-c-library-includes-c-$(arch)),$($(owner-id)-c-library-includes-c))
-includes-cpp += $(or $($(owner-id)-c-library-includes-cpp-$(arch)),$($(owner-id)-c-library-includes-cpp))
-includes-asm += $(or $($(owner-id)-c-library-includes-asm-$(arch)),$($(owner-id)-c-library-includes-asm))
+includes-c += $($(owner-id)-includes-c)
+includes-cpp += $($(owner-id)-includes-cpp)
+includes-asm += $($(owner-id)-includes-asm)
+includes-c += $($(owner-id)-c-library-includes-c)
+includes-cpp += $($(owner-id)-c-library-includes-cpp)
+includes-asm += $($(owner-id)-c-library-includes-asm)
 
 archives += $(filter-out $(program-c-library-archive),$(program-dep-archives))
 archives += $(program-c-library-archive)

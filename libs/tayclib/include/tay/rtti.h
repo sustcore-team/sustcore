@@ -11,6 +11,9 @@
 
 #pragma once
 
+#include <concepts>
+#include <type_traits>
+
 namespace tay
 {
     template <typename T, typename _Base, typename _TypeId>

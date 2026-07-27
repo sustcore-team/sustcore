@@ -15,6 +15,7 @@ makefile = "Makefile"
 target = "build-static"
 version = "0.1.0-dev.1"
 support-archs = ["riscv64"]
+support-environments = ["freestanding", "host"]
 
 include-c = ["include"]
 include-cpp = ["include"]
@@ -34,7 +35,9 @@ include-asm = ["include"]
 - `version`
   - concrete SemVer 2.0 library release version
 - `support-archs`
-  - allow-list of supported architectures
+  - allow-list of supported freestanding architectures
+- `support-environments`
+  - allow-list containing `freestanding` and/or `host`; defaults to freestanding
 - `include-c/cpp/asm`
   - exported include roots for each language
 
@@ -43,6 +46,7 @@ include-asm = ["include"]
 - `id` must be globally unique across all dependency owners
 - one metadata file may contain multiple `[[libmeta]]`
 - missing `support-archs` means “available on all architectures”
+- `support-archs` never restricts native host visibility
 - missing `include-*` means “export nothing”
 - `libname = ""` means “header-only”
 
@@ -84,9 +88,9 @@ Generated output:
 
 This registry fragment contains:
 
-- `library-ids`
-- `library-ids-riscv64`
-- `library-ids-loongarch64`
+- `library-ids-all` for cross-environment validation and matrix enumeration
+- `library-ids-$(is-freestanding-<arch>)` and `library-ids-$(is-host)`
+- `library-ids`, resolved from the active selector's `library-ids-y` bucket
 - `library-<id>-version`
 - `library-<id>-libname`
 - `library-<id>-makefile`
@@ -96,6 +100,7 @@ This registry fragment contains:
 - `library-<id>-include-c`
 - `library-<id>-include-cpp`
 - `library-<id>-include-asm`
+- `library-<id>-crt0-$(is-<arch>)`, `crti`, `crtn`, and `ldscript` variants
 
 Generated build-target output:
 
@@ -104,27 +109,47 @@ Generated build-target output:
 This build-target fragment contains:
 
 - `build-lib-<id>`
-- `build-lib-targets-<arch>`
+- `build-lib-targets-$(is-freestanding-<arch>)`
+- `host-build-lib-targets-$(is-host)`
 - `build-libs`
 
 Each non-header-only target passes its matching
-`build-header-lib-<id>.mk` file to the library sub-make. The header declares
+`$(path-ctx)/lib-<id>.mk` file through `ctx=` to the library sub-make. The context declares
 the library owner and source root, with defaults for its object directory
 (`$(path-obj)/libs/<id>`) and final archive
-(`$(path-bin)/libs/<libname>`). Header-only libraries still receive a header
+(`$(path-bin)/libs/<libname>`). Header-only libraries still receive a context
 with an empty `target`.
 
 ## Component Build Fragments
 
 Each buildable library or module uses three root fragments:
 
-- `Makefile` loads the component header, flags, collection result, and rules.
+- `Makefile` loads the component context, flags, collection result, and rules.
 - `flags.mk` declares component-local compiler flags and include paths.
 - `collect.mk` invokes `script/build/collector.mk` for the component root.
 
 Source selection belongs exclusively in `include.mk`. The collector reads the
 root and all nested `include.mk` files, classifies their `src-y` and `src-n`
 entries by language, and prefixes nested paths relative to the component root.
+
+## Testbench Metadata
+
+Host test programs are registered below the owning library in either
+`testbench/test/metadata.toml` or `testbench/bench/metadata.toml`:
+
+```toml
+[[hostprog]]
+id = "example-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "example-test"
+```
+
+`kind = "test"` denotes functionality and must be placed in `testbench/test`;
+`kind = "bench"` denotes performance and must be placed in `testbench/bench`.
+The scanner derives the owner from the surrounding library and retains support
+for a legacy combined `testbench/metadata.toml` file.
 
 ## Dependency File Schema
 
@@ -138,9 +163,17 @@ lib = "mini-cstd"
 [[riscv64.dependencies]]
 lib = "sbi"
 
+[[host.dependencies]]
+lib = "tayclib"
+
 ```
 
-The resolver:
+The resolver combines the public section, selected environment section, and
+each applicable architecture section. A single `make configure` resolves and
+validates every known freestanding architecture. Repeated dependencies are
+deduplicated only when
+their version expressions are identical; conflicting expressions are errors.
+It then:
 
 - reads top-level `[[dependencies]]`
 - reads arch-specific `[[<arch>.dependencies]]`
@@ -150,20 +183,22 @@ The resolver:
 
 Generated output:
 
-- `script/.cache/deps-<id>.mk`
+- `script/.cache/deps/<id>.mk`
+- `script/.cache/deps/host-<id>.mk` after host validation
 
-This file exports:
+Each file uses the build dimension selectors internally and exports only the
+selected final values:
 
 - `<id>-dep-ids`
-- `<id>-dep-ids-<arch>`
 - `<id>-dep-archives`
-- `<id>-dep-archives-<arch>`
 - `<id>-includes-c`
 - `<id>-includes-cpp`
 - `<id>-includes-asm`
-- `<id>-includes-c-<arch>`
-- `<id>-includes-cpp-<arch>`
-- `<id>-includes-asm-<arch>`
+
+For example, public dependencies append to `<id>-dep-ids-y`, while an
+architecture dependency appends through `<id>-dep-ids-$(is-<arch>)`; the final
+`<id>-dep-ids` is assigned from the active `y` bucket. Host fragments use the
+same interface but are generated only after native architecture validation.
 
 ## Current Examples
 

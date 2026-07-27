@@ -57,11 +57,11 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核. �
 ```sh
 make init
 make switch arch=riscv64 mode=debug
-make configure config=default arch=riscv64
+make configure config=default
 make build-kernel
 ```
 
-`arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`build-kernel` 会先构建当前架构可见的库和 initrd，再调用 `kernel/Makefile` 链接内核；只构建库时可使用 `make build-libs`。
+`arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`configure` 会一次生成所有 freestanding 架构的依赖缓存；之后只需用 `make switch` 改变持久选择，不需要重新配置。`build-kernel` 会先构建当前架构可见的库和 initrd，再调用 `kernel/Makefile` 链接内核；只构建库时可使用 `make build-libs`。
 
 为 clangd 更新当前配置的编译数据库：
 
@@ -76,6 +76,45 @@ make update arch=loongarch64 mode=release
 ```
 
 编译数据库保存在 `build/<mode>/<arch>/compile_commands.json`。`make switch` 与 `make configure` 会将当前选择对应的数据库原子复制到 `build/compile_commands.json`；目标尚未生成时会删除旧副本，避免 clangd 继续使用错误架构的编译参数。VS Code clangd 插件可固定使用 `--compile-commands-dir=build`。
+
+Host 库与 testbench 的编译数据库可独立生成和选择：
+
+```sh
+make update-host mode=debug
+make clangd-host mode=debug
+make clangd-target
+```
+
+Host 数据库位于 `build/<mode>/host/<host-triple>/compile_commands.json`；sanitizer profile 会使用对应的隔离子目录。`clangd-host` 与 `clangd-target` 只原子替换稳定入口，不修改 `make switch` 保存的架构和模式。
+
+## 测试与性能测试
+
+运行 host testbench 前，配置集的 `clang.toml` 必须包含可通过 `make validate-host` 验证的 `[host]` 工具链。功能测试使用当前构建模式，默认构建并运行所有 `testbench/test` 程序：
+
+```sh
+make host-test
+make host-test lib=tayclib
+make host-test lib=taycpplib sanitize=address,undefined
+```
+
+runner 会继续执行全部匹配用例，最后汇总每项 `PASS`、`FAIL` 或 `SKIP`；任一用例失败时 `make host-test` 返回非零状态。`lib=<id>` 只选择指定库，`sanitize` 可选 `address`、`undefined` 或 `address,undefined`。
+
+性能测试位于 `testbench/bench`。`make bench` 默认使用 release 模式构建全部 benchmark executable，但不会运行：
+
+```sh
+make bench
+make bench mode=debug
+```
+
+使用 `host-bench` 构建并顺序运行 benchmark；未显式指定 `mode` 时同样使用 release：
+
+```sh
+make host-bench
+make host-bench lib=tayclib
+make host-bench lib=taycpplib mode=release
+```
+
+测试程序输出到 `build/<mode>/host/<host-triple>/test/`，benchmark 输出到同级 `bench/`；sanitizer 构建使用独立的 `sanitize/<profile>/` 子目录。
 
 ## 运行
 
@@ -116,4 +155,4 @@ make update arch=loongarch64 mode=release
 
 # 环境配置
 
-构建配置位于 `config/<name>/*.toml`，通过 `make configure config=<name> [arch=<arch>]` 生成 `script/.cache/` 下的 Make 片段。当前默认配置集为 `config/default/`；构建系统说明见 [构建系统概览](./aidoc/buildsystem/overview.md) 与 [配置流程](./aidoc/buildsystem/configuration.md)。
+构建配置位于 `config/<name>/*.toml`，通过 `make configure config=<name>` 生成 `script/.cache/` 下的 Make 片段。为兼容旧命令，显式传入的 `arch=` 或 `mode=` 会被忽略并给出警告；构建选择应使用 `make switch`。`make clean` 删除全部构建产物但保留配置，`make cleandist` 还会删除所有可再生成的配置与依赖缓存，只保留 `.switch.mk` 中的架构和模式选择。当前默认配置集为 `config/default/`；构建系统说明见 [构建系统概览](./aidoc/buildsystem/overview.md) 与 [配置流程](./aidoc/buildsystem/configuration.md)。

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Manage architecture- and mode-specific compilation databases for clangd."""
+"""Manage target and host compilation databases for clangd."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -13,23 +14,36 @@ from pathlib import Path
 
 SUPPORTED_ARCHITECTURES = {"riscv64", "loongarch64"}
 SUPPORTED_MODES = {"debug", "release"}
+SUPPORTED_SANITIZERS = {"", "address", "undefined", "address,undefined"}
+HOST_TRIPLE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def parse_arguments(arguments: list[str]) -> tuple[str, dict[str, str]]:
-    if not arguments or arguments[0] not in {"prepare", "select"}:
-        raise ValueError("expected action 'prepare' or 'select'")
+    schemas = {
+        "prepare": ({"root", "arch", "mode"}, set()),
+        "select": ({"root", "arch", "mode"}, set()),
+        "prepare-host": ({"root", "triple", "mode"}, {"sanitize"}),
+        "select-host": ({"root", "triple", "mode"}, {"sanitize"}),
+        "publish-host": ({"root", "triple", "mode", "source"}, {"sanitize"}),
+    }
+    if not arguments or arguments[0] not in schemas:
+        raise ValueError(
+            "expected action 'prepare', 'select', 'prepare-host', "
+            "'select-host', or 'publish-host'"
+        )
 
     action = arguments[0]
+    required, optional = schemas[action]
     values: dict[str, str] = {}
     for argument in arguments[1:]:
         key, separator, value = argument.partition("=")
-        if not separator or key not in {"root", "arch", "mode"}:
+        if not separator or key not in required | optional:
             raise ValueError(f"invalid argument: {argument}")
         if key in values:
             raise ValueError(f"duplicate argument: {key}")
         values[key] = value
 
-    missing = {"root", "arch", "mode"} - values.keys()
+    missing = required - values.keys()
     if missing:
         raise ValueError("missing argument: " + ", ".join(sorted(missing)))
     return action, values
@@ -44,19 +58,67 @@ def validate_selection(build_root: Path, arch: str, mode: str) -> None:
         raise ValueError(f"unsupported mode: {mode}")
 
 
-def database_path(
-    build_root: Path, arch: str, mode: str
-) -> Path:
+def validate_host_selection(
+    build_root: Path, triple: str, mode: str, sanitize: str = ""
+) -> None:
+    if not str(build_root):
+        raise ValueError("build root must not be empty")
+    if not HOST_TRIPLE_PATTERN.fullmatch(triple):
+        raise ValueError(f"invalid host triple: {triple!r}")
+    if mode not in SUPPORTED_MODES:
+        raise ValueError(f"unsupported mode: {mode}")
+    if sanitize not in SUPPORTED_SANITIZERS:
+        raise ValueError(f"unsupported sanitizer: {sanitize!r}")
+
+
+def database_path(build_root: Path, arch: str, mode: str) -> Path:
     validate_selection(build_root, arch, mode)
     return build_root / mode / arch / "compile_commands.json"
 
 
-def prepare_database(
-    build_root: Path, arch: str, mode: str
+def host_database_path(
+    build_root: Path, triple: str, mode: str, sanitize: str = ""
 ) -> Path:
+    validate_host_selection(build_root, triple, mode, sanitize)
+    parent = build_root / mode / "host" / triple
+    if sanitize:
+        parent = parent / "sanitize" / sanitize.replace(",", "-")
+    return parent / "compile_commands.json"
+
+
+def prepare_database(build_root: Path, arch: str, mode: str) -> Path:
     path = database_path(build_root, arch, mode)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def prepare_host_database(
+    build_root: Path, triple: str, mode: str, sanitize: str = ""
+) -> Path:
+    path = host_database_path(build_root, triple, mode, sanitize)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _validate_database(path: Path) -> None:
+    try:
+        with path.open("r", encoding="utf-8") as database_file:
+            data = json.load(database_file)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"invalid compilation database JSON: {path}: {error}") from error
+    if not isinstance(data, list):
+        raise ValueError(f"compilation database must contain a JSON array: {path}")
+
+
+def publish_database(source: Path, target: Path) -> Path:
+    if not source.is_file():
+        raise ValueError(f"compilation database does not exist: {source}")
+    _validate_database(source)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() and not target.is_file():
+        raise ValueError(f"refusing to replace non-file: {target}")
+    os.replace(source, target)
+    return target
 
 
 def _remove_current_database(current_path: Path) -> None:
@@ -66,10 +128,7 @@ def _remove_current_database(current_path: Path) -> None:
         raise ValueError(f"refusing to replace non-file: {current_path}")
 
 
-def select_database(
-    build_root: Path, arch: str, mode: str
-) -> tuple[Path, Path, bool]:
-    target = database_path(build_root, arch, mode)
+def _select_path(build_root: Path, target: Path) -> tuple[Path, Path, bool]:
     build_root.mkdir(parents=True, exist_ok=True)
     current_path = build_root / "compile_commands.json"
 
@@ -78,10 +137,7 @@ def select_database(
         return current_path, target, False
 
     try:
-        with target.open("r", encoding="utf-8") as database_file:
-            data = json.load(database_file)
-        if not isinstance(data, list):
-            raise ValueError(f"compilation database must contain a JSON array: {target}")
+        _validate_database(target)
     except (OSError, ValueError):
         _remove_current_database(current_path)
         raise
@@ -108,37 +164,70 @@ def select_database(
     return current_path, target, True
 
 
+def select_database(
+    build_root: Path, arch: str, mode: str
+) -> tuple[Path, Path, bool]:
+    return _select_path(build_root, database_path(build_root, arch, mode))
+
+
+def select_host_database(
+    build_root: Path, triple: str, mode: str, sanitize: str = ""
+) -> tuple[Path, Path, bool]:
+    return _select_path(
+        build_root, host_database_path(build_root, triple, mode, sanitize)
+    )
+
+
+def _print_selection(current_path: Path, target: Path, selected: bool) -> None:
+    print(f"Selected compilation database: {target}")
+    if selected:
+        print(f"clangd database: {current_path}")
+    else:
+        print(
+            f"compile_commands.py: warning: database has not been generated: {target}",
+            file=sys.stderr,
+        )
+
+
 def main(arguments: list[str]) -> int:
     try:
         action, values = parse_arguments(arguments)
         root_value = values["root"]
-        arch = values["arch"]
-        mode = values["mode"]
         if not root_value:
             raise ValueError("build root must not be empty")
         build_root = Path(root_value)
-        if action == "prepare":
-            path = prepare_database(build_root, arch, mode)
-            print(f"Compilation database: {path}")
-        else:
-            if not arch or not mode:
+
+        if action in {"prepare", "select"}:
+            arch = values["arch"]
+            mode = values["mode"]
+            if action == "select" and (not arch or not mode):
                 print(
                     "compile_commands.py: warning: current configuration is incomplete; "
                     "run 'make switch' and 'make configure' before selecting a database",
                     file=sys.stderr,
                 )
                 return 0
-            current_path, target, selected = select_database(
-                build_root, arch, mode
-            )
-            print(f"Selected compilation database: {target}")
-            if not selected:
-                print(
-                    f"compile_commands.py: warning: database has not been generated: {target}",
-                    file=sys.stderr,
-                )
+            if action == "prepare":
+                print(f"Compilation database: {prepare_database(build_root, arch, mode)}")
             else:
-                print(f"clangd database: {current_path}")
+                _print_selection(*select_database(build_root, arch, mode))
+            return 0
+
+        triple = values["triple"]
+        mode = values["mode"]
+        sanitize = values.get("sanitize", "")
+        if action == "prepare-host":
+            print(
+                "Compilation database: "
+                f"{prepare_host_database(build_root, triple, mode, sanitize)}"
+            )
+        elif action == "select-host":
+            _print_selection(
+                *select_host_database(build_root, triple, mode, sanitize)
+            )
+        else:
+            target = host_database_path(build_root, triple, mode, sanitize)
+            print(f"Published compilation database: {publish_database(Path(values['source']), target)}")
     except (OSError, ValueError) as error:
         print(f"compile_commands.py: {error}", file=sys.stderr)
         return 1
