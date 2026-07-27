@@ -104,13 +104,15 @@ retaining the `kind = "test"|"bench"` metadata interface:
 
 ```text
 libs/<library>/testbench/test/metadata.toml
+libs/<library>/testbench/headercheck/metadata.toml
 libs/<library>/testbench/bench/metadata.toml
 ```
 
-Each split metadata file may register one or more `[[hostprog]]` entries, but
-their `kind` must match the directory. Header checks belong to the `test`
-metadata. The scanner still accepts the legacy `testbench/metadata.toml`
-layout so out-of-tree libraries can migrate independently.
+The owning `[[libmeta]]` registers every file through the
+`testbench.test`, `testbench.headercheck`, and `testbench.bench` lists. Test and
+benchmark files contain matching `[[hostprog]]` entries; header-check files
+contain only `[[headercheck]]`. Unregistered files are ignored and no legacy
+directory scan is performed.
 
 The aggregate Python runner handles executable testbenches only. Header checks
 and the freestanding panic link check remain under their dedicated targets and

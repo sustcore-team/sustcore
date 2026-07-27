@@ -16,6 +16,9 @@ target = "build-static"
 version = "0.1.0-dev.1"
 support-archs = ["riscv64"]
 support-environments = ["freestanding", "host"]
+testbench.test = ["testbench/test/metadata.toml"]
+testbench.headercheck = ["testbench/headercheck/metadata.toml"]
+testbench.bench = ["testbench/bench/metadata.toml"]
 
 include-c = ["include"]
 include-cpp = ["include"]
@@ -40,6 +43,8 @@ include-asm = ["include"]
   - allow-list containing `freestanding` and/or `host`; defaults to freestanding
 - `include-c/cpp/asm`
   - exported include roots for each language
+- `testbench.test/headercheck/bench`
+  - explicit lists of testbench TOML files relative to this library metadata
 
 ## Current Rules
 
@@ -134,8 +139,20 @@ entries by language, and prefixes nested paths relative to the component root.
 
 ## Testbench Metadata
 
-Host test programs are registered below the owning library in either
-`testbench/test/metadata.toml` or `testbench/bench/metadata.toml`:
+Each `[[libmeta]]` explicitly registers all of its testbench metadata files:
+
+```toml
+testbench.test = ["testbench/test/metadata.toml"]
+testbench.headercheck = ["testbench/headercheck/metadata.toml"]
+testbench.bench = ["testbench/bench/metadata.toml"]
+```
+
+When a `testbench` table is present, all three fields are required arrays;
+unused categories use an empty array. Paths must name existing TOML files
+relative to the library metadata. A metadata file may contain multiple
+`[[libmeta]]` entries, each with independent testbench lists.
+
+Test and benchmark files register executable programs:
 
 ```toml
 [[hostprog]]
@@ -146,10 +163,11 @@ target = "build"
 output = "example-test"
 ```
 
-`kind = "test"` denotes functionality and must be placed in `testbench/test`;
-`kind = "bench"` denotes performance and must be placed in `testbench/bench`.
-The scanner derives the owner from the surrounding library and retains support
-for a legacy combined `testbench/metadata.toml` file.
+`kind = "test"` is valid only in a file listed by `testbench.test`, while
+`kind = "bench"` is valid only in a file listed by `testbench.bench`.
+Header-check files listed by `testbench.headercheck` contain only
+`[[headercheck]]` entries. The scanner does not discover unregistered files by
+directory or file name.
 
 ## Dependency File Schema
 

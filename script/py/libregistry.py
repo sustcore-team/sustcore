@@ -35,6 +35,9 @@ class LibraryMeta:
     arch_crtn: dict[str, str]
     metadata_path: str
     support_environments: tuple[str, ...] = ("freestanding",)
+    testbench_test: tuple[str, ...] = ()
+    testbench_headercheck: tuple[str, ...] = ()
+    testbench_bench: tuple[str, ...] = ()
 
     @property
     def archive_path(self) -> str:
@@ -101,6 +104,14 @@ class HeaderCheckMeta:
     requires_features: tuple[str, ...] = ()
     before_headers: tuple[str, ...] = ()
     after_headers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TestbenchMetadataSource:
+    path: Path
+    category: str
+    owner: str
+    library_root: Path
 
 
 def scan_metadata_files(root: Path) -> list[Path]:
@@ -171,6 +182,59 @@ def normalize_string_list(raw_value: object, field: str) -> tuple[str, ...]:
     ):
         raise ValueError(f"{field} must be an array of non-empty strings")
     return tuple(dict.fromkeys(raw_value))
+
+
+def normalize_testbench_paths(
+    metadata_path: Path, raw_value: object
+) -> dict[str, tuple[str, ...]]:
+    categories = ("test", "headercheck", "bench")
+    if raw_value is None:
+        return {category: () for category in categories}
+    if not isinstance(raw_value, dict):
+        raise ValueError(f"{metadata_path}: testbench must be a table")
+
+    missing = [category for category in categories if category not in raw_value]
+    if missing:
+        raise ValueError(
+            f"{metadata_path}: testbench is missing fields: {', '.join(missing)}"
+        )
+    unknown = sorted(set(raw_value) - set(categories))
+    if unknown:
+        raise ValueError(
+            f"{metadata_path}: testbench contains unsupported fields: {', '.join(unknown)}"
+        )
+
+    result: dict[str, tuple[str, ...]] = {}
+    seen_paths: dict[str, str] = {}
+    for category in categories:
+        field = f"{metadata_path}: testbench.{category}"
+        paths = raw_value[category]
+        if not isinstance(paths, list) or not all(
+            isinstance(path, str) and path for path in paths
+        ):
+            raise ValueError(f"{field} must be an array of non-empty strings")
+
+        resolved_paths: list[str] = []
+        for raw_path in paths:
+            relative_path = normalize_relative_path(raw_path, field, required=True)
+            if Path(relative_path).suffix != ".toml":
+                raise ValueError(f"{field} entries must name TOML files")
+            resolved_path = (metadata_path.parent / relative_path).resolve()
+            if not resolved_path.is_file():
+                raise ValueError(
+                    f"{metadata_path}: testbench.{category} file does not exist: {raw_path}"
+                )
+            path_key = str(resolved_path)
+            previous_category = seen_paths.get(path_key)
+            if previous_category is not None:
+                raise ValueError(
+                    f"{metadata_path}: testbench file {raw_path!r} is registered in "
+                    f"both {previous_category!r} and {category!r}"
+                )
+            seen_paths[path_key] = category
+            resolved_paths.append(path_key)
+        result[category] = tuple(resolved_paths)
+    return result
 
 
 def normalize_features(raw_value: object, field: str) -> tuple[str, ...]:
@@ -326,6 +390,9 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                 makefile_path = str(resolved_makefile)
 
             arch_data = _arch_data_for_entry(metadata_path, data, entry, len(entries))
+            testbench_paths = normalize_testbench_paths(
+                metadata_path, entry.get("testbench")
+            )
             libraries.append(
                 LibraryMeta(
                     id=library_id,
@@ -358,6 +425,9 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                         KNOWN_ENVIRONMENTS,
                         default=("freestanding",),
                     ),
+                    testbench_test=testbench_paths["test"],
+                    testbench_headercheck=testbench_paths["headercheck"],
+                    testbench_bench=testbench_paths["bench"],
                 )
             )
 
@@ -472,48 +542,25 @@ def libraries_for_environment(
     ]
 
 
-def _testbench_metadata_files(root: Path) -> list[Path]:
-    result: list[Path] = []
-    for relative_root in ("libs", "third_party/libs"):
-        scan_root = root / relative_root
-        if scan_root.is_dir():
-            result.extend(sorted(scan_root.glob("*/testbench/metadata.toml")))
-            for kind in ("test", "bench"):
-                result.extend(
-                    sorted(scan_root.glob(f"*/testbench/{kind}/metadata.toml"))
+def _testbench_metadata_sources(root: Path) -> list[TestbenchMetadataSource]:
+    result: list[TestbenchMetadataSource] = []
+    for library in scan_libraries(root):
+        paths_by_category = {
+            "test": library.testbench_test,
+            "headercheck": library.testbench_headercheck,
+            "bench": library.testbench_bench,
+        }
+        for category, paths in paths_by_category.items():
+            result.extend(
+                TestbenchMetadataSource(
+                    path=Path(path),
+                    category=category,
+                    owner=library.id,
+                    library_root=Path(library.root),
                 )
+                for path in paths
+            )
     return result
-
-
-def _testbench_owner(metadata_path: Path) -> tuple[str, Path]:
-    testbench_root = metadata_path.parent
-    if testbench_root.name in {"test", "bench"}:
-        testbench_root = testbench_root.parent
-    if testbench_root.name != "testbench":
-        raise ValueError(f"{metadata_path}: metadata is not under a testbench directory")
-    library_root = testbench_root.parent
-    library_metadata = library_root / "metadata.toml"
-    if not library_metadata.is_file():
-        raise ValueError(
-            f"{metadata_path}: testbench has no owning library metadata.toml"
-        )
-    with library_metadata.open("rb") as metadata_file:
-        data = tomllib.load(metadata_file)
-    entries = data.get("libmeta")
-    if not isinstance(entries, list) or len(entries) != 1:
-        raise ValueError(
-            f"{metadata_path}: owning metadata.toml must contain exactly one libmeta entry"
-        )
-    entry = entries[0]
-    if not isinstance(entry, dict):
-        raise ValueError(f"{library_metadata}: libmeta entry must be a table")
-    return validate_global_id(entry.get("id"), f"{library_metadata}: id"), library_root
-
-
-def _testbench_kind(metadata_path: Path) -> str | None:
-    if metadata_path.parent.name in {"test", "bench"}:
-        return metadata_path.parent.name
-    return None
 
 
 def scan_testbenches(
@@ -524,15 +571,21 @@ def scan_testbenches(
     seen_program_ids: dict[str, Path] = {}
     seen_check_ids: dict[str, Path] = {}
 
-    for metadata_path in _testbench_metadata_files(root):
-        owner, library_root = _testbench_owner(metadata_path)
-        directory_kind = _testbench_kind(metadata_path)
+    for source in _testbench_metadata_sources(root):
+        metadata_path = source.path
+        owner = source.owner
+        library_root = source.library_root
+        category = source.category
         with metadata_path.open("rb") as metadata_file:
             data = tomllib.load(metadata_file)
 
         raw_programs = data.get("hostprog", [])
         if not isinstance(raw_programs, list):
             raise ValueError(f"{metadata_path}: hostprog must be an array of tables")
+        if category == "headercheck" and raw_programs:
+            raise ValueError(
+                f"{metadata_path}: hostprog entries belong in testbench.test or testbench.bench files"
+            )
         for entry in raw_programs:
             if not isinstance(entry, dict):
                 raise ValueError(f"{metadata_path}: hostprog entries must be tables")
@@ -546,10 +599,10 @@ def scan_testbenches(
             kind = entry.get("kind")
             if kind not in {"test", "bench"}:
                 raise ValueError(f"{metadata_path}: hostprog.kind must be 'test' or 'bench'")
-            if directory_kind is not None and kind != directory_kind:
+            if kind != category:
                 raise ValueError(
                     f"{metadata_path}: hostprog.kind {kind!r} does not match "
-                    f"testbench/{directory_kind}"
+                    f"testbench.{category} registration"
                 )
             makefile = normalize_relative_path(
                 entry.get("makefile"), f"{metadata_path}: hostprog.makefile", required=True
@@ -592,9 +645,9 @@ def scan_testbenches(
         raw_checks = data.get("headercheck", [])
         if not isinstance(raw_checks, list):
             raise ValueError(f"{metadata_path}: headercheck must be an array of tables")
-        if directory_kind == "bench" and raw_checks:
+        if category != "headercheck" and raw_checks:
             raise ValueError(
-                f"{metadata_path}: headercheck entries belong in testbench/test"
+                f"{metadata_path}: headercheck entries belong in testbench.headercheck files"
             )
         for index, entry in enumerate(raw_checks):
             if not isinstance(entry, dict):

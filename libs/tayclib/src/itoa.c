@@ -32,7 +32,7 @@ static ALWAYS_INLINE void __set0(char *buf, size_t bufsz, size_t pos) {
     buf[pos] = '\0';
 }
 
-static char *__itoa_convert_s(unsigned long long val, int negative, char *buf,
+static char *__itoa_convert_s(unsigned long long val, bool negative, char *buf,
                               size_t bufsz, int radix) {
     if (buf == NULL || bufsz == 0 || radix < 2 || radix > 36) {
         return buf;

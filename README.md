@@ -89,7 +89,7 @@ Host 数据库位于 `build/<mode>/host/<host-triple>/compile_commands.json`；s
 
 ## 测试与性能测试
 
-运行 host testbench 前，配置集的 `clang.toml` 必须包含可通过 `make validate-host` 验证的 `[host]` 工具链。功能测试使用当前构建模式，默认构建并运行所有 `testbench/test` 程序：
+运行 host testbench 前，配置集的 `clang.toml` 必须包含可通过 `make validate-host` 验证的 `[host]` 工具链。库通过 metadata 中的 `testbench.test`、`testbench.headercheck` 和 `testbench.bench` 列表显式注册对应 TOML 文件。功能测试使用当前构建模式，默认构建并运行所有已注册的 test 程序：
 
 ```sh
 make host-test

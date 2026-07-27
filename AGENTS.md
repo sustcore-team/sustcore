@@ -89,6 +89,9 @@ makefile = "Makefile"
 target = "build-static"
 version = "0.1.0-dev.1"
 support-archs = ["riscv64"]
+testbench.test = ["testbench/test/metadata.toml"]
+testbench.headercheck = ["testbench/headercheck/metadata.toml"]
+testbench.bench = ["testbench/bench/metadata.toml"]
 
 include-c = ["include"]
 include-cpp = ["include"]
@@ -102,6 +105,8 @@ Important current rules:
 - `libname` is the generated static archive name; an empty value denotes a
   header-only library.
 - `support-archs` is an allow-list.
+- test, header-check, and benchmark metadata are read only from the explicit
+  `testbench.test`, `testbench.headercheck`, and `testbench.bench` lists.
 - `build-libs` is generated from library metadata and skips header-only
   libraries.
 
