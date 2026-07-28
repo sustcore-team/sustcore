@@ -1,33 +1,15 @@
-# Shared host executable build rules. The library testbench Makefile selects
-# sources before including this fragment.
-include $(path-s)/env/host-buildpath.mk
-include $(ctx)
-include $(path-cache)/libraries.mk
--include $(deps-file)
+# Shared Host testbench executable layer. Its Makefile selects sources while
+# component.mk owns environment setup and object compilation.
+component-use-collector := n
+component-use-public-includes := y
+component-dependency-owner := $(library-owner)
+component-include-owner := $(library-owner)
+include $(path-s)/build/component.mk
 
-src-root := $(owner-root)
-
-include $(path-s)/toolchain/c.mk
-include $(path-s)/toolchain/cpp.mk
 include $(path-s)/toolchain/ld.mk
-
-includes-c += $(library-$(library-owner)-include-c) $($(library-owner)-includes-c)
-includes-cpp += $(library-$(library-owner)-include-cpp) $($(library-owner)-includes-cpp)
-
-objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
-objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))
-objects := $(objects-c) $(objects-cpp)
-deps := $(objects:.o=.d)
 owner-archive := $(if $(filter n,$(library-$(library-owner)-is-header-only)),$(path-bin)/libs/$(library-$(library-owner)-libname))
-archives := $($(library-owner)-dep-archives) $(owner-archive)
-
-$(objects): $(toolchain-stamp)
-
-include $(path-s)/rules/c.mk
-include $(path-s)/rules/cpp.mk
+archives := $(component-dep-archives) $(owner-archive)
 
 $(target): $(objects) $(archives)
 	$(q)$(mkdir) $(@D)
 	$(q)$(if $(strip $(sources-cpp)),$(comp-ld-cpp),$(comp-ld-c)) -o $@ $(objects) $(archives) $(flags-ld)
-
--include $(deps)

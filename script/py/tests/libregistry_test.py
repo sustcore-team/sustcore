@@ -46,7 +46,7 @@ class LibraryEnvironmentTests(unittest.TestCase):
 
 class TestbenchSchemaTests(unittest.TestCase):
     def test_scans_programs_and_header_checks_with_derived_owners(self) -> None:
-        programs, checks = libregistry.scan_testbenches(ROOT)
+        programs, checks, freestanding = libregistry.scan_testbenches(ROOT)
         self.assertIn("tayclib-itoa-test", {program.id for program in programs})
         panic = next(program for program in programs if program.id == "taycpplib-panic-test")
         self.assertEqual((panic.owner, panic.expect), ("taycpplib", "abort"))
@@ -55,8 +55,26 @@ class TestbenchSchemaTests(unittest.TestCase):
             program for program in programs if program.id == "taycpplib-bench"
         )
         self.assertEqual((benchmark.kind, Path(benchmark.root).name), ("bench", "bench"))
+        example = next(
+            program for program in programs if program.id == "tayclib-itoa-example"
+        )
+        self.assertEqual((example.kind, Path(example.root).name), ("example", "example"))
+        panic_example = next(
+            program for program in programs if program.id == "taycpplib-panic-example"
+        )
+        self.assertEqual((panic_example.expect, panic_example.stderr_contains), (
+            "abort", "tay panic: panic example"
+        ))
         reflection = next(check for check in checks if check.id == "taycpplib-reflection")
         self.assertEqual(reflection.requires_features, ("cpp-static-reflection",))
+        expected = next(
+            check
+            for check in freestanding
+            if check.id == "taycpplib-panic-with-provider"
+        )
+        self.assertEqual((expected.kind, expected.expect), ("link", "success"))
+        self.assertIn("expected_freestanding.cpp", expected.sources)
+        self.assertEqual(Path(expected.root).name, "freestanding")
 
         libraries = {library.id: library for library in libregistry.scan_libraries(ROOT)}
         self.assertEqual(
@@ -79,10 +97,11 @@ class TestbenchSchemaTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            programs, checks = libregistry.scan_testbenches(root)
+            programs, checks, freestanding = libregistry.scan_testbenches(root)
 
             self.assertEqual(programs, [])
             self.assertEqual(checks, [])
+            self.assertEqual(freestanding, [])
 
     def test_explicit_testbench_metadata_registration(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -93,7 +112,8 @@ class TestbenchSchemaTests(unittest.TestCase):
             (library / "metadata.toml").write_text(
                 '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
                 'testbench.test=["testbench/metadata.toml"]\n'
-                'testbench.headercheck=[]\ntestbench.bench=[]\n',
+                'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n',
                 encoding="utf-8",
             )
             (testbench / "Makefile").write_text("build:\n", encoding="utf-8")
@@ -103,7 +123,7 @@ class TestbenchSchemaTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            programs, _ = libregistry.scan_testbenches(root)
+            programs, _, _ = libregistry.scan_testbenches(root)
 
             self.assertEqual([(program.id, program.kind) for program in programs], [
                 ("sample-test", "test")
@@ -118,7 +138,8 @@ class TestbenchSchemaTests(unittest.TestCase):
             (library / "metadata.toml").write_text(
                 '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
                 'testbench.test=["testbench/test/metadata.toml"]\n'
-                'testbench.headercheck=[]\ntestbench.bench=[]\n',
+                'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n',
                 encoding="utf-8",
             )
             (testbench / "Makefile").write_text("build:\n", encoding="utf-8")
@@ -141,9 +162,11 @@ class TestbenchSchemaTests(unittest.TestCase):
                 '[[libmeta]]\nid="one"\nlibname=""\nversion="1.0.0"\n'
                 'testbench.test=["testbench/one.toml"]\n'
                 'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n'
                 '[[libmeta]]\nid="two"\nlibname=""\nversion="1.0.0"\n'
                 'testbench.test=["testbench/two.toml"]\n'
-                'testbench.headercheck=[]\ntestbench.bench=[]\n',
+                'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n',
                 encoding="utf-8",
             )
             (testbench / "Makefile").write_text("build:\n", encoding="utf-8")
@@ -158,7 +181,7 @@ class TestbenchSchemaTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            programs, _ = libregistry.scan_testbenches(root)
+            programs, _, _ = libregistry.scan_testbenches(root)
 
             self.assertEqual(
                 [(program.id, program.owner) for program in programs],
@@ -174,7 +197,8 @@ class TestbenchSchemaTests(unittest.TestCase):
             (library / "metadata.toml").write_text(
                 '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
                 'testbench.test=["testbench/header.toml"]\n'
-                'testbench.headercheck=[]\ntestbench.bench=[]\n',
+                'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n',
                 encoding="utf-8",
             )
             (testbench / "header.toml").write_text(
@@ -186,19 +210,116 @@ class TestbenchSchemaTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "testbench.headercheck"):
                 libregistry.scan_testbenches(root)
 
-    def test_testbench_table_requires_all_category_lists(self) -> None:
+    def test_testbench_category_lists_are_optional(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             library = root / "libs" / "sample"
-            library.mkdir(parents=True)
+            testbench = library / "testbench"
+            testbench.mkdir(parents=True)
             (library / "metadata.toml").write_text(
                 '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
-                'testbench.test=[]\n',
+                'testbench.test=["testbench/test.toml"]\n',
+                encoding="utf-8",
+            )
+            (testbench / "Makefile").write_text("build:\n", encoding="utf-8")
+            (testbench / "test.toml").write_text(
+                '[[hostprog]]\nid="sample-test"\nkind="test"\n'
+                'makefile="Makefile"\ntarget="build"\noutput="sample-test"\n',
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(ValueError, "missing fields: headercheck, bench"):
-                libregistry.scan_libraries(root)
+            libraries = libregistry.scan_libraries(root)
+            programs, headers, freestanding = libregistry.scan_testbenches(root)
+
+            self.assertEqual(libraries[0].testbench_test, (
+                str((testbench / "test.toml").resolve()),
+            ))
+            self.assertEqual(libraries[0].testbench_headercheck, ())
+            self.assertEqual(libraries[0].testbench_bench, ())
+            self.assertEqual(libraries[0].testbench_freestanding, ())
+            self.assertEqual(libraries[0].testbench_example, ())
+            self.assertEqual([program.id for program in programs], ["sample-test"])
+            self.assertEqual(headers, [])
+            self.assertEqual(freestanding, [])
+
+    def test_freestanding_check_schema(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            library = root / "libs" / "sample"
+            check_root = library / "testbench" / "freestanding"
+            check_root.mkdir(parents=True)
+            (library / "metadata.toml").write_text(
+                '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
+                'testbench.test=[]\ntestbench.headercheck=[]\n'
+                'testbench.bench=[]\n'
+                'testbench.freestanding=["testbench/freestanding/metadata.toml"]\n',
+                encoding="utf-8",
+            )
+            (check_root / "check.cpp").write_text("int value;\n", encoding="utf-8")
+            (check_root / "metadata.toml").write_text(
+                '[[freestanding-check]]\nid="sample-compile"\n'
+                'kind="compile"\nlanguage="c++"\n'
+                'sources=["check.cpp"]\nexpect="success"\n',
+                encoding="utf-8",
+            )
+
+            programs, headers, freestanding = libregistry.scan_testbenches(root)
+
+            self.assertEqual(programs, [])
+            self.assertEqual(headers, [])
+            self.assertEqual(
+                [(check.id, check.owner, check.kind, check.expect)
+                 for check in freestanding],
+                [("sample-compile", "sample", "compile", "success")],
+            )
+
+    def test_rejects_freestanding_check_registered_as_host_test(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            library = root / "libs" / "sample"
+            check_root = library / "testbench" / "test"
+            check_root.mkdir(parents=True)
+            (library / "metadata.toml").write_text(
+                '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
+                'testbench.test=["testbench/test/metadata.toml"]\n'
+                'testbench.headercheck=[]\ntestbench.bench=[]\n'
+                'testbench.freestanding=[]\n',
+                encoding="utf-8",
+            )
+            (check_root / "check.cpp").write_text("int value;\n", encoding="utf-8")
+            (check_root / "metadata.toml").write_text(
+                '[[freestanding-check]]\nid="sample-compile"\n'
+                'kind="compile"\nlanguage="c++"\n'
+                'sources=["check.cpp"]\nexpect="success"\n',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "testbench.freestanding"):
+                libregistry.scan_testbenches(root)
+
+    def test_rejects_freestanding_source_language_mismatch(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            library = root / "libs" / "sample"
+            check_root = library / "testbench" / "freestanding"
+            check_root.mkdir(parents=True)
+            (library / "metadata.toml").write_text(
+                '[[libmeta]]\nid="sample"\nlibname=""\nversion="1.0.0"\n'
+                'testbench.test=[]\ntestbench.headercheck=[]\n'
+                'testbench.bench=[]\n'
+                'testbench.freestanding=["testbench/freestanding/metadata.toml"]\n',
+                encoding="utf-8",
+            )
+            (check_root / "check.c").write_text("int value;\n", encoding="utf-8")
+            (check_root / "metadata.toml").write_text(
+                '[[freestanding-check]]\nid="sample-compile"\n'
+                'kind="compile"\nlanguage="c++"\n'
+                'sources=["check.c"]\nexpect="success"\n',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "does not match language"):
+                libregistry.scan_testbenches(root)
 
     def test_rejects_unknown_required_feature(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown features"):

@@ -1,0 +1,38 @@
+[[freestanding-check]]
+id = "taycpplib-panic-without-provider"
+kind = "link"
+language = "c++"
+sources = ["panic_link_user.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-panic-with-provider"
+kind = "link"
+language = "c++"
+sources = [
+    "panic_link_user.cpp",
+    "panic_provider.cpp",
+    "expected_freestanding.cpp",
+]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-expected-no-dangling-reference"
+kind = "compile"
+language = "c++"
+sources = ["expected_invalid_dangling.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-expected-no-error-reference"
+kind = "compile"
+language = "c++"
+sources = ["expected_invalid_error_reference.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-expected-no-rvalue-reference"
+kind = "compile"
+language = "c++"
+sources = ["expected_invalid_rvalue_reference.cpp"]
+expect = "failure"

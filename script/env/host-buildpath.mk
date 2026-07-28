@@ -31,6 +31,7 @@ path-bin ?= $(path-build)/bin
 path-obj ?= $(path-build)/obj
 path-test ?= $(path-build)/test
 path-bench ?= $(path-build)/bench
+path-example ?= $(path-build)/example
 toolchain-stamp := $(path-build)/.toolchain-$(host-toolchain-fingerprint)
 
 include $(path-s)/env/selection.mk

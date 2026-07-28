@@ -87,9 +87,9 @@ make clangd-target
 
 Host 数据库位于 `build/<mode>/host/<host-triple>/compile_commands.json`；sanitizer profile 会使用对应的隔离子目录。`clangd-host` 与 `clangd-target` 只原子替换稳定入口，不修改 `make switch` 保存的架构和模式。
 
-## 测试与性能测试
+## 测试、示例与性能测试
 
-运行 host testbench 前，配置集的 `clang.toml` 必须包含可通过 `make validate-host` 验证的 `[host]` 工具链。库通过 metadata 中的 `testbench.test`、`testbench.headercheck` 和 `testbench.bench` 列表显式注册对应 TOML 文件。功能测试使用当前构建模式，默认构建并运行所有已注册的 test 程序：
+运行 host testbench 前，配置集的 `clang.toml` 必须包含可通过 `make validate-host` 验证的 `[host]` 工具链。库通过 metadata 中的 `testbench.test`、`testbench.headercheck`、`testbench.bench`、`testbench.freestanding` 和 `testbench.example` 列表显式注册对应 TOML 文件。功能测试使用当前构建模式，默认构建并运行所有已注册的 test 程序：
 
 ```sh
 make host-test
@@ -98,6 +98,26 @@ make host-test lib=taycpplib sanitize=address,undefined
 ```
 
 runner 会继续执行全部匹配用例，最后汇总每项 `PASS`、`FAIL` 或 `SKIP`；任一用例失败时 `make host-test` 返回非零状态。`lib=<id>` 只选择指定库，`sanitize` 可选 `address`、`undefined` 或 `address,undefined`。
+
+freestanding testbench 只针对当前交叉架构进行编译或链接，不会尝试运行生成物：
+
+```sh
+make freestanding-check
+make freestanding-check lib=taycpplib arch=riscv64
+```
+
+`check-lib` 和 `build-lib-matrix` 会自动执行匹配的 freestanding checks。
+
+示例程序位于 `testbench/example`。`make example` 只构建全部示例，`host-example` 则构建并顺序运行；两者都支持通过 `lib=` 过滤所属库：
+
+```sh
+make example
+make example lib=taycpplib
+make host-example
+make host-example lib=tayclib
+```
+
+当前示例覆盖 `itoa`、`range`、`refc`、`owner`、`expected` 和 `panic`。其中 panic 示例的 `SIGABRT` 与 stderr 输出由 runner 按 metadata 自动验收。
 
 性能测试位于 `testbench/bench`。`make bench` 默认使用 release 模式构建全部 benchmark executable，但不会运行：
 
@@ -114,7 +134,7 @@ make host-bench lib=tayclib
 make host-bench lib=taycpplib mode=release
 ```
 
-测试程序输出到 `build/<mode>/host/<host-triple>/test/`，benchmark 输出到同级 `bench/`；sanitizer 构建使用独立的 `sanitize/<profile>/` 子目录。
+测试程序输出到 `build/<mode>/host/<host-triple>/test/`，benchmark 和示例程序分别输出到同级 `bench/` 与 `example/`；sanitizer 构建使用独立的 `sanitize/<profile>/` 子目录。
 
 ## 运行
 

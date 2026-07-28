@@ -38,7 +38,9 @@ Defines compiler, linker, archiver, and QEMU-facing tool variables:
 - `ld.mk`
 - `ar.mk`
 - `qemu.mk`
-- `host/*.mk`
+
+The C/C++/link/archive fragments are shared by Host and freestanding builds;
+validated Host values come from `script/.cache/host.mk`.
 
 ### `script/rules`
 
@@ -52,6 +54,19 @@ Defines thin build rules only:
 
 These files consume resolved variables and do not decide target kind, source
 discovery, or architecture selection.
+
+### `script/build`
+
+Defines the shared component layers:
+
+- `collector.mk` discovers sources declared by component `include.mk` files.
+- `component.mk` selects the build environment, loads the generated context
+  and dependencies, normalizes sources/objects, and installs compilation rules.
+- `static-library.mk` adds the archiver toolchain and archive rule on top of
+  `component.mk`.
+
+`component.mk` deliberately stops at object generation. Kernel images, modules,
+Host programs, and static archives retain separate final-artifact layers.
 
 ### `script/py`
 
@@ -71,13 +86,9 @@ Examples:
 - `libs/mincstd/Makefile`
 - `third_party/libs/libfdt/Makefile`
 
-These files assemble:
-
-- local sources
-- flags
-- include paths
-- output target path
-- dependencies
+Static-library Makefiles now only identify their component root and include
+`script/build/static-library.mk`. Kernel, module, and Host-program layers include
+`component.mk` and add only their own link or packaging semantics.
 
 ## High-Level Flow
 

@@ -1,30 +1,21 @@
-# Kernel target skeleton driven by the top-level Makefile.
+# Kernel image layer built on the common component compilation rules.
 ifeq ($(origin global-env), undefined)
 $(error kernel/Makefile must be invoked with global-env from the top-level Makefile)
 endif
-ifeq ($(origin ctx), undefined)
-$(error kernel/Makefile must be invoked with ctx from the top-level Makefile)
-endif
 
+kernel-makefile := $(lastword $(MAKEFILE_LIST))
+component-root := $(abspath $(dir $(kernel-makefile)))
 include $(global-env)
-include $(path-s)/env/buildpath.mk
-include $(ctx)
--include $(path-deps)/$(owner-id).mk
 
-# Load the architecture defaults first, then normalize the externally selected
-# boot method.
-include $(owner-root)/variant.$(arch).mk
-include $(owner-root)/enable.mk
+component-config-mks = \
+	$(owner-root)/variant.$(arch).mk \
+	$(owner-root)/enable.mk
+component-extra-objects = $(path-initrd-obj)
+include $(path-s)/build/component.mk
 
-src-root := $(owner-root)
 link-script ?= $(boot-link-script)
+archives += $(component-dep-archives)
 
-include $(owner-root)/flags.mk
-include $(owner-root)/collect.mk
-
-# Resolve the configured toolchain into the language-neutral rule interface.
-include $(path-s)/toolchain/c.mk
-include $(path-s)/toolchain/cpp.mk
 include $(path-s)/toolchain/ld.mk
 
 riscv64-objcopy-output := elf64-littleriscv
@@ -32,38 +23,14 @@ riscv64-objcopy-arch := riscv
 loongarch64-objcopy-output := elf64-loongarch
 loongarch64-objcopy-arch := loongarch
 
-comp-asm ?= $(comp-c)
 comp-objcopy ?= llvm-objcopy
 
-flags-asm += $($(arch)-flags-c)
-
-archives += $($(owner-id)-dep-archives)
-includes-c += $($(owner-id)-includes-c)
-includes-cpp += $($(owner-id)-includes-cpp)
-includes-asm += $($(owner-id)-includes-asm)
-
-# The generic build driver will consume these variables in the next layer.
-sources-asm := $(strip $(sources-y-asm))
-sources-c := $(strip $(sources-y-c))
-sources-cpp := $(strip $(sources-y-cpp))
-
-objects-asm := $(addprefix $(obj-root)/,$(sources-asm:.S=.o))
-objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
-objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))
-objects-attachment := $(path-initrd-obj)
-objects := $(objects-asm) $(objects-c) $(objects-cpp) $(objects-attachment)
-deps := $(objects:.o=.d)
-
-include $(path-s)/rules/asm.mk
-include $(path-s)/rules/c.mk
-include $(path-s)/rules/cpp.mk
 include $(path-s)/rules/ld.mk
-
--include $(deps)
 
 $(path-initrd-obj): $(path-initrd)
 	$(q)$(mkdir) $(@D)
-	$(q)$(comp-objcopy) -I binary -O $($(arch)-objcopy-output) -B $($(arch)-objcopy-arch) --rename-section .data=.attach.initrd $< $@
+	$(q)$(comp-objcopy) -I binary -O $($(arch)-objcopy-output) \
+		-B $($(arch)-objcopy-arch) --rename-section .data=.attach.initrd $< $@
 
 .PHONY: build kernel-vars
 build: $(target)

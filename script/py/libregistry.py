@@ -38,6 +38,8 @@ class LibraryMeta:
     testbench_test: tuple[str, ...] = ()
     testbench_headercheck: tuple[str, ...] = ()
     testbench_bench: tuple[str, ...] = ()
+    testbench_freestanding: tuple[str, ...] = ()
+    testbench_example: tuple[str, ...] = ()
     host_libname: str | None = None
     host_makefile: str | None = None
     host_target: str | None = None
@@ -132,6 +134,19 @@ class HeaderCheckMeta:
 
 
 @dataclass(frozen=True)
+class FreestandingCheckMeta:
+    id: str
+    owner: str
+    root: str
+    library_root: str
+    metadata_path: str
+    kind: str
+    language: str
+    sources: tuple[str, ...]
+    expect: str = "success"
+
+
+@dataclass(frozen=True)
 class TestbenchMetadataSource:
     path: Path
     category: str
@@ -212,17 +227,12 @@ def normalize_string_list(raw_value: object, field: str) -> tuple[str, ...]:
 def normalize_testbench_paths(
     metadata_path: Path, raw_value: object
 ) -> dict[str, tuple[str, ...]]:
-    categories = ("test", "headercheck", "bench")
+    categories = ("test", "headercheck", "bench", "freestanding", "example")
     if raw_value is None:
         return {category: () for category in categories}
     if not isinstance(raw_value, dict):
         raise ValueError(f"{metadata_path}: testbench must be a table")
 
-    missing = [category for category in categories if category not in raw_value]
-    if missing:
-        raise ValueError(
-            f"{metadata_path}: testbench is missing fields: {', '.join(missing)}"
-        )
     unknown = sorted(set(raw_value) - set(categories))
     if unknown:
         raise ValueError(
@@ -233,7 +243,7 @@ def normalize_testbench_paths(
     seen_paths: dict[str, str] = {}
     for category in categories:
         field = f"{metadata_path}: testbench.{category}"
-        paths = raw_value[category]
+        paths = raw_value.get(category, [])
         if not isinstance(paths, list) or not all(
             isinstance(path, str) and path for path in paths
         ):
@@ -507,6 +517,8 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                     testbench_test=testbench_paths["test"],
                     testbench_headercheck=testbench_paths["headercheck"],
                     testbench_bench=testbench_paths["bench"],
+                    testbench_freestanding=testbench_paths["freestanding"],
+                    testbench_example=testbench_paths["example"],
                     host_libname=host_libname,
                     host_makefile=host_makefile,
                     host_target=host_target,
@@ -631,6 +643,8 @@ def _testbench_metadata_sources(root: Path) -> list[TestbenchMetadataSource]:
             "test": library.testbench_test,
             "headercheck": library.testbench_headercheck,
             "bench": library.testbench_bench,
+            "freestanding": library.testbench_freestanding,
+            "example": library.testbench_example,
         }
         for category, paths in paths_by_category.items():
             result.extend(
@@ -647,11 +661,17 @@ def _testbench_metadata_sources(root: Path) -> list[TestbenchMetadataSource]:
 
 def scan_testbenches(
     root: Path,
-) -> tuple[list[HostProgramMeta], list[HeaderCheckMeta]]:
+) -> tuple[
+    list[HostProgramMeta],
+    list[HeaderCheckMeta],
+    list[FreestandingCheckMeta],
+]:
     programs: list[HostProgramMeta] = []
     header_checks: list[HeaderCheckMeta] = []
+    freestanding_checks: list[FreestandingCheckMeta] = []
     seen_program_ids: dict[str, Path] = {}
     seen_check_ids: dict[str, Path] = {}
+    seen_freestanding_ids: dict[str, Path] = {}
 
     for source in _testbench_metadata_sources(root):
         metadata_path = source.path
@@ -664,9 +684,10 @@ def scan_testbenches(
         raw_programs = data.get("hostprog", [])
         if not isinstance(raw_programs, list):
             raise ValueError(f"{metadata_path}: hostprog must be an array of tables")
-        if category == "headercheck" and raw_programs:
+        if category in {"headercheck", "freestanding"} and raw_programs:
             raise ValueError(
-                f"{metadata_path}: hostprog entries belong in testbench.test or testbench.bench files"
+                f"{metadata_path}: hostprog entries belong in testbench.test, "
+                "testbench.bench, or testbench.example files"
             )
         for entry in raw_programs:
             if not isinstance(entry, dict):
@@ -679,8 +700,11 @@ def scan_testbenches(
                 )
             seen_program_ids[program_id] = metadata_path
             kind = entry.get("kind")
-            if kind not in {"test", "bench"}:
-                raise ValueError(f"{metadata_path}: hostprog.kind must be 'test' or 'bench'")
+            if kind not in {"test", "bench", "example"}:
+                raise ValueError(
+                    f"{metadata_path}: hostprog.kind must be 'test', 'bench', "
+                    "or 'example'"
+                )
             if kind != category:
                 raise ValueError(
                     f"{metadata_path}: hostprog.kind {kind!r} does not match "
@@ -777,4 +801,89 @@ def scan_testbenches(
                 )
             )
 
-    return programs, header_checks
+        raw_freestanding = data.get("freestanding-check", [])
+        if not isinstance(raw_freestanding, list):
+            raise ValueError(
+                f"{metadata_path}: freestanding-check must be an array of tables"
+            )
+        if category != "freestanding" and raw_freestanding:
+            raise ValueError(
+                f"{metadata_path}: freestanding-check entries belong in "
+                "testbench.freestanding files"
+            )
+        for entry in raw_freestanding:
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"{metadata_path}: freestanding-check entries must be tables"
+                )
+            check_id = validate_global_id(
+                entry.get("id"), f"{metadata_path}: freestanding-check.id"
+            )
+            if check_id in seen_freestanding_ids:
+                raise ValueError(
+                    f"duplicate freestanding check id {check_id!r}: "
+                    f"{seen_freestanding_ids[check_id]} and {metadata_path}"
+                )
+            seen_freestanding_ids[check_id] = metadata_path
+
+            kind = entry.get("kind")
+            if kind not in {"compile", "link"}:
+                raise ValueError(
+                    f"{metadata_path}: freestanding-check.kind must be "
+                    "'compile' or 'link'"
+                )
+            language = entry.get("language")
+            if language not in {"c", "c++"}:
+                raise ValueError(
+                    f"{metadata_path}: freestanding-check.language must be 'c' or 'c++'"
+                )
+            expect = entry.get("expect", "success")
+            if expect not in {"success", "failure"}:
+                raise ValueError(
+                    f"{metadata_path}: freestanding-check.expect must be "
+                    "'success' or 'failure'"
+                )
+            raw_sources = entry.get("sources")
+            if not isinstance(raw_sources, list) or not raw_sources or not all(
+                isinstance(item, str) and item for item in raw_sources
+            ):
+                raise ValueError(
+                    f"{metadata_path}: freestanding-check.sources must be a "
+                    "non-empty array of strings"
+                )
+            allowed_suffixes = {"c": {".c"}, "c++": {".cpp"}}
+            sources: list[str] = []
+            for raw_source in raw_sources:
+                relative_source = normalize_relative_path(
+                    raw_source,
+                    f"{metadata_path}: freestanding-check.sources",
+                    required=True,
+                )
+                source_path = (metadata_path.parent / relative_source).resolve()
+                if not source_path.is_file():
+                    raise ValueError(
+                        f"{metadata_path}: freestanding source does not exist: "
+                        f"{raw_source}"
+                    )
+                if source_path.suffix not in allowed_suffixes[language]:
+                    raise ValueError(
+                        f"{metadata_path}: freestanding source {raw_source!r} "
+                        f"does not match language {language!r}"
+                    )
+                sources.append(relative_source)
+
+            freestanding_checks.append(
+                FreestandingCheckMeta(
+                    id=check_id,
+                    owner=owner,
+                    root=str(metadata_path.parent.resolve()),
+                    library_root=str(library_root.resolve()),
+                    metadata_path=str(metadata_path),
+                    kind=kind,
+                    language=language,
+                    sources=tuple(sources),
+                    expect=expect,
+                )
+            )
+
+    return programs, header_checks, freestanding_checks

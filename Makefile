@@ -26,9 +26,9 @@ require-freestanding-selection:
 	$(if $(filter $(mode),debug release),,$(error no supported build mode selected; run 'make switch arch=<arch> mode=<mode>'))
 
 build-libs build-modules build-initrd build-kernel runonly dbgonly update: require-configured require-freestanding-selection
-validate-host build-host-libs build-host-lib host-test bench host-bench: require-configured
+validate-host build-host-libs build-host-lib host-test example host-example bench host-bench: require-configured
 host-header-check: require-configured
-freestanding-header-check check-lib build-lib-matrix: require-configured require-freestanding-selection
+freestanding-header-check freestanding-check check-lib build-lib-matrix: require-configured require-freestanding-selection
 
 kernel-path ?= $(path-bin)/kernel/sustcore.bin
 

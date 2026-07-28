@@ -52,6 +52,7 @@ target ?= $(kernel-path)
 
 Kernel source discovery currently uses:
 
+- `script/build/component.mk`
 - `script/build/collector.mk`
 - `kernel/collect.mk`
 - root and subdirectory `include.mk`
@@ -59,6 +60,10 @@ Kernel source discovery currently uses:
 `collect.mk` only invokes the shared collector. Each `include.mk` declares the
 sources in its own directory through `src-y` and `src-n`; this includes the
 kernel root when it owns sources directly.
+
+The kernel Makefile supplies its architecture variant files and initrd
+attachment through `component-config-mks` and `component-extra-objects`, then
+adds only the linker and objcopy layers after common object compilation.
 
 Current active source model:
 

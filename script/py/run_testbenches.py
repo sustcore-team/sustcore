@@ -13,7 +13,7 @@ from typing import Callable
 from libregistry import HostProgramMeta, scan_testbenches
 
 
-VALID_KINDS = {"test", "bench"}
+VALID_KINDS = {"test", "bench", "example"}
 VALID_MODES = {"debug", "release"}
 VALID_SANITIZERS = {"", "address", "undefined", "address,undefined"}
 
@@ -43,7 +43,7 @@ def parse_arguments(arguments: list[str]) -> dict[str, str]:
     if missing:
         raise ValueError("missing argument: " + ", ".join(sorted(missing)))
     if values["kind"] not in VALID_KINDS:
-        raise ValueError("kind must be 'test' or 'bench'")
+        raise ValueError("kind must be 'test', 'bench', or 'example'")
     if values["mode"] not in VALID_MODES:
         raise ValueError("mode must be 'debug' or 'release'")
     if values.get("sanitize", "") not in VALID_SANITIZERS:
@@ -120,7 +120,11 @@ def run_selected(
 
 
 def print_summary(kind: str, results: list[ProgramResult]) -> None:
-    label = "Functionality" if kind == "test" else "Performance"
+    label = {
+        "test": "Functionality",
+        "bench": "Performance",
+        "example": "Example",
+    }[kind]
     print(f"\n{label} testbench summary:")
     for result in results:
         suffix = f" ({result.detail})" if result.detail else ""
@@ -135,7 +139,7 @@ def print_summary(kind: str, results: list[ProgramResult]) -> None:
 def main(arguments: list[str]) -> int:
     try:
         values = parse_arguments(arguments)
-        programs, _ = scan_testbenches(Path(values["root"]))
+        programs, _, _ = scan_testbenches(Path(values["root"]))
         results = run_selected(values, programs)
         print_summary(values["kind"], results)
         return 1 if any(result.status == "FAIL" for result in results) else 0

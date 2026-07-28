@@ -29,6 +29,8 @@ reference, but it does not describe the current live behavior.
   - Builds validated native archives or header checks.
 - `make host-test [lib=<id>]` / `make host-bench [lib=<id>]`
   - Builds and runs registered native tests or benchmarks.
+- `make example [lib=<id>]` / `make host-example [lib=<id>]`
+  - Builds registered native examples, or builds and runs them sequentially.
 - `make bench`
   - Builds all registered native benchmarks in release mode without running them.
 - `make check-lib lib=<id>` / `make build-lib-matrix lib=<id>`
@@ -92,6 +94,8 @@ support-archs = ["riscv64"]
 testbench.test = ["testbench/test/metadata.toml"]
 testbench.headercheck = ["testbench/headercheck/metadata.toml"]
 testbench.bench = ["testbench/bench/metadata.toml"]
+testbench.freestanding = ["testbench/freestanding/metadata.toml"]
+testbench.example = ["testbench/example/metadata.toml"]
 
 include-c = ["include"]
 include-cpp = ["include"]
@@ -105,8 +109,9 @@ Important current rules:
 - `libname` is the generated static archive name; an empty value denotes a
   header-only library.
 - `support-archs` is an allow-list.
-- test, header-check, and benchmark metadata are read only from the explicit
-  `testbench.test`, `testbench.headercheck`, and `testbench.bench` lists.
+- test, header-check, benchmark, freestanding-check, and example metadata are
+  read only from their explicit `testbench.*` lists. Every list is optional;
+  an omitted category defaults to no registered metadata.
 - `build-libs` is generated from library metadata and skips header-only
   libraries.
 
@@ -162,8 +167,10 @@ The kernel Makefile stack is now split into:
 
 Current status:
 
-- object compilation is wired through `script/rules/*.mk`
-- static libraries are built through per-library Makefiles and `llvm-ar`
+- object compilation is shared through `script/build/component.mk` and
+  `script/rules/*.mk`
+- static libraries stack `script/build/static-library.mk` on the component
+  layer and use `llvm-ar`
 - the kernel links against resolved libraries from `deps/kernel.mk`
 - `kernel-path` is controlled by the top-level Makefile and passed to the
   kernel sub-make
@@ -174,8 +181,8 @@ Current status:
   around architecture switching behavior.
 - the kernel tree is still incomplete compared with the legacy repository
 - the C/C++ runtime split is still evolving
-- host libraries, tests, header checks, benchmarks, sanitizers, and library
-  matrices are available through the dedicated host/check targets
+- host libraries, tests, examples, header checks, benchmarks, sanitizers, and
+  library matrices are available through the dedicated host/check targets
 
 ## Current Host System
 

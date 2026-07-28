@@ -13,3 +13,26 @@ target = "build"
 output = "taycpplib-panic-test"
 expect = "abort"
 stderr-contains = "tay panic test"
+
+[[hostprog]]
+id = "taycpplib-expected-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-expected-test"
+
+[[hostprog]]
+id = "taycpplib-expected-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-expected-panic-test"
+expect = "abort"
+stderr-contains = "bad expected access"
+
+[[hostprog]]
+id = "taycpplib-string-view-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-string-view-test"

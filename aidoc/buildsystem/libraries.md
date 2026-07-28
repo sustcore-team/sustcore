@@ -19,6 +19,8 @@ support-environments = ["freestanding", "host"]
 testbench.test = ["testbench/test/metadata.toml"]
 testbench.headercheck = ["testbench/headercheck/metadata.toml"]
 testbench.bench = ["testbench/bench/metadata.toml"]
+testbench.freestanding = ["testbench/freestanding/metadata.toml"]
+testbench.example = ["testbench/example/metadata.toml"]
 
 include-c = ["include"]
 include-cpp = ["include"]
@@ -49,7 +51,7 @@ target = "build-host-static"
   - allow-list containing `freestanding` and/or `host`; defaults to freestanding
 - `include-c/cpp/asm`
   - exported include roots for each language
-- `testbench.test/headercheck/bench`
+- `testbench.test/headercheck/bench/freestanding/example`
   - explicit lists of testbench TOML files relative to this library metadata
 - `host.libname/makefile/target`
   - optional host-specific build override; omitted fields inherit the common
@@ -140,9 +142,20 @@ receive a context, whose selected archive value expands to empty.
 
 Each buildable library or module uses three root fragments:
 
-- `Makefile` loads the component context, flags, collection result, and rules.
+- `Makefile` identifies the component root and selects its artifact layer.
 - `flags.mk` declares component-local compiler flags and include paths.
 - `collect.mk` invokes `script/build/collector.mk` for the component root.
+
+Project static libraries stack `script/build/static-library.mk` on top of
+`script/build/component.mk`. The component layer owns buildpath/context loading,
+dependency includes, source normalization, toolchain selection, object rules,
+Host toolchain stamps, and depfiles. The static-library layer adds only `ar` and
+the `build-static` entry point. A normal library Makefile is therefore:
+
+```make
+component-root := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(component-root)/../../script/build/static-library.mk
+```
 
 Source selection belongs exclusively in `include.mk`. The collector reads the
 root and all nested `include.mk` files, classifies their `src-y` and `src-n`
@@ -156,12 +169,15 @@ Each `[[libmeta]]` explicitly registers all of its testbench metadata files:
 testbench.test = ["testbench/test/metadata.toml"]
 testbench.headercheck = ["testbench/headercheck/metadata.toml"]
 testbench.bench = ["testbench/bench/metadata.toml"]
+testbench.freestanding = ["testbench/freestanding/metadata.toml"]
+testbench.example = ["testbench/example/metadata.toml"]
 ```
 
-When a `testbench` table is present, all three fields are required arrays;
-unused categories use an empty array. Paths must name existing TOML files
-relative to the library metadata. A metadata file may contain multiple
-`[[libmeta]]` entries, each with independent testbench lists.
+All five `testbench` fields are optional arrays. An omitted field is equivalent
+to an empty array and means that the library has no metadata registered for
+that category. Paths must name existing TOML files relative to the library
+metadata. A metadata file may contain multiple `[[libmeta]]` entries, each with
+independent testbench lists.
 
 Test and benchmark files register executable programs:
 
@@ -174,11 +190,29 @@ target = "build"
 output = "example-test"
 ```
 
-`kind = "test"` is valid only in a file listed by `testbench.test`, while
-`kind = "bench"` is valid only in a file listed by `testbench.bench`.
+`kind = "test"`, `kind = "bench"`, and `kind = "example"` are valid only in
+files listed by the corresponding `testbench.test`, `testbench.bench`, and
+`testbench.example` fields.
 Header-check files listed by `testbench.headercheck` contain only
 `[[headercheck]]` entries. The scanner does not discover unregistered files by
 directory or file name.
+
+Freestanding files register compile/link checks that are built for the selected
+target architecture but never executed on the host:
+
+```toml
+[[freestanding-check]]
+id = "example-contract"
+kind = "link"
+language = "c++"
+sources = ["consumer.cpp", "provider.cpp"]
+expect = "success"
+```
+
+`kind` is `compile` or `link`; `expect` is `success` or `failure`. Sources must
+exist beside the registered metadata file and match the declared C or C++
+language. These checks are available through `make freestanding-check`,
+`check-lib`, and `build-lib-matrix`.
 
 ## Dependency File Schema
 

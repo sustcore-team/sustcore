@@ -30,12 +30,23 @@ _prepare-host-deps:
 
 selected-host-test-ids = $(if $(lib),$(foreach id,$(testbench-test-ids),$(if $(filter $(lib),$(hostprog-$(id)-owner)),$(id))),$(testbench-test-ids))
 selected-host-bench-ids = $(if $(lib),$(foreach id,$(testbench-bench-ids),$(if $(filter $(lib),$(hostprog-$(id)-owner)),$(id))),$(testbench-bench-ids))
+selected-host-example-ids = $(if $(lib),$(foreach id,$(testbench-example-ids),$(if $(filter $(lib),$(hostprog-$(id)-owner)),$(id))),$(testbench-example-ids))
 selected-host-header-check-ids = $(foreach id,$(header-check-ids),$(if $(if $(lib),$(filter $(lib),$(headercheck-$(id)-owner)),y),$(id)))
 selected-freestanding-header-check-ids = $(foreach id,$(header-check-ids),$(if $(if $(lib),$(filter $(lib),$(headercheck-$(id)-owner)),y),$(id)))
+selected-freestanding-check-ids = $(foreach id,$(freestanding-check-ids),$(if $(filter y,$(library-$(freestandingcheck-$(id)-owner)-is-supported)),$(if $(if $(lib),$(filter $(lib),$(freestandingcheck-$(id)-owner)),y),$(id))))
 
-.PHONY: _host-test _bench _host-bench _host-header-check _freestanding-header-check
+.PHONY: _host-test _example _host-example _bench _host-bench _host-header-check
+.PHONY: _freestanding-header-check _freestanding-check
 _host-test: _build-host-libs
 	$(q)$(s-run-testbenches) root=$(call shq,$(path-e)) kind=test mode=$(mode) \
+		sanitize=$(call shq,$(sanitize)) lib=$(call shq,$(lib)) \
+		host-features=$(call shq,$(host-features)) make-command=$(call shq,$(MAKE)) q=$(call shq,$(q))
+
+_example: _build-host-libs $(addprefix host-program-,$(selected-host-example-ids))
+	$(q)$(echo) "Host examples built"
+
+_host-example: _build-host-libs
+	$(q)$(s-run-testbenches) root=$(call shq,$(path-e)) kind=example mode=$(mode) \
 		sanitize=$(call shq,$(sanitize)) lib=$(call shq,$(lib)) \
 		host-features=$(call shq,$(host-features)) make-command=$(call shq,$(MAKE)) q=$(call shq,$(q))
 
@@ -47,7 +58,7 @@ _host-bench: _build-host-libs
 		sanitize=$(call shq,$(sanitize)) lib=$(call shq,$(lib)) \
 		host-features=$(call shq,$(host-features)) make-command=$(call shq,$(MAKE)) q=$(call shq,$(q))
 
-.NOTPARALLEL: _host-bench
+.NOTPARALLEL: _host-example _host-bench
 
 _host-header-check: $(addprefix host-header-check-,$(selected-host-header-check-ids))
 	$(q)$(echo) "Host header checks passed"
@@ -55,8 +66,12 @@ _host-header-check: $(addprefix host-header-check-,$(selected-host-header-check-
 _freestanding-header-check: $(addprefix freestanding-header-check-,$(selected-freestanding-header-check-ids))
 	$(q)$(echo) "Freestanding header checks passed for $(arch)"
 
-.PHONY: build-host-libs build-host-lib host-test bench host-bench
-.PHONY: host-header-check freestanding-header-check check-lib build-lib-matrix
+_freestanding-check: $(addprefix freestanding-check-,$(selected-freestanding-check-ids))
+	$(q)$(echo) "Freestanding checks passed for $(arch)"
+
+.PHONY: build-host-libs build-host-lib host-test example host-example bench host-bench
+.PHONY: host-header-check freestanding-header-check freestanding-check
+.PHONY: check-lib build-lib-matrix
 build-host-libs:
 	$(q)$(MAKE) --no-print-directory validate-host
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) _prepare-host-deps
@@ -73,6 +88,20 @@ host-test:
 	$(q)$(MAKE) --no-print-directory validate-host
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _prepare-host-deps
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _host-test
+
+example:
+	$(if $(lib),$(if $(filter $(lib),$(library-ids-all)),,$(error unknown library id: $(lib))),)
+	$(if $(lib),$(if $(filter host,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment host)),)
+	$(q)$(MAKE) --no-print-directory validate-host
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _prepare-host-deps
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _example
+
+host-example:
+	$(if $(lib),$(if $(filter $(lib),$(library-ids-all)),,$(error unknown library id: $(lib))),)
+	$(if $(lib),$(if $(filter host,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment host)),)
+	$(q)$(MAKE) --no-print-directory validate-host
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _prepare-host-deps
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) lib=$(lib) _host-example
 
 bench:
 	$(q)$(MAKE) --no-print-directory validate-host
@@ -96,16 +125,24 @@ freestanding-header-check: _require-lib
 	$(if $(filter $(arch),$(or $(library-$(lib)-support-archs),riscv64 loongarch64)),,$(error library $(lib) does not support architecture $(arch)))
 	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check
 
+freestanding-check:
+	$(if $(lib),$(if $(filter $(lib),$(library-ids-all)),,$(error unknown library id: $(lib))),)
+	$(if $(lib),$(if $(filter freestanding,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment freestanding)),)
+	$(if $(lib),$(if $(filter $(arch),$(or $(library-$(lib)-support-archs),riscv64 loongarch64)),,$(error library $(lib) does not support architecture $(arch))),)
+	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-check
+
 check-lib: _require-lib
 	$(if $(filter freestanding,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment freestanding))
 	$(if $(filter $(arch),$(or $(library-$(lib)-support-archs),riscv64 loongarch64)),,$(error library $(lib) does not support architecture $(arch)))
 	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) build-lib-$(lib)
 	$(q)$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check,:)
+	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-check
 	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) host-test,:)
 
 build-lib-matrix: _require-lib
 	$(q)set -e; for matrix_arch in $(or $(library-$(lib)-support-archs),riscv64 loongarch64); do \
 		$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) build-lib-$(lib); \
 		$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) lib=$(lib) _freestanding-header-check;,) \
+		$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) lib=$(lib) _freestanding-check; \
 	done
 	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) build-host-lib,:)

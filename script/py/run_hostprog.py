@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one host test/benchmark and enforce its metadata expectation."""
+"""Run one host testbench program and enforce its metadata expectation."""
 
 from __future__ import annotations
 

@@ -1,0 +1,162 @@
+/**
+ * @file span
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief span
+ * @version alpha-1.0.0
+ * @date 2026-03-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstddef>
+#include <iterator>
+#include <limits>
+#include <memory>
+
+namespace std {
+    inline constexpr std::size_t dynamic_extent =
+        std::numeric_limits<std::size_t>::max();
+
+    template <class T, std::size_t exteExtentnt = std::dynamic_extent>
+    class span;
+
+    template <class T, std::size_t Extent>
+    class span {
+    public:
+        using element_type    = T;
+        using value_type      = remove_cv_t<T>;
+        using size_type       = std::size_t;
+        using difference_type = std::ptrdiff_t;
+        using pointer         = element_type *;
+        using reference       = element_type &;
+        using const_pointer   = const element_type *;
+        using const_reference = const element_type &;
+        using iterator        = pointer;
+        using const_iterator  = const_pointer;
+        // using reverse_iterator = std::reverse_iterator<iterator>;
+        // using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+        static constexpr std::size_t extent = Extent;
+
+    private:
+        pointer data_   = nullptr;
+        size_type size_ = 0;
+
+    public:
+        // 构造函数
+        constexpr span() noexcept = default;
+
+        template <class It>
+        explicit(extent != dynamic_extent) constexpr span(It first,
+                                                          size_type cnt)
+            : data_(std::to_address(*first)), size_(cnt) {
+            if constexpr (Extent != dynamic_extent) {
+                if (cnt != Extent) {
+                    // do something...
+                }
+            }
+        }
+
+        template <class It, class End>
+        explicit(extent != dynamic_extent) constexpr span(It first, End last)
+            : span(first, std::distance(first, last)) {}
+
+        template <size_t ArrayExtent>
+            requires(Extent == dynamic_extent || ArrayExtent == Extent)
+        constexpr span(
+            type_identity_t<element_type> (&__arr)[ArrayExtent]) noexcept
+            : span(static_cast<pointer>(__arr), ArrayExtent) {}
+
+        template <size_t ArrayExtent>
+            requires(Extent == dynamic_extent || ArrayExtent == Extent)
+        constexpr span(type_identity_t<element_type> (&__arr)[ArrayExtent],
+                       size_t extent) noexcept
+            : span(static_cast<pointer>(__arr), ArrayExtent) {
+            if (extent != ArrayExtent) {
+                // do something...
+            }
+        }
+
+        // other constructors..
+
+        constexpr span(const span &) noexcept  = default;
+        constexpr span(span &&) noexcept       = default;
+        span &operator=(const span &) noexcept = default;
+        span &operator=(span &&) noexcept      = default;
+        ~span()                                = default;
+
+        // iterators
+        constexpr iterator begin() const noexcept {
+            return data_;
+        }
+        constexpr iterator end() const noexcept {
+            return data_ + size_;
+        }
+        constexpr const_iterator cbegin() const noexcept {
+            return data_;
+        }
+        constexpr const_iterator cend() const noexcept {
+            return data_ + size_;
+        }
+
+        // reverse iterators...
+
+        // element access
+        constexpr reference front() const {
+            return *data_;
+        }
+        constexpr reference back() const {
+            return *(data_ + size_ - 1);
+        }
+        constexpr reference operator[](size_type idx) const {
+            return data_[idx];
+        }
+        constexpr reference at(size_type idx) const {
+            if (idx >= size_) {
+                // do something...
+            }
+            return data_[idx];
+        }
+        constexpr pointer data() const noexcept {
+            return data_;
+        }
+
+        // observers
+        [[nodiscard]]
+        constexpr size_type size() const noexcept {
+            return size_;
+        }
+        [[nodiscard]]
+        constexpr size_type size_bytes() const noexcept {
+            return size_ * sizeof(element_type);
+        }
+        [[nodiscard]]
+        constexpr bool empty() const noexcept {
+            return size_ == 0;
+        }
+
+        // subviews
+        template <std::size_t Count>
+        constexpr span<element_type, Count> first() const {
+            static_assert(Count <= Extent, "Count exceeds span extent");
+            return span<element_type, Count>(data_, Count);
+        }
+
+        template <std::size_t Count>
+        constexpr span<element_type, Count> last() const {
+            static_assert(Count <= Extent, "Count exceeds span extent");
+            return span<element_type, Count>(data_ + size_ - Count, Count);
+        }
+
+        template <std::size_t Offset, std::size_t Count = dynamic_extent>
+        constexpr span<element_type, Count> subspan() const {
+            static_assert(Offset <= Extent, "Offset exceeds span extent");
+            static_assert(Count <= Extent - Offset,
+                          "Count exceeds span extent");
+            return span<element_type, Count>(data_ + Offset, Count);
+        }
+    };
+}  // namespace std

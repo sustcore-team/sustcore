@@ -1,0 +1,36 @@
+[[hostprog]]
+id = "taycpplib-range-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-range-example"
+
+[[hostprog]]
+id = "taycpplib-refc-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-refc-example"
+
+[[hostprog]]
+id = "taycpplib-owner-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-owner-example"
+
+[[hostprog]]
+id = "taycpplib-expected-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-expected-example"
+
+[[hostprog]]
+id = "taycpplib-panic-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-panic-example"
+expect = "abort"
+stderr-contains = "tay panic: panic example"

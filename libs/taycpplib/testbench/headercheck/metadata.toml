@@ -5,6 +5,18 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-expected"
+header = "tay/expected.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-err"
+header = "tay/err.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-owner"
 header = "tay/owner.h"
 language = "c++"
@@ -34,6 +46,12 @@ header = "tay/reflection.h"
 language = "c++"
 environments = ["host"]
 requires-features = ["cpp-static-reflection"]
+
+[[headercheck]]
+id = "taycpplib-string-view"
+header = "tay/string_view.h"
+language = "c++"
+environments = ["freestanding", "host"]
 
 [[headercheck]]
 id = "taycpplib-units"

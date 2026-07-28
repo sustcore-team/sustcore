@@ -1,13 +1,13 @@
 [[libmeta]]
 id = "taycpplib"
 libname = ""
-makefile = "Makefile"
-target = "check-freestanding"
 version = "0.1.0-dev.1"
 support-environments = ["freestanding", "host"]
 testbench.test = ["testbench/test/metadata.toml"]
 testbench.headercheck = ["testbench/headercheck/metadata.toml"]
 testbench.bench = ["testbench/bench/metadata.toml"]
+testbench.freestanding = ["testbench/freestanding/metadata.toml"]
+testbench.example = ["testbench/example/metadata.toml"]
 
 include-c   = ["include"]
 include-cpp = ["include"]

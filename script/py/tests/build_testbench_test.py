@@ -30,9 +30,12 @@ show:
 \t@echo programs=$(testbench-program-ids)
 \t@echo tests=$(testbench-test-ids)
 \t@echo benches=$(testbench-bench-ids)
+\t@echo examples=$(testbench-example-ids)
 \t@echo checks=$(header-check-ids)
+\t@echo freestanding-checks=$(freestanding-check-ids)
 \t@echo all-programs=$(testbench-program-ids-all)
 \t@echo all-checks=$(header-check-ids-all)
+\t@echo all-freestanding-checks=$(freestanding-check-ids-all)
 """
         result = subprocess.run(
             ["make", "--no-print-directory", "-f", "-", "show"],
@@ -50,8 +53,11 @@ show:
         self.assertEqual(values["programs"], values["all-programs"])
         self.assertIn("tayclib-itoa-test", values["tests"].split())
         self.assertIn("taycpplib-bench", values["benches"].split())
+        self.assertIn("tayclib-itoa-example", values["examples"].split())
+        self.assertIn("taycpplib-expected-example", values["examples"].split())
         self.assertIn("tayclib-bits-after-system", values["checks"].split())
         self.assertIn("taycpplib-reflection", values["checks"].split())
+        self.assertEqual(values["freestanding-checks"], "")
 
     def test_freestanding_selects_only_freestanding_header_checks(self) -> None:
         values = self._evaluate("freestanding", "riscv64")
@@ -59,10 +65,18 @@ show:
         self.assertEqual(values["programs"], "")
         self.assertEqual(values["tests"], "")
         self.assertEqual(values["benches"], "")
+        self.assertEqual(values["examples"], "")
         self.assertIn("tayclib-rtti-cpp", values["checks"].split())
         self.assertNotIn("tayclib-bits-after-system", values["checks"].split())
         self.assertNotIn("taycpplib-reflection", values["checks"].split())
         self.assertIn("tayclib-bits-after-system", values["all-checks"].split())
+        self.assertIn(
+            "taycpplib-panic-with-provider",
+            values["freestanding-checks"].split(),
+        )
+        self.assertEqual(
+            values["freestanding-checks"], values["all-freestanding-checks"]
+        )
 
 
 if __name__ == "__main__":

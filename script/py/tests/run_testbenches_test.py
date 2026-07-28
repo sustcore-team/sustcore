@@ -109,6 +109,23 @@ class RunTestbenchesTests(unittest.TestCase):
         ])
         self.assertEqual(len(calls), 1)
 
+    def test_runs_examples_as_demonstrations(self) -> None:
+        calls: list[list[str]] = []
+
+        def execute(command: list[str], *, check: bool) -> subprocess.CompletedProcess[object]:
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        with redirect_stdout(StringIO()):
+            results = run_testbenches.run_selected(
+                values(kind="example"),
+                [program("demo", kind="example")],
+                executor=execute,
+            )
+
+        self.assertEqual(results, [run_testbenches.ProgramResult("demo", "DONE")])
+        self.assertEqual(len(calls), 1)
+
     def test_functionality_summary_lists_statuses_and_counts(self) -> None:
         output = StringIO()
         with redirect_stdout(output):

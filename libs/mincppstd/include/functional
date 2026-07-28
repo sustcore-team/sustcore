@@ -1,0 +1,18 @@
+/**
+ * @file functional
+ * @brief Minimal callable utilities.
+ */
+
+#pragma once
+
+#include <type_traits>
+
+namespace std {
+    template <typename F, typename... Args>
+    constexpr invoke_result_t<F, Args...>
+    invoke(F&& function, Args&&... args) noexcept(noexcept(
+        detail::invoke_impl(forward<F>(function), forward<Args>(args)...))) {
+        return detail::invoke_impl(forward<F>(function),
+                                   forward<Args>(args)...);
+    }
+}  // namespace std

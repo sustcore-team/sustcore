@@ -1,10 +1,10 @@
-# Host Builds, Tests, And Benchmarks
+# Host Builds, Tests, Examples, And Benchmarks
 
 ## Current Scope
 
 Host commands validate a native Clang toolchain, resolve environment-specific
-dependencies, and build isolated libraries, tests, header checks, and
-benchmarks.
+dependencies, and build isolated libraries, tests, examples, header checks,
+and benchmarks.
 
 Run validation after selecting a configuration:
 
@@ -14,6 +14,8 @@ make validate-host
 make validate-host host-arch=x86_64
 make build-host-libs
 make host-test [lib=tayclib] [sanitize=address,undefined]
+make example [lib=taycpplib]
+make host-example [lib=taycpplib]
 make bench
 make host-bench [lib=taycpplib]
 make update-host [mode=debug] [sanitize=address,undefined]
@@ -58,6 +60,7 @@ build/<mode>/host/<host-triple>/bin/
 build/<mode>/host/<host-triple>/obj/
 build/<mode>/host/<host-triple>/test/
 build/<mode>/host/<host-triple>/bench/
+build/<mode>/host/<host-triple>/example/
 ```
 
 The freestanding build path remains `build/<mode>/<arch>/`. Shared C++ rules
@@ -85,11 +88,16 @@ unchanged. Supported profiles are `address`, `undefined`, and
   abort/stderr assertions. It continues after individual failures, reports
   `PASS`, `FAIL`, and `SKIP` for every selected program, then fails overall if
   any program failed.
+- `example` builds every matching demonstration program without running it.
+- `host-example` sequentially runs every matching demonstration, including
+  declared abort/stderr expectations.
 - `bench` defaults to release and only builds every registered benchmark.
 - `host-bench` defaults to release and sequentially runs every matching
   performance benchmark through the same aggregate runner.
 - `host-header-check` compiles each applicable public header independently.
-- `update-host` captures host libraries and all test/benchmark translation
+- `freestanding-check` performs registered target compile/link checks without
+  executing cross-architecture output.
+- `update-host` captures host libraries and all test/benchmark/example translation
   units through Bear without running the executables.
 - `clangd-host` and `clangd-target` select the stable clangd database without
   changing the persisted target build selection.
@@ -100,22 +108,25 @@ These steps never update `.switch.mk`.
 
 ## Testbench Layout
 
-Library testbenches use separate functionality and performance roots while
-retaining the `kind = "test"|"bench"` metadata interface:
+Library testbenches use separate functionality, performance, and example roots
+while retaining the `kind = "test"|"bench"|"example"` metadata interface:
 
 ```text
 libs/<library>/testbench/test/metadata.toml
 libs/<library>/testbench/headercheck/metadata.toml
 libs/<library>/testbench/bench/metadata.toml
+libs/<library>/testbench/freestanding/metadata.toml
+libs/<library>/testbench/example/metadata.toml
 ```
 
 The owning `[[libmeta]]` registers every file through the
-`testbench.test`, `testbench.headercheck`, and `testbench.bench` lists. Test and
-benchmark files contain matching `[[hostprog]]` entries; header-check files
-contain only `[[headercheck]]`. Unregistered files are ignored and no legacy
+`testbench.test`, `testbench.headercheck`, `testbench.bench`,
+`testbench.freestanding`, and `testbench.example` lists. Test, benchmark, and
+example files contain matching `[[hostprog]]` entries; header-check files
+contain only `[[headercheck]]`, and freestanding files contain only
+`[[freestanding-check]]`. Unregistered files are ignored and no legacy
 directory scan is performed.
 
-The aggregate Python runner handles executable testbenches only. Header checks
-remain under their dedicated targets. The freestanding panic provider contract
-is owned by `libs/taycpplib/Makefile` and is invoked through the normal
-`build-lib-taycpplib`/`check-lib` path.
+The aggregate Python runner handles executable Host testbenches only. Header
+checks remain under their dedicated targets. Freestanding contracts use the
+generic compile/link checker and are never run as native programs.
