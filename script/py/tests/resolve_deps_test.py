@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import resolve_deps
-from libregistry import scan_dependency_owners
+from libregistry import scan_dependency_owners, scan_libraries
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -121,6 +121,19 @@ show:
         )
         self.assertIn(
             "taycpplib-dep-ids := $(strip $(taycpplib-dep-ids-y))", output
+        )
+
+    def test_archive_selection_uses_the_active_environment_variant(self) -> None:
+        libraries = {library.id: library for library in scan_libraries(ROOT)}
+        taycpplib = libraries["taycpplib"]
+
+        self.assertEqual(
+            resolve_deps._scope_values([taycpplib], "freestanding")["dep-archives"],
+            "",
+        )
+        self.assertEqual(
+            resolve_deps._scope_values([taycpplib], "host")["dep-archives"],
+            "$(path-bin)/libs/libtaycpplib.a",
         )
 
 

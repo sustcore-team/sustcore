@@ -78,8 +78,9 @@ unchanged. Supported profiles are `address`, `undefined`, and
 
 ## Command Semantics
 
-- `build-host-libs` builds all non-header-only host libraries.
-- `build-host-lib lib=<id>` runs host header checks for a header-only library.
+- `build-host-libs` builds all host variants that declare an archive.
+- `build-host-lib lib=<id>` builds the selected host archive, or runs host
+  header checks when that specific host variant is header-only.
 - `host-test` builds and runs every matching functionality test, including
   abort/stderr assertions. It continues after individual failures, reports
   `PASS`, `FAIL`, and `SKIP` for every selected program, then fails overall if
@@ -115,5 +116,6 @@ contain only `[[headercheck]]`. Unregistered files are ignored and no legacy
 directory scan is performed.
 
 The aggregate Python runner handles executable testbenches only. Header checks
-and the freestanding panic link check remain under their dedicated targets and
-`check-lib`.
+remain under their dedicated targets. The freestanding panic provider contract
+is owned by `libs/taycpplib/Makefile` and is invoked through the normal
+`build-lib-taycpplib`/`check-lib` path.

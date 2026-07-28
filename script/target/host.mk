@@ -99,12 +99,13 @@ freestanding-header-check: _require-lib
 check-lib: _require-lib
 	$(if $(filter freestanding,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment freestanding))
 	$(if $(filter $(arch),$(or $(library-$(lib)-support-archs),riscv64 loongarch64)),,$(error library $(lib) does not support architecture $(arch)))
-	$(q)$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check,$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) build-lib-$(lib))
-	$(q)$(if $(filter taycpplib,$(lib)),$(MAKE) --no-print-directory -f $(path-s)/host/panic-link.mk global-env=$(global-env) environment=freestanding arch=$(arch) mode=$(mode) q=$(q) library-owner=taycpplib deps-file=$(path-deps)/taycpplib.mk check, :)
+	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) build-lib-$(lib)
+	$(q)$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check,:)
 	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) host-test,:)
 
 build-lib-matrix: _require-lib
 	$(q)set -e; for matrix_arch in $(or $(library-$(lib)-support-archs),riscv64 loongarch64); do \
-		$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) $(if $(filter y,$(library-$(lib)-is-header-only)),lib=$(lib) _freestanding-header-check,build-lib-$(lib)); \
+		$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) build-lib-$(lib); \
+		$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) lib=$(lib) _freestanding-header-check;,) \
 	done
 	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) build-host-lib,:)

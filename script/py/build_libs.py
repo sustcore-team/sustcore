@@ -6,7 +6,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import build_ctx
-from libregistry import KNOWN_ARCHITECTURES, LibraryMeta, scan_libraries
+from libregistry import (
+    KNOWN_ARCHITECTURES,
+    KNOWN_ENVIRONMENTS,
+    LibraryMeta,
+    scan_libraries,
+)
 
 
 def _scan(root: Path) -> tuple[list[LibraryMeta], dict[str, list[LibraryMeta]]]:
@@ -48,9 +53,35 @@ def _emit_registry(
         for library in libraries:
             lines.append(f"library-{library.id}-version := {library.version}")
             lines.append(f"library-{library.id}-kind := {library.kind}")
-            lines.append(f"library-{library.id}-libname := {library.libname}")
-            lines.append(f"library-{library.id}-makefile := {library.makefile}")
-            lines.append(f"library-{library.id}-target := {library.target}")
+            for environment in KNOWN_ENVIRONMENTS:
+                lines.append(
+                    f"library-{library.id}-libname-$(is-{environment}) += "
+                    f"{library.libname_for(environment)}"
+                )
+                lines.append(
+                    f"library-{library.id}-makefile-$(is-{environment}) += "
+                    f"{library.makefile_for(environment)}"
+                )
+                lines.append(
+                    f"library-{library.id}-target-$(is-{environment}) += "
+                    f"{library.target_for(environment)}"
+                )
+                lines.append(
+                    f"library-{library.id}-is-header-only-$(is-{environment}) += "
+                    f"{'y' if library.is_header_only_for(environment) else 'n'}"
+                )
+            lines.append(
+                f"library-{library.id}-libname := $(strip $(library-{library.id}-libname-y))"
+            )
+            lines.append(
+                f"library-{library.id}-makefile := $(strip $(library-{library.id}-makefile-y))"
+            )
+            lines.append(
+                f"library-{library.id}-target := $(strip $(library-{library.id}-target-y))"
+            )
+            lines.append(
+                f"library-{library.id}-is-header-only := $(strip $(library-{library.id}-is-header-only-y))"
+            )
             lines.append(
                 f"library-{library.id}-support-environments-all := {' '.join(library.support_environments)}"
             )
@@ -64,9 +95,9 @@ def _emit_registry(
             lines.append(
                 f"library-{library.id}-support-archs := {' '.join(library.support_archs)}"
             )
-            lines.append(f"library-{library.id}-archive := {library.archive_path}")
             lines.append(
-                f"library-{library.id}-is-header-only := {'y' if library.is_header_only else 'n'}"
+                f"library-{library.id}-archive := $(if $(library-{library.id}-libname),"
+                f"$(path-bin)/libs/$(library-{library.id}-libname))"
             )
             lines.append(f"library-{library.id}-include-c := {library.include_c}")
             lines.append(f"library-{library.id}-include-cpp := {library.include_cpp}")
@@ -127,13 +158,13 @@ def _emit_build_targets(
     for library in libraries:
         lines.append(f".PHONY: build-lib-{library.id}")
         lines.append(f"build-lib-{library.id}:")
-        if not library.is_header_only:
+        if library.makefile_for("freestanding") and library.target_for("freestanding"):
             lines.append(
                 "\t$(q)$(MAKE) -f {makefile} global-env=$(global-env) "
                 "arch=$(arch) q=$(q) ctx=$(path-ctx)/{ctx} {target}".format(
-                    makefile=library.makefile,
+                    makefile=library.makefile_for("freestanding"),
                     ctx=build_ctx.library_name(library.id),
-                    target=library.target,
+                    target=library.target_for("freestanding"),
                 )
             )
         lines.append("")
@@ -144,7 +175,7 @@ def _emit_build_targets(
             + " ".join(
                 f"build-lib-{library.id}"
                 for library in arch_libraries
-                if not library.is_header_only
+                if not library.is_header_only_for("freestanding")
             )
         )
     lines.append("")
@@ -155,7 +186,9 @@ def _emit_build_targets(
 
     host_libraries = [library for library in libraries if library.supports("host")]
     host_archive_libraries = [
-        library for library in host_libraries if not library.is_header_only
+        library
+        for library in host_libraries
+        if not library.is_header_only_for("host")
     ]
     lines.append("")
     lines.append(
@@ -164,7 +197,7 @@ def _emit_build_targets(
     )
     for library in host_libraries:
         lines.append(f"host-build-lib-{library.id}:")
-        if library.is_header_only:
+        if library.is_header_only_for("host"):
             lines.append(
                 "\t$(q)$(MAKE) --no-print-directory _host-header-check "
                 f"lib={library.id} mode=$(mode) sanitize=$(sanitize)"
@@ -175,10 +208,10 @@ def _emit_build_targets(
                 "environment=host allow-target-arch=$(allow-target-arch) mode=$(mode) sanitize=$(sanitize) q=$(q) "
                 "ctx=$(path-ctx)/{ctx} "
                 "deps-file=$(path-deps)/host-{owner}.mk {target}".format(
-                    makefile=library.makefile,
+                    makefile=library.makefile_for("host"),
                     ctx=build_ctx.library_name(library.id),
                     owner=library.id,
-                    target=library.target,
+                    target=library.target_for("host"),
                 )
             )
         lines.append("")
@@ -214,7 +247,10 @@ def emit_ctx(root: Path) -> dict[str, str]:
             library.id,
             library.root,
             f"$(path-obj)/libs/{library.id}",
-            library.archive_path,
+            "$(if $(filter y,$(is-host)),{host},{freestanding})".format(
+                host=library.archive_path_for("host"),
+                freestanding=library.archive_path_for("freestanding"),
+            ),
         )
         for library in libraries
     }

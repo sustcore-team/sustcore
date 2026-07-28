@@ -33,6 +33,16 @@ class LibraryEnvironmentTests(unittest.TestCase):
         self.assertFalse(library.supports("freestanding", "loongarch64"))
         self.assertTrue(library.supports("host", "x86_64"))
 
+    def test_host_build_variant_can_add_an_archive(self) -> None:
+        libraries = {library.id: library for library in libregistry.scan_libraries(ROOT)}
+        taycpplib = libraries["taycpplib"]
+
+        self.assertTrue(taycpplib.is_header_only_for("freestanding"))
+        self.assertFalse(taycpplib.is_header_only_for("host"))
+        self.assertEqual(taycpplib.libname_for("host"), "libtaycpplib.a")
+        self.assertEqual(Path(taycpplib.makefile_for("host")).name, "Makefile")
+        self.assertEqual(taycpplib.target_for("host"), "build-static")
+
 
 class TestbenchSchemaTests(unittest.TestCase):
     def test_scans_programs_and_header_checks_with_derived_owners(self) -> None:

@@ -60,6 +60,8 @@ show:
 \t@echo build-targets=$(build-lib-targets)
 \t@echo host-build-targets=$(host-build-lib-targets)
 \t@echo tayclib-environments=$(library-tayclib-support-environments)
+\t@echo taycpplib-libname=$(library-taycpplib-libname)
+\t@echo taycpplib-header-only=$(library-taycpplib-is-header-only)
 """
         result = subprocess.run(
             ["make", "--no-print-directory", "-f", "-", "show"],
@@ -79,6 +81,8 @@ show:
         self.assertIn("build-lib-sbi", values["build-targets"].split())
         self.assertEqual(values["host-build-targets"], "")
         self.assertEqual(values["tayclib-environments"], "freestanding")
+        self.assertEqual(values["taycpplib-libname"], "")
+        self.assertEqual(values["taycpplib-header-only"], "y")
 
     def test_loongarch64_registry_is_selected_by_make_selectors(self) -> None:
         values = self._evaluate("freestanding", "loongarch64", "release")
@@ -87,6 +91,8 @@ show:
         self.assertEqual(values["crt0"], "arch/loongarch64/crt0.o")
         self.assertNotIn("build-lib-sbi", values["build-targets"].split())
         self.assertEqual(values["tayclib-environments"], "freestanding")
+        self.assertEqual(values["taycpplib-libname"], "")
+        self.assertEqual(values["taycpplib-header-only"], "y")
 
     def test_host_registry_is_selected_by_environment_selector(self) -> None:
         values = self._evaluate("host", "x86_64")
@@ -95,9 +101,12 @@ show:
         self.assertEqual(values["crt0"], "")
         self.assertEqual(values["build-targets"], "")
         self.assertEqual(
-            values["host-build-targets"].split(), ["host-build-lib-tayclib"]
+            values["host-build-targets"].split(),
+            ["host-build-lib-tayclib", "host-build-lib-taycpplib"],
         )
         self.assertEqual(values["tayclib-environments"], "host")
+        self.assertEqual(values["taycpplib-libname"], "libtaycpplib.a")
+        self.assertEqual(values["taycpplib-header-only"], "n")
 
     def test_component_contexts_define_library_paths(self) -> None:
         contexts = build_libs.emit_ctx(ROOT)
@@ -106,10 +115,21 @@ show:
         self.assertIn("owner-id := mini-cstd", context)
         self.assertIn("owner-root := " + str(ROOT / "libs" / "mincstd"), context)
         self.assertIn("obj-root ?= $(path-obj)/libs/mini-cstd", context)
-        self.assertIn("target ?= $(path-bin)/libs/libmini-cstd.a", context)
+        self.assertIn(
+            "target ?= $(if $(filter y,$(is-host)),"
+            "$(path-bin)/libs/libmini-cstd.a,$(path-bin)/libs/libmini-cstd.a)",
+            context,
+        )
 
         header_only = contexts["lib-mini-cppstd.mk"]
-        self.assertIn("target ?= \n", header_only)
+        self.assertIn("target ?= $(if $(filter y,$(is-host)),,)", header_only)
+
+        host_implementation = contexts["lib-taycpplib.mk"]
+        self.assertIn(
+            "target ?= $(if $(filter y,$(is-host)),"
+            "$(path-bin)/libs/libtaycpplib.a,)",
+            host_implementation,
+        )
 
 
 if __name__ == "__main__":

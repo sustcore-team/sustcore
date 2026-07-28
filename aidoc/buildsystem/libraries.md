@@ -23,6 +23,11 @@ testbench.bench = ["testbench/bench/metadata.toml"]
 include-c = ["include"]
 include-cpp = ["include"]
 include-asm = ["include"]
+
+[libmeta.host]
+libname = "libsbi-host.a"
+makefile = "Makefile"
+target = "build-host-static"
 ```
 
 ## Current Field Meanings
@@ -30,7 +35,8 @@ include-asm = ["include"]
 - `id`
   - global logical identifier
 - `libname`
-  - actual archive file name; empty string means header-only
+  - freestanding archive file name; an empty string marks that variant
+    header-only
 - `makefile`
   - path relative to the metadata file
 - `target`
@@ -45,6 +51,9 @@ include-asm = ["include"]
   - exported include roots for each language
 - `testbench.test/headercheck/bench`
   - explicit lists of testbench TOML files relative to this library metadata
+- `host.libname/makefile/target`
+  - optional host-specific build override; omitted fields inherit the common
+    values, while `host.libname = ""` marks only the host variant header-only
 
 ## Current Rules
 
@@ -53,7 +62,8 @@ include-asm = ["include"]
 - missing `support-archs` means “available on all architectures”
 - `support-archs` never restricts native host visibility
 - missing `include-*` means “export nothing”
-- `libname = ""` means “header-only”
+- `libname = ""` means the freestanding variant is header-only
+- a `[libmeta.host]` override may independently add or remove the host archive
 
 ## Version Naming And Requirements
 
@@ -118,12 +128,13 @@ This build-target fragment contains:
 - `host-build-lib-targets-$(is-host)`
 - `build-libs`
 
-Each non-header-only target passes its matching
+Each buildable target passes its matching
 `$(path-ctx)/lib-<id>.mk` file through `ctx=` to the library sub-make. The context declares
 the library owner and source root, with defaults for its object directory
 (`$(path-obj)/libs/<id>`) and final archive
-(`$(path-bin)/libs/<libname>`). Header-only libraries still receive a context
-with an empty `target`.
+(`$(path-bin)/libs/<libname>`). The archive name and header-only status are
+selected independently for freestanding and host. Header-only variants still
+receive a context, whose selected archive value expands to empty.
 
 ## Component Build Fragments
 

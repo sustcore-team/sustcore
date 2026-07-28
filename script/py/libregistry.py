@@ -38,16 +38,41 @@ class LibraryMeta:
     testbench_test: tuple[str, ...] = ()
     testbench_headercheck: tuple[str, ...] = ()
     testbench_bench: tuple[str, ...] = ()
+    host_libname: str | None = None
+    host_makefile: str | None = None
+    host_target: str | None = None
+
+    def libname_for(self, environment: str) -> str:
+        if environment == "host" and self.host_libname is not None:
+            return self.host_libname
+        return self.libname
+
+    def makefile_for(self, environment: str) -> str:
+        if environment == "host" and self.host_makefile is not None:
+            return self.host_makefile
+        return self.makefile
+
+    def target_for(self, environment: str) -> str:
+        if environment == "host" and self.host_target is not None:
+            return self.host_target
+        return self.target
+
+    def archive_path_for(self, environment: str) -> str:
+        libname = self.libname_for(environment)
+        if not libname:
+            return ""
+        return f"$(path-bin)/libs/{libname}"
+
+    def is_header_only_for(self, environment: str) -> bool:
+        return self.libname_for(environment) == ""
 
     @property
     def archive_path(self) -> str:
-        if not self.libname:
-            return ""
-        return f"$(path-bin)/libs/{self.libname}"
+        return self.archive_path_for("freestanding")
 
     @property
     def is_header_only(self) -> bool:
-        return self.libname == ""
+        return self.is_header_only_for("freestanding")
 
     @property
     def is_c_library(self) -> bool:
@@ -258,6 +283,52 @@ def normalize_libname(raw_value: object, field: str) -> str:
     return raw_value
 
 
+def normalize_library_build(
+    metadata_path: Path,
+    raw_value: object,
+    *,
+    field: str,
+    inherited_libname: str,
+    inherited_makefile: str,
+    inherited_target: str,
+) -> tuple[str | None, str | None, str | None]:
+    if raw_value is None:
+        return None, None, None
+    if not isinstance(raw_value, dict):
+        raise ValueError(f"{metadata_path}: {field} must be a table")
+    unknown = sorted(set(raw_value) - {"libname", "makefile", "target"})
+    if unknown:
+        raise ValueError(
+            f"{metadata_path}: {field} contains unsupported fields: {', '.join(unknown)}"
+        )
+
+    libname = normalize_libname(
+        raw_value.get("libname", inherited_libname),
+        f"{metadata_path}: {field}.libname",
+    )
+    raw_makefile = raw_value.get("makefile", inherited_makefile)
+    target = raw_value.get("target", inherited_target)
+    if not isinstance(raw_makefile, str):
+        raise ValueError(f"{metadata_path}: {field}.makefile must be a string")
+    if not isinstance(target, str):
+        raise ValueError(f"{metadata_path}: {field}.target must be a string")
+    if libname and (not raw_makefile or not target):
+        raise ValueError(
+            f"{metadata_path}: {field}.makefile and {field}.target must be non-empty "
+            "for non-header-only variants"
+        )
+
+    makefile = ""
+    if raw_makefile:
+        resolved_makefile = (metadata_path.parent / raw_makefile).resolve()
+        if not resolved_makefile.is_file():
+            raise ValueError(
+                f"{metadata_path}: {field}.makefile does not exist: {raw_makefile}"
+            )
+        makefile = str(resolved_makefile)
+    return libname, makefile, target
+
+
 def normalize_kind(raw_value: object, field: str) -> str:
     if raw_value is None:
         return "library"
@@ -393,6 +464,14 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
             testbench_paths = normalize_testbench_paths(
                 metadata_path, entry.get("testbench")
             )
+            host_libname, host_makefile, host_target = normalize_library_build(
+                metadata_path,
+                entry.get("host"),
+                field="host",
+                inherited_libname=libname,
+                inherited_makefile=makefile_path,
+                inherited_target=raw_target,
+            )
             libraries.append(
                 LibraryMeta(
                     id=library_id,
@@ -428,6 +507,9 @@ def scan_libraries(root: Path) -> list[LibraryMeta]:
                     testbench_test=testbench_paths["test"],
                     testbench_headercheck=testbench_paths["headercheck"],
                     testbench_bench=testbench_paths["bench"],
+                    host_libname=host_libname,
+                    host_makefile=host_makefile,
+                    host_target=host_target,
                 )
             )
 

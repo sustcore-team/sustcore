@@ -234,10 +234,13 @@ def _resolve_scope(
     return resolved
 
 
-def _archive_path_for_arch(library: LibraryMeta, arch: str) -> str:
-    if not library.libname:
+def _archive_path_for_environment(
+    library: LibraryMeta, environment: str
+) -> str:
+    libname = library.libname_for(environment)
+    if not libname:
         return ""
-    return f"$(path-bin)/libs/{library.libname}"
+    return f"$(path-bin)/libs/{libname}"
 
 
 def _object_path_for_crt(library: LibraryMeta, relative_object: str) -> str:
@@ -267,14 +270,16 @@ C_LIBRARY_FIELDS = (
 )
 
 
-def _scope_values(libraries: list[LibraryMeta], arch: str) -> dict[str, str]:
+def _scope_values(
+    libraries: list[LibraryMeta], environment: str
+) -> dict[str, str]:
     return {
         "dep-ids": " ".join(_stable_unique(library.id for library in libraries)),
         "dep-archives": " ".join(
             _stable_unique(
-                _archive_path_for_arch(library, arch)
+                _archive_path_for_environment(library, environment)
                 for library in libraries
-                if library.libname
+                if library.libname_for(environment)
             )
         ),
         "includes-c": " ".join(
@@ -290,9 +295,12 @@ def _scope_values(libraries: list[LibraryMeta], arch: str) -> dict[str, str]:
 
 
 def _emit_scope_condition(
-    owner_id: str, selector: str, libraries: list[LibraryMeta], arch: str
+    owner_id: str,
+    selector: str,
+    libraries: list[LibraryMeta],
+    environment: str,
 ) -> list[str]:
-    values = _scope_values(libraries, arch)
+    values = _scope_values(libraries, environment)
     return [
         f"{owner_id}-{field}-{selector} += {values[field]}"
         for field in SCOPE_FIELDS
@@ -383,7 +391,9 @@ def _c_library_values(
 
     return {
         "c-library-id": library.id,
-        "c-library-archive": _archive_path_for_arch(library, arch),
+        "c-library-archive": _archive_path_for_environment(
+            library, "freestanding"
+        ),
         "c-library-includes-c": library.include_c,
         "c-library-includes-cpp": library.include_cpp,
         "c-library-includes-asm": library.include_asm,
@@ -473,7 +483,7 @@ def emit(
             _libraries_for_entries(
                 common_entries, resolved_by_arch[representative_arch]
             ),
-            representative_arch,
+            environment,
         )
     )
     lines.extend(
@@ -483,7 +493,7 @@ def emit(
             _libraries_for_entries(
                 environment_entries, resolved_by_arch[representative_arch]
             ),
-            representative_arch,
+            environment,
         )
     )
 
@@ -498,7 +508,7 @@ def emit(
                 owner.id,
                 f"$(is-{arch})",
                 _libraries_for_entries(selected_entries, resolved_by_arch[arch]),
-                arch,
+                environment,
             )
         )
     lines.extend(_emit_scope_final(owner.id))
