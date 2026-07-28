@@ -1,9 +1,37 @@
 [[hostprog]]
-id = "taycpplib-behavior-test"
+id = "taycpplib-algorithm-test"
 kind = "test"
 makefile = "Makefile"
 target = "build"
-output = "taycpplib-behavior-test"
+output = "taycpplib-algorithm-test"
+
+[[hostprog]]
+id = "taycpplib-range-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-range-test"
+
+[[hostprog]]
+id = "taycpplib-owner-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-owner-test"
+
+[[hostprog]]
+id = "taycpplib-refc-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-refc-test"
+
+[[hostprog]]
+id = "taycpplib-units-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-units-test"
 
 [[hostprog]]
 id = "taycpplib-panic-test"
@@ -36,3 +64,56 @@ kind = "test"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-string-view-test"
+
+[[hostprog]]
+id = "taycpplib-sort-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-sort-test"
+
+[[hostprog]]
+id = "taycpplib-find-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-find-test"
+
+[[hostprog]]
+id = "taycpplib-misc-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-misc-test"
+
+[[hostprog]]
+id = "taycpplib-allocator-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-allocator-test"
+
+[[hostprog]]
+id = "taycpplib-allocator-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-allocator-panic-test"
+expect = "abort"
+stderr-contains = "out of memory"
+
+[[hostprog]]
+id = "taycpplib-string-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-string-test"
+
+[[hostprog]]
+id = "taycpplib-string-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-string-panic-test"
+expect = "abort"
+stderr-contains = "string allocation failed"

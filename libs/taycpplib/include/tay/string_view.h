@@ -343,7 +343,15 @@ namespace tay {
         [[nodiscard]]
         constexpr size_type find(char character,
                                  size_type position = 0) const noexcept {
-            return find(&character, position, 1);
+            if (position >= size_) {
+                return npos;
+            }
+            for (size_type index = position; index < size_; ++index) {
+                if (data_[index] == character) {
+                    return index;
+                }
+            }
+            return npos;
         }
 
         [[nodiscard]]
@@ -371,6 +379,14 @@ namespace tay {
                 return npos;
             }
 
+            // TODO: implement a more efficient search algorithm like:
+            // KMP(T: O(n + m), S: O(m))
+            // Two-Way(T: O(n + m), S: O(1))
+            // I think it would be better to apply different algorithms on different situations
+            // let L to be the length of pattern string
+            // then when L <= 8, use naive search algorithm,
+            // when 8 < L <= 32, use Two-Way algorithm,
+            // when L > 32, use Two-Way with bad characters
             for (size_type index = position; index <= size_ - count; ++index) {
                 if (M_cmemcmp(data_ + index, string, count) == 0) {
                     return index;
@@ -382,7 +398,14 @@ namespace tay {
         [[nodiscard]]
         constexpr size_type rfind(char character,
                                   size_type position = npos) const noexcept {
-            return rfind(&character, position, 1);
+            const size_type last = size_ - 1;
+            const size_type start = position < last ? position : last;
+            for (size_type index = start + 1; index > 0; --index) {
+                if (data_[index - 1] == character) {
+                    return index - 1;
+                }
+            }
+            return npos;
         }
 
         [[nodiscard]]
@@ -420,7 +443,7 @@ namespace tay {
         [[nodiscard]]
         constexpr size_type find_first_of(
             char character, size_type position = 0) const noexcept {
-            return find_first_of(&character, position, 1);
+            return find(character, position);
         }
 
         [[nodiscard]]
@@ -450,7 +473,7 @@ namespace tay {
         [[nodiscard]]
         constexpr size_type find_last_of(
             char character, size_type position = npos) const noexcept {
-            return find_last_of(&character, position, 1);
+            return rfind(character, position);
         }
 
         [[nodiscard]]

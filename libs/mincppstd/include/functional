@@ -9,10 +9,22 @@
 
 namespace std {
     template <typename F, typename... Args>
-    constexpr invoke_result_t<F, Args...>
-    invoke(F&& function, Args&&... args) noexcept(noexcept(
-        detail::invoke_impl(forward<F>(function), forward<Args>(args)...))) {
-        return detail::invoke_impl(forward<F>(function),
-                                   forward<Args>(args)...);
+        requires requires(F&& function, Args&&... args) {
+            detail::invoke_impl(std::forward<F>(function),
+                                std::forward<Args>(args)...);
+        }
+    constexpr decltype(auto) invoke(F&& function, Args&&... args) noexcept(
+        noexcept(detail::invoke_impl(std::forward<F>(function),
+                                     std::forward<Args>(args)...))) {
+        return detail::invoke_impl(std::forward<F>(function),
+                                   std::forward<Args>(args)...);
     }
+
+    struct identity {
+        template <typename T>
+        [[nodiscard]]
+        constexpr T&& operator()(T&& t) const noexcept {
+            return std::forward<T>(t);
+        }
+    };
 }  // namespace std

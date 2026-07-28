@@ -22,5 +22,7 @@ namespace tay {
         OUT_OF_RANGE,
         NULLPTR,
         INVALID_ARGUMENT,
+        OUT_OF_MEMORY,
+        ALLOCATION_SIZE_OVERFLOW,
     };
 }  // namespace tay

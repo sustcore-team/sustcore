@@ -36,3 +36,31 @@ kind = "compile"
 language = "c++"
 sources = ["expected_invalid_rvalue_reference.cpp"]
 expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-sort"
+kind = "compile"
+language = "c++"
+sources = ["sort_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-find-misc"
+kind = "compile"
+language = "c++"
+sources = ["find_misc_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-allocator-string"
+kind = "compile"
+language = "c++"
+sources = ["allocator_string_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-no-default-freestanding-allocator"
+kind = "compile"
+language = "c++"
+sources = ["allocator_default_invalid.cpp"]
+expect = "failure"

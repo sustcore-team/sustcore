@@ -1,13 +1,35 @@
-ifeq ($(program-id),taycpplib-behavior-test)
-sources-cpp := behavior_test.cpp
+ifeq ($(program-id),taycpplib-algorithm-test)
+sources-cpp := algorithm.cpp
+else ifeq ($(program-id),taycpplib-range-test)
+sources-cpp := range.cpp
+else ifeq ($(program-id),taycpplib-owner-test)
+sources-cpp := owner.cpp
+else ifeq ($(program-id),taycpplib-refc-test)
+sources-cpp := refc.cpp
+else ifeq ($(program-id),taycpplib-units-test)
+sources-cpp := units.cpp
 else ifeq ($(program-id),taycpplib-panic-test)
-sources-cpp := panic_test.cpp
+sources-cpp := panic.cpp
 else ifeq ($(program-id),taycpplib-expected-test)
-sources-cpp := expected_test.cpp
+sources-cpp := expected.cpp
 else ifeq ($(program-id),taycpplib-expected-panic-test)
-sources-cpp := expected_panic_test.cpp
+sources-cpp := expected_panic.cpp
 else ifeq ($(program-id),taycpplib-string-view-test)
-sources-cpp := string_view_test.cpp
+sources-cpp := string_view.cpp
+else ifeq ($(program-id),taycpplib-sort-test)
+sources-cpp := sort.cpp
+else ifeq ($(program-id),taycpplib-find-test)
+sources-cpp := find.cpp
+else ifeq ($(program-id),taycpplib-misc-test)
+sources-cpp := misc.cpp
+else ifeq ($(program-id),taycpplib-allocator-test)
+sources-cpp := allocator.cpp
+else ifeq ($(program-id),taycpplib-allocator-panic-test)
+sources-cpp := allocator_panic.cpp
+else ifeq ($(program-id),taycpplib-string-test)
+sources-cpp := string.cpp
+else ifeq ($(program-id),taycpplib-string-panic-test)
+sources-cpp := string_panic.cpp
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

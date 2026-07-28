@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <type_traits>
 #include <compare>
+#include <concepts>
 
 namespace std {
     struct input_iterator_tag {};
@@ -29,6 +30,20 @@ namespace std {
     template <typename _Iterator, typename = void_t<>>
     struct __iterator_traits {};
 
+    template <typename _Iterator>
+    struct __iterator_traits<
+        _Iterator,
+        void_t<typename _Iterator::iterator_category,
+               typename _Iterator::value_type,
+               typename _Iterator::difference_type, typename _Iterator::pointer,
+               typename _Iterator::reference>> {
+        using iterator_category = typename _Iterator::iterator_category;
+        using value_type        = typename _Iterator::value_type;
+        using difference_type   = typename _Iterator::difference_type;
+        using pointer           = typename _Iterator::pointer;
+        using reference         = typename _Iterator::reference;
+    };
+
     template <typename Iter>
     struct iterator_traits : public __iterator_traits<Iter> {};
 
@@ -42,6 +57,78 @@ namespace std {
         using pointer           = _Tp *;
         using reference         = _Tp &;
     };
+
+    template <typename _Iterator>
+    using iter_value_t =
+        typename iterator_traits<remove_cvref_t<_Iterator>>::value_type;
+
+    template <typename _Iterator>
+    using iter_difference_t =
+        typename iterator_traits<remove_cvref_t<_Iterator>>::difference_type;
+
+    template <typename _Iterator>
+    using iter_reference_t = decltype(*declval<_Iterator &>());
+
+    template <typename _Iterator>
+    concept input_or_output_iterator = requires(_Iterator iterator) {
+        *iterator;
+        ++iterator;
+        iterator++;
+    };
+
+    template <typename _Sentinel, typename _Iterator>
+    concept sentinel_for =
+        input_or_output_iterator<_Iterator> &&
+        requires(const _Iterator &iterator, const _Sentinel &sentinel) {
+            iterator == sentinel;
+            iterator != sentinel;
+            sentinel == iterator;
+            sentinel != iterator;
+        };
+
+    template <typename _Iterator>
+    concept input_iterator = input_or_output_iterator<_Iterator> && requires {
+        typename iter_value_t<_Iterator>;
+        typename iter_difference_t<_Iterator>;
+    };
+
+    template <typename _Iterator, typename _Value>
+    concept output_iterator = input_or_output_iterator<_Iterator> &&
+                              requires(_Iterator iterator, _Value &&value) {
+                                  *iterator = static_cast<_Value &&>(value);
+                              };
+
+    template <typename _Iterator>
+    concept forward_iterator = input_iterator<_Iterator> &&
+                               requires(_Iterator left, const _Iterator right) {
+                                   left == right;
+                                   left != right;
+                               };
+
+    template <typename _Iterator>
+    concept bidirectional_iterator =
+        forward_iterator<_Iterator> && requires(_Iterator iterator) {
+            --iterator;
+            iterator--;
+        };
+
+    template <typename _Iterator>
+    concept random_access_iterator =
+        bidirectional_iterator<_Iterator> &&
+        requires(_Iterator iterator, const _Iterator other,
+                 iter_difference_t<_Iterator> offset) {
+            iterator += offset;
+            iterator -= offset;
+            iterator + offset;
+            offset + iterator;
+            iterator - offset;
+            other - iterator;
+            iterator[offset];
+            iterator < other;
+            iterator <= other;
+            iterator > other;
+            iterator >= other;
+        };
 
     template <typename _InputIterator>
     constexpr typename iterator_traits<_InputIterator>::difference_type

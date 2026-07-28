@@ -1,5 +1,9 @@
-ifeq ($(program-id),taycpplib-bench)
-sources-cpp := taycpplib_bench.cpp
+ifeq ($(program-id),taycpplib-range-bench)
+sources-cpp := range.cpp
+else ifeq ($(program-id),taycpplib-string-view-bench)
+sources-cpp := string_view.cpp
+else ifeq ($(program-id),taycpplib-sort-bench)
+sources-cpp := sort.cpp
 else
 $(error unsupported taycpplib host benchmark: $(program-id))
 endif

@@ -34,3 +34,17 @@ target = "build"
 output = "taycpplib-panic-example"
 expect = "abort"
 stderr-contains = "tay panic: panic example"
+
+[[hostprog]]
+id = "taycpplib-string-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-string-example"
+
+[[hostprog]]
+id = "taycpplib-allocator-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-allocator-example"

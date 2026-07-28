@@ -5,6 +5,24 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-sort"
+header = "tay/algo/sort.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-find"
+header = "tay/algo/find.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-misc"
+header = "tay/algo/misc.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-expected"
 header = "tay/expected.h"
 language = "c++"
@@ -50,6 +68,18 @@ requires-features = ["cpp-static-reflection"]
 [[headercheck]]
 id = "taycpplib-string-view"
 header = "tay/string_view.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-allocator"
+header = "tay/allocator.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-string"
+header = "tay/string.h"
 language = "c++"
 environments = ["freestanding", "host"]
 

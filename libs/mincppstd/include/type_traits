@@ -472,8 +472,8 @@ namespace std {
 
         template <typename... Args>
         constexpr auto operator()(Args&&... args) const
-            -> decltype((*__ptr)(forward<Args>(args)...)) {
-            return (*__ptr)(forward<Args>(args)...);
+            -> decltype((*__ptr)(std::forward<Args>(args)...)) {
+            return (*__ptr)(std::forward<Args>(args)...);
         }
     };
 
@@ -484,8 +484,9 @@ namespace std {
             typename = enable_if_t<is_member_function_pointer_v<decay_t<F>>>>
         constexpr auto invoke_impl(F&& f, reference_wrapper<T> t,
                                    Args&&... args)
-            -> decltype((t.get().*forward<F>(f))(forward<Args>(args)...)) {
-            return (t.get().*forward<F>(f))(forward<Args>(args)...);
+            -> decltype((t.get().*
+                         std::forward<F>(f))(std::forward<Args>(args)...)) {
+            return (t.get().*std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
         // pointer-to-member function, object instance (not pointer)
@@ -493,9 +494,10 @@ namespace std {
             typename F, typename T1, typename... Args,
             typename = enable_if_t<is_member_function_pointer_v<decay_t<F>>>>
         constexpr auto invoke_impl(F&& f, T1&& t1, Args&&... args)
-            -> decltype((forward<T1>(t1).*
-                         forward<F>(f))(forward<Args>(args)...)) {
-            return (forward<T1>(t1).*forward<F>(f))(forward<Args>(args)...);
+            -> decltype((std::forward<T1>(t1).*
+                         std::forward<F>(f))(std::forward<Args>(args)...)) {
+            return (std::forward<T1>(t1).*
+                    std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
         // pointer-to-member function, pointer to object
@@ -503,8 +505,9 @@ namespace std {
             typename F, typename T1, typename... Args,
             typename = enable_if_t<is_member_function_pointer_v<decay_t<F>>>>
         constexpr auto invoke_impl(F&& f, T1* t1, Args&&... args)
-            -> decltype((t1->*forward<F>(f))(forward<Args>(args)...)) {
-            return (t1->*forward<F>(f))(forward<Args>(args)...);
+            -> decltype((t1->*std::forward<F>(f))(
+                std::forward<Args>(args)...)) {
+            return (t1->*std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
         // pointer-to-data member, reference_wrapper as object
@@ -512,33 +515,34 @@ namespace std {
             typename F, typename T,
             typename = enable_if_t<is_member_object_pointer_v<decay_t<F>>>>
         constexpr auto invoke_impl(F&& f, reference_wrapper<T> t)
-            -> decltype(t.get().*forward<F>(f)) {
-            return t.get().*forward<F>(f);
+            -> decltype(t.get().*std::forward<F>(f)) {
+            return t.get().*std::forward<F>(f);
         }
 
         // pointer-to-data member, object instance (not pointer)
         template <
             typename F, typename T1,
             typename = enable_if_t<is_member_object_pointer_v<decay_t<F>>>>
-        constexpr auto invoke_impl(F&& f, T1&& t1) -> decltype(forward<T1>(t1).*
-                                                               forward<F>(f)) {
-            return forward<T1>(t1).*forward<F>(f);
+        constexpr auto invoke_impl(F&& f,
+                                   T1&& t1) -> decltype(std::forward<T1>(t1).*
+                                                        std::forward<F>(f)) {
+            return std::forward<T1>(t1).*std::forward<F>(f);
         }
 
         // pointer-to-data member, pointer to object
         template <
             typename F, typename T1,
             typename = enable_if_t<is_member_object_pointer_v<decay_t<F>>>>
-        constexpr auto invoke_impl(F&& f,
-                                   T1* t1) -> decltype(t1->*forward<F>(f)) {
-            return t1->*forward<F>(f);
+        constexpr auto invoke_impl(F&& f, T1* t1)
+            -> decltype(t1->*std::forward<F>(f)) {
+            return t1->*std::forward<F>(f);
         }
 
         // general callable (non-member-pointer)
         template <typename F, typename... Args>
         constexpr auto invoke_impl(F&& f, Args&&... args)
-            -> decltype(forward<F>(f)(forward<Args>(args)...)) {
-            return forward<F>(f)(forward<Args>(args)...);
+            -> decltype(std::forward<F>(f)(std::forward<Args>(args)...)) {
+            return std::forward<F>(f)(std::forward<Args>(args)...);
         }
     }  // namespace detail
 

@@ -52,7 +52,7 @@ namespace std {
         template <class It>
         explicit(extent != dynamic_extent) constexpr span(It first,
                                                           size_type cnt)
-            : data_(std::to_address(*first)), size_(cnt) {
+            : data_(std::to_address(first)), size_(cnt) {
             if constexpr (Extent != dynamic_extent) {
                 if (cnt != Extent) {
                     // do something...

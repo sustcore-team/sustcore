@@ -11,8 +11,7 @@
 
 #pragma once
 
-#include <features.h>
-
+#include <feat/config.h>
 #include <type_traits>
 
 namespace std {

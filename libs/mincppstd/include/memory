@@ -1,0 +1,484 @@
+/**
+ * @file memory
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief Memory utilities and allocator support.
+ * @version 0.1.0-dev.1
+ * @date 2026-07-28
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+#pragma once
+
+#include <cstddef>
+#include <new>
+#include <type_traits>
+#include <utility>
+
+namespace std {
+    template <class Pointer, class SizeType = size_t>
+    struct allocation_result {
+        Pointer ptr;
+        SizeType count;
+    };
+
+    template <class Pointer>
+    struct pointer_traits;
+
+    namespace __memory_detail {
+        template <class Pointer>
+        struct first_template_argument {};
+
+        template <template <class, class...> class Template, class Element,
+                  class... Args>
+        struct first_template_argument<Template<Element, Args...>> {
+            using type = Element;
+        };
+
+        template <class Pointer, class = void>
+        struct pointer_element : first_template_argument<Pointer> {};
+
+        template <class Pointer>
+        struct pointer_element<Pointer,
+                               void_t<typename Pointer::element_type>> {
+            using type = typename Pointer::element_type;
+        };
+
+        template <class Pointer, class Element>
+        struct replace_first_template_argument;
+
+        template <template <class, class...> class Template, class OldElement,
+                  class... Args, class Element>
+        struct replace_first_template_argument<Template<OldElement, Args...>,
+                                               Element> {
+            using type = Template<Element, Args...>;
+        };
+
+        template <class Pointer, class Element, class = void>
+        struct pointer_rebind
+            : replace_first_template_argument<Pointer, Element> {};
+
+        template <class Pointer, class Element>
+        struct pointer_rebind<
+            Pointer, Element,
+            void_t<typename Pointer::template rebind<Element>>> {
+            using type = typename Pointer::template rebind<Element>;
+        };
+
+        template <class Pointer>
+        using pointer_difference = typename Pointer::difference_type;
+
+        template <class Pointer, class Element, bool = is_void_v<Element>>
+        struct pointer_to_base {
+            using pointer      = Pointer;
+            using element_type = Element;
+
+            [[nodiscard]]
+            static constexpr pointer pointer_to(element_type& reference)
+                requires requires { Pointer::pointer_to(reference); }
+            {
+                return Pointer::pointer_to(reference);
+            }
+        };
+
+        template <class Pointer, class Element>
+        struct pointer_to_base<Pointer, Element, true> {};
+
+        template <class Element>
+        struct pointer_to_base<Element*, Element, false> {
+            using pointer      = Element*;
+            using element_type = Element;
+
+            [[nodiscard]]
+            static constexpr pointer pointer_to(
+                element_type& reference) noexcept {
+                return std::addressof(reference);
+            }
+        };
+
+        template <class Pointer, class = void>
+        struct pointer_traits_base {};
+
+        template <class Pointer>
+        struct pointer_traits_base<
+            Pointer, void_t<typename pointer_element<Pointer>::type>>
+            : pointer_to_base<Pointer,
+                              typename pointer_element<Pointer>::type> {
+            using pointer      = Pointer;
+            using element_type = typename pointer_element<Pointer>::type;
+            using difference_type =
+                __detected_or_t<ptrdiff_t, pointer_difference, Pointer>;
+
+            template <class Element>
+            using rebind = typename pointer_rebind<Pointer, Element>::type;
+        };
+
+        template <class Allocator>
+        using allocator_pointer = typename Allocator::pointer;
+
+        template <class Allocator>
+        using allocator_copy_propagation =
+            typename Allocator::propagate_on_container_copy_assignment;
+
+        template <class Allocator>
+        using allocator_move_propagation =
+            typename Allocator::propagate_on_container_move_assignment;
+
+        template <class Allocator>
+        using allocator_swap_propagation =
+            typename Allocator::propagate_on_container_swap;
+
+        template <class Allocator>
+        using allocator_always_equal = typename Allocator::is_always_equal;
+
+        template <class Allocator, class Pointer, class Element, class = void>
+        struct allocator_pointer_selector {
+            using type =
+                typename pointer_traits<Pointer>::template rebind<Element>;
+        };
+
+        template <class Allocator, class Pointer, class Element>
+        struct allocator_pointer_selector<
+            Allocator, Pointer, Element,
+            void_t<typename Allocator::const_pointer>> {
+            using type = typename Allocator::const_pointer;
+        };
+
+        template <class Allocator, class Pointer, class = void>
+        struct allocator_void_pointer_selector {
+            using type =
+                typename pointer_traits<Pointer>::template rebind<void>;
+        };
+
+        template <class Allocator, class Pointer>
+        struct allocator_void_pointer_selector<
+            Allocator, Pointer, void_t<typename Allocator::void_pointer>> {
+            using type = typename Allocator::void_pointer;
+        };
+
+        template <class Allocator, class Pointer, class = void>
+        struct allocator_const_void_pointer_selector {
+            using type =
+                typename pointer_traits<Pointer>::template rebind<const void>;
+        };
+
+        template <class Allocator, class Pointer>
+        struct allocator_const_void_pointer_selector<
+            Allocator, Pointer,
+            void_t<typename Allocator::const_void_pointer>> {
+            using type = typename Allocator::const_void_pointer;
+        };
+
+        template <class Allocator, class Pointer, class = void>
+        struct allocator_difference_selector {
+            using type = typename pointer_traits<Pointer>::difference_type;
+        };
+
+        template <class Allocator, class Pointer>
+        struct allocator_difference_selector<
+            Allocator, Pointer, void_t<typename Allocator::difference_type>> {
+            using type = typename Allocator::difference_type;
+        };
+
+        template <class Allocator, class Difference, class = void>
+        struct allocator_size_selector {
+            using type = make_unsigned_t<Difference>;
+        };
+
+        template <class Allocator, class Difference>
+        struct allocator_size_selector<Allocator, Difference,
+                                       void_t<typename Allocator::size_type>> {
+            using type = typename Allocator::size_type;
+        };
+
+        template <class Allocator, class Value>
+        struct replace_allocator_value;
+
+        template <template <class, class...> class AllocatorTemplate,
+                  class OldValue, class... Args, class Value>
+        struct replace_allocator_value<AllocatorTemplate<OldValue, Args...>,
+                                       Value> {
+            using type = AllocatorTemplate<Value, Args...>;
+        };
+
+        template <class Allocator, class Value, class = void>
+        struct allocator_rebind : replace_allocator_value<Allocator, Value> {};
+
+        template <class Allocator, class Value>
+        struct allocator_rebind<
+            Allocator, Value,
+            void_t<typename Allocator::template rebind<Value>::other>> {
+            using type = typename Allocator::template rebind<Value>::other;
+        };
+    }  // namespace __memory_detail
+
+    template <class Pointer>
+    struct pointer_traits : __memory_detail::pointer_traits_base<Pointer> {};
+
+    template <class T>
+    struct pointer_traits<T*> : __memory_detail::pointer_to_base<T*, T> {
+        using pointer         = T*;
+        using element_type    = T;
+        using difference_type = ptrdiff_t;
+
+        template <class Element>
+        using rebind = Element*;
+    };
+
+    template <class T>
+    [[nodiscard]]
+    constexpr T* to_address(T* pointer) noexcept {
+        static_assert(!is_function_v<T>,
+                      "std::to_address does not accept function pointers");
+        return pointer;
+    }
+
+    template <class Pointer>
+    [[nodiscard]]
+    constexpr auto to_address(const Pointer& pointer) noexcept {
+        if constexpr (requires {
+                          pointer_traits<Pointer>::to_address(pointer);
+                      })
+        {
+            return pointer_traits<Pointer>::to_address(pointer);
+        } else {
+            return std::to_address(pointer.operator->());
+        }
+    }
+
+    template <typename U, typename... Args>
+    constexpr void construct(U* location, Args&&... args) {
+        ::new (static_cast<void*>(location)) U(std::forward<Args>(args)...);
+    }
+
+    template <typename U>
+    constexpr void destroy(U* location) noexcept {
+        location->~U();
+    }
+
+    template <typename T>
+    class allocator {
+    public:
+        using value_type                             = T;
+        using pointer                                = T*;
+        using const_pointer                          = const T*;
+        using size_type                              = size_t;
+        using difference_type                        = ptrdiff_t;
+        using propagate_on_container_move_assignment = true_type;
+        using is_always_equal                        = true_type;
+
+        constexpr allocator() noexcept = default;
+
+        template <typename U>
+        constexpr allocator(const allocator<U>&) noexcept {}
+
+        [[nodiscard]]
+        constexpr pointer allocate(size_type count,
+                                   const void* hint
+                                   [[maybe_unused]] = nullptr) {
+            if (count > max_size()) {
+                __builtin_trap();
+            }
+            return static_cast<pointer>(
+                ::operator new(count * sizeof(value_type)));
+        }
+
+        constexpr void deallocate(pointer pointer,
+                                  size_type count [[maybe_unused]]) noexcept {
+            ::operator delete(pointer);
+        }
+
+        template <typename U, typename... Args>
+        constexpr void construct(U* location, Args&&... args) {
+            std::construct(location, std::forward<Args>(args)...);
+        }
+
+        template <typename U>
+        constexpr void destroy(U* location) noexcept {
+            std::destroy(location);
+        }
+
+        [[nodiscard]]
+        constexpr size_type max_size() const noexcept {
+            return size_type(-1) / sizeof(value_type);
+        }
+
+        template <typename U>
+        struct rebind {
+            using other = allocator<U>;
+        };
+    };
+
+    template <typename T, typename U>
+    constexpr bool operator==(const allocator<T>&,
+                              const allocator<U>&) noexcept {
+        return true;
+    }
+
+    template <typename T, typename U>
+    constexpr bool operator!=(const allocator<T>&,
+                              const allocator<U>&) noexcept {
+        return false;
+    }
+
+    template <class Allocator>
+    struct allocator_traits {
+        using allocator_type = Allocator;
+        using value_type     = typename allocator_type::value_type;
+        using pointer =
+            __detected_or_t<value_type*, __memory_detail::allocator_pointer,
+                            allocator_type>;
+        using const_pointer =
+            typename __memory_detail::allocator_pointer_selector<
+                allocator_type, pointer, const value_type>::type;
+        using void_pointer =
+            typename __memory_detail::allocator_void_pointer_selector<
+                allocator_type, pointer>::type;
+        using const_void_pointer =
+            typename __memory_detail::allocator_const_void_pointer_selector<
+                allocator_type, pointer>::type;
+        using difference_type =
+            typename __memory_detail::allocator_difference_selector<
+                allocator_type, pointer>::type;
+        using size_type = typename __memory_detail::allocator_size_selector<
+            allocator_type, difference_type>::type;
+        using propagate_on_container_copy_assignment =
+            __detected_or_t<false_type,
+                            __memory_detail::allocator_copy_propagation,
+                            allocator_type>;
+        using propagate_on_container_move_assignment =
+            __detected_or_t<false_type,
+                            __memory_detail::allocator_move_propagation,
+                            allocator_type>;
+        using propagate_on_container_swap =
+            __detected_or_t<false_type,
+                            __memory_detail::allocator_swap_propagation,
+                            allocator_type>;
+        using is_always_equal =
+            __detected_or_t<bool_constant<__is_empty(allocator_type)>,
+                            __memory_detail::allocator_always_equal,
+                            allocator_type>;
+
+        template <class U>
+        using rebind_alloc =
+            typename __memory_detail::allocator_rebind<allocator_type, U>::type;
+
+        template <class U>
+        using rebind_traits = allocator_traits<rebind_alloc<U>>;
+
+    private:
+        template <class T, class... Args>
+        static consteval bool construct_is_noexcept() {
+            if constexpr (requires {
+                              declval<allocator_type&>().construct(
+                                  declval<T*>(), declval<Args>()...);
+                          })
+            {
+                return noexcept(declval<allocator_type&>().construct(
+                    declval<T*>(), declval<Args>()...));
+            } else {
+                return is_nothrow_constructible_v<T, Args...>;
+            }
+        }
+
+        template <class T>
+        static consteval bool destroy_is_noexcept() {
+            if constexpr (requires {
+                              declval<allocator_type&>().destroy(declval<T*>());
+                          })
+            {
+                return noexcept(
+                    declval<allocator_type&>().destroy(declval<T*>()));
+            } else {
+                return noexcept(declval<T*>()->~T());
+            }
+        }
+
+    public:
+        [[nodiscard]]
+        static constexpr pointer allocate(allocator_type& allocator,
+                                          size_type count) {
+            return allocator.allocate(count);
+        }
+
+        [[nodiscard]]
+        static constexpr pointer allocate(allocator_type& allocator,
+                                          size_type count,
+                                          const_void_pointer hint) {
+            if constexpr (requires { allocator.allocate(count, hint); }) {
+                return allocator.allocate(count, hint);
+            } else {
+                (void)hint;
+                return allocator.allocate(count);
+            }
+        }
+
+        [[nodiscard]]
+        static constexpr allocation_result<pointer, size_type>
+        allocate_at_least(allocator_type& allocator, size_type count) {
+            if constexpr (requires { allocator.allocate_at_least(count); }) {
+                return allocator.allocate_at_least(count);
+            } else {
+                return {allocate(allocator, count), count};
+            }
+        }
+
+        static constexpr void deallocate(
+            allocator_type& allocator, pointer pointer,
+            size_type count) noexcept(noexcept(allocator.deallocate(pointer,
+                                                                    count))) {
+            allocator.deallocate(pointer, count);
+        }
+
+        template <class T, class... Args>
+        static constexpr void construct(
+            allocator_type& allocator, T* location,
+            Args&&... args) noexcept(construct_is_noexcept<T, Args...>()) {
+            if constexpr (requires {
+                              allocator.construct(location,
+                                                  std::forward<Args>(args)...);
+                          })
+            {
+                allocator.construct(location, std::forward<Args>(args)...);
+            } else {
+                ::new (static_cast<void*>(location))
+                    T(std::forward<Args>(args)...);
+            }
+        }
+
+        template <class T>
+        static constexpr void destroy(
+            allocator_type& allocator,
+            T* location) noexcept(destroy_is_noexcept<T>()) {
+            if constexpr (requires { allocator.destroy(location); }) {
+                allocator.destroy(location);
+            } else {
+                location->~T();
+            }
+        }
+
+        [[nodiscard]]
+        static constexpr size_type max_size(
+            const allocator_type& allocator) noexcept {
+            if constexpr (requires { allocator.max_size(); }) {
+                return allocator.max_size();
+            } else {
+                return size_type(-1) / sizeof(value_type);
+            }
+        }
+
+        [[nodiscard]]
+        static constexpr allocator_type select_on_container_copy_construction(
+            const allocator_type& allocator) {
+            if constexpr (requires {
+                              allocator.select_on_container_copy_construction();
+                          })
+            {
+                return allocator.select_on_container_copy_construction();
+            } else {
+                return allocator;
+            }
+        }
+    };
+}  // namespace std
