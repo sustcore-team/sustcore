@@ -30,6 +30,14 @@ else ifeq ($(program-id),taycpplib-string-test)
 sources-cpp := string.cpp
 else ifeq ($(program-id),taycpplib-string-panic-test)
 sources-cpp := string_panic.cpp
+else ifeq ($(program-id),taycpplib-list-test)
+sources-cpp := list.cpp
+else ifeq ($(program-id),taycpplib-map-test)
+sources-cpp := map.cpp
+else ifeq ($(program-id),taycpplib-set-test)
+sources-cpp := set.cpp
+else ifeq ($(program-id),taycpplib-container-failure-test)
+sources-cpp := container_failure.cpp
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

@@ -117,3 +117,31 @@ target = "build"
 output = "taycpplib-string-panic-test"
 expect = "abort"
 stderr-contains = "string allocation failed"
+
+[[hostprog]]
+id = "taycpplib-list-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-list-test"
+
+[[hostprog]]
+id = "taycpplib-map-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-map-test"
+
+[[hostprog]]
+id = "taycpplib-set-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-set-test"
+
+[[hostprog]]
+id = "taycpplib-container-failure-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-container-failure-test"

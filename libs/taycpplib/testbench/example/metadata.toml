@@ -48,3 +48,24 @@ kind = "example"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-allocator-example"
+
+[[hostprog]]
+id = "taycpplib-list-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-list-example"
+
+[[hostprog]]
+id = "taycpplib-map-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-map-example"
+
+[[hostprog]]
+id = "taycpplib-set-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-set-example"

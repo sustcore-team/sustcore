@@ -64,3 +64,10 @@ kind = "compile"
 language = "c++"
 sources = ["allocator_default_invalid.cpp"]
 expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-containers"
+kind = "compile"
+language = "c++"
+sources = ["containers_freestanding.cpp"]
+expect = "success"

@@ -12,6 +12,12 @@ else ifeq ($(program-id),taycpplib-string-example)
 sources-cpp := string.cpp
 else ifeq ($(program-id),taycpplib-allocator-example)
 sources-cpp := allocator.cpp
+else ifeq ($(program-id),taycpplib-list-example)
+sources-cpp := list.cpp
+else ifeq ($(program-id),taycpplib-map-example)
+sources-cpp := map.cpp
+else ifeq ($(program-id),taycpplib-set-example)
+sources-cpp := set.cpp
 else
 $(error unsupported taycpplib host example: $(program-id))
 endif

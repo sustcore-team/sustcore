@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <type_traits>
+#include <utility>
 
 namespace std {
     template <typename F, typename... Args>
@@ -25,6 +27,72 @@ namespace std {
         [[nodiscard]]
         constexpr T&& operator()(T&& t) const noexcept {
             return std::forward<T>(t);
+        }
+    };
+
+    template <class T = void>
+    struct equal_to {
+        [[nodiscard]]
+        constexpr bool operator()(const T& left, const T& right) const
+            noexcept(noexcept(left == right)) {
+            return left == right;
+        }
+    };
+
+    template <>
+    struct equal_to<void> {
+        using is_transparent = void;
+
+        template <class T, class U>
+        [[nodiscard]]
+        constexpr auto operator()(T&& left, U&& right) const
+            noexcept(noexcept(std::forward<T>(left) == std::forward<U>(right)))
+                -> decltype(std::forward<T>(left) == std::forward<U>(right)) {
+            return std::forward<T>(left) == std::forward<U>(right);
+        }
+    };
+
+    template <class T>
+    struct hash;
+
+    template <class T>
+    struct __trival_hash {
+        [[nodiscard]]
+        constexpr size_t operator()(T value) const noexcept {
+            return static_cast<size_t>(value);
+        }
+    };
+
+    template <>
+    struct hash<bool> : __trival_hash<bool> {};
+    template <>
+    struct hash<char> : __trival_hash<char> {};
+    template <>
+    struct hash<signed char> : __trival_hash<signed char> {};
+    template <>
+    struct hash<unsigned char> : __trival_hash<unsigned char> {};
+    template <>
+    struct hash<short> : __trival_hash<short> {};
+    template <>
+    struct hash<unsigned short> : __trival_hash<unsigned short> {};
+    template <>
+    struct hash<int> : __trival_hash<int> {};
+    template <>
+    struct hash<unsigned int> : __trival_hash<unsigned int> {};
+    template <>
+    struct hash<long> : __trival_hash<long> {};
+    template <>
+    struct hash<unsigned long> : __trival_hash<unsigned long> {};
+    template <>
+    struct hash<long long> : __trival_hash<long long> {};
+    template <>
+    struct hash<unsigned long long> : __trival_hash<unsigned long long> {};
+
+    template <class T>
+    struct hash<T*> {
+        [[nodiscard]]
+        size_t operator()(T* pointer) const noexcept {
+            return reinterpret_cast<size_t>(pointer);
         }
     };
 }  // namespace std

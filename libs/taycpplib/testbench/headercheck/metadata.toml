@@ -88,3 +88,21 @@ id = "taycpplib-units"
 header = "tay/units.h"
 language = "c++"
 environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-list"
+header = "tay/list.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-map"
+header = "tay/map.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-set"
+header = "tay/set.h"
+language = "c++"
+environments = ["freestanding", "host"]
