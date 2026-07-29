@@ -37,6 +37,13 @@ namespace {
         }
     };
 
+    struct move_only_less {
+        constexpr bool operator()(const move_only& left,
+                                  const move_only& right) const {
+            return left.value < right.value;
+        }
+    };
+
     constexpr bool constexpr_sort_works() {
         int values[]   = {5, 1, 4, 1, 3, 2};
         int expected[] = {1, 1, 2, 3, 4, 5};
@@ -45,6 +52,12 @@ namespace {
     }
 }  // namespace
 
+static_assert(std::sortable<int*>);
+static_assert(
+    std::sortable<record*, std::ranges::less, decltype(&record::key)>);
+static_assert(std::sortable<move_only*, move_only_less>);
+static_assert(!std::permutable<const int*>);
+static_assert(!std::sortable<const int*>);
 static_assert(constexpr_sort_works());
 
 int main() {

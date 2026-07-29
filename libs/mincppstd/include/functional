@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -22,7 +23,21 @@ namespace std {
                                    std::forward<Args>(args)...);
     }
 
+    template <typename R, typename F, typename... Args>
+        requires is_invocable_r_v<R, F, Args...>
+    constexpr R invoke_r(F&& function, Args&&... args) noexcept(
+        is_nothrow_invocable_r_v<R, F, Args...>) {
+        if constexpr (is_void_v<R>) {
+            std::invoke(std::forward<F>(function), std::forward<Args>(args)...);
+        } else {
+            return std::invoke(std::forward<F>(function),
+                               std::forward<Args>(args)...);
+        }
+    }
+
     struct identity {
+        using is_transparent = void;
+
         template <typename T>
         [[nodiscard]]
         constexpr T&& operator()(T&& t) const noexcept {
@@ -51,6 +66,37 @@ namespace std {
             return std::forward<T>(left) == std::forward<U>(right);
         }
     };
+
+    namespace ranges {
+        struct less {
+            using is_transparent = void;
+
+            template <class T, class U>
+                requires totally_ordered_with<T, U>
+            [[nodiscard]]
+            constexpr bool operator()(T&& left, U&& right) const
+                noexcept(noexcept(std::forward<T>(left) <
+                                  std::forward<U>(right))) {
+                if constexpr (is_pointer_v<remove_reference_t<T>> &&
+                              is_pointer_v<remove_reference_t<U>>)
+                {
+                    if (std::is_constant_evaluated()) {
+                        return std::forward<T>(left) < std::forward<U>(right);
+                    }
+
+                    using address_type = __UINTPTR_TYPE__;
+                    return reinterpret_cast<address_type>(
+                               static_cast<const volatile void*>(
+                                   std::forward<T>(left))) <
+                           reinterpret_cast<address_type>(
+                               static_cast<const volatile void*>(
+                                   std::forward<U>(right)));
+                } else {
+                    return std::forward<T>(left) < std::forward<U>(right);
+                }
+            }
+        };
+    }  // namespace ranges
 
     template <class T>
     struct hash;

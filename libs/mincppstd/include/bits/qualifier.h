@@ -15,19 +15,11 @@ namespace std {
     // Const - Volatile Modifiers
     template <typename _Tp>
     struct remove_const {
-        using type = _Tp;
-    };
-    template <typename _Tp>
-    struct remove_const<const _Tp> {
-        using type = _Tp;
+        using type = __remove_const(_Tp);
     };
     template <typename _Tp>
     struct remove_volatile {
-        using type = _Tp;
-    };
-    template <typename _Tp>
-    struct remove_volatile<volatile _Tp> {
-        using type = _Tp;
+        using type = __remove_volatile(_Tp);
     };
     template <typename _Tp>
     struct remove_cv {
@@ -63,41 +55,17 @@ namespace std {
     // Reference Modifiers
     template <typename _Tp>
     struct remove_reference {
-        using type = _Tp;
-    };
-    template <typename _Tp>
-    struct remove_reference<_Tp&> {
-        using type = _Tp;
-    };
-    template <typename _Tp>
-    struct remove_reference<_Tp&&> {
-        using type = _Tp;
+        using type = __remove_reference_t(_Tp);
     };
 
     template <typename _Tp>
     struct add_lvalue_reference {
-        using type = _Tp&;
-    };
-    template <typename _Tp>
-    struct add_lvalue_reference<_Tp&> {
-        using type = _Tp&;
-    };
-    template <typename _Tp>
-    struct add_lvalue_reference<_Tp&&> {
-        using type = _Tp&;
+        using type = __add_lvalue_reference(_Tp);
     };
 
     template <typename _Tp>
     struct add_rvalue_reference {
-        using type = _Tp&&;
-    };
-    template <typename _Tp>
-    struct add_rvalue_reference<_Tp&> {
-        using type = _Tp&&;
-    };
-    template <typename _Tp>
-    struct add_rvalue_reference<_Tp&&> {
-        using type = _Tp&&;
+        using type = __add_rvalue_reference(_Tp);
     };
 
     template <typename _Tp>
@@ -106,11 +74,20 @@ namespace std {
     using add_lvalue_reference_t = typename add_lvalue_reference<_Tp>::type;
     template <typename _Tp>
     using add_rvalue_reference_t = typename add_rvalue_reference<_Tp>::type;
-    template <typename _Tp>
-    using remove_cvref_t = remove_cv_t<remove_reference_t<_Tp>>;
 
-    // Note: a temporary implementation of decay_t, which only removes const
-    // and volatile qualifiers, as well as references.
     template <typename _Tp>
-    using decay_t = remove_cvref_t<_Tp>;
+    struct remove_cvref {
+        using type = __remove_cvref(_Tp);
+    };
+
+    template <typename _Tp>
+    using remove_cvref_t = typename remove_cvref<_Tp>::type;
+
+    template <typename _Tp>
+    struct decay {
+        using type = __decay(_Tp);
+    };
+
+    template <typename _Tp>
+    using decay_t = typename decay<_Tp>::type;
 }  // namespace std

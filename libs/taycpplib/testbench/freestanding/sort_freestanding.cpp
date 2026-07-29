@@ -24,6 +24,10 @@ namespace {
     }
 }  // namespace
 
+static_assert(std::sortable<int *>);
+static_assert(
+    std::sortable<record *, std::ranges::less, decltype(&record::key)>);
+static_assert(!std::sortable<const int *>);
 static_assert(sort_works());
 
 int main() {
