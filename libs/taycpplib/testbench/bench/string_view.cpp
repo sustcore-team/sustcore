@@ -7,12 +7,26 @@
 
 namespace {
     constexpr std::uint64_t iterations = 2000000;
+    constexpr std::uint64_t long_search_iterations = 200000;
+
+    constexpr std::size_t repetitive_text_length  = 512;
+    constexpr std::size_t random_text_length      = 512;
+    constexpr std::size_t random_pattern_length   = 32;
+    constexpr std::size_t random_pattern_count    = 64;
+
+    std::uint64_t next_random(std::uint64_t& state) noexcept {
+        state ^= state << 7;
+        state ^= state >> 9;
+        state ^= state << 8;
+        return state;
+    }
 
     template <typename Operation>
-    void benchmark(const char* name, std::uint64_t seed, Operation operation) {
+    void benchmark(const char* name, std::uint64_t seed, Operation operation,
+                   std::uint64_t operation_iterations = iterations) {
         volatile std::uint64_t checksum = 0;
         const auto start                = std::chrono::steady_clock::now();
-        for (std::uint64_t index = 0; index < iterations; ++index) {
+        for (std::uint64_t index = 0; index < operation_iterations; ++index) {
             checksum = checksum + operation(index + seed);
         }
         const auto elapsed =
@@ -20,9 +34,11 @@ namespace {
                 std::chrono::steady_clock::now() - start)
                 .count();
         std::cout << std::format(
-            "{:28} iterations={} elapsed={:10d} ns ns/op={:8.3f} checksum={}\n",
-            name, (unsigned long long)iterations, (long long)elapsed,
-            (double)elapsed / (double)iterations, (unsigned long long)checksum);
+            "{:28} iterations={:7d} elapsed={:10d} ns ns/op={:8.3f} checksum={}\n",
+            name, (unsigned long long)operation_iterations,
+            (long long)elapsed,
+            (double)elapsed / (double)operation_iterations,
+            (unsigned long long)checksum);
     }
 }  // namespace
 
@@ -40,8 +56,62 @@ int main() {
     const auto seed = static_cast<std::uint64_t>(
         std::chrono::steady_clock::now().time_since_epoch().count());
 
-    std::printf("taycpplib string_view benchmark (%llu iterations each)\n",
-                (unsigned long long)iterations);
+    char repetitive_text_storage[repetitive_text_length];
+    for (std::size_t index = 0; index + 1 < repetitive_text_length; ++index) {
+        repetitive_text_storage[index] = 'A';
+    }
+    repetitive_text_storage[repetitive_text_length - 1] = 'B';
+    const tay::string_view repetitive_text(repetitive_text_storage,
+                                           repetitive_text_length);
+    constexpr tay::string_view repetitive_patterns[] = {
+        "AAAAAB",
+        "AAAAAC",
+        "AAAABB",
+    };
+
+    char random_text_storage[random_text_length];
+    char random_pattern_storage[random_pattern_count][random_pattern_length];
+    tay::string_view random_patterns[random_pattern_count];
+    std::uint64_t random_state = seed | 1;
+    for (char& character : random_text_storage) {
+        character = static_cast<char>('a' + next_random(random_state) % 26);
+    }
+    for (std::size_t pattern_index = 0;
+         pattern_index < random_pattern_count; ++pattern_index) {
+        if ((pattern_index & 1) == 0) {
+            const std::size_t start =
+                next_random(random_state) %
+                (random_text_length - random_pattern_length + 1);
+            for (std::size_t index = 0; index < random_pattern_length;
+                 ++index) {
+                random_pattern_storage[pattern_index][index] =
+                    random_text_storage[start + index];
+            }
+        } else {
+            for (std::size_t index = 0; index < random_pattern_length;
+                 ++index) {
+                random_pattern_storage[pattern_index][index] =
+                    static_cast<char>('a' + next_random(random_state) % 26);
+            }
+            random_pattern_storage[pattern_index][random_pattern_length / 2] =
+                '\0';
+        }
+        random_patterns[pattern_index] = tay::string_view(
+            random_pattern_storage[pattern_index], random_pattern_length);
+    }
+    const tay::string_view random_text(random_text_storage,
+                                       random_text_length);
+
+    std::printf(
+        "taycpplib string_view benchmark (default=%llu, long-search=%llu "
+        "iterations)\n",
+        (unsigned long long)iterations,
+        (unsigned long long)long_search_iterations);
+    std::printf(
+        "search datasets: repetitive=%zu bytes, random=%zu bytes/%zu-byte "
+        "patterns (%zu total, 50%% hits)\n",
+        repetitive_text_length, random_text_length, random_pattern_length,
+        random_pattern_count);
 
     benchmark("baseline", seed,
               [](std::uint64_t token) { return token & 0xff; });
@@ -170,24 +240,42 @@ int main() {
         return static_cast<std::uint64_t>(text.ends_with(suffixes[token & 3]));
     });
 
-    benchmark("contains", seed, [&](std::uint64_t token) {
-        return static_cast<std::uint64_t>(text.contains(words[token & 3]));
-    });
+    benchmark("contains(repetitive)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            repetitive_text.contains(repetitive_patterns[token % 3]));
+    }, long_search_iterations);
+
+    benchmark("contains(random)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            random_text.contains(random_patterns[token % random_pattern_count]));
+    }, long_search_iterations);
+
+    benchmark("find(repetitive)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            repetitive_text.find(repetitive_patterns[token % 3]));
+    }, long_search_iterations);
+
+    benchmark("find(random)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            random_text.find(random_patterns[token % random_pattern_count]));
+    }, long_search_iterations);
+
+    benchmark("rfind(repetitive)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            repetitive_text.rfind(repetitive_patterns[token % 3]));
+    }, long_search_iterations);
+
+    benchmark("rfind(random)", seed, [&](std::uint64_t token) {
+        return static_cast<std::uint64_t>(
+            random_text.rfind(random_patterns[token % random_pattern_count]));
+    }, long_search_iterations);
 
     benchmark("find(char)", seed, [&](std::uint64_t token) {
         return static_cast<std::uint64_t>(text.find(characters[token & 3]));
     });
 
-    benchmark("find(string_view)", seed, [&](std::uint64_t token) {
-        return static_cast<std::uint64_t>(text.find(words[token & 3]));
-    });
-
     benchmark("rfind(char)", seed, [&](std::uint64_t token) {
         return static_cast<std::uint64_t>(text.rfind(characters[token & 3]));
-    });
-
-    benchmark("rfind(string_view)", seed, [&](std::uint64_t token) {
-        return static_cast<std::uint64_t>(text.rfind(words[token & 3]));
     });
 
     benchmark("find_first_of", seed, [&](std::uint64_t token) {

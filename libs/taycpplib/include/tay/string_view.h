@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <tay/detail/string/two_way.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 
@@ -35,6 +36,8 @@ namespace tay {
         static constexpr size_type npos = size_type(-1);
 
     private:
+        static constexpr size_type M_naive_search_threshold = 4;
+
         const_pointer data_ = nullptr;
         size_type size_     = 0;
 
@@ -74,6 +77,64 @@ namespace tay {
                 }
             }
             return false;
+        }
+
+        template <detail::__search_direction direction>
+        [[nodiscard]]
+        static constexpr size_type M_naive_search(
+            const_pointer text, size_type text_length, const_pointer pattern,
+            size_type pattern_length) noexcept {
+            if (pattern_length == 0) {
+                if constexpr (direction == detail::__search_direction::FORWARD)
+                {
+                    return 0;
+                } else {
+                    return text_length;
+                }
+            }
+            if (pattern_length > text_length) {
+                return npos;
+            }
+
+            const size_type last = text_length - pattern_length;
+            if constexpr (direction == detail::__search_direction::FORWARD) {
+                for (size_type position = 0; position <= last; ++position) {
+                    if (M_cmemcmp(text + position, pattern, pattern_length) ==
+                        0)
+                    {
+                        return position;
+                    }
+                }
+                return npos;
+            }
+
+            for (size_type position = last + 1; position > 0; --position) {
+                if (M_cmemcmp(text + position - 1, pattern, pattern_length) ==
+                    0)
+                {
+                    return position - 1;
+                }
+            }
+            return npos;
+        }
+
+        template <detail::__search_direction direction>
+        [[nodiscard]]
+        static constexpr size_type M_search(const_pointer text,
+                                            size_type text_length,
+                                            const_pointer pattern,
+                                            size_type pattern_length) noexcept {
+            if consteval {
+                return M_naive_search<direction>(text, text_length, pattern,
+                                                 pattern_length);
+
+                if (pattern_length <= M_naive_search_threshold) {
+                    return M_naive_search<direction>(text, text_length, pattern,
+                                                     pattern_length);
+                }
+            }
+            return detail::__str_two_way<direction>(text, text_length, pattern,
+                                                    pattern_length);
         }
 
         [[nodiscard]]
@@ -379,26 +440,19 @@ namespace tay {
                 return npos;
             }
 
-            // TODO: implement a more efficient search algorithm like:
-            // KMP(T: O(n + m), S: O(m))
-            // Two-Way(T: O(n + m), S: O(1))
-            // I think it would be better to apply different algorithms on different situations
-            // let L to be the length of pattern string
-            // then when L <= 8, use naive search algorithm,
-            // when 8 < L <= 32, use Two-Way algorithm,
-            // when L > 32, use Two-Way with bad characters
-            for (size_type index = position; index <= size_ - count; ++index) {
-                if (M_cmemcmp(data_ + index, string, count) == 0) {
-                    return index;
-                }
-            }
-            return npos;
+            const size_type result =
+                M_search<detail::__search_direction::FORWARD>(
+                    data_ + position, size_ - position, string, count);
+            return result == npos ? npos : position + result;
         }
 
         [[nodiscard]]
         constexpr size_type rfind(char character,
                                   size_type position = npos) const noexcept {
-            const size_type last = size_ - 1;
+            if (empty()) {
+                return npos;
+            }
+            const size_type last  = size_ - 1;
             const size_type start = position < last ? position : last;
             for (size_type index = start + 1; index > 0; --index) {
                 if (data_[index - 1] == character) {
@@ -432,12 +486,8 @@ namespace tay {
 
             const size_type last  = size_ - count;
             const size_type start = position < last ? position : last;
-            for (size_type index = start + 1; index > 0; --index) {
-                if (M_cmemcmp(data_ + index - 1, string, count) == 0) {
-                    return index - 1;
-                }
-            }
-            return npos;
+            return M_search<detail::__search_direction::BACKWARD>(
+                data_, start + count, string, count);
         }
 
         [[nodiscard]]

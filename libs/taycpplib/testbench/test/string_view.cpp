@@ -7,6 +7,127 @@
 using namespace tay::string_view_literals;
 
 namespace {
+    constexpr tay::string_view::size_type reference_find(
+        tay::string_view text, tay::string_view pattern,
+        tay::string_view::size_type position) {
+        if (position > text.size()) {
+            return tay::string_view::npos;
+        }
+        if (pattern.empty()) {
+            return position;
+        }
+        if (pattern.size() > text.size() - position) {
+            return tay::string_view::npos;
+        }
+        for (auto candidate = position;
+             candidate <= text.size() - pattern.size(); ++candidate) {
+            const auto selected = text.substr(candidate, pattern.size());
+            if (selected && *selected == pattern) {
+                return candidate;
+            }
+        }
+        return tay::string_view::npos;
+    }
+
+    constexpr tay::string_view::size_type reference_rfind(
+        tay::string_view text, tay::string_view pattern,
+        tay::string_view::size_type position) {
+        if (pattern.empty()) {
+            return position < text.size() ? position : text.size();
+        }
+        if (pattern.size() > text.size()) {
+            return tay::string_view::npos;
+        }
+
+        const auto last = text.size() - pattern.size();
+        const auto start = position < last ? position : last;
+        for (auto candidate = start + 1; candidate > 0; --candidate) {
+            const auto selected =
+                text.substr(candidate - 1, pattern.size());
+            if (selected && *selected == pattern) {
+                return candidate - 1;
+            }
+        }
+        return tay::string_view::npos;
+    }
+
+    void fill_binary(char* output, std::size_t length, std::size_t bits) {
+        for (std::size_t index = 0; index < length; ++index) {
+            output[index] = static_cast<char>('a' + ((bits >> index) & 1));
+        }
+    }
+
+    void exhaustive_search_matches_reference() {
+        char text_buffer[8]{};
+        char pattern_buffer[7]{};
+
+        for (std::size_t text_length = 0; text_length <= 8; ++text_length) {
+            for (std::size_t text_bits = 0;
+                 text_bits < (std::size_t(1) << text_length); ++text_bits) {
+                fill_binary(text_buffer, text_length, text_bits);
+                const tay::string_view text(text_buffer, text_length);
+
+                for (std::size_t pattern_length = 0; pattern_length <= 7;
+                     ++pattern_length) {
+                    for (std::size_t pattern_bits = 0;
+                         pattern_bits < (std::size_t(1) << pattern_length);
+                         ++pattern_bits) {
+                        fill_binary(pattern_buffer, pattern_length,
+                                    pattern_bits);
+                        const tay::string_view pattern(pattern_buffer,
+                                                       pattern_length);
+
+                        for (std::size_t position = 0;
+                             position <= text_length + 1; ++position) {
+                            assert(text.find(pattern, position) ==
+                                   reference_find(text, pattern, position));
+                            assert(text.rfind(pattern, position) ==
+                                   reference_rfind(text, pattern, position));
+                        }
+                        assert(text.rfind(pattern) ==
+                               reference_rfind(text, pattern,
+                                               tay::string_view::npos));
+                    }
+                }
+            }
+        }
+    }
+
+    void pseudo_random_search_matches_reference() {
+        char text_buffer[80]{};
+        char pattern_buffer[40]{};
+        std::size_t state = 0x9e3779b97f4a7c15ULL;
+
+        for (std::size_t iteration = 0; iteration < 5000; ++iteration) {
+            state ^= state << 7;
+            state ^= state >> 9;
+            const auto text_length = state % sizeof(text_buffer);
+            state ^= state << 8;
+            const auto pattern_length = state % sizeof(pattern_buffer);
+
+            for (std::size_t index = 0; index < text_length; ++index) {
+                state ^= state << 7;
+                state ^= state >> 9;
+                text_buffer[index] = static_cast<char>(state >> 24);
+            }
+            for (std::size_t index = 0; index < pattern_length; ++index) {
+                state ^= state << 7;
+                state ^= state >> 9;
+                pattern_buffer[index] = static_cast<char>(state >> 24);
+            }
+
+            const tay::string_view text(text_buffer, text_length);
+            const tay::string_view pattern(pattern_buffer, pattern_length);
+            const auto position = state % (text_length + 2);
+            assert(text.find(pattern, position) ==
+                   reference_find(text, pattern, position));
+            assert(text.rfind(pattern, position) ==
+                   reference_rfind(text, pattern, position));
+            assert(text.rfind(pattern) ==
+                   reference_rfind(text, pattern, tay::string_view::npos));
+        }
+    }
+
     constexpr bool constexpr_interface_works() {
         tay::string_view view = "hello world";
         if (view.size() != 11 || view.length() != 11 || view.empty()) {
@@ -130,6 +251,18 @@ static_assert(tay::string_view_hash{}("hash") ==
 int main() {
     assert(constexpr_interface_works());
 
+    const tay::string_view repeated = "xxababac--ababac--tail";
+    assert(repeated.find("ababac") == 2);
+    assert(repeated.find("ababac", 3) == 10);
+    assert(repeated.rfind("ababac") == 10);
+    assert(repeated.rfind("ababac", 9) == 2);
+    assert(repeated.find("ababa") == 2);
+    assert(repeated.rfind("ababa") == 10);
+
+    const tay::string_view periodic = "aaaaaaaaaaaaaaaaab";
+    assert(periodic.find("aaaaab") == 12);
+    assert(periodic.rfind("aaaaaa") == 11);
+
     static constexpr char embedded[] = {'a', '\0', 'b'};
     constexpr tay::string_view view(embedded, 3);
     static_assert(view.size() == 3);
@@ -140,6 +273,20 @@ int main() {
     static_assert(empty.end() == nullptr);
     static_assert(empty.find("") == 0);
     static_assert(empty.rfind("") == 0);
+
+    static constexpr char embedded_text[] = {'x', 'a', '\0', 'b', 'c', '\0',
+                                              'd', 'a', '\0', 'b', 'c', '\0',
+                                              'd'};
+    static constexpr char embedded_pattern[] = {'a', '\0', 'b', 'c', '\0',
+                                                 'd'};
+    const tay::string_view binary_text(embedded_text, sizeof(embedded_text));
+    const tay::string_view binary_pattern(embedded_pattern,
+                                          sizeof(embedded_pattern));
+    assert(binary_text.find(binary_pattern) == 1);
+    assert(binary_text.rfind(binary_pattern) == 7);
+
+    exhaustive_search_matches_reference();
+    pseudo_random_search_matches_reference();
 
     return 0;
 }

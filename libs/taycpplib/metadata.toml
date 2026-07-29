@@ -1,6 +1,8 @@
 [[libmeta]]
 id = "taycpplib"
-libname = ""
+libname = "libtaycpplib.a"
+makefile = "Makefile"
+target = "build-static"
 version = "0.1.0-dev.1"
 support-environments = ["freestanding", "host"]
 testbench.test = ["testbench/test/metadata.toml"]
@@ -12,8 +14,3 @@ testbench.example = ["testbench/example/metadata.toml"]
 include-c   = ["include"]
 include-cpp = ["include"]
 include-asm = ["include"]
-
-[libmeta.host]
-libname = "libtaycpplib.a"
-makefile = "Makefile"
-target = "build-static"
