@@ -145,3 +145,10 @@ kind = "test"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-container-failure-test"
+
+[[hostprog]]
+id = "taycpplib-format-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-format-test"

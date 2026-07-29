@@ -84,6 +84,36 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-format"
+header = "tay/format.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-fmt-core"
+header = "tay/fmt/core.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-fmt-context"
+header = "tay/fmt/context.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-fmt-formatters"
+header = "tay/fmt/formatters.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-fmt-engine"
+header = "tay/fmt/engine.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-units"
 header = "tay/units.h"
 language = "c++"

@@ -71,3 +71,27 @@ kind = "compile"
 language = "c++"
 sources = ["containers_freestanding.cpp"]
 expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-format-without-allocator"
+kind = "link"
+language = "c++"
+sources = ["format_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-format-invalid"
+kind = "compile"
+language = "c++"
+sources = [
+    "format_invalid_unmatched_open.cpp",
+    "format_invalid_unescaped_close.cpp",
+    "format_invalid_mixed_index.cpp",
+    "format_invalid_argument_index.cpp",
+    "format_invalid_spec.cpp",
+    "format_invalid_missing_formatter.cpp",
+    "format_invalid_partial_spec.cpp",
+    "format_invalid_zero_chunk.cpp",
+    "format_invalid_callback_result.cpp",
+]
+expect = "failure"

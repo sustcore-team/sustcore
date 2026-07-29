@@ -38,6 +38,8 @@ else ifeq ($(program-id),taycpplib-set-test)
 sources-cpp := set.cpp
 else ifeq ($(program-id),taycpplib-container-failure-test)
 sources-cpp := container_failure.cpp
+else ifeq ($(program-id),taycpplib-format-test)
+sources-cpp := format.cpp
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

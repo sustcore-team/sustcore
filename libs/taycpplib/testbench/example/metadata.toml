@@ -69,3 +69,10 @@ kind = "example"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-set-example"
+
+[[hostprog]]
+id = "taycpplib-format-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-format-example"

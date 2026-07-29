@@ -18,6 +18,8 @@ else ifeq ($(program-id),taycpplib-map-example)
 sources-cpp := map.cpp
 else ifeq ($(program-id),taycpplib-set-example)
 sources-cpp := set.cpp
+else ifeq ($(program-id),taycpplib-format-example)
+sources-cpp := format.cpp
 else
 $(error unsupported taycpplib host example: $(program-id))
 endif
