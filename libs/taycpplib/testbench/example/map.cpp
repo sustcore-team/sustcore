@@ -5,15 +5,12 @@
  * @date 2026-07-29
  */
 
-#include <tay/allocator.h>
 #include <tay/map.h>
 
 #include <cstdio>
-#include <utility>
 
 namespace {
-    using entry      = std::pair<const int, const char*>;
-    using status_map = tay::map<int, const char*, tay::allocator<entry>>;
+    using status_map = tay::map<int, const char*>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {

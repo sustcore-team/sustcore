@@ -1,6 +1,6 @@
 /**
  * @file allocator.h
- * @brief Exception-free allocator adaptation and stateless host allocation.
+ * @brief Exception-free allocator adaptation and stateless allocation.
  */
 
 #pragma once
@@ -16,6 +16,9 @@
 #include <utility>
 
 namespace tay {
+    void* __alloc(std::size_t size, std::size_t alignment) noexcept;
+    void __free(void* ptr, std::size_t size, std::size_t alignment) noexcept;
+
     template <class Pointer, class SizeType = std::size_t>
     struct allocation_result {
         Pointer ptr;
@@ -174,7 +177,6 @@ namespace tay {
         }
     };
 
-#if defined(TAY_ENV_HOST)
     template <class T>
     class allocator {
     public:
@@ -197,7 +199,8 @@ namespace tay {
         };
 
         [[nodiscard]]
-        expected<pointer, error_code> try_allocate(size_type count) noexcept {
+        constexpr expected<pointer, error_code> try_allocate(
+            size_type count) noexcept {
             if (count == 0) {
                 return pointer{};
             }
@@ -206,8 +209,14 @@ namespace tay {
                     unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
             }
 
-            void* memory          = nullptr;
             const size_type bytes = count * sizeof(value_type);
+            if consteval {
+                std::allocator<value_type> standard_allocator;
+                return standard_allocator.allocate(count);
+            }
+
+            void* memory = nullptr;
+#if defined(TAY_ENV_HOST)
             if constexpr (alignof(value_type) >
                           __STDCPP_DEFAULT_NEW_ALIGNMENT__)
             {
@@ -216,6 +225,9 @@ namespace tay {
             } else {
                 memory = ::operator new(bytes, std::nothrow);
             }
+#else
+            memory = tay::__alloc(bytes, alignof(value_type));
+#endif
             if (memory == nullptr) {
                 return expected<pointer, error_code>(unexpect,
                                                      error_code::OUT_OF_MEMORY);
@@ -224,7 +236,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        pointer allocate(size_type count) noexcept {
+        constexpr pointer allocate(size_type count) noexcept {
             auto result = try_allocate(count);
             if (!result) {
                 detail::panic_allocation(result.error());
@@ -232,11 +244,16 @@ namespace tay {
             return *result;
         }
 
-        void deallocate(pointer memory,
-                        size_type count [[maybe_unused]]) noexcept {
+        constexpr void deallocate(pointer memory, size_type count) noexcept {
             if (memory == nullptr) {
                 return;
             }
+            if consteval {
+                std::allocator<value_type> standard_allocator;
+                standard_allocator.deallocate(memory, count);
+                return;
+            }
+#if defined(TAY_ENV_HOST)
             if constexpr (alignof(value_type) >
                           __STDCPP_DEFAULT_NEW_ALIGNMENT__)
             {
@@ -245,6 +262,10 @@ namespace tay {
             } else {
                 ::operator delete(memory);
             }
+#else
+            tay::__free(memory, count * sizeof(value_type),
+                        alignof(value_type));
+#endif
         }
 
         [[nodiscard]]
@@ -264,5 +285,4 @@ namespace tay {
                               const allocator<U>&) noexcept {
         return false;
     }
-#endif
 }  // namespace tay

@@ -5,13 +5,12 @@
  * @date 2026-07-29
  */
 
-#include <tay/allocator.h>
 #include <tay/set.h>
 
 #include <cstdio>
 
 namespace {
-    using id_set = tay::set<int, tay::allocator<int>>;
+    using id_set = tay::set<int>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {

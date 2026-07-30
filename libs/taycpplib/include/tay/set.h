@@ -27,7 +27,8 @@ namespace tay {
         };
     }  // namespace detail
 
-    template <class Key, class Allocator, class Hash = std::hash<Key>,
+    template <class Key, class Allocator = allocator<Key>,
+              class Hash     = std::hash<Key>,
               class KeyEqual = detail::hash_equal<Key>>
     class hash_set {
     public:
@@ -549,7 +550,8 @@ namespace tay {
         return left.swap(right);
     }
 
-    template <class Key, class Allocator, class Hash = std::hash<Key>,
+    template <class Key, class Allocator = allocator<Key>,
+              class Hash     = std::hash<Key>,
               class KeyEqual = detail::hash_equal<Key>>
     using set = hash_set<Key, Allocator, Hash, KeyEqual>;
 }  // namespace tay

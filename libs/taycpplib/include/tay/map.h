@@ -27,8 +27,10 @@ namespace tay {
         };
     }  // namespace detail
 
-    template <class Key, class T, class Allocator, class Hash = std::hash<Key>,
-              class KeyEqual = detail::hash_equal<Key>>
+    template <class Key, class T,
+              class Allocator = allocator<std::pair<const Key, T>>,
+              class Hash      = std::hash<Key>,
+              class KeyEqual  = detail::hash_equal<Key>>
     class hash_map {
     public:
         using key_type       = Key;
@@ -641,7 +643,9 @@ namespace tay {
         return left.swap(right);
     }
 
-    template <class Key, class T, class Allocator, class Hash = std::hash<Key>,
-              class KeyEqual = detail::hash_equal<Key>>
+    template <class Key, class T,
+              class Allocator = allocator<std::pair<const Key, T>>,
+              class Hash      = std::hash<Key>,
+              class KeyEqual  = detail::hash_equal<Key>>
     using map = hash_map<Key, T, Allocator, Hash, KeyEqual>;
 }  // namespace tay

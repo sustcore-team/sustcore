@@ -136,3 +136,15 @@ id = "taycpplib-set"
 header = "tay/set.h"
 language = "c++"
 environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-path"
+header = "tay/path.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-logger"
+header = "tay/logger.h"
+language = "c++"
+environments = ["freestanding", "host"]

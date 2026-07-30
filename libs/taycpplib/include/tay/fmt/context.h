@@ -87,6 +87,10 @@ namespace tay::detail {
             write(text.data(), text.size());
         }
 
+        [[nodiscard]] constexpr bool stopped() const noexcept {
+            return sink_->stopped();
+        }
+
         template <class As = infer_format_type, class Value>
         typename basic_format_context::iterator format(Value&& value) {
             using selected_type = std::conditional_t<

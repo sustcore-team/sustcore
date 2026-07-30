@@ -40,6 +40,10 @@ else ifeq ($(program-id),taycpplib-container-failure-test)
 sources-cpp := container_failure.cpp
 else ifeq ($(program-id),taycpplib-format-test)
 sources-cpp := format.cpp
+else ifeq ($(program-id),taycpplib-path-test)
+sources-cpp := path.cpp
+else ifeq ($(program-id),taycpplib-logger-test)
+sources-cpp := logger.cpp
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

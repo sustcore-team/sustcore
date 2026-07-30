@@ -5,34 +5,29 @@
  * @date 2026-07-29
  */
 
-#include <tay/allocator.h>
 #include <tay/string.h>
 #include <tay/string_view.h>
 
 #include <cstdio>
 #include <utility>
 
-namespace {
-    using string = tay::string<tay::allocator<char>>;
-
-    template <class Result>
-    bool succeeded(const Result& result, const char* operation) {
-        if (result) {
-            return true;
-        }
-        std::printf("%s failed with error code %u\n", operation,
-                    static_cast<unsigned>(result.error()));
-        return false;
+template <class Result>
+bool succeeded(const Result& result, const char* operation) {
+    if (result) {
+        return true;
     }
+    std::printf("%s failed with error code %u\n", operation,
+                static_cast<unsigned>(result.error()));
+    return false;
+}
 
-    void print(const char* label, tay::string_view text) {
-        std::printf("%-12s %.*s\n", label, static_cast<int>(text.size()),
-                    text.data());
-    }
-}  // namespace
+void print(const char* label, tay::string_view text) {
+    std::printf("%-12s %.*s\n", label, static_cast<int>(text.size()),
+                text.data());
+}
 
 int main() {
-    string text("tay::string");
+    tay::string<> text("tay::string");
     print("created:", text);
 
     if (!succeeded(text.insert(0, "Using ", 6), "insert") ||
@@ -43,7 +38,7 @@ int main() {
     print("expanded:", text);
 
     const auto adjective = text.find("pleasant");
-    if (adjective == string::npos ||
+    if (adjective == tay::string<>::npos ||
         !succeeded(text.replace(adjective, 8, "exception-free", 14),
                    "replace") ||
         !succeeded(text.erase(0, 6), "erase"))

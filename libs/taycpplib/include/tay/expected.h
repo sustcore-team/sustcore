@@ -8,6 +8,7 @@
 #include <tay/panic.h>
 
 #include <functional>
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -60,13 +61,12 @@ namespace tay {
 
         template <typename T, typename... Args>
         constexpr T* construct_at(T* location, Args&&... args) {
-            return ::new (static_cast<void*>(location))
-                T(std::forward<Args>(args)...);
+            return std::construct_at(location, std::forward<Args>(args)...);
         }
 
         template <typename T>
         constexpr void destroy_at(T* location) noexcept {
-            location->~T();
+            std::destroy_at(location);
         }
 
         template <typename V, typename E>

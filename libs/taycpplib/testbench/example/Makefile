@@ -20,6 +20,10 @@ else ifeq ($(program-id),taycpplib-set-example)
 sources-cpp := set.cpp
 else ifeq ($(program-id),taycpplib-format-example)
 sources-cpp := format.cpp
+else ifeq ($(program-id),taycpplib-path-example)
+sources-cpp := path.cpp
+else ifeq ($(program-id),taycpplib-logger-example)
+sources-cpp := logger.cpp
 else
 $(error unsupported taycpplib host example: $(program-id))
 endif

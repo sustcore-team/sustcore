@@ -76,3 +76,17 @@ kind = "example"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-format-example"
+
+[[hostprog]]
+id = "taycpplib-path-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-path-example"
+
+[[hostprog]]
+id = "taycpplib-logger-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-logger-example"

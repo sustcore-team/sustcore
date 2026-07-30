@@ -246,7 +246,7 @@ namespace tay::detail {
         }
 
         void flush() {
-            if (offset_ == 0) {
+            if (offset_ == 0 || stopped()) {
                 return;
             }
             const auto written = (*callback_)(chunk_, offset_);
@@ -261,6 +261,9 @@ namespace tay::detail {
             : callback_(&callback) {}
 
         void put(char character) {
+            if (stopped()) {
+                return;
+            }
             count_character();
             chunk_[offset_++] = character;
             if (offset_ == ChunkSize) {
@@ -276,6 +279,10 @@ namespace tay::detail {
 
         void finish() {
             flush();
+        }
+
+        [[nodiscard]] bool stopped() const noexcept {
+            return sink_failed_ || size_overflow_;
         }
 
         [[nodiscard]] expected<std::size_t, format_error> result() const {
@@ -317,11 +324,16 @@ namespace tay::detail {
     template <class Context, class... Args>
     void execute_format(Context& context, string_view text, Args&&... args) {
         const auto write_literal = [&context](string_view literal) {
-            context.write(literal);
+            if (!context.stopped()) {
+                context.write(literal);
+            }
         };
         const auto write_field = [&context, &args...](std::size_t index,
                                                       string_view spec) {
-            format_argument(index, spec, context, std::forward<Args>(args)...);
+            if (!context.stopped()) {
+                format_argument(index, spec, context,
+                                std::forward<Args>(args)...);
+            }
             return parse_error::none;
         };
         (void)scan_format(text, write_literal, write_field);

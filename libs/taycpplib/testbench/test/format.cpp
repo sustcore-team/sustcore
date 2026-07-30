@@ -79,6 +79,96 @@ namespace {
         unsigned cause;
         cache_t cache;
     };
+
+    struct tracked_value {
+        int* calls;
+        char character;
+    };
+
+    struct allocation_state {
+        bool fail               = false;
+        std::size_t allocations = 0;
+    };
+
+    template <class T>
+    struct tracking_allocator {
+        using value_type      = T;
+        using is_always_equal = std::false_type;
+
+        allocation_state* state = nullptr;
+
+        constexpr explicit tracking_allocator(allocation_state& value) noexcept
+            : state(&value) {}
+
+        template <class U>
+        constexpr tracking_allocator(
+            const tracking_allocator<U>& other) noexcept
+            : state(other.state) {}
+
+        tay::expected<T*, tay::error_code> try_allocate(
+            std::size_t count) noexcept {
+            if (state->fail) {
+                return tay::expected<T*, tay::error_code>(
+                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+            }
+            auto* memory = static_cast<T*>(
+                ::operator new(count * sizeof(T), std::nothrow));
+            if (memory == nullptr) {
+                return tay::expected<T*, tay::error_code>(
+                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+            }
+            ++state->allocations;
+            return memory;
+        }
+
+        void deallocate(T* memory, std::size_t) noexcept {
+            ::operator delete(memory);
+        }
+
+        template <class U>
+        struct rebind {
+            using other = tracking_allocator<U>;
+        };
+
+        template <class>
+        friend struct tracking_allocator;
+    };
+
+    template <class T, class U>
+    constexpr bool operator==(const tracking_allocator<T>& left,
+                              const tracking_allocator<U>& right) noexcept {
+        return left.state == right.state;
+    }
+
+    template <class T, class U>
+    constexpr bool operator!=(const tracking_allocator<T>& left,
+                              const tracking_allocator<U>& right) noexcept {
+        return !(left == right);
+    }
+
+    template <class T>
+    struct tiny_allocator {
+        using value_type = T;
+
+        tay::expected<T*, tay::error_code> try_allocate(
+            std::size_t count) noexcept {
+            auto* memory = static_cast<T*>(
+                ::operator new(count * sizeof(T), std::nothrow));
+            if (memory == nullptr) {
+                return tay::expected<T*, tay::error_code>(
+                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+            }
+            return memory;
+        }
+
+        void deallocate(T* memory, std::size_t) noexcept {
+            ::operator delete(memory);
+        }
+
+        constexpr std::size_t max_size() const noexcept {
+            return 8;
+        }
+    };
 }  // namespace
 
 namespace tay {
@@ -151,6 +241,19 @@ namespace tay {
             context.write(", cache=");
             context.format(status.cache);
             context.put('}');
+            return context.out();
+        }
+    };
+
+    template <>
+    struct formatter<tracked_value> : detail::empty_spec_formatter {
+        template <class FormatContext>
+        typename FormatContext::iterator format(const tracked_value& value,
+                                                FormatContext& context) const {
+            ++*value.calls;
+            for (int index = 0; index < 6; ++index) {
+                context.put(value.character);
+            }
             return context.out();
         }
     };
@@ -270,8 +373,11 @@ namespace {
             result         = tay::format_to<4>(sink, "abcdefghijkl");
             assert(!result);
             assert(result.error() == tay::format_error::sink_error);
-            assert(sink.calls == 3);
-            expect_text(sink, "abcdefghijkl");
+            assert(sink.calls == fail_call + 1);
+            const std::size_t expected_size = (fail_call + 1) * 4;
+            assert(sink.size == expected_size);
+            assert(std::memcmp(sink.buffer, "abcdefghijkl", expected_size) ==
+                   0);
         }
 
         for (const auto mode : {collecting_sink::failure_mode::short_write,
@@ -283,8 +389,8 @@ namespace {
             result         = tay::format_to<4>(sink, "abcdefghijkl");
             assert(!result);
             assert(result.error() == tay::format_error::sink_error);
-            assert(sink.calls == 3);
-            expect_text(sink, "abcdefghijkl");
+            assert(sink.calls == 2);
+            expect_text(sink, "abcdefgh");
         }
     }
 
@@ -306,6 +412,77 @@ namespace {
                     "cpu_status{id=3, ready=true, cause=42, "
                     "cache=cache{size=64, enabled=false}}");
     }
+
+    void bounded_iterator_output_stops_formatting() {
+        char output[64];
+        std::memset(output, '?', sizeof(output));
+
+        int first_calls  = 0;
+        int second_calls = 0;
+        tracked_value first{&first_calls, 'a'};
+        tracked_value second{&second_calls, 'b'};
+
+        auto zero = tay::format_to_iter_s(output, 0, "{}{}", first, second);
+        assert(zero && *zero == output);
+        assert(first_calls == 0 && second_calls == 0 && output[0] == '?');
+
+        auto literal = tay::format_to_iter_s(output, 3, "abcdef{}", first);
+        assert(literal && *literal == output + 3);
+        assert(std::memcmp(output, "abc", 3) == 0 && output[3] == '?');
+        assert(first_calls == 0);
+
+        auto formatter =
+            tay::format_to_iter_s(output, 4, "{}{}", first, second);
+        assert(formatter && *formatter == output + 4);
+        assert(std::memcmp(output, "aaaa", 4) == 0 && output[4] == '?');
+        assert(first_calls == 1 && second_calls == 0);
+
+        std::memset(output, '?', sizeof(output));
+        auto exact = tay::format_to_iter_s(output, 3, "{}", "xyz");
+        assert(exact && *exact == output + 3);
+        assert(std::memcmp(output, "xyz", 3) == 0 && output[3] == '?');
+
+        cpu_status status{3, true, 42, cache_t(64, false)};
+        auto nested = tay::format_to_iter_s(output, 18, "{}", status);
+        assert(nested && *nested == output + 18);
+        assert(std::memcmp(output, "cpu_status{id=3, r", 18) == 0);
+    }
+
+    void owning_format_uses_requested_allocator() {
+        static_assert(std::is_same_v<
+                      decltype(tay::format("{}", 1)),
+                      tay::expected<tay::string<>, tay::error_code>>);
+
+        auto default_result = tay::format("{} {:x} {}", "value", 42, true);
+        assert(default_result && *default_result == "value 2a true");
+
+        move_only_value value('q');
+        auto custom = tay::format("{:d}", value);
+        assert(custom && *custom == "qq");
+
+        allocation_state state;
+        tracking_allocator<char> allocator(state);
+        auto small = tay::format(allocator, "small={}", 7);
+        assert(small && *small == "small=7");
+        assert(state.allocations == 0);
+
+        auto large = tay::format(
+            allocator, "this output is long enough to allocate: {}", 42);
+        assert(large &&
+               *large == "this output is long enough to allocate: 42");
+        assert(state.allocations > 0);
+
+        state.fail = true;
+        auto failed = tay::format(
+            allocator, "this output also requires dynamic allocation");
+        assert(!failed && failed.error() == tay::error_code::OUT_OF_MEMORY);
+
+        tiny_allocator<char> tiny;
+        auto overflow = tay::format(tiny, "12345678");
+        assert(!overflow);
+        assert(overflow.error() ==
+               tay::error_code::ALLOCATION_SIZE_OVERFLOW);
+    }
 }  // namespace
 
 int main() {
@@ -313,5 +490,7 @@ int main() {
     chunking_and_failures_work();
     custom_formatter_does_not_copy_arguments();
     context_format_supports_explicit_and_nested_formatters();
+    bounded_iterator_output_stops_formatting();
+    owning_format_uses_requested_allocator();
     return 0;
 }

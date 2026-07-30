@@ -152,3 +152,17 @@ kind = "test"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-format-test"
+
+[[hostprog]]
+id = "taycpplib-path-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-path-test"
+
+[[hostprog]]
+id = "taycpplib-logger-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-logger-test"

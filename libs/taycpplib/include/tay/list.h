@@ -18,7 +18,7 @@
 #include <utility>
 
 namespace tay {
-    template <class T, class Allocator>
+    template <class T, class Allocator = allocator<T>>
     class array_list {
     public:
         using value_type            = T;
@@ -999,6 +999,6 @@ namespace tay {
         return left.swap(right);
     }
 
-    template <class T, class Allocator>
+    template <class T, class Allocator = allocator<T>>
     using list = array_list<T, Allocator>;
 }  // namespace tay

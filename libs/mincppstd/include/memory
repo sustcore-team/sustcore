@@ -17,6 +17,17 @@
 #include <utility>
 
 namespace std {
+    template <class T, class... Args>
+    [[nodiscard]] constexpr T* construct_at(T* location, Args&&... args) {
+        return ::new (static_cast<void*>(location))
+            T(std::forward<Args>(args)...);
+    }
+
+    template <class T>
+    constexpr void destroy_at(T* location) noexcept {
+        location->~T();
+    }
+
     template <class Pointer, class SizeType = size_t>
     struct allocation_result {
         Pointer ptr;

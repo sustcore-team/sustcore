@@ -46,5 +46,9 @@ int main() {
     auto result        = tay::format_to<8>(
         write_output, "boot={} hex={:x} ptr={} status={}", true, value, &value,
         status);
-    return result && *result == output_size ? 0 : 1;
+    char iterator_output[8]{};
+    auto iterator_result =
+        tay::format_to_iter_s(iterator_output, sizeof(iterator_output),
+                              "{}:{}", true, value);
+    return result && *result == output_size && iterator_result ? 0 : 1;
 }

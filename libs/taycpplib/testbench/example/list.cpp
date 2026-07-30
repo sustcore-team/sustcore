@@ -5,13 +5,12 @@
  * @date 2026-07-29
  */
 
-#include <tay/allocator.h>
 #include <tay/list.h>
 
 #include <cstdio>
 
 namespace {
-    using number_list = tay::list<int, tay::allocator<int>>;
+    using number_list = tay::list<int>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {

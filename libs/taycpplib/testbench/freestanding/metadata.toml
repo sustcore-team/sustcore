@@ -59,11 +59,11 @@ sources = ["allocator_string_freestanding.cpp"]
 expect = "success"
 
 [[freestanding-check]]
-id = "taycpplib-no-default-freestanding-allocator"
+id = "taycpplib-default-freestanding-allocator"
 kind = "compile"
 language = "c++"
-sources = ["allocator_default_invalid.cpp"]
-expect = "failure"
+sources = ["allocator_default_freestanding.cpp"]
+expect = "success"
 
 [[freestanding-check]]
 id = "taycpplib-containers"
@@ -77,6 +77,38 @@ id = "taycpplib-format-without-allocator"
 kind = "link"
 language = "c++"
 sources = ["format_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-allocator-hooks-missing"
+kind = "link"
+language = "c++"
+sources = ["allocator_hooks_user.cpp", "panic_provider.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-allocator-hooks-provided"
+kind = "link"
+language = "c++"
+sources = [
+    "allocator_hooks_user.cpp",
+    "allocator_hooks_provider.cpp",
+    "panic_provider.cpp",
+]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-path"
+kind = "compile"
+language = "c++"
+sources = ["path_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-logger-without-allocator"
+kind = "link"
+language = "c++"
+sources = ["logger_freestanding.cpp"]
 expect = "success"
 
 [[freestanding-check]]

@@ -19,7 +19,7 @@
 #include <utility>
 
 namespace tay {
-    template <class Allocator>
+    template <class Allocator = allocator<char>>
     class string {
     public:
         using allocator_type        = Allocator;

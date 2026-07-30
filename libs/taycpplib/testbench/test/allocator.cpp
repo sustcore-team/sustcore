@@ -1,10 +1,16 @@
 #include <tay/allocator.h>
+#include <tay/list.h>
+#include <tay/map.h>
+#include <tay/set.h>
+#include <tay/string.h>
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <new>
 #include <type_traits>
+#include <utility>
 
 namespace {
     struct allocation_state {
@@ -73,6 +79,25 @@ namespace {
         int value;
         explicit object(int initial) noexcept : value(initial) {}
     };
+
+    struct alignas(128) over_aligned {
+        int value;
+    };
+
+    consteval bool constexpr_allocation_works() {
+        tay::allocator<int> allocator;
+        auto memory = allocator.try_allocate(2);
+        if (!memory) {
+            return false;
+        }
+        std::construct_at(*memory, 17);
+        std::construct_at(*memory + 1, 25);
+        const bool valid = (*memory)[0] + (*memory)[1] == 42;
+        std::destroy_at(*memory);
+        std::destroy_at(*memory + 1);
+        allocator.deallocate(*memory, 2);
+        return valid;
+    }
 }  // namespace
 
 static_assert(std::is_same_v<
@@ -87,6 +112,24 @@ static_assert(std::is_same_v<
               decltype(tay::allocator_traits<tay::allocator<int>>::try_allocate(
                   std::declval<tay::allocator<int>&>(), 1)),
               tay::expected<int*, tay::error_code>>);
+static_assert(constexpr_allocation_works());
+static_assert(std::is_same_v<tay::string<>,
+                             tay::string<tay::allocator<char>>>);
+static_assert(std::is_same_v<tay::array_list<int>,
+                             tay::array_list<int, tay::allocator<int>>>);
+static_assert(std::is_same_v<tay::list<int>,
+                             tay::array_list<int, tay::allocator<int>>>);
+static_assert(std::is_same_v<tay::hash_set<int>,
+                             tay::hash_set<int, tay::allocator<int>>>);
+static_assert(std::is_same_v<tay::set<int>,
+                             tay::hash_set<int, tay::allocator<int>>>);
+using default_map_value = std::pair<const int, int>;
+static_assert(std::is_same_v<
+              tay::hash_map<int, int>,
+              tay::hash_map<int, int, tay::allocator<default_map_value>>>);
+static_assert(std::is_same_v<
+              tay::map<int, int>,
+              tay::hash_map<int, int, tay::allocator<default_map_value>>>);
 
 int main() {
     tay::allocator<int> host_allocator;
@@ -98,6 +141,13 @@ int main() {
     auto memory = host_traits::try_allocate(host_allocator, 4);
     assert(memory && *memory != nullptr);
     host_traits::deallocate(host_allocator, *memory, 4);
+
+    tay::allocator<over_aligned> aligned_allocator;
+    auto aligned = aligned_allocator.try_allocate(1);
+    assert(aligned);
+    assert(reinterpret_cast<std::uintptr_t>(*aligned) % alignof(over_aligned) ==
+           0);
+    aligned_allocator.deallocate(*aligned, 1);
 
     auto overflow = host_traits::try_allocate(
         host_allocator, host_traits::max_size(host_allocator) + 1);
