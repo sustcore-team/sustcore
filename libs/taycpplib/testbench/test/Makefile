@@ -48,6 +48,17 @@ else ifeq ($(program-id),taycpplib-storage-test)
 sources-cpp := storage.cpp
 else ifeq ($(program-id),taycpplib-raii-test)
 sources-cpp := raii.cpp
+else ifeq ($(program-id),taycpplib-lock-test)
+sources-cpp := lock.cpp
+else ifeq ($(program-id),taycpplib-unique-lock-no-mutex-panic-test)
+sources-cpp := unique_lock_panic.cpp
+macros-cpp += -DTAY_TEST_UNIQUE_LOCK_NO_MUTEX=1
+else ifeq ($(program-id),taycpplib-unique-lock-already-owns-panic-test)
+sources-cpp := unique_lock_panic.cpp
+macros-cpp += -DTAY_TEST_UNIQUE_LOCK_ALREADY_OWNS=1
+else ifeq ($(program-id),taycpplib-unique-lock-not-owned-panic-test)
+sources-cpp := unique_lock_panic.cpp
+macros-cpp += -DTAY_TEST_UNIQUE_LOCK_NOT_OWNED=1
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

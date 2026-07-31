@@ -188,3 +188,10 @@ kind = "example"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-unique-ptr-example"
+
+[[hostprog]]
+id = "taycpplib-lock-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-lock-example"

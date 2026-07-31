@@ -141,3 +141,17 @@ sources = [
     "format_invalid_callback_result.cpp",
 ]
 expect = "failure"
+
+[[freestanding-check]]
+id = "taycpplib-lock"
+kind = "compile"
+language = "c++"
+sources = ["lock_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-lock-duplicate-context-order"
+kind = "compile"
+language = "c++"
+sources = ["lock_invalid_duplicate_order.cpp"]
+expect = "failure"

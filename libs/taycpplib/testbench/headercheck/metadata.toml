@@ -232,3 +232,15 @@ id = "taycpplib-logger"
 header = "tay/logger.h"
 language = "c++"
 environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-spinlock"
+header = "tay/spinlock.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-lock"
+header = "tay/lock.h"
+language = "c++"
+environments = ["freestanding", "host"]

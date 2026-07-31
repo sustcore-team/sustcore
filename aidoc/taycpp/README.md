@@ -21,6 +21,8 @@
   堆分配。
 - 若静态版与动态版只有存储不同，则公开一个 `basic_*` 算法核心，并用
   storage policy 组成具体别名。例如 `basic_fifo`、`fifo`、`static_fifo`。
+- 基础同步类型只负责原子锁；中断、抢占等执行上下文状态由 kernel Guard
+  保存，并通过 `context_lock_guard` 静态组合。
 - 不检查的快速接口（如多数 `operator[]`）要求调用者满足前置条件；有
   边界检查的接口通常返回 `expected`。
 - `tay::panic()` 用于无法从当前 API 恢复的契约破坏或便利构造函数中的

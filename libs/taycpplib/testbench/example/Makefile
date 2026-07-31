@@ -52,6 +52,8 @@ else ifeq ($(program-id),taycpplib-guard-example)
 sources-cpp := guard.cpp
 else ifeq ($(program-id),taycpplib-unique-ptr-example)
 sources-cpp := unique_ptr.cpp
+else ifeq ($(program-id),taycpplib-lock-example)
+sources-cpp := lock.cpp
 else
 $(error unsupported taycpplib host example: $(program-id))
 endif

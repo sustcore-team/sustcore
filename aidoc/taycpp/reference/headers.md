@@ -10,7 +10,8 @@
 | 关联容器 | `tay/map.h`、`tay/set.h`、`tay/flat.h` |
 | 侵入式容器 | `tay/intrusive.h`、`tay/list.h`、`tay/tree.h`、`tay/container_of.h` |
 | 字符串 | `tay/string.h`、`tay/string_view.h` |
-| RAII/所有权 | `tay/raii.h`、`tay/guard.h`、`tay/owner.h`、`tay/unique_ptr.h`、`tay/refcount.h` |
+| RAII/所有权 | `tay/raii.h`、`tay/guard.h`、`tay/lock.h`、`tay/owner.h`、`tay/unique_ptr.h`、`tay/refcount.h` |
+| 原子同步 | `tay/spinlock.h` |
 | 错误/分配 | `tay/expected.h`、`tay/err.h`、`tay/panic.h`、`tay/allocator.h` |
 | callable/utility | `tay/functional.h`、`tay/utility.h` |
 | 服务 | `tay/format.h`、`tay/fmt/*.h`、`tay/logger.h`、`tay/path.h`、`tay/units.h` |

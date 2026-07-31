@@ -180,3 +180,37 @@ kind = "test"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-raii-test"
+
+[[hostprog]]
+id = "taycpplib-lock-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-lock-test"
+
+[[hostprog]]
+id = "taycpplib-unique-lock-no-mutex-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-unique-lock-no-mutex-panic-test"
+expect = "abort"
+stderr-contains = "unique_lock has no associated lock"
+
+[[hostprog]]
+id = "taycpplib-unique-lock-already-owns-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-unique-lock-already-owns-panic-test"
+expect = "abort"
+stderr-contains = "unique_lock already owns the lock"
+
+[[hostprog]]
+id = "taycpplib-unique-lock-not-owned-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-unique-lock-not-owned-panic-test"
+expect = "abort"
+stderr-contains = "unique_lock does not own the lock"

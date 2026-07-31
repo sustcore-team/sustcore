@@ -8,5 +8,6 @@
 #pragma once
 
 #include <tay/guard.h>
+#include <tay/lock.h>
 #include <tay/owner.h>
 #include <tay/unique_ptr.h>
