@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <tay/utility.h>
+
 #include <functional>
 #include <iterator>
 #include <utility>
@@ -20,21 +22,44 @@ namespace tay::detail {
         // the introsort works best when N = 32
         inline constexpr auto insertion_sort_threshold = 32;
 
-        template <typename Compare, typename Proj, typename Left,
-                  typename Right>
-        [[nodiscard]]
-        constexpr bool projcmp(Compare& comp, Proj& proj, Left&& left,
-                               Right&& right) {
-            return std::invoke(comp,
-                               std::invoke(proj, std::forward<Left>(left)),
-                               std::invoke(proj, std::forward<Right>(right)));
-        }
+        struct compare_tag {};
+        struct projection_tag {};
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename Compare, typename Proj>
+        class projected_compare : private composition<compare_tag, Compare>,
+                                  private composition<projection_tag, Proj> {
+        public:
+            constexpr projected_compare(Compare compare, Proj projection)
+                : composition<compare_tag, Compare>(std::move(compare)),
+                  composition<projection_tag, Proj>(std::move(projection)) {}
+
+            template <typename Left, typename Right>
+            [[nodiscard]] constexpr bool operator()(Left&& left,
+                                                     Right&& right) {
+                auto &compare = get<compare_tag>(this);
+                auto &project = get<projection_tag>(this);
+                return std::invoke(
+                    compare,
+                    std::invoke(project, std::forward<Left>(left)),
+                    std::invoke(project, std::forward<Right>(right)));
+            }
+
+            template <typename Left, typename Right>
+            [[nodiscard]] constexpr bool operator()(Left&& left,
+                                                     Right&& right) const {
+                const auto& compare = get<compare_tag>(this);
+                const auto& project = get<projection_tag>(this);
+                return std::invoke(
+                    compare, std::invoke(project, std::forward<Left>(left)),
+                    std::invoke(project, std::forward<Right>(right)));
+            }
+        };
+
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
+                     std::sortable<RandomIt, Compare>
         constexpr void insertion_sort(RandomIt first, RandomIt last,
-                                      Compare& comp, Proj& proj) {
+                                      Compare& comp) {
             if (first == last) {
                 return;
             }
@@ -44,8 +69,7 @@ namespace tay::detail {
                     std::ranges::iter_move(current));
                 RandomIt hole = current;
 
-                while (hole != first && projcmp(comp, proj, value, *(hole - 1)))
-                {
+                while (hole != first && comp(value, *(hole - 1))) {
                     *hole = std::ranges::iter_move(hole - 1);
                     --hole;
                 }
@@ -53,24 +77,24 @@ namespace tay::detail {
             }
         }
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
+                     std::sortable<RandomIt, Compare>
         constexpr void sift_down(RandomIt first,
                                  std::iter_difference_t<RandomIt> root,
                                  std::iter_difference_t<RandomIt> count,
-                                 Compare& comp, Proj& proj) {
+                                 Compare& comp) {
             using difference_type = std::iter_difference_t<RandomIt>;
 
             while (root < count / 2) {
                 difference_type child = root * 2 + 1;
                 if (child + 1 < count &&
-                    projcmp(comp, proj, *(first + child), *(first + child + 1)))
+                    comp(*(first + child), *(first + child + 1)))
                 {
                     ++child;
                 }
 
-                if (!projcmp(comp, proj, *(first + root), *(first + child))) {
+                if (!comp(*(first + root), *(first + child))) {
                     return;
                 }
 
@@ -79,11 +103,10 @@ namespace tay::detail {
             }
         }
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
-        constexpr void heapsort(RandomIt first, RandomIt last, Compare& comp,
-                                Proj& proj) {
+                     std::sortable<RandomIt, Compare>
+        constexpr void heapsort(RandomIt first, RandomIt last, Compare& comp) {
             using difference_type = std::iter_difference_t<RandomIt>;
 
             if (first == last) {
@@ -97,32 +120,32 @@ namespace tay::detail {
 
             for (difference_type root = count / 2; root > 0;) {
                 --root;
-                sift_down(first, root, count, comp, proj);
+                sift_down(first, root, count, comp);
             }
 
             for (difference_type remaining = count; remaining > 1;) {
                 --remaining;
                 std::ranges::iter_swap(first, first + remaining);
-                sift_down(first, difference_type{0}, remaining, comp, proj);
+                sift_down(first, difference_type{0}, remaining, comp);
             }
         }
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
+                     std::sortable<RandomIt, Compare>
         [[nodiscard]]
         constexpr RandomIt partition(RandomIt first, RandomIt last,
-                                     Compare& comp, Proj& proj) {
+                                     Compare& comp) {
             RandomIt middle     = first + (last - first) / 2;
             RandomIt last_value = last - 1;
 
-            if (projcmp(comp, proj, *middle, *first)) {
+            if (comp(*middle, *first)) {
                 std::ranges::iter_swap(middle, first);
             }
-            if (projcmp(comp, proj, *last_value, *middle)) {
+            if (comp(*last_value, *middle)) {
                 std::ranges::iter_swap(last_value, middle);
             }
-            if (projcmp(comp, proj, *middle, *first)) {
+            if (comp(*middle, *first)) {
                 std::ranges::iter_swap(middle, first);
             }
 
@@ -134,11 +157,11 @@ namespace tay::detail {
             while (true) {
                 do {
                     ++left;
-                } while (projcmp(comp, proj, *left, *pivot));
+                } while (comp(*left, *pivot));
 
                 do {
                     --right;
-                } while (projcmp(comp, proj, *pivot, *right));
+                } while (comp(*pivot, *right));
 
                 if (left >= right) {
                     break;
@@ -150,43 +173,41 @@ namespace tay::detail {
             return left;
         }
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
+                     std::sortable<RandomIt, Compare>
         constexpr void introsort_loop(
             RandomIt first, RandomIt last,
-            std::iter_difference_t<RandomIt> depth_limit, Compare& comp,
-            Proj& proj) {
+            std::iter_difference_t<RandomIt> depth_limit, Compare& comp) {
             using difference_type = std::iter_difference_t<RandomIt>;
 
             while (last - first > insertion_sort_threshold) {
                 if (depth_limit == 0) {
-                    heapsort(first, last, comp, proj);
+                    heapsort(first, last, comp);
                     return;
                 }
                 --depth_limit;
 
-                RandomIt pivot = partition(first, last, comp, proj);
+                RandomIt pivot = __introsort::partition(first, last, comp);
                 const difference_type left_size  = pivot - first;
                 const difference_type right_size = last - (pivot + 1);
 
                 if (left_size < right_size) {
-                    introsort_loop(first, pivot, depth_limit, comp, proj);
+                    introsort_loop(first, pivot, depth_limit, comp);
                     first = pivot + 1;
                 } else {
-                    introsort_loop(pivot + 1, last, depth_limit, comp, proj);
+                    introsort_loop(pivot + 1, last, depth_limit, comp);
                     last = pivot;
                 }
             }
 
-            insertion_sort(first, last, comp, proj);
+            insertion_sort(first, last, comp);
         }
 
-        template <typename RandomIt, typename Compare, typename Proj>
+        template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> &&
-                     std::sortable<RandomIt, Compare, Proj>
-        constexpr void introsort(RandomIt first, RandomIt last, Compare comp,
-                                 Proj proj) {
+                     std::sortable<RandomIt, Compare>
+        constexpr void introsort(RandomIt first, RandomIt last, Compare comp) {
             using difference_type = std::iter_difference_t<RandomIt>;
 
             if (first == last) {
@@ -198,7 +219,7 @@ namespace tay::detail {
                 ++depth_limit;
             }
 
-            introsort_loop(first, last, depth_limit * 2, comp, proj);
+            introsort_loop(first, last, depth_limit * 2, comp);
         }
     }  // namespace __introsort
 
@@ -208,6 +229,8 @@ namespace tay::detail {
         requires std::random_access_iterator<RandomIt> &&
                  std::sortable<RandomIt, Compare, Proj>
     {
-        __introsort::introsort(first, last, std::move(comp), std::move(proj));
+        using comparator = __introsort::projected_compare<Compare, Proj>;
+        comparator combined(std::move(comp), std::move(proj));
+        __introsort::introsort(first, last, std::move(combined));
     }
 }  // namespace tay::detail

@@ -1,5 +1,5 @@
 #include <tay/allocator.h>
-#include <tay/list.h>
+#include <tay/array_list.h>
 #include <tay/map.h>
 #include <tay/set.h>
 #include <tay/string.h>
@@ -117,19 +117,17 @@ static_assert(std::is_same_v<tay::string<>,
                              tay::string<tay::allocator<char>>>);
 static_assert(std::is_same_v<tay::array_list<int>,
                              tay::array_list<int, tay::allocator<int>>>);
-static_assert(std::is_same_v<tay::list<int>,
+static_assert(std::is_same_v<tay::array_list<int>,
                              tay::array_list<int, tay::allocator<int>>>);
 static_assert(std::is_same_v<tay::hash_set<int>,
-                             tay::hash_set<int, tay::allocator<int>>>);
-static_assert(std::is_same_v<tay::set<int>,
-                             tay::hash_set<int, tay::allocator<int>>>);
+                             tay::hash_set<int, std::hash<int>,
+                                           std::equal_to<int>,
+                                           tay::allocator<int>>>);
 using default_map_value = std::pair<const int, int>;
 static_assert(std::is_same_v<
               tay::hash_map<int, int>,
-              tay::hash_map<int, int, tay::allocator<default_map_value>>>);
-static_assert(std::is_same_v<
-              tay::map<int, int>,
-              tay::hash_map<int, int, tay::allocator<default_map_value>>>);
+              tay::hash_map<int, int, std::hash<int>, std::equal_to<int>,
+                            tay::allocator<default_map_value>>>);
 
 int main() {
     tay::allocator<int> host_allocator;

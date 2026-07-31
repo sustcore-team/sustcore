@@ -50,11 +50,18 @@ target = "build"
 output = "taycpplib-allocator-example"
 
 [[hostprog]]
-id = "taycpplib-list-example"
+id = "taycpplib-array_list-example"
 kind = "example"
 makefile = "Makefile"
 target = "build"
-output = "taycpplib-list-example"
+output = "taycpplib-array_list-example"
+
+[[hostprog]]
+id = "taycpplib-intrusive-list-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-intrusive-list-example"
 
 [[hostprog]]
 id = "taycpplib-map-example"
@@ -90,3 +97,94 @@ kind = "example"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-logger-example"
+
+[[hostprog]]
+id = "taycpplib-storage-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-storage-example"
+
+[[hostprog]]
+id = "taycpplib-static-vector-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-static-vector-example"
+
+[[hostprog]]
+id = "taycpplib-array-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-array-example"
+
+[[hostprog]]
+id = "taycpplib-bitmap-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-bitmap-example"
+
+[[hostprog]]
+id = "taycpplib-fifo-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-fifo-example"
+
+[[hostprog]]
+id = "taycpplib-function-wrappers-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-function-wrappers-example"
+
+[[hostprog]]
+id = "taycpplib-flat-containers-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-flat-containers-example"
+
+[[hostprog]]
+id = "taycpplib-slot-map-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-slot-map-example"
+
+[[hostprog]]
+id = "taycpplib-intrusive-tree-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-intrusive-tree-example"
+
+[[hostprog]]
+id = "taycpplib-binary-search-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-binary-search-example"
+
+[[hostprog]]
+id = "taycpplib-heap-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-heap-example"
+
+[[hostprog]]
+id = "taycpplib-guard-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-guard-example"
+
+[[hostprog]]
+id = "taycpplib-unique-ptr-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-unique-ptr-example"

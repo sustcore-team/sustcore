@@ -15,18 +15,18 @@ namespace {
         std::size_t fail_call     = std::size_t(-1);
 
         void clear() noexcept {
-            buffer[0]     = '\0';
-            size          = 0;
-            calls         = 0;
-            constructions = 0;
-            fail_call     = std::size_t(-1);
+            buffer[0] = '\0';
+            size      = 0;
+            calls     = 0;
+            fail_call = std::size_t(-1);
         }
     };
 
     struct collecting_output {
-        inline static output_state* state = nullptr;
+        output_state* state;
 
-        collecting_output() noexcept {
+        explicit collecting_output(output_state& state_ref) noexcept
+            : state(&state_ref) {
             ++state->constructions;
         }
 
@@ -78,9 +78,9 @@ namespace {
         expect_text(state, expected);
     }
 
-    loggers::result_type log_from_helper(unsigned& line) {
+    loggers::result_type log_from_helper(loggers& logger, unsigned& line) {
         line = __LINE__ + 1;
-        return loggers::info("from helper");
+        return logger.info("from helper");
     }
 }  // namespace
 
@@ -90,49 +90,49 @@ static_assert(loggers::chunk_size == 256);
 
 int main() {
     output_state state;
-    collecting_output::state = &state;
+    loggers logger(state);
+    assert(state.constructions == 1);
 
     const unsigned debug_line = __LINE__ + 1;
-    auto debug                = loggers::debug("value={:x}", 42);
+    auto debug                = logger.debug("value={:x}", 42);
     assert(debug && *debug == state.size);
-    assert(state.constructions == 1);
     expect_log(state, debug_line, "\x1b[34mDEBUG\x1b[0m", "value=2a");
 
     state.clear();
     const unsigned info_line = __LINE__ + 1;
-    auto info                = loggers::info("ready={}", true);
+    auto info                = logger.info("ready={}", true);
     assert(info && *info == state.size);
     expect_log(state, info_line, "\x1b[32mINFO\x1b[0m", "ready=true");
 
     state.clear();
     unsigned helper_line = 0;
-    auto helper          = log_from_helper(helper_line);
+    auto helper          = log_from_helper(logger, helper_line);
     assert(helper && *helper == state.size);
     expect_log(state, helper_line, "\x1b[32mINFO\x1b[0m", "from helper", true,
                "log_from_helper");
 
     state.clear();
     const unsigned warning_line = __LINE__ + 1;
-    auto warning                = loggers::warn("remaining={}", 3);
+    auto warning                = logger.warn("remaining={}", 3);
     assert(warning && *warning == state.size);
     expect_log(state, warning_line, "\x1b[35mWARN\x1b[0m", "remaining=3");
 
     state.clear();
     const unsigned error_line = __LINE__ + 1;
-    auto error                = loggers::error("code={}", -5);
+    auto error                = logger.error("code={}", -5);
     assert(error && *error == state.size);
     expect_log(state, error_line, "\x1b[31mERROR\x1b[0m", "code=-5");
 
     state.clear();
     const unsigned fatal_line = __LINE__ + 1;
-    auto fatal                = loggers::fatal("panic at {}", "boot");
+    auto fatal                = logger.fatal("panic at {}", "boot");
     assert(fatal && *fatal == state.size);
     expect_log(state, fatal_line, "\x1b[31mFATAL\x1b[0m", "panic at boot");
 
     state.clear();
     state.fail_call            = 1;
     const unsigned failed_line = __LINE__ + 1;
-    auto failed                = loggers::info("message={}", 7);
+    auto failed                = logger.info("message={}", 7);
     assert(!failed && failed.error() == tay::format_error::sink_error);
     assert(state.calls == 2);
     expect_log(state, failed_line, "\x1b[32mINFO\x1b[0m", "message=7", false);
@@ -141,19 +141,21 @@ int main() {
     int formatter_calls = 0;
     tracked_value value{&formatter_calls};
     using errors_only = tay::logger<collecting_output, tay::log_level::ERROR>;
-    auto suppressed   = errors_only::debug("{}", value);
+    errors_only errors_logger(state);
+    auto suppressed = errors_logger.debug("{}", value);
     assert(suppressed && *suppressed == 0);
     assert(formatter_calls == 0);
-    assert(state.constructions == 0 && state.calls == 0 && state.size == 0);
+    assert(state.constructions == 2 && state.calls == 0 && state.size == 0);
 
     const unsigned emitted_line = __LINE__ + 1;
-    auto emitted                = errors_only::error("{}", value);
+    auto emitted                = errors_logger.error("{}", value);
     assert(emitted && formatter_calls == 1);
     expect_log(state, emitted_line, "\x1b[31mERROR\x1b[0m", "tracked");
 
     state.clear();
     using disabled = tay::logger<collecting_output, tay::log_level::DISABLE>;
-    auto ignored   = disabled::fatal("not emitted");
-    assert(ignored && *ignored == 0 && state.constructions == 0);
+    disabled disabled_logger(state);
+    auto ignored = disabled_logger.fatal("not emitted");
+    assert(ignored && *ignored == 0 && state.constructions == 3);
     return 0;
 }

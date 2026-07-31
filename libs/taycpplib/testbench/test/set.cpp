@@ -4,10 +4,10 @@
 #include <type_traits>
 #include <utility>
 
-using set_type = tay::set<int, tay::allocator<int>>;
+using set_type = tay::hash_set<int>;
 
 static_assert(
-    std::is_same_v<set_type, tay::hash_set<int, tay::allocator<int>>>);
+    std::is_same_v<set_type, tay::hash_set<int>>);
 static_assert(std::is_const_v<std::remove_reference_t<
                   decltype(*std::declval<set_type::iterator>())>>);
 

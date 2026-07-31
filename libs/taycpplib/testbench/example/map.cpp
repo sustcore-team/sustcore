@@ -10,7 +10,7 @@
 #include <cstdio>
 
 namespace {
-    using status_map = tay::map<int, const char*>;
+    using status_map = tay::hash_map<int, const char*>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {

@@ -262,6 +262,22 @@ namespace tay {
                 return result_type(*std::forward<Self>(self));
             }
         }
+
+        template <typename Self, typename Visitor>
+        constexpr decltype(auto) match_impl(Self&& self, Visitor&& visitor) {
+            using source_type = std::remove_cvref_t<Self>;
+            if (self.has_value()) {
+                if constexpr (std::is_void_v<typename source_type::value_type>)
+                {
+                    return std::invoke(std::forward<Visitor>(visitor));
+                } else {
+                    return std::invoke(std::forward<Visitor>(visitor),
+                                       *std::forward<Self>(self));
+                }
+            }
+            return std::invoke(std::forward<Visitor>(visitor),
+                               std::forward<Self>(self).error());
+        }
     }  // namespace detail
 
     template <typename E>
@@ -790,6 +806,42 @@ namespace tay {
             return detail::transform_error_impl(std::move(*this),
                                                 std::forward<F>(function));
         }
+
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) & {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const& {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) && {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const&& {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) & {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const& {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) && {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const&& {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
+        }
     };
 
     template <typename E>
@@ -1118,6 +1170,40 @@ namespace tay {
         constexpr auto transform_error(F&& function) const&& {
             return detail::transform_error_impl(std::move(*this),
                                                 std::forward<F>(function));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) & {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const& {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) && {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const&& {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) & {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const& {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) && {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const&& {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
         }
     };
 
@@ -1483,6 +1569,40 @@ namespace tay {
         constexpr auto transform_error(F&& function) const&& {
             return detail::transform_error_impl(std::move(*this),
                                                 std::forward<F>(function));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) & {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const& {
+            return detail::match_impl(*this, std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) && {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) match(Visitor&& visitor) const&& {
+            return detail::match_impl(std::move(*this),
+                                      std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) & {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const& {
+            return match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) && {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
+        }
+        template <typename Visitor>
+        constexpr decltype(auto) visit(Visitor&& visitor) const&& {
+            return std::move(*this).match(std::forward<Visitor>(visitor));
         }
     };
 

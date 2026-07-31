@@ -44,6 +44,10 @@ else ifeq ($(program-id),taycpplib-path-test)
 sources-cpp := path.cpp
 else ifeq ($(program-id),taycpplib-logger-test)
 sources-cpp := logger.cpp
+else ifeq ($(program-id),taycpplib-storage-test)
+sources-cpp := storage.cpp
+else ifeq ($(program-id),taycpplib-raii-test)
+sources-cpp := raii.cpp
 else
 $(error unsupported taycpplib host test: $(program-id))
 endif

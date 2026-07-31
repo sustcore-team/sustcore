@@ -1,16 +1,16 @@
 /**
  * @file list.cpp
- * @brief Demonstrate contiguous storage with tay::list.
+ * @brief Demonstrate contiguous storage with tay::array_list.
  * @version 0.1.0-dev.1
  * @date 2026-07-29
  */
 
-#include <tay/list.h>
+#include <tay/array_list.h>
 
 #include <cstdio>
 
 namespace {
-    using number_list = tay::list<int>;
+    using number_list = tay::array_list<int>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {

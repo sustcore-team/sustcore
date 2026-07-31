@@ -1,4 +1,4 @@
-#include <tay/list.h>
+#include <tay/array_list.h>
 #include <tay/map.h>
 #include <tay/set.h>
 
@@ -35,9 +35,11 @@ constexpr bool operator==(const freestanding_allocator<T> &,
 }
 
 using map_value = std::pair<const int, int>;
-using list_type = tay::list<int, freestanding_allocator<int>>;
-using map_type  = tay::map<int, int, freestanding_allocator<map_value>>;
-using set_type  = tay::set<int, freestanding_allocator<int>>;
+using list_type = tay::array_list<int, freestanding_allocator<int>>;
+using map_type  = tay::hash_map<int, int, std::hash<int>, std::equal_to<int>,
+                                freestanding_allocator<map_value>>;
+using set_type  = tay::hash_set<int, std::hash<int>, std::equal_to<int>,
+                                freestanding_allocator<int>>;
 
 static_assert(std::is_same_v<decltype(map_type::try_create()),
                              tay::expected<map_type, tay::error_code>>);

@@ -1,4 +1,4 @@
-#include <tay/list.h>
+#include <tay/array_list.h>
 #include <tay/map.h>
 #include <tay/set.h>
 
@@ -72,7 +72,7 @@ namespace {
 int main() {
     allocation_state state;
     checked_allocator<int> list_allocator(state);
-    tay::list<int, checked_allocator<int>> list(list_allocator);
+    tay::array_list<int, checked_allocator<int>> list(list_allocator);
     state.fail       = true;
     auto list_failed = list.push_back(1);
     assert(!list_failed);
@@ -80,7 +80,9 @@ int main() {
     assert(list.empty() && list.capacity() == 0);
 
     using map_value = std::pair<const int, int>;
-    using map_type  = tay::map<int, int, checked_allocator<map_value>>;
+    using map_type  = tay::hash_map<int, int, std::hash<int>,
+                                    std::equal_to<int>,
+                                    checked_allocator<map_value>>;
     static_assert(!has_subscript<map_type>);
 
     checked_allocator<map_value> map_allocator(state);
@@ -107,7 +109,8 @@ int main() {
     assert(map_created->bucket_count() == old_buckets);
     assert(map_created->contains(1));
 
-    using set_type  = tay::set<int, checked_allocator<int>>;
+    using set_type  = tay::hash_set<int, std::hash<int>, std::equal_to<int>,
+                                    checked_allocator<int>>;
     auto set_failed = set_type::try_create(list_allocator);
     assert(!set_failed);
     assert(set_failed.error() == tay::error_code::OUT_OF_MEMORY);

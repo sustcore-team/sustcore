@@ -68,15 +68,16 @@ namespace tay {
 }  // namespace tay
 
 int main() {
-    loggers::debug("boot stage={}", 1);
-    loggers::info("kernel image loaded at {}",
-                  reinterpret_cast<void*>(0x80200000));
-    loggers::warn("only {} MiB remain", 32);
-    loggers::error("device {} returned code {}", "virtio0", -5);
-    loggers::fatal("unable to continue: {}", "root filesystem missing");
+    loggers logger;
+    logger.debug("boot stage={}", 1);
+    logger.info("kernel image loaded at {}",
+                reinterpret_cast<void*>(0x80200000));
+    logger.warn("only {} MiB remain", 32);
+    logger.error("device {} returned code {}", "virtio0", -5);
+    logger.fatal("unable to continue: {}", "root filesystem missing");
 
     cache_t _cache{.size = 32, .enabled = true};
     cpu_status status{.id = 0, .ready = true, .cause = 0, .cache = _cache};
-    loggers::info("CPU status: {}", status);
+    logger.info("CPU status: {}", status);
     return 0;
 }

@@ -73,6 +73,20 @@ sources = ["containers_freestanding.cpp"]
 expect = "success"
 
 [[freestanding-check]]
+id = "taycpplib-storage-containers"
+kind = "compile"
+language = "c++"
+sources = ["storage_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-raii"
+kind = "compile"
+language = "c++"
+sources = ["raii_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
 id = "taycpplib-format-without-allocator"
 kind = "link"
 language = "c++"

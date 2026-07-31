@@ -12,11 +12,10 @@ namespace {
 }  // namespace
 
 using value_type = std::pair<const int, int>;
-using map_type   = tay::map<int, int, tay::allocator<value_type>, collide_hash>;
+using map_type   = tay::hash_map<int, int, collide_hash>;
 
 static_assert(
-    std::is_same_v<map_type, tay::hash_map<int, int, tay::allocator<value_type>,
-                                           collide_hash>>);
+    std::is_same_v<map_type, tay::hash_map<int, int, collide_hash>>);
 
 int main() {
     map_type values;

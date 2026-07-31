@@ -1,4 +1,5 @@
 #include <tay/expected.h>
+#include <tay/utility.h>
 
 #include <cassert>
 #include <type_traits>
@@ -274,6 +275,46 @@ namespace {
         assert(const_rvalue.value() == 6);
     }
 
+    void test_match_and_visit() {
+        tay::expected<int, error_code> value = tay::Ok(41);
+        auto value_result                    = value.match(tay::overloaded{
+            [](int item) { return item + 1; },
+            [](error_code) { return -1; },
+        });
+        assert(value_result == 42);
+
+        tay::expected<int, error_code> failed = tay::Err(error_code::missing);
+        auto error_result                     = failed.visit(tay::overloaded{
+            [](int) { return 1; },
+            [](error_code error) {
+                return error == error_code::missing ? 2 : 3;
+            },
+        });
+        assert(error_result == 2);
+
+        tay::expected<void, error_code> done = tay::Ok();
+        auto void_value                      = done.match(tay::overloaded{
+            [] { return 7; },
+            [](error_code) { return -1; },
+        });
+        assert(void_value == 7);
+
+        done            = tay::Err(error_code::failure);
+        auto void_error = done.visit(tay::overloaded{
+            [] { return 7; },
+            [](error_code) { return -1; },
+        });
+        assert(void_error == -1);
+
+        int referenced_value                       = 9;
+        tay::expected<int&, error_code> referenced = tay::Ok(referenced_value);
+        auto reference_result = referenced.match(tay::overloaded{
+            [](int& item) { return item; },
+            [](error_code) { return -1; },
+        });
+        assert(reference_result == 9);
+    }
+
     void test_exception_state_restoration() {
         tay::expected<throwing_value, error_code> target =
             tay::Err(error_code::missing);
@@ -327,6 +368,7 @@ int main() {
     test_lifetimes_and_move_only();
     test_reference_rebinding();
     test_monadic_operations();
+    test_match_and_visit();
     test_exception_state_restoration();
     return 0;
 }

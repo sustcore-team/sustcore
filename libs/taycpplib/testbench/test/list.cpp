@@ -1,4 +1,4 @@
-#include <tay/list.h>
+#include <tay/array_list.h>
 
 #include <cassert>
 #include <type_traits>
@@ -22,11 +22,11 @@ namespace {
     };
 }  // namespace
 
-static_assert(std::is_same_v<tay::list<int, tay::allocator<int>>,
+static_assert(std::is_same_v<tay::array_list<int, tay::allocator<int>>,
                              tay::array_list<int, tay::allocator<int>>>);
 
 int main() {
-    using list_type = tay::list<int, tay::allocator<int>>;
+    using list_type = tay::array_list<int, tay::allocator<int>>;
 
     list_type values{1, 2, 4};
     assert(values.size() == 3);

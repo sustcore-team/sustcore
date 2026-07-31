@@ -5,9 +5,10 @@
  * @date 2026-07-28
  */
 
-#include <cstdio>
-
 #include <tay/expected.h>
+#include <tay/utility.h>
+
+#include <cstdio>
 
 namespace {
     tay::expected<int, const char*> divide(int numerator, int denominator) {
@@ -19,13 +20,22 @@ namespace {
 
     void print_result(int numerator, int denominator) {
         auto result = divide(numerator, denominator);
-        if (result) {
-            std::printf("%d / %d = %d\n", numerator, denominator,
-                        result.value());
-        } else {
-            std::printf("%d / %d failed: %s\n", numerator, denominator,
-                        result.error());
-        }
+
+        result.match(tay::overloaded{
+            [=](int value) {
+                std::printf("%d / %d = %d\n", numerator, denominator, value);
+            },
+            [=](const char* error) {
+                std::printf("%d / %d failed: %s\n", numerator, denominator,
+                            error);
+            },
+        });
+
+        const char* state = result.visit(tay::overloaded{
+            [](int) { return "value"; },
+            [](const char*) { return "error"; },
+        });
+        std::printf("result state: %s\n", state);
     }
 }  // namespace
 

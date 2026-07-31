@@ -41,6 +41,24 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-guard"
+header = "tay/guard.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-unique-ptr"
+header = "tay/unique_ptr.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-raii"
+header = "tay/raii.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-panic"
 header = "tay/panic.h"
 language = "c++"
@@ -121,7 +139,73 @@ environments = ["freestanding", "host"]
 
 [[headercheck]]
 id = "taycpplib-list"
+header = "tay/array_list.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-static-vector"
+header = "tay/static_vector.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-array"
+header = "tay/array.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-bitmap"
+header = "tay/bitmap.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-fifo"
+header = "tay/fifo.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-functional"
+header = "tay/functional.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-intrusive-list"
 header = "tay/list.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-intrusive-tree"
+header = "tay/tree.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-binary-search"
+header = "tay/algo/binary_search.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-heap"
+header = "tay/algo/heap.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-flat"
+header = "tay/flat.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-slot-map"
+header = "tay/slot_map.h"
 language = "c++"
 environments = ["freestanding", "host"]
 

@@ -19,7 +19,8 @@ namespace {
 }  // namespace
 
 int main() {
-    auto debug = loggers::debug("boot={}", true);
-    auto error = loggers::error("cause={:x}", 42u);
+    loggers logger;
+    auto debug = logger.debug("boot={}", true);
+    auto error = logger.error("cause={:x}", 42u);
     return debug && error && output_size != 0 ? 0 : 1;
 }

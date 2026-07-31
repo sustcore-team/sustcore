@@ -10,7 +10,7 @@
 #include <cstdio>
 
 namespace {
-    using id_set = tay::set<int>;
+    using id_set = tay::hash_set<int>;
 
     template <class Result>
     bool succeeded(const Result& result, const char* operation) {
