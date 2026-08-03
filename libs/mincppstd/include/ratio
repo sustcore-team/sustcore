@@ -1,9 +1,9 @@
 /**
  * @file ratio
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 编译器有理数计算
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <ratio> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-02-22
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -60,8 +60,7 @@ namespace std {
             static_assert(_a * _t + _b * _s < _c / 2, "乘法运算溢出!");
             static_assert(_s * _t <= _max, "乘法运算溢出!");
             // 在此处做了一个移项
-            static_assert((_a * _t + _b * _s) * _c <= _max - _s * _t,
-                          "乘法运算溢出!");
+            static_assert((_a * _t + _b * _s) * _c <= _max - _s * _t, "乘法运算溢出!");
 
             static constexpr _Z val = _mul(P, Q);
         };
@@ -127,14 +126,11 @@ namespace std {
     using ratio_add = _arith::ratio_add<R1::num, R1::den, R2::num, R2::dem>;
 
     template <__ratio_trait R1, __ratio_trait R2>
-    using ratio_subtract =
-        _arith::ratio_subtract<R1::num, R1::den, R2::num, R2::dem>;
+    using ratio_subtract = _arith::ratio_subtract<R1::num, R1::den, R2::num, R2::dem>;
     template <__ratio_trait R1, __ratio_trait R2>
-    using ratio_multiply =
-        _arith::ratio_multiply<R1::num, R1::den, R2::num, R2::dem>;
+    using ratio_multiply = _arith::ratio_multiply<R1::num, R1::den, R2::num, R2::dem>;
     template <__ratio_trait R1, __ratio_trait R2>
-    using ratio_divide =
-        _arith::ratio_divide<R1::num, R1::den, R2::num, R2::dem>;
+    using ratio_divide = _arith::ratio_divide<R1::num, R1::den, R2::num, R2::dem>;
 
     // ratio comparison
     template <class R1, class R2>

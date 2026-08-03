@@ -1,9 +1,9 @@
 /**
  * @file cmp.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief comparators
+ * @brief 提供比较器和比较适配工具。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -37,4 +37,4 @@ namespace tay::__algo {
             return std::forward<L>(lhs) == std::forward<R>(rhs);
         }
     };
-}  // namespace tay::__cmp
+}  // namespace tay::__algo

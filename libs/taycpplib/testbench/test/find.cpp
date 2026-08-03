@@ -1,3 +1,14 @@
+/**
+ * @file find.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 查找算法的匹配和未命中行为。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/algo/find.h>
 
 #include <cassert>
@@ -11,10 +22,9 @@ namespace {
         constexpr bool operator==(const record&) const = default;
     };
 
-    template <typename T, std::size_t Size>
-    constexpr bool prefix_equal(const T (&values)[Size], const T* expected,
-                                std::size_t count) {
-        for (std::size_t index = 0; index < count; ++index) {
+    template <typename T, size_t Size>
+    constexpr bool prefix_equal(const T (&values)[Size], const T* expected, size_t count) {
+        for (size_t index = 0; index < count; ++index) {
             if (!(values[index] == expected[index])) {
                 return false;
             }
@@ -29,9 +39,7 @@ namespace {
         {
             return false;
         }
-        if (tay::find_if(values, [](int value) { return value % 2 == 0; }) !=
-            values)
-        {
+        if (tay::find_if(values, [](int value) { return value % 2 == 0; }) != values) {
             return false;
         }
         if (!tay::contains(values, 2) || tay::contains(values, 8)) {
@@ -47,18 +55,15 @@ namespace {
 static_assert(find_algorithms_work());
 
 int main() {
-    int values[] = {1, 2, 3, 4, 5, 6};
-    auto new_end =
-        tay::remove_if(values, [](int value) { return value % 2 != 0; });
+    int values[]         = {1, 2, 3, 4, 5, 6};
+    auto new_end         = tay::remove_if(values, [](int value) { return value % 2 != 0; });
     const int expected[] = {2, 4, 6};
     assert(new_end == values + 3);
     assert(prefix_equal(values, expected, 3));
 
     record records[] = {{3, 30}, {1, 10}, {2, 20}, {1, 11}};
     assert(tay::find(records, 2, &record::key) == records + 2);
-    assert(tay::find_if(
-               records, [](int key) { return key < 2; }, &record::key) ==
-           records + 1);
+    assert(tay::find_if(records, [](int key) { return key < 2; }, &record::key) == records + 1);
     assert(tay::contains(records, 3, &record::key));
 
     auto records_end                = tay::remove(records, 1, &record::key);

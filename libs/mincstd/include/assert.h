@@ -1,11 +1,11 @@
 /**
  * @file assert.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief assert.h
+ * @brief 为 freestanding C 环境提供与标准 <assert.h> 对应的断言接口。
  * @version 0.1.0-dev.1
- * @date 2022-12-31
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2022 TayhuangOS Development Team
+ * @copyright Copyright (c) 2026
  * SPDX-License-Identifier: LGPL-2.1-only
  *
  */
@@ -25,8 +25,7 @@ extern "C" {
  * @param base_file 源文件
  * @param line 行
  */
-void assertion_failure(const char *expression, const char *file,
-                       const char *base_file, int line);
+void assertion_failure(const char *expression, const char *file, const char *base_file, int line);
 /**
  * @brief 崩溃断言
  *
@@ -35,8 +34,7 @@ void assertion_failure(const char *expression, const char *file,
  * @param base_file 源文件
  * @param line 行
  */
-void panic_failure(const char *expression, const char *file,
-                   const char *base_file, int line);
+void panic_failure(const char *expression, const char *file, const char *base_file, int line);
 /**
  * @brief 崩溃
  *
@@ -54,7 +52,7 @@ void panic(const char *format, ...);
 #endif
 
 // 不开启DEBUG
-#if defined(NDEBUG) || ! ASSERT_IMPLEMENTED
+#if defined(NDEBUG) || !ASSERT_IMPLEMENTED
 /** 断言 */
 #define assert(expression)       ((void)(expression))
 /** 崩溃断言 */

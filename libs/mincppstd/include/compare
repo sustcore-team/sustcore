@@ -1,9 +1,9 @@
 /**
  * @file compare
  * @author theflysong (song_of_the_fly@163.com)
- * @brief compare
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <compare> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-02-17
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -60,69 +60,57 @@ namespace std {
         static const partial_ordering unordered;
 
         [[nodiscard]]
-        friend constexpr bool operator==(partial_ordering _lhs,
-                                         partial_ordering _rhs) noexcept {
+        friend constexpr bool operator==(partial_ordering _lhs, partial_ordering _rhs) noexcept {
             return _lhs._value == _rhs._value;
         }
         [[nodiscard]]
-        friend constexpr bool operator==(partial_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator==(partial_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr bool operator<(partial_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<(partial_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(partial_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator>(partial_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(partial_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<=(partial_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(partial_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(partial_ordering _v, __cmpcat::_unspec) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr bool operator<(__cmpcat::_unspec,
-                                        partial_ordering _v) noexcept {
+        friend constexpr bool operator<(__cmpcat::_unspec, partial_ordering _v) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(__cmpcat::_unspec,
-                                        partial_ordering _v) noexcept {
+        friend constexpr bool operator>(__cmpcat::_unspec, partial_ordering _v) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(__cmpcat::_unspec,
-                                         partial_ordering _v) noexcept {
+        friend constexpr bool operator<=(__cmpcat::_unspec, partial_ordering _v) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(__cmpcat::_unspec,
-                                         partial_ordering _v) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(__cmpcat::_unspec, partial_ordering _v) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr partial_ordering operator<=>(
-            partial_ordering _v, __cmpcat::_unspec) noexcept {
+        friend constexpr partial_ordering operator<=>(partial_ordering _v,
+                                                      __cmpcat::_unspec) noexcept {
             return _v;
         }
 
         [[nodiscard]]
-        friend constexpr partial_ordering operator<=>(
-            __cmpcat::_unspec, partial_ordering _v) noexcept {
+        friend constexpr partial_ordering operator<=>(__cmpcat::_unspec,
+                                                      partial_ordering _v) noexcept {
             if (__cmpcat::reversible(_v._value)) {
                 return partial_ordering(__cmpcat::reverse(_v._value));
             }
@@ -135,12 +123,9 @@ namespace std {
 
     // partial_ordering有效值
     inline constexpr partial_ordering partial_ordering::less(__cmpcat::less);
-    inline constexpr partial_ordering partial_ordering::equivalent(
-        __cmpcat::equiv);
-    inline constexpr partial_ordering partial_ordering::greater(
-        __cmpcat::greater);
-    inline constexpr partial_ordering partial_ordering::unordered(
-        __cmpcat::unordered);
+    inline constexpr partial_ordering partial_ordering::equivalent(__cmpcat::equiv);
+    inline constexpr partial_ordering partial_ordering::greater(__cmpcat::greater);
+    inline constexpr partial_ordering partial_ordering::unordered(__cmpcat::unordered);
 
     class weak_ordering {
         __cmpcat::type _value;
@@ -162,69 +147,55 @@ namespace std {
         }
 
         [[nodiscard]]
-        friend constexpr bool operator==(weak_ordering _lhs,
-                                         weak_ordering _rhs) noexcept {
+        friend constexpr bool operator==(weak_ordering _lhs, weak_ordering _rhs) noexcept {
             return _lhs._value == _rhs._value;
         }
         [[nodiscard]]
-        friend constexpr bool operator==(weak_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator==(weak_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr bool operator<(weak_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<(weak_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(weak_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator>(weak_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(weak_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<=(weak_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(weak_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(weak_ordering _v, __cmpcat::_unspec) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr bool operator<(__cmpcat::_unspec,
-                                        weak_ordering _v) noexcept {
+        friend constexpr bool operator<(__cmpcat::_unspec, weak_ordering _v) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(__cmpcat::_unspec,
-                                        weak_ordering _v) noexcept {
+        friend constexpr bool operator>(__cmpcat::_unspec, weak_ordering _v) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(__cmpcat::_unspec,
-                                         weak_ordering _v) noexcept {
+        friend constexpr bool operator<=(__cmpcat::_unspec, weak_ordering _v) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(__cmpcat::_unspec,
-                                         weak_ordering _v) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(__cmpcat::_unspec, weak_ordering _v) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr weak_ordering operator<=>(weak_ordering _v,
-                                                   __cmpcat::_unspec) noexcept {
+        friend constexpr weak_ordering operator<=>(weak_ordering _v, __cmpcat::_unspec) noexcept {
             return _v;
         }
 
         [[nodiscard]]
-        friend constexpr weak_ordering operator<=>(__cmpcat::_unspec,
-                                                   weak_ordering _v) noexcept {
+        friend constexpr weak_ordering operator<=>(__cmpcat::_unspec, weak_ordering _v) noexcept {
             return weak_ordering(__cmpcat::reverse(_v._value));
         }
 
@@ -260,68 +231,56 @@ namespace std {
         }
 
         [[nodiscard]]
-        friend constexpr bool operator==(strong_ordering _lhs,
-                                         strong_ordering _rhs) noexcept {
+        friend constexpr bool operator==(strong_ordering _lhs, strong_ordering _rhs) noexcept {
             return _lhs._value == _rhs._value;
         }
         [[nodiscard]]
-        friend constexpr bool operator==(strong_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator==(strong_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator<(strong_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<(strong_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(strong_ordering _v,
-                                        __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator>(strong_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(strong_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
+        friend constexpr bool operator<=(strong_ordering _v, __cmpcat::_unspec) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(strong_ordering _v,
-                                         __cmpcat::_unspec) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(strong_ordering _v, __cmpcat::_unspec) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr bool operator<(__cmpcat::_unspec,
-                                        strong_ordering _v) noexcept {
+        friend constexpr bool operator<(__cmpcat::_unspec, strong_ordering _v) noexcept {
             return _v._value == __cmpcat::less;
         }
         [[nodiscard]]
-        friend constexpr bool operator>(__cmpcat::_unspec,
-                                        strong_ordering _v) noexcept {
+        friend constexpr bool operator>(__cmpcat::_unspec, strong_ordering _v) noexcept {
             return _v._value == __cmpcat::greater;
         }
         [[nodiscard]]
-        friend constexpr bool operator<=(__cmpcat::_unspec,
-                                         strong_ordering _v) noexcept {
+        friend constexpr bool operator<=(__cmpcat::_unspec, strong_ordering _v) noexcept {
             return _v._value == __cmpcat::less || _v._value == __cmpcat::equiv;
         }
         [[nodiscard]]
-        friend constexpr bool operator>=(__cmpcat::_unspec,
-                                         strong_ordering _v) noexcept {
-            return _v._value == __cmpcat::greater ||
-                   _v._value == __cmpcat::equiv;
+        friend constexpr bool operator>=(__cmpcat::_unspec, strong_ordering _v) noexcept {
+            return _v._value == __cmpcat::greater || _v._value == __cmpcat::equiv;
         }
 
         [[nodiscard]]
-        friend constexpr strong_ordering operator<=>(
-            strong_ordering _v, __cmpcat::_unspec) noexcept {
+        friend constexpr strong_ordering operator<=>(strong_ordering _v,
+                                                     __cmpcat::_unspec) noexcept {
             return _v;
         }
 
         [[nodiscard]]
-        friend constexpr strong_ordering operator<=>(
-            __cmpcat::_unspec, strong_ordering _v) noexcept {
+        friend constexpr strong_ordering operator<=>(__cmpcat::_unspec,
+                                                     strong_ordering _v) noexcept {
             return strong_ordering(__cmpcat::reverse(_v._value));
         }
     };
@@ -329,10 +288,8 @@ namespace std {
     // strong_ordering有效值
     inline constexpr strong_ordering strong_ordering::less(__cmpcat::less);
     inline constexpr strong_ordering strong_ordering::equal(__cmpcat::equiv);
-    inline constexpr strong_ordering strong_ordering::equivalent(
-        __cmpcat::equiv);
-    inline constexpr strong_ordering strong_ordering::greater(
-        __cmpcat::greater);
+    inline constexpr strong_ordering strong_ordering::equivalent(__cmpcat::equiv);
+    inline constexpr strong_ordering strong_ordering::greater(__cmpcat::greater);
 
     // is_eq/neq/lt/lteq/gt/gteq
     [[nodiscard]]

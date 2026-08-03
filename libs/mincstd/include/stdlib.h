@@ -1,11 +1,11 @@
 /**
  * @file stdlib.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief stdlib.h
+ * @brief 为 freestanding C 环境提供与标准 <stdlib.h> 对应的基础工具声明。
  * @version 0.1.0-dev.1
- * @date 2025-11-18
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  *
  */
 
@@ -16,8 +16,8 @@
 extern "C" {
 #endif
 
-#include <stddef.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 
 void *malloc(size_t size);

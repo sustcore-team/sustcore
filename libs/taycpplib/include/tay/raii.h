@@ -1,8 +1,12 @@
 /**
  * @file raii.h
- * @brief Convenience header for tay scope and ownership RAII types.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 汇集 Tay C++ 库的作用域和所有权 RAII 类型。
  * @version 0.1.0-dev.1
- * @date 2026-07-31
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once

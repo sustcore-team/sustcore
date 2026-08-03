@@ -1,3 +1,14 @@
+/**
+ * @file path.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 tay::path 的路径解析和词法操作。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/format.h>
 #include <tay/path.h>
 
@@ -8,9 +19,9 @@
 
 namespace {
     struct allocation_state {
-        bool fail                 = false;
-        std::size_t allocations   = 0;
-        std::size_t deallocations = 0;
+        bool fail            = false;
+        size_t allocations   = 0;
+        size_t deallocations = 0;
     };
 
     template <class T>
@@ -20,30 +31,27 @@ namespace {
 
         allocation_state* state = nullptr;
 
-        constexpr explicit checked_allocator(allocation_state& value) noexcept
-            : state(&value) {}
+        constexpr explicit checked_allocator(allocation_state& value) noexcept : state(&value) {}
 
         template <class U>
         constexpr checked_allocator(const checked_allocator<U>& other) noexcept
             : state(other.state) {}
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
             if (state->fail) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             ++state->allocations;
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ++state->deallocations;
             ::operator delete(memory);
         }
@@ -76,8 +84,7 @@ namespace {
     }
 }  // namespace
 
-static_assert(
-    std::is_same_v<typename tay::path<>::allocator_type, tay::allocator<char>>);
+static_assert(std::is_same_v<typename tay::path<>::allocator_type, tay::allocator<char>>);
 
 int main() {
     auto empty = tay::path<>::try_create("");
@@ -92,7 +99,7 @@ int main() {
 
     auto components        = make_path("///home//user/docs/");
     const char* expected[] = {"/", "home", "user", "docs"};
-    std::size_t index      = 0;
+    size_t index           = 0;
     for (auto component : components) {
         assert(index < 4);
         assert(component == expected[index++]);
@@ -125,7 +132,7 @@ int main() {
     assert(dot_extension && dot_extension->empty());
     assert(final_dot_extension && *final_dot_extension == ".");
 
-    auto normalized = make_path("///usr//local/../bin/.").try_normalize();
+    auto normalized          = make_path("///usr//local/../bin/.").try_normalize();
     auto relative_normalized = make_path("./a/b/../c/./d").try_normalize();
     auto above_root          = make_path("/../../etc").try_normalize();
     auto cancelled           = make_path("a/..").try_normalize();
@@ -163,8 +170,7 @@ int main() {
     assert(!target.ends_with(make_path("port.txt")));
     assert(!target.ends_with(make_path("/docs/report.txt")));
     assert(target < make_path("/z"));
-    assert(std::hash<tay::path<>>{}(target) ==
-           std::hash<tay::path<>>{}(make_path(target.c_str())));
+    assert(std::hash<tay::path<>>{}(target) == std::hash<tay::path<>>{}(make_path(target.c_str())));
 
     auto formatted = tay::format("path={}", target);
     assert(formatted && *formatted == "path=/home/user/docs/report.txt");
@@ -184,9 +190,9 @@ int main() {
     assert(join_failure.error() == tay::error_code::OUT_OF_MEMORY);
     assert(*atomic == "123456789012345");
 
-    state.fail     = false;
-    auto long_path = checked_path::try_create(
-        "/a/long/path/which/needs/dynamic/storage/../file", allocator);
+    state.fail = false;
+    auto long_path =
+        checked_path::try_create("/a/long/path/which/needs/dynamic/storage/../file", allocator);
     assert(long_path);
     state.fail             = true;
     auto normalize_failure = long_path->try_normalize();

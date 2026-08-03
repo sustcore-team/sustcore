@@ -1,6 +1,12 @@
 /**
  * @file path.h
- * @brief Allocator-aware POSIX lexical paths.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供分配器感知的 POSIX 词法路径类型。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -32,8 +38,7 @@ namespace tay {
 
         string_type path_;
 
-        constexpr path(string_tag, string_type&& text) noexcept
-            : path_(std::move(text)) {}
+        constexpr path(string_tag, string_type&& text) noexcept : path_(std::move(text)) {}
 
         [[nodiscard]] static constexpr bool is_dot(string_view component) {
             return component == ".";
@@ -43,8 +48,8 @@ namespace tay {
             return component == "..";
         }
 
-        [[nodiscard]] static constexpr expected<void, error_code>
-        append_component(string_type& output, string_view component) noexcept {
+        [[nodiscard]] static constexpr expected<void, error_code> append_component(
+            string_type& output, string_view component) noexcept {
             if (!output.empty() && output[output.size() - 1] != '/') {
                 auto separator = output.push_back('/');
                 if (!separator) {
@@ -70,8 +75,8 @@ namespace tay {
 
         [[nodiscard]] constexpr expected<path, error_code> try_slice(
             size_type position, size_type count) const noexcept {
-            auto text = string_type::try_create(path_.data() + position, count,
-                                                path_.get_allocator());
+            auto text =
+                string_type::try_create(path_.data() + position, count, path_.get_allocator());
             if (!text) {
                 return expected<path, error_code>(unexpect, text.error());
             }
@@ -87,8 +92,8 @@ namespace tay {
             bool root_         = false;
             string_view current_{};
 
-            constexpr const_iterator(const path* owner, size_type begin,
-                                     size_type end, bool root) noexcept
+            constexpr const_iterator(const path* owner, size_type begin, size_type end,
+                                     bool root) noexcept
                 : owner_(owner), begin_(begin), end_(end), root_(root) {
                 refresh();
             }
@@ -99,8 +104,7 @@ namespace tay {
                 } else if (root_) {
                     current_ = string_view("/", 1);
                 } else {
-                    current_ = string_view(owner_->path_.data() + begin_,
-                                           end_ - begin_);
+                    current_ = string_view(owner_->path_.data() + begin_, end_ - begin_);
                 }
             }
 
@@ -152,12 +156,10 @@ namespace tay {
                 return copy;
             }
 
-            [[nodiscard]] friend constexpr bool operator==(
-                const const_iterator& left,
-                const const_iterator& right) noexcept {
-                return left.owner_ == right.owner_ &&
-                       left.begin_ == right.begin_ && left.end_ == right.end_ &&
-                       left.root_ == right.root_;
+            [[nodiscard]] friend constexpr bool operator==(const const_iterator& left,
+                                                           const const_iterator& right) noexcept {
+                return left.owner_ == right.owner_ && left.begin_ == right.begin_ &&
+                       left.end_ == right.end_ && left.root_ == right.root_;
             }
         };
 
@@ -167,8 +169,7 @@ namespace tay {
             requires(std::is_nothrow_default_constructible_v<allocator_type>)
         = default;
 
-        constexpr explicit path(const allocator_type& allocator) noexcept
-            : path_(allocator) {}
+        constexpr explicit path(const allocator_type& allocator) noexcept : path_(allocator) {}
 
         constexpr path(const path&) noexcept            = default;
         constexpr path(path&&) noexcept                 = default;
@@ -200,8 +201,7 @@ namespace tay {
         [[nodiscard]] static constexpr expected<path, error_code> try_create(
             const char* text, const allocator_type& allocator) noexcept {
             if (text == nullptr) {
-                return expected<path, error_code>(unexpect,
-                                                  error_code::NULLPTR);
+                return expected<path, error_code>(unexpect, error_code::NULLPTR);
             }
             return try_create(string_view(text), allocator);
         }
@@ -263,8 +263,7 @@ namespace tay {
             return const_iterator(this, size(), size(), false);
         }
 
-        constexpr expected<void, error_code> try_concat(
-            string_view suffix) noexcept {
+        constexpr expected<void, error_code> try_concat(string_view suffix) noexcept {
             auto appended = path_.append(suffix);
             if (!appended) {
                 return expected<void, error_code>(unexpect, appended.error());
@@ -272,8 +271,7 @@ namespace tay {
             return {};
         }
 
-        constexpr expected<void, error_code> try_concat(
-            const path& suffix) noexcept {
+        constexpr expected<void, error_code> try_concat(const path& suffix) noexcept {
             return try_concat(suffix.view());
         }
 
@@ -287,13 +285,10 @@ namespace tay {
             if (!result) {
                 return result;
             }
-            if (!result->empty() && !other.empty() &&
-                result->path_[result->size() - 1] != '/')
-            {
+            if (!result->empty() && !other.empty() && result->path_[result->size() - 1] != '/') {
                 auto separator = result->path_.push_back('/');
                 if (!separator) {
-                    return expected<path, error_code>(unexpect,
-                                                      separator.error());
+                    return expected<path, error_code>(unexpect, separator.error());
                 }
             }
             auto appended = result->path_.append(other);
@@ -308,8 +303,7 @@ namespace tay {
             return try_join(other.view());
         }
 
-        [[nodiscard]] constexpr expected<path, error_code> try_parent_path()
-            const noexcept {
+        [[nodiscard]] constexpr expected<path, error_code> try_parent_path() const noexcept {
             if (empty()) {
                 return try_slice(0, 0);
             }
@@ -335,8 +329,7 @@ namespace tay {
             return try_slice(0, slash);
         }
 
-        [[nodiscard]] constexpr expected<path, error_code> try_filename()
-            const noexcept {
+        [[nodiscard]] constexpr expected<path, error_code> try_filename() const noexcept {
             if (empty() || path_[size() - 1] == '/') {
                 return try_slice(size(), 0);
             }
@@ -347,8 +340,7 @@ namespace tay {
             return try_slice(begin_position, size() - begin_position);
         }
 
-        [[nodiscard]] constexpr expected<path, error_code> try_stem()
-            const noexcept {
+        [[nodiscard]] constexpr expected<path, error_code> try_stem() const noexcept {
             auto filename = try_filename();
             if (!filename) {
                 return filename;
@@ -363,8 +355,7 @@ namespace tay {
             return filename->try_slice(0, dot);
         }
 
-        [[nodiscard]] constexpr expected<path, error_code> try_extension()
-            const noexcept {
+        [[nodiscard]] constexpr expected<path, error_code> try_extension() const noexcept {
             auto filename = try_filename();
             if (!filename) {
                 return filename;
@@ -379,8 +370,7 @@ namespace tay {
             return filename->try_slice(dot, filename->size() - dot);
         }
 
-        [[nodiscard]] constexpr expected<path, error_code> try_normalize()
-            const noexcept {
+        [[nodiscard]] constexpr expected<path, error_code> try_normalize() const noexcept {
             if (empty()) {
                 return try_create(get_allocator());
             }
@@ -401,36 +391,30 @@ namespace tay {
                     continue;
                 }
                 if (is_dot_dot(component)) {
-                    const size_type slash = output->rfind('/');
-                    const size_type last_begin =
-                        slash == string_type::npos ? 0 : slash + 1;
+                    const size_type slash      = output->rfind('/');
+                    const size_type last_begin = slash == string_type::npos ? 0 : slash + 1;
                     const string_view last(output->data() + last_begin,
                                            output->size() - last_begin);
-                    if (!output->empty() && string_view(*output) != "/" &&
-                        !is_dot_dot(last))
-                    {
+                    if (!output->empty() && string_view(*output) != "/" && !is_dot_dot(last)) {
                         pop_component(*output);
                     } else if (!is_absolute()) {
                         auto appended = append_component(*output, component);
                         if (!appended) {
-                            return expected<path, error_code>(unexpect,
-                                                              appended.error());
+                            return expected<path, error_code>(unexpect, appended.error());
                         }
                     }
                     continue;
                 }
                 auto appended = append_component(*output, component);
                 if (!appended) {
-                    return expected<path, error_code>(unexpect,
-                                                      appended.error());
+                    return expected<path, error_code>(unexpect, appended.error());
                 }
             }
 
             if (output->empty() && is_relative()) {
                 auto current = output->push_back('.');
                 if (!current) {
-                    return expected<path, error_code>(unexpect,
-                                                      current.error());
+                    return expected<path, error_code>(unexpect, current.error());
                 }
             }
             return path(string_tag{}, std::move(*output));
@@ -439,8 +423,7 @@ namespace tay {
         [[nodiscard]] constexpr expected<path, error_code> try_relative_to(
             const path& base) const noexcept {
             if (is_absolute() != base.is_absolute()) {
-                return expected<path, error_code>(unexpect,
-                                                  error_code::INVALID_ARGUMENT);
+                return expected<path, error_code>(unexpect, error_code::INVALID_ARGUMENT);
             }
 
             auto target_normal = try_normalize();
@@ -449,14 +432,13 @@ namespace tay {
             }
             auto base_normal = base.try_normalize();
             if (!base_normal) {
-                return expected<path, error_code>(unexpect,
-                                                  base_normal.error());
+                return expected<path, error_code>(unexpect, base_normal.error());
             }
 
             auto target_it = target_normal->begin();
             auto base_it   = base_normal->begin();
-            while (target_it != target_normal->end() &&
-                   base_it != base_normal->end() && *target_it == *base_it)
+            while (target_it != target_normal->end() && base_it != base_normal->end() &&
+                   *target_it == *base_it)
             {
                 ++target_it;
                 ++base_it;
@@ -484,8 +466,7 @@ namespace tay {
             while (parents-- > 0) {
                 auto appended = append_component(*output, "..");
                 if (!appended) {
-                    return expected<path, error_code>(unexpect,
-                                                      appended.error());
+                    return expected<path, error_code>(unexpect, appended.error());
                 }
             }
             for (; target_it != target_normal->end(); ++target_it) {
@@ -494,22 +475,19 @@ namespace tay {
                 }
                 auto appended = append_component(*output, *target_it);
                 if (!appended) {
-                    return expected<path, error_code>(unexpect,
-                                                      appended.error());
+                    return expected<path, error_code>(unexpect, appended.error());
                 }
             }
             if (output->empty()) {
                 auto current = output->push_back('.');
                 if (!current) {
-                    return expected<path, error_code>(unexpect,
-                                                      current.error());
+                    return expected<path, error_code>(unexpect, current.error());
                 }
             }
             return path(string_tag{}, std::move(*output));
         }
 
-        [[nodiscard]] constexpr bool starts_with(
-            string_view prefix) const noexcept {
+        [[nodiscard]] constexpr bool starts_with(string_view prefix) const noexcept {
             if (prefix.empty()) {
                 return true;
             }
@@ -520,18 +498,15 @@ namespace tay {
             if (selected != prefix) {
                 return false;
             }
-            return size() == prefix.size() ||
-                   prefix[prefix.size() - 1] == '/' ||
+            return size() == prefix.size() || prefix[prefix.size() - 1] == '/' ||
                    path_[prefix.size()] == '/';
         }
 
-        [[nodiscard]] constexpr bool starts_with(
-            const path& prefix) const noexcept {
+        [[nodiscard]] constexpr bool starts_with(const path& prefix) const noexcept {
             return starts_with(prefix.view());
         }
 
-        [[nodiscard]] constexpr bool ends_with(
-            string_view suffix) const noexcept {
+        [[nodiscard]] constexpr bool ends_with(string_view suffix) const noexcept {
             if (suffix.empty()) {
                 return true;
             }
@@ -549,13 +524,12 @@ namespace tay {
             return suffix[0] != '/' && path_[start - 1] == '/';
         }
 
-        [[nodiscard]] constexpr bool ends_with(
-            const path& suffix) const noexcept {
+        [[nodiscard]] constexpr bool ends_with(const path& suffix) const noexcept {
             return ends_with(suffix.view());
         }
 
-        [[nodiscard]] friend constexpr bool operator==(
-            const path& left, const path& right) noexcept {
+        [[nodiscard]] friend constexpr bool operator==(const path& left,
+                                                       const path& right) noexcept {
             return left.view() == right.view();
         }
 
@@ -564,21 +538,18 @@ namespace tay {
             return left.view() <=> right.view();
         }
 
-        [[nodiscard]] constexpr bool operator==(
-            string_view other) const noexcept {
+        [[nodiscard]] constexpr bool operator==(string_view other) const noexcept {
             return view() == other;
         }
 
-        [[nodiscard]] constexpr std::strong_ordering operator<=>(
-            string_view other) const noexcept {
+        [[nodiscard]] constexpr std::strong_ordering operator<=>(string_view other) const noexcept {
             return view() <=> other;
         }
     };
 
     template <class Allocator>
     struct formatter<path<Allocator>> {
-        constexpr format_parse_context::iterator parse(
-            format_parse_context& context) noexcept {
+        constexpr format_parse_context::iterator parse(format_parse_context& context) noexcept {
             return context.begin();
         }
 

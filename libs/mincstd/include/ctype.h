@@ -1,11 +1,11 @@
 /**
  * @file ctype.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief ctype.h
+ * @brief 为 freestanding C 环境提供与标准 <ctype.h> 对应的字符分类和转换接口。
  * @version 0.1.0-dev.1
- * @date 2022-12-31
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2022 TayhuangOS Development Team
+ * @copyright Copyright (c) 2026
  * SPDX-License-Identifier: LGPL-2.1-only
  *
  */

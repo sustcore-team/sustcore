@@ -1,76 +1,81 @@
 /**
  * @file bitmap.h
- * @brief Storage-policy based dynamic and static bitmaps.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供基于存储策略的静态和动态位图。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
 
 #include <tay/allocator.h>
+#include <tay/bits.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 #include <tay/panic.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <type_traits>
 #include <utility>
 
 namespace tay {
-    template <class Allocator = allocator<std::uint64_t>>
+    template <class Allocator = allocator<u64_t>>
     class dynamic_bitmap_storage {
     public:
-        using word_type = std::uint64_t;
+        using word_type      = u64_t;
         using allocator_type = Allocator;
-        using size_type = std::size_t;
+        using size_type      = size_t;
 
     private:
         [[no_unique_address]] allocator_type allocator_{};
-        word_type* words_ = nullptr;
+        word_type* words_     = nullptr;
         size_type word_count_ = 0;
-        size_type bit_count_ = 0;
+        size_type bit_count_  = 0;
 
     public:
-        constexpr dynamic_bitmap_storage() noexcept = default;
-        dynamic_bitmap_storage(const dynamic_bitmap_storage&) = delete;
+        constexpr dynamic_bitmap_storage() noexcept                      = default;
+        dynamic_bitmap_storage(const dynamic_bitmap_storage&)            = delete;
         dynamic_bitmap_storage& operator=(const dynamic_bitmap_storage&) = delete;
-        constexpr dynamic_bitmap_storage(dynamic_bitmap_storage&& other)
-            noexcept
-            : allocator_(std::move(other.allocator_)), words_(other.words_),
-              word_count_(other.word_count_), bit_count_(other.bit_count_) {
-            other.words_ = nullptr;
+        constexpr dynamic_bitmap_storage(dynamic_bitmap_storage&& other) noexcept
+            : allocator_(std::move(other.allocator_)),
+              words_(other.words_),
+              word_count_(other.word_count_),
+              bit_count_(other.bit_count_) {
+            other.words_      = nullptr;
             other.word_count_ = other.bit_count_ = 0;
         }
-        constexpr dynamic_bitmap_storage& operator=(
-            dynamic_bitmap_storage&& other) noexcept {
+        constexpr dynamic_bitmap_storage& operator=(dynamic_bitmap_storage&& other) noexcept {
             if (this != &other) {
                 reset();
-                allocator_ = std::move(other.allocator_);
-                words_ = other.words_;
-                word_count_ = other.word_count_;
-                bit_count_ = other.bit_count_;
-                other.words_ = nullptr;
+                allocator_        = std::move(other.allocator_);
+                words_            = other.words_;
+                word_count_       = other.word_count_;
+                bit_count_        = other.bit_count_;
+                other.words_      = nullptr;
                 other.word_count_ = other.bit_count_ = 0;
             }
             return *this;
         }
-        constexpr ~dynamic_bitmap_storage() noexcept { reset(); }
+        constexpr ~dynamic_bitmap_storage() noexcept {
+            reset();
+        }
 
-        [[nodiscard]] static constexpr expected<dynamic_bitmap_storage,
-                                                error_code>
-        try_create(size_type bit_count,
-                   const allocator_type& allocator = {}) noexcept {
+        [[nodiscard]] static constexpr expected<dynamic_bitmap_storage, error_code> try_create(
+            size_type bit_count, const allocator_type& allocator = {}) noexcept {
             dynamic_bitmap_storage result;
-            result.allocator_ = allocator;
-            result.bit_count_ = bit_count;
+            result.allocator_  = allocator;
+            result.bit_count_  = bit_count;
             result.word_count_ = (bit_count + 63) / 64;
             if (result.word_count_ == 0) {
                 return result;
             }
-            auto memory = allocator_traits<allocator_type>::try_allocate(
-                result.allocator_, result.word_count_);
+            auto memory = allocator_traits<allocator_type>::try_allocate(result.allocator_,
+                                                                         result.word_count_);
             if (!memory) {
-                return expected<dynamic_bitmap_storage, error_code>(
-                    unexpect, memory.error());
+                return expected<dynamic_bitmap_storage, error_code>(unexpect, memory.error());
             }
             result.words_ = *memory;
             for (size_type i = 0; i < result.word_count_; ++i) {
@@ -79,7 +84,9 @@ namespace tay {
             return result;
         }
 
-        [[nodiscard]] constexpr word_type* words() noexcept { return words_; }
+        [[nodiscard]] constexpr word_type* words() noexcept {
+            return words_;
+        }
         [[nodiscard]] constexpr const word_type* words() const noexcept {
             return words_;
         }
@@ -96,26 +103,27 @@ namespace tay {
     private:
         constexpr void reset() noexcept {
             if (words_ != nullptr) {
-                allocator_traits<allocator_type>::deallocate(
-                    allocator_, words_, word_count_);
+                allocator_traits<allocator_type>::deallocate(allocator_, words_, word_count_);
             }
-            words_ = nullptr;
+            words_      = nullptr;
             word_count_ = bit_count_ = 0;
         }
     };
 
-    template <std::size_t N>
+    template <size_t N>
     class static_bitmap_storage {
     public:
-        using word_type = std::uint64_t;
-        using size_type = std::size_t;
+        using word_type                              = u64_t;
+        using size_type                              = size_t;
         static constexpr size_type static_word_count = (N + 63) / 64;
 
     private:
         word_type words_[static_word_count == 0 ? 1 : static_word_count]{};
 
     public:
-        [[nodiscard]] constexpr word_type* words() noexcept { return words_; }
+        [[nodiscard]] constexpr word_type* words() noexcept {
+            return words_;
+        }
         [[nodiscard]] constexpr const word_type* words() const noexcept {
             return words_;
         }
@@ -128,20 +136,25 @@ namespace tay {
     };
 
     template <class Storage>
-    concept bitmap_storage = requires(Storage& storage,
-                                      const Storage& const_storage) {
+    concept bitmap_storage = requires(Storage& storage, const Storage& const_storage) {
         typename Storage::word_type;
-        { storage.words() };
-        { const_storage.word_count() } -> std::convertible_to<std::size_t>;
-        { const_storage.bit_count() } -> std::convertible_to<std::size_t>;
+        {
+            storage.words()
+        };
+        {
+            const_storage.word_count()
+        } -> std::convertible_to<size_t>;
+        {
+            const_storage.bit_count()
+        } -> std::convertible_to<size_t>;
     };
 
     template <bitmap_storage Storage>
     class basic_bitmap {
     public:
-        using storage_type = Storage;
-        using word_type = typename storage_type::word_type;
-        using size_type = std::size_t;
+        using storage_type                     = Storage;
+        using word_type                        = typename storage_type::word_type;
+        using size_type                        = size_t;
         inline static constexpr size_type npos = size_type(-1);
 
         class reference {
@@ -176,23 +189,19 @@ namespace tay {
         constexpr void mask_tail() noexcept {
             const size_type remainder = size() % 64;
             if (remainder != 0 && storage_.word_count() != 0) {
-                storage_.words()[storage_.word_count() - 1] &=
-                    (word_type{1} << remainder) - 1;
+                storage_.words()[storage_.word_count() - 1] &= (word_type{1} << remainder) - 1;
             }
         }
-        [[nodiscard]] constexpr bool test_unchecked(size_type index) const
-            noexcept {
-            return (storage_.words()[index / 64] &
-                    (word_type{1} << (index % 64))) != 0;
+        [[nodiscard]] constexpr bool test_unchecked(size_type index) const noexcept {
+            return (storage_.words()[index / 64] & (word_type{1} << (index % 64))) != 0;
         }
         constexpr void set_unchecked(size_type index, bool value) noexcept {
             const word_type mask = word_type{1} << (index % 64);
-            word_type& word = storage_.words()[index / 64];
-            word = value ? word | mask : word & ~mask;
+            word_type& word      = storage_.words()[index / 64];
+            word                 = value ? word | mask : word & ~mask;
         }
         constexpr void flip_unchecked(size_type index) noexcept {
-            storage_.words()[index / 64] ^=
-                word_type{1} << (index % 64);
+            storage_.words()[index / 64] ^= word_type{1} << (index % 64);
         }
 
     public:
@@ -210,14 +219,13 @@ namespace tay {
             storage_ = std::move(*storage);
         }
 
-        [[nodiscard]] static constexpr expected<basic_bitmap, error_code>
-        try_create(size_type bit_count) noexcept
+        [[nodiscard]] static constexpr expected<basic_bitmap, error_code> try_create(
+            size_type bit_count) noexcept
             requires requires { storage_type::try_create(bit_count); }
         {
             auto storage = storage_type::try_create(bit_count);
             if (!storage) {
-                return expected<basic_bitmap, error_code>(unexpect,
-                                                          storage.error());
+                return expected<basic_bitmap, error_code>(unexpect, storage.error());
             }
             return basic_bitmap(std::move(*storage));
         }
@@ -225,26 +233,24 @@ namespace tay {
         [[nodiscard]] constexpr size_type size() const noexcept {
             return storage_.bit_count();
         }
-        [[nodiscard]] constexpr bool empty() const noexcept { return size() == 0; }
+        [[nodiscard]] constexpr bool empty() const noexcept {
+            return size() == 0;
+        }
         [[nodiscard]] constexpr bool operator[](size_type index) const noexcept {
             return test_unchecked(index);
         }
         [[nodiscard]] constexpr reference operator[](size_type index) noexcept {
             return reference(*this, index);
         }
-        [[nodiscard]] constexpr expected<bool, error_code> test(
-            size_type index) const noexcept {
+        [[nodiscard]] constexpr expected<bool, error_code> test(size_type index) const noexcept {
             if (index >= size()) {
-                return expected<bool, error_code>(unexpect,
-                                                  error_code::OUT_OF_RANGE);
+                return expected<bool, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return test_unchecked(index);
         }
-        constexpr expected<void, error_code> set(size_type index,
-                                                 bool value = true) noexcept {
+        constexpr expected<void, error_code> set(size_type index, bool value = true) noexcept {
             if (index >= size()) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::OUT_OF_RANGE);
+                return expected<void, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             set_unchecked(index, value);
             return {};
@@ -254,8 +260,7 @@ namespace tay {
         }
         constexpr expected<void, error_code> flip(size_type index) noexcept {
             if (index >= size()) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::OUT_OF_RANGE);
+                return expected<void, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             flip_unchecked(index);
             return {};
@@ -283,18 +288,20 @@ namespace tay {
         [[nodiscard]] constexpr size_type count() const noexcept {
             size_type result = 0;
             for (size_type i = 0; i < storage_.word_count(); ++i) {
-                result += static_cast<size_type>(
-                    __builtin_popcountll(storage_.words()[i]));
+                result += static_cast<size_type>(__builtin_popcountll(storage_.words()[i]));
             }
             return result;
         }
-        [[nodiscard]] constexpr bool any() const noexcept { return count() != 0; }
-        [[nodiscard]] constexpr bool none() const noexcept { return !any(); }
+        [[nodiscard]] constexpr bool any() const noexcept {
+            return count() != 0;
+        }
+        [[nodiscard]] constexpr bool none() const noexcept {
+            return !any();
+        }
         [[nodiscard]] constexpr bool all() const noexcept {
             return count() == size();
         }
-        [[nodiscard]] constexpr size_type find_first_set(
-            size_type start = 0) const noexcept {
+        [[nodiscard]] constexpr size_type find_first_set(size_type start = 0) const noexcept {
             for (size_type i = start; i < size(); ++i) {
                 if (test_unchecked(i)) {
                     return i;
@@ -302,8 +309,7 @@ namespace tay {
             }
             return npos;
         }
-        [[nodiscard]] constexpr size_type find_first_clear(
-            size_type start = 0) const noexcept {
+        [[nodiscard]] constexpr size_type find_first_clear(size_type start = 0) const noexcept {
             for (size_type i = start; i < size(); ++i) {
                 if (!test_unchecked(i)) {
                     return i;
@@ -366,9 +372,9 @@ namespace tay {
         return left;
     }
 
-    template <class Allocator = allocator<std::uint64_t>>
+    template <class Allocator = allocator<u64_t>>
     using bitmap = basic_bitmap<dynamic_bitmap_storage<Allocator>>;
 
-    template <std::size_t N>
+    template <size_t N>
     using static_bitmap = basic_bitmap<static_bitmap_storage<N>>;
 }  // namespace tay

@@ -1,7 +1,7 @@
 /**
  * @file csrnum.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief CSR 相关
+ * @brief LoongArch 控制状态寄存器编号与位域定义
  * @version 0.1.0-dev.1
  * @date 2026-06-15
  *
@@ -131,9 +131,7 @@
 #define CRMD_DA       (1UL << 3)
 #define CRMD_PG       (1UL << 4)
 
-#define PWCTL0_4LEVEL                                                       \
-    ((9UL << 25) | (30UL << 20) | (9UL << 15) | (21UL << 10) | (9UL << 5) | \
-     12UL)
+#define PWCTL0_4LEVEL ((9UL << 25) | (30UL << 20) | (9UL << 15) | (21UL << 10) | (9UL << 5) | 12UL)
 #define PWCTL1_4LEVEL (39UL | (9UL << 6))
 #define STLBPGSIZE_4K 12UL
 

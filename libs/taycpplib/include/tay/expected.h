@@ -1,12 +1,19 @@
 /**
  * @file expected.h
- * @brief Exception-free result values with native lvalue-reference support.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供支持左值引用的无异常值或错误结果类型。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
 
 #include <tay/panic.h>
 
+#include <concepts>
 #include <functional>
 #include <memory>
 #include <new>
@@ -20,6 +27,18 @@ namespace tay {
 
     inline constexpr unexpect_t unexpect{};
 
+    struct in_place_t {
+        explicit constexpr in_place_t() = default;
+    };
+
+    inline constexpr in_place_t in_place{};
+
+    struct try_in_place_t {
+        explicit constexpr try_in_place_t() = default;
+    };
+
+    inline constexpr try_in_place_t try_in_place{};
+
     template <typename E>
     class unexpected;
 
@@ -29,12 +48,10 @@ namespace tay {
     namespace detail {
         template <typename T>
         inline constexpr bool valid_error_type_v =
-            std::is_object_v<T> && !std::is_array_v<T> &&
-            std::is_same_v<T, std::remove_cv_t<T>>;
+            std::is_object_v<T> && !std::is_array_v<T> && std::is_same_v<T, std::remove_cv_t<T>>;
 
         template <typename T>
-        inline constexpr bool valid_owned_value_type_v =
-            std::is_object_v<T> && !std::is_array_v<T>;
+        inline constexpr bool valid_owned_value_type_v = std::is_object_v<T> && !std::is_array_v<T>;
 
         template <typename T>
         struct is_unexpected : std::false_type {};
@@ -43,8 +60,7 @@ namespace tay {
         struct is_unexpected<unexpected<E>> : std::true_type {};
 
         template <typename T>
-        inline constexpr bool is_unexpected_v =
-            is_unexpected<std::remove_cvref_t<T>>::value;
+        inline constexpr bool is_unexpected_v = is_unexpected<std::remove_cvref_t<T>>::value;
 
         template <typename T>
         struct is_expected : std::false_type {};
@@ -53,8 +69,7 @@ namespace tay {
         struct is_expected<expected<V, E>> : std::true_type {};
 
         template <typename T>
-        inline constexpr bool is_expected_v =
-            is_expected<std::remove_cvref_t<T>>::value;
+        inline constexpr bool is_expected_v = is_expected<std::remove_cvref_t<T>>::value;
 
         template <typename T>
         struct is_ok_wrapper : std::false_type {};
@@ -80,16 +95,14 @@ namespace tay {
         };
 
         template <typename New, typename Old, typename... Args>
-        inline constexpr bool can_reinitialize_v =
-            std::is_constructible_v<New, Args...> &&
-            (std::is_nothrow_constructible_v<New, Args...> ||
-             std::is_nothrow_move_constructible_v<New> ||
-             std::is_nothrow_move_constructible_v<Old>);
+        inline constexpr bool can_reinit_v = std::is_constructible_v<New, Args...> &&
+                                             (std::is_nothrow_constructible_v<New, Args...> ||
+                                              std::is_nothrow_move_constructible_v<New> ||
+                                              std::is_nothrow_move_constructible_v<Old>);
 
         template <typename New, typename Old, typename... Args>
-            requires(can_reinitialize_v<New, Old, Args...>)
-        constexpr void reinitialize(New* new_location, Old* old_location,
-                                    Args&&... args) {
+            requires(can_reinit_v<New, Old, Args...>)
+        constexpr void reinit(New* new_location, Old* old_location, Args&&... args) {
             if constexpr (std::is_nothrow_constructible_v<New, Args...>) {
                 destroy_at(old_location);
                 construct_at(new_location, std::forward<Args>(args)...);
@@ -143,30 +156,26 @@ namespace tay {
             using error_type  = typename source_type::error_type;
 
             if constexpr (std::is_void_v<typename source_type::value_type>) {
-                using raw_result =
-                    decltype(std::invoke(std::forward<F>(function)));
+                using raw_result  = decltype(std::invoke(std::forward<F>(function)));
                 using result_type = std::remove_cvref_t<raw_result>;
                 static_assert(is_expected_v<result_type>,
                               "and_then callback must return tay::expected");
-                static_assert(std::is_same_v<typename result_type::error_type,
-                                             error_type>,
+                static_assert(std::is_same_v<typename result_type::error_type, error_type>,
                               "and_then callback must preserve the error type");
                 if (self.has_value()) {
                     return std::invoke(std::forward<F>(function));
                 }
                 return result_type(unexpect, std::forward<Self>(self).error());
             } else {
-                using raw_result  = decltype(std::invoke(
-                    std::forward<F>(function), *std::forward<Self>(self)));
+                using raw_result =
+                    decltype(std::invoke(std::forward<F>(function), *std::forward<Self>(self)));
                 using result_type = std::remove_cvref_t<raw_result>;
                 static_assert(is_expected_v<result_type>,
                               "and_then callback must return tay::expected");
-                static_assert(std::is_same_v<typename result_type::error_type,
-                                             error_type>,
+                static_assert(std::is_same_v<typename result_type::error_type, error_type>,
                               "and_then callback must preserve the error type");
                 if (self.has_value()) {
-                    return std::invoke(std::forward<F>(function),
-                                       *std::forward<Self>(self));
+                    return std::invoke(std::forward<F>(function), *std::forward<Self>(self));
                 }
                 return result_type(unexpect, std::forward<Self>(self).error());
             }
@@ -178,13 +187,11 @@ namespace tay {
             using error_type  = typename source_type::error_type;
 
             if constexpr (std::is_void_v<typename source_type::value_type>) {
-                using raw_result =
-                    decltype(std::invoke(std::forward<F>(function)));
+                using raw_result  = decltype(std::invoke(std::forward<F>(function)));
                 using value_type  = transform_value_t<raw_result>;
                 using result_type = expected<value_type, error_type>;
                 if (!self.has_value()) {
-                    return result_type(unexpect,
-                                       std::forward<Self>(self).error());
+                    return result_type(unexpect, std::forward<Self>(self).error());
                 }
                 if constexpr (std::is_void_v<raw_result>) {
                     std::invoke(std::forward<F>(function));
@@ -193,21 +200,19 @@ namespace tay {
                     return result_type(std::invoke(std::forward<F>(function)));
                 }
             } else {
-                using raw_result  = decltype(std::invoke(
-                    std::forward<F>(function), *std::forward<Self>(self)));
+                using raw_result =
+                    decltype(std::invoke(std::forward<F>(function), *std::forward<Self>(self)));
                 using value_type  = transform_value_t<raw_result>;
                 using result_type = expected<value_type, error_type>;
                 if (!self.has_value()) {
-                    return result_type(unexpect,
-                                       std::forward<Self>(self).error());
+                    return result_type(unexpect, std::forward<Self>(self).error());
                 }
                 if constexpr (std::is_void_v<raw_result>) {
-                    std::invoke(std::forward<F>(function),
-                                *std::forward<Self>(self));
+                    std::invoke(std::forward<F>(function), *std::forward<Self>(self));
                     return result_type{};
                 } else {
-                    return result_type(std::invoke(std::forward<F>(function),
-                                                   *std::forward<Self>(self)));
+                    return result_type(
+                        std::invoke(std::forward<F>(function), *std::forward<Self>(self)));
                 }
             }
         }
@@ -216,18 +221,15 @@ namespace tay {
         constexpr auto or_else_impl(Self&& self, F&& function) {
             using source_type = std::remove_cvref_t<Self>;
             using value_type  = typename source_type::value_type;
-            using raw_result  = decltype(std::invoke(
-                std::forward<F>(function), std::forward<Self>(self).error()));
+            using raw_result =
+                decltype(std::invoke(std::forward<F>(function), std::forward<Self>(self).error()));
             using result_type = std::remove_cvref_t<raw_result>;
-            static_assert(is_expected_v<result_type>,
-                          "or_else callback must return tay::expected");
-            static_assert(
-                std::is_same_v<typename result_type::value_type, value_type>,
-                "or_else callback must preserve the value type");
+            static_assert(is_expected_v<result_type>, "or_else callback must return tay::expected");
+            static_assert(std::is_same_v<typename result_type::value_type, value_type>,
+                          "or_else callback must preserve the value type");
 
             if (!self.has_value()) {
-                return std::invoke(std::forward<F>(function),
-                                   std::forward<Self>(self).error());
+                return std::invoke(std::forward<F>(function), std::forward<Self>(self).error());
             }
             if constexpr (std::is_void_v<value_type>) {
                 return result_type{};
@@ -240,21 +242,18 @@ namespace tay {
         constexpr auto transform_error_impl(Self&& self, F&& function) {
             using source_type = std::remove_cvref_t<Self>;
             using value_type  = typename source_type::value_type;
-            using raw_error   = decltype(std::invoke(
-                std::forward<F>(function), std::forward<Self>(self).error()));
-            static_assert(
-                !std::is_void_v<raw_error> && !std::is_reference_v<raw_error>,
-                "transform_error callback must return an object");
+            using raw_error =
+                decltype(std::invoke(std::forward<F>(function), std::forward<Self>(self).error()));
+            static_assert(!std::is_void_v<raw_error> && !std::is_reference_v<raw_error>,
+                          "transform_error callback must return an object");
             using error_type = std::remove_cvref_t<raw_error>;
-            static_assert(
-                valid_error_type_v<error_type>,
-                "transform_error callback returned an invalid error type");
+            static_assert(valid_error_type_v<error_type>,
+                          "transform_error callback returned an invalid error type");
             using result_type = expected<value_type, error_type>;
 
             if (!self.has_value()) {
-                return result_type(
-                    unexpect, std::invoke(std::forward<F>(function),
-                                          std::forward<Self>(self).error()));
+                return result_type(unexpect, std::invoke(std::forward<F>(function),
+                                                         std::forward<Self>(self).error()));
             }
             if constexpr (std::is_void_v<value_type>) {
                 return result_type{};
@@ -267,16 +266,13 @@ namespace tay {
         constexpr decltype(auto) match_impl(Self&& self, Visitor&& visitor) {
             using source_type = std::remove_cvref_t<Self>;
             if (self.has_value()) {
-                if constexpr (std::is_void_v<typename source_type::value_type>)
-                {
+                if constexpr (std::is_void_v<typename source_type::value_type>) {
                     return std::invoke(std::forward<Visitor>(visitor));
                 } else {
-                    return std::invoke(std::forward<Visitor>(visitor),
-                                       *std::forward<Self>(self));
+                    return std::invoke(std::forward<Visitor>(visitor), *std::forward<Self>(self));
                 }
             }
-            return std::invoke(std::forward<Visitor>(visitor),
-                               std::forward<Self>(self).error());
+            return std::invoke(std::forward<Visitor>(visitor), std::forward<Self>(self).error());
         }
     }  // namespace detail
 
@@ -300,8 +296,8 @@ namespace tay {
             requires(!detail::is_unexpected_v<G> &&
                      !std::is_same_v<std::remove_cvref_t<G>, unexpect_t> &&
                      std::is_constructible_v<E, G &&>)
-        constexpr explicit(!std::is_convertible_v<G&&, E>) unexpected(
-            G&& error) noexcept(std::is_nothrow_constructible_v<E, G&&>)
+        constexpr explicit(!std::is_convertible_v<G&&, E>)
+            unexpected(G&& error) noexcept(std::is_nothrow_constructible_v<E, G&&>)
             : error_(std::forward<G>(error)) {}
 
         template <typename... Args>
@@ -323,8 +319,7 @@ namespace tay {
             return std::move(error_);
         }
 
-        constexpr void swap(unexpected& other) noexcept(
-            noexcept(std::swap(error_, other.error_)))
+        constexpr void swap(unexpected& other) noexcept(noexcept(std::swap(error_, other.error_)))
             requires requires { std::swap(error_, other.error_); }
         {
             std::swap(error_, other.error_);
@@ -338,9 +333,8 @@ namespace tay {
     class expected {
         static_assert(detail::valid_owned_value_type_v<T>,
                       "expected<T, E> requires a non-array object value type");
-        static_assert(
-            detail::valid_error_type_v<E>,
-            "expected<T, E> requires an unqualified non-array error object");
+        static_assert(detail::valid_error_type_v<E>,
+                      "expected<T, E> requires an unqualified non-array error object");
 
         detail::storage<T, E> storage_;
         bool has_value_;
@@ -355,8 +349,7 @@ namespace tay {
 
         template <typename U>
         static constexpr bool valid_value_argument =
-            !std::is_same_v<std::remove_cvref_t<U>, expected> &&
-            !detail::is_unexpected_v<U> &&
+            !std::is_same_v<std::remove_cvref_t<U>, expected> && !detail::is_unexpected_v<U> &&
             !detail::is_ok_wrapper<std::remove_cvref_t<U>>::value &&
             !std::is_same_v<std::remove_cvref_t<U>, unexpect_t>;
 
@@ -364,28 +357,52 @@ namespace tay {
         using value_type = T;
         using error_type = E;
 
-        constexpr expected() noexcept(
-            std::is_nothrow_default_constructible_v<T>)
+        constexpr expected() noexcept(std::is_nothrow_default_constructible_v<T>)
             requires std::is_default_constructible_v<T>
             : storage_{}, has_value_(true) {
             detail::construct_at(std::addressof(storage_.value));
         }
 
-        template <typename U = T>
-            requires(valid_value_argument<U> &&
-                     std::is_constructible_v<T, U &&>)
-        constexpr explicit(!std::is_convertible_v<U&&, T>) expected(
-            U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>)
+        template <typename... Args>
+            requires std::is_constructible_v<T, Args&&...>
+        constexpr explicit expected(in_place_t, Args&&... args) noexcept(
+            std::is_nothrow_constructible_v<T, Args&&...>)
             : storage_{}, has_value_(true) {
-            detail::construct_at(std::addressof(storage_.value),
-                                 std::forward<U>(value));
+            detail::construct_at(std::addressof(storage_.value), std::forward<Args>(args)...);
+        }
+
+        template <typename initializer_t, typename... Args>
+            requires(std::is_nothrow_constructible_v<T, Args && ...> &&
+                     requires(initializer_t&& initializer, T& value) {
+                         {
+                             std::forward<initializer_t>(initializer)(value)
+                         } -> std::same_as<expected<void, E>>;
+                     })
+        constexpr explicit expected(try_in_place_t, initializer_t&& initializer,
+                                    Args&&... args) noexcept
+            : storage_{}, has_value_(true) {
+            detail::construct_at(std::addressof(storage_.value), std::forward<Args>(args)...);
+            auto initialized = std::forward<initializer_t>(initializer)(storage_.value);
+            if (!initialized) {
+                E error = std::move(initialized).error();
+                detail::destroy_at(std::addressof(storage_.value));
+                detail::construct_at(std::addressof(storage_.error), std::move(error));
+                has_value_ = false;
+            }
+        }
+
+        template <typename U = T>
+            requires(valid_value_argument<U> && std::is_constructible_v<T, U &&>)
+        constexpr explicit(!std::is_convertible_v<U&&, T>)
+            expected(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>)
+            : storage_{}, has_value_(true) {
+            detail::construct_at(std::addressof(storage_.value), std::forward<U>(value));
         }
 
         template <typename G>
             requires std::is_constructible_v<E, const G&>
-        constexpr explicit(!std::is_convertible_v<const G&, E>)
-            expected(const unexpected<G>& error) noexcept(
-                std::is_nothrow_constructible_v<E, const G&>)
+        constexpr explicit(!std::is_convertible_v<const G&, E>) expected(
+            const unexpected<G>& error) noexcept(std::is_nothrow_constructible_v<E, const G&>)
             : storage_{}, has_value_(false) {
             detail::construct_at(std::addressof(storage_.error), error.error());
         }
@@ -393,11 +410,9 @@ namespace tay {
         template <typename G>
             requires std::is_constructible_v<E, G&&>
         constexpr explicit(!std::is_convertible_v<G&&, E>)
-            expected(unexpected<G>&& error) noexcept(
-                std::is_nothrow_constructible_v<E, G&&>)
+            expected(unexpected<G>&& error) noexcept(std::is_nothrow_constructible_v<E, G&&>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::move(error).error());
+            detail::construct_at(std::addressof(storage_.error), std::move(error).error());
         }
 
         template <typename... Args>
@@ -405,35 +420,27 @@ namespace tay {
         constexpr explicit expected(unexpect_t, Args&&... args) noexcept(
             std::is_nothrow_constructible_v<E, Args&&...>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::forward<Args>(args)...);
+            detail::construct_at(std::addressof(storage_.error), std::forward<Args>(args)...);
         }
 
         constexpr expected(const expected& other) noexcept(
-            std::is_nothrow_copy_constructible_v<T> &&
-            std::is_nothrow_copy_constructible_v<E>)
-            requires(std::is_copy_constructible_v<T> &&
-                     std::is_copy_constructible_v<E>)
+            std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_copy_constructible_v<E>)
+            requires(std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>)
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
-                detail::construct_at(std::addressof(storage_.value),
-                                     other.storage_.value);
+                detail::construct_at(std::addressof(storage_.value), other.storage_.value);
             } else {
-                detail::construct_at(std::addressof(storage_.error),
-                                     other.storage_.error);
+                detail::construct_at(std::addressof(storage_.error), other.storage_.error);
             }
         }
 
         constexpr expected(const expected&)
-            requires(!std::is_copy_constructible_v<T> ||
-                     !std::is_copy_constructible_v<E>)
+            requires(!std::is_copy_constructible_v<T> || !std::is_copy_constructible_v<E>)
         = delete;
 
-        constexpr expected(expected&& other) noexcept(
-            std::is_nothrow_move_constructible_v<T> &&
-            std::is_nothrow_move_constructible_v<E>)
-            requires(std::is_move_constructible_v<T> &&
-                     std::is_move_constructible_v<E>)
+        constexpr expected(expected&& other) noexcept(std::is_nothrow_move_constructible_v<T> &&
+                                                      std::is_nothrow_move_constructible_v<E>)
+            requires(std::is_move_constructible_v<T> && std::is_move_constructible_v<E>)
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
                 detail::construct_at(std::addressof(storage_.value),
@@ -445,8 +452,7 @@ namespace tay {
         }
 
         constexpr expected(expected&&)
-            requires(!std::is_move_constructible_v<T> ||
-                     !std::is_move_constructible_v<E>)
+            requires(!std::is_move_constructible_v<T> || !std::is_move_constructible_v<E>)
         = delete;
 
         constexpr ~expected() {
@@ -454,12 +460,9 @@ namespace tay {
         }
 
         constexpr expected& operator=(const expected& other)
-            requires(std::is_copy_constructible_v<T> &&
-                     std::is_copy_assignable_v<T> &&
-                     std::is_copy_constructible_v<E> &&
-                     std::is_copy_assignable_v<E> &&
-                     detail::can_reinitialize_v<T, E, const T&> &&
-                     detail::can_reinitialize_v<E, T, const E&>)
+            requires(std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T> &&
+                     std::is_copy_constructible_v<E> && std::is_copy_assignable_v<E> &&
+                     detail::can_reinit_v<T, E, const T&> && detail::can_reinit_v<E, T, const E&>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -469,39 +472,29 @@ namespace tay {
             } else if (!has_value_ && !other.has_value_) {
                 storage_.error = other.storage_.error;
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     other.storage_.error);
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               other.storage_.error);
                 has_value_ = false;
             } else {
-                detail::reinitialize(std::addressof(storage_.value),
-                                     std::addressof(storage_.error),
-                                     other.storage_.value);
+                detail::reinit(std::addressof(storage_.value), std::addressof(storage_.error),
+                               other.storage_.value);
                 has_value_ = true;
             }
             return *this;
         }
 
         constexpr expected& operator=(const expected&)
-            requires(!std::is_copy_constructible_v<T> ||
-                     !std::is_copy_assignable_v<T> ||
-                     !std::is_copy_constructible_v<E> ||
-                     !std::is_copy_assignable_v<E> ||
-                     !detail::can_reinitialize_v<T, E, const T&> ||
-                     !detail::can_reinitialize_v<E, T, const E&>)
+            requires(!std::is_copy_constructible_v<T> || !std::is_copy_assignable_v<T> ||
+                     !std::is_copy_constructible_v<E> || !std::is_copy_assignable_v<E> ||
+                     !detail::can_reinit_v<T, E, const T&> || !detail::can_reinit_v<E, T, const E&>)
         = delete;
 
         constexpr expected& operator=(expected&& other) noexcept(
-            std::is_nothrow_move_assignable_v<T> &&
-            std::is_nothrow_move_assignable_v<E> &&
-            std::is_nothrow_move_constructible_v<T> &&
-            std::is_nothrow_move_constructible_v<E>)
-            requires(std::is_move_constructible_v<T> &&
-                     std::is_move_assignable_v<T> &&
-                     std::is_move_constructible_v<E> &&
-                     std::is_move_assignable_v<E> &&
-                     detail::can_reinitialize_v<T, E, T &&> &&
-                     detail::can_reinitialize_v<E, T, E &&>)
+            std::is_nothrow_move_assignable_v<T> && std::is_nothrow_move_assignable_v<E> &&
+            std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<E>)
+            requires(std::is_move_constructible_v<T> && std::is_move_assignable_v<T> &&
+                     std::is_move_constructible_v<E> && std::is_move_assignable_v<E> &&
+                     detail::can_reinit_v<T, E, T &&> && detail::can_reinit_v<E, T, E &&>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -511,54 +504,44 @@ namespace tay {
             } else if (!has_value_ && !other.has_value_) {
                 storage_.error = std::move(other.storage_.error);
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(other.storage_.error));
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(other.storage_.error));
                 has_value_ = false;
             } else {
-                detail::reinitialize(std::addressof(storage_.value),
-                                     std::addressof(storage_.error),
-                                     std::move(other.storage_.value));
+                detail::reinit(std::addressof(storage_.value), std::addressof(storage_.error),
+                               std::move(other.storage_.value));
                 has_value_ = true;
             }
             return *this;
         }
 
         constexpr expected& operator=(expected&&)
-            requires(!std::is_move_constructible_v<T> ||
-                     !std::is_move_assignable_v<T> ||
-                     !std::is_move_constructible_v<E> ||
-                     !std::is_move_assignable_v<E> ||
-                     !detail::can_reinitialize_v<T, E, T &&> ||
-                     !detail::can_reinitialize_v<E, T, E &&>)
+            requires(!std::is_move_constructible_v<T> || !std::is_move_assignable_v<T> ||
+                     !std::is_move_constructible_v<E> || !std::is_move_assignable_v<E> ||
+                     !detail::can_reinit_v<T, E, T &&> || !detail::can_reinit_v<E, T, E &&>)
         = delete;
 
         template <typename U = T>
-            requires(valid_value_argument<U> &&
-                     std::is_constructible_v<T, U &&> &&
-                     std::is_assignable_v<T&, U &&> &&
-                     detail::can_reinitialize_v<T, E, U &&>)
+            requires(valid_value_argument<U> && std::is_constructible_v<T, U &&> &&
+                     std::is_assignable_v<T&, U &&> && detail::can_reinit_v<T, E, U &&>)
         constexpr expected& operator=(U&& value) {
             if (has_value_) {
                 storage_.value = std::forward<U>(value);
             } else {
-                detail::reinitialize(std::addressof(storage_.value),
-                                     std::addressof(storage_.error),
-                                     std::forward<U>(value));
+                detail::reinit(std::addressof(storage_.value), std::addressof(storage_.error),
+                               std::forward<U>(value));
                 has_value_ = true;
             }
             return *this;
         }
 
         template <typename G>
-            requires(std::is_constructible_v<E, const G&> &&
-                     std::is_assignable_v<E&, const G&> &&
-                     detail::can_reinitialize_v<E, T, const G&>)
+            requires(std::is_constructible_v<E, const G&> && std::is_assignable_v<E&, const G&> &&
+                     detail::can_reinit_v<E, T, const G&>)
         constexpr expected& operator=(const unexpected<G>& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     error.error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               error.error());
                 has_value_ = false;
             } else {
                 storage_.error = error.error();
@@ -567,14 +550,12 @@ namespace tay {
         }
 
         template <typename G>
-            requires(std::is_constructible_v<E, G &&> &&
-                     std::is_assignable_v<E&, G &&> &&
-                     detail::can_reinitialize_v<E, T, G &&>)
+            requires(std::is_constructible_v<E, G &&> && std::is_assignable_v<E&, G &&> &&
+                     detail::can_reinit_v<E, T, G &&>)
         constexpr expected& operator=(unexpected<G>&& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(error).error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(error).error());
                 has_value_ = false;
             } else {
                 storage_.error = std::move(error).error();
@@ -650,19 +631,16 @@ namespace tay {
             requires std::is_nothrow_constructible_v<T, Args&&...>
         constexpr T& emplace(Args&&... args) noexcept {
             destroy_active();
-            detail::construct_at(std::addressof(storage_.value),
-                                 std::forward<Args>(args)...);
+            detail::construct_at(std::addressof(storage_.value), std::forward<Args>(args)...);
             has_value_ = true;
             return storage_.value;
         }
 
         constexpr void swap(expected& other) noexcept(
-            std::is_nothrow_move_constructible_v<T> &&
-            std::is_nothrow_move_constructible_v<E> &&
+            std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<E> &&
             noexcept(std::swap(storage_.value, other.storage_.value)) &&
             noexcept(std::swap(storage_.error, other.storage_.error)))
-            requires(std::is_move_constructible_v<T> &&
-                     std::is_move_constructible_v<E> &&
+            requires(std::is_move_constructible_v<T> && std::is_move_constructible_v<E> &&
                      (std::is_nothrow_move_constructible_v<T> ||
                       std::is_nothrow_move_constructible_v<E>) &&
                      requires {
@@ -686,13 +664,11 @@ namespace tay {
                 detail::destroy_at(std::addressof(error_side->storage_.error));
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
                 try {
-                    detail::construct_at(
-                        std::addressof(error_side->storage_.value),
-                        std::move(value_side->storage_.value));
+                    detail::construct_at(std::addressof(error_side->storage_.value),
+                                         std::move(value_side->storage_.value));
                 } catch (...) {
-                    detail::construct_at(
-                        std::addressof(error_side->storage_.error),
-                        std::move(temporary));
+                    detail::construct_at(std::addressof(error_side->storage_.error),
+                                         std::move(temporary));
                     throw;
                 }
 #else
@@ -708,13 +684,11 @@ namespace tay {
                 detail::destroy_at(std::addressof(value_side->storage_.value));
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
                 try {
-                    detail::construct_at(
-                        std::addressof(value_side->storage_.error),
-                        std::move(error_side->storage_.error));
+                    detail::construct_at(std::addressof(value_side->storage_.error),
+                                         std::move(error_side->storage_.error));
                 } catch (...) {
-                    detail::construct_at(
-                        std::addressof(value_side->storage_.value),
-                        std::move(temporary));
+                    detail::construct_at(std::addressof(value_side->storage_.value),
+                                         std::move(temporary));
                     throw;
                 }
 #else
@@ -739,13 +713,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto and_then(F&& function) && {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto and_then(F&& function) const&& {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
 
         template <typename F>
@@ -758,13 +730,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto transform(F&& function) && {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform(F&& function) const&& {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
 
         template <typename F>
@@ -777,34 +747,28 @@ namespace tay {
         }
         template <typename F>
         constexpr auto or_else(F&& function) && {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto or_else(F&& function) const&& {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
 
         template <typename F>
         constexpr auto transform_error(F&& function) & {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const& {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) && {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const&& {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
 
         template <typename Visitor>
@@ -817,13 +781,11 @@ namespace tay {
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) && {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) const&& {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
 
         template <typename Visitor>
@@ -846,9 +808,8 @@ namespace tay {
 
     template <typename E>
     class expected<void, E> {
-        static_assert(
-            detail::valid_error_type_v<E>,
-            "expected<void, E> requires an unqualified non-array error object");
+        static_assert(detail::valid_error_type_v<E>,
+                      "expected<void, E> requires an unqualified non-array error object");
 
         detail::storage<char, E> storage_;
         bool has_value_;
@@ -871,9 +832,8 @@ namespace tay {
 
         template <typename G>
             requires std::is_constructible_v<E, const G&>
-        constexpr explicit(!std::is_convertible_v<const G&, E>)
-            expected(const unexpected<G>& error) noexcept(
-                std::is_nothrow_constructible_v<E, const G&>)
+        constexpr explicit(!std::is_convertible_v<const G&, E>) expected(
+            const unexpected<G>& error) noexcept(std::is_nothrow_constructible_v<E, const G&>)
             : storage_{}, has_value_(false) {
             detail::construct_at(std::addressof(storage_.error), error.error());
         }
@@ -881,11 +841,9 @@ namespace tay {
         template <typename G>
             requires std::is_constructible_v<E, G&&>
         constexpr explicit(!std::is_convertible_v<G&&, E>)
-            expected(unexpected<G>&& error) noexcept(
-                std::is_nothrow_constructible_v<E, G&&>)
+            expected(unexpected<G>&& error) noexcept(std::is_nothrow_constructible_v<E, G&&>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::move(error).error());
+            detail::construct_at(std::addressof(storage_.error), std::move(error).error());
         }
 
         template <typename... Args>
@@ -893,19 +851,16 @@ namespace tay {
         constexpr explicit expected(unexpect_t, Args&&... args) noexcept(
             std::is_nothrow_constructible_v<E, Args&&...>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::forward<Args>(args)...);
+            detail::construct_at(std::addressof(storage_.error), std::forward<Args>(args)...);
         }
 
-        constexpr expected(const expected& other) noexcept(
-            std::is_nothrow_copy_constructible_v<E>)
+        constexpr expected(const expected& other) noexcept(std::is_nothrow_copy_constructible_v<E>)
             requires std::is_copy_constructible_v<E>
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
                 detail::construct_at(std::addressof(storage_.value), char{});
             } else {
-                detail::construct_at(std::addressof(storage_.error),
-                                     other.storage_.error);
+                detail::construct_at(std::addressof(storage_.error), other.storage_.error);
             }
         }
 
@@ -913,8 +868,7 @@ namespace tay {
             requires(!std::is_copy_constructible_v<E>)
         = delete;
 
-        constexpr expected(expected&& other) noexcept(
-            std::is_nothrow_move_constructible_v<E>)
+        constexpr expected(expected&& other) noexcept(std::is_nothrow_move_constructible_v<E>)
             requires std::is_move_constructible_v<E>
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
@@ -934,8 +888,7 @@ namespace tay {
         }
 
         constexpr expected& operator=(const expected& other)
-            requires(std::is_copy_constructible_v<E> &&
-                     std::is_copy_assignable_v<E>)
+            requires(std::is_copy_constructible_v<E> && std::is_copy_assignable_v<E>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -946,9 +899,8 @@ namespace tay {
             if (!has_value_ && !other.has_value_) {
                 storage_.error = other.storage_.error;
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     other.storage_.error);
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               other.storage_.error);
                 has_value_ = false;
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
@@ -959,15 +911,12 @@ namespace tay {
         }
 
         constexpr expected& operator=(const expected&)
-            requires(!std::is_copy_constructible_v<E> ||
-                     !std::is_copy_assignable_v<E>)
+            requires(!std::is_copy_constructible_v<E> || !std::is_copy_assignable_v<E>)
         = delete;
 
         constexpr expected& operator=(expected&& other) noexcept(
-            std::is_nothrow_move_constructible_v<E> &&
-            std::is_nothrow_move_assignable_v<E>)
-            requires(std::is_move_constructible_v<E> &&
-                     std::is_move_assignable_v<E>)
+            std::is_nothrow_move_constructible_v<E> && std::is_nothrow_move_assignable_v<E>)
+            requires(std::is_move_constructible_v<E> && std::is_move_assignable_v<E>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -978,9 +927,8 @@ namespace tay {
             if (!has_value_ && !other.has_value_) {
                 storage_.error = std::move(other.storage_.error);
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(other.storage_.error));
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(other.storage_.error));
                 has_value_ = false;
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
@@ -991,18 +939,15 @@ namespace tay {
         }
 
         constexpr expected& operator=(expected&&)
-            requires(!std::is_move_constructible_v<E> ||
-                     !std::is_move_assignable_v<E>)
+            requires(!std::is_move_constructible_v<E> || !std::is_move_assignable_v<E>)
         = delete;
 
         template <typename G>
-            requires(std::is_constructible_v<E, const G&> &&
-                     std::is_assignable_v<E&, const G&>)
+            requires(std::is_constructible_v<E, const G&> && std::is_assignable_v<E&, const G&>)
         constexpr expected& operator=(const unexpected<G>& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     error.error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               error.error());
                 has_value_ = false;
             } else {
                 storage_.error = error.error();
@@ -1011,13 +956,11 @@ namespace tay {
         }
 
         template <typename G>
-            requires(std::is_constructible_v<E, G &&> &&
-                     std::is_assignable_v<E&, G &&>)
+            requires(std::is_constructible_v<E, G &&> && std::is_assignable_v<E&, G &&>)
         constexpr expected& operator=(unexpected<G>&& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(error).error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(error).error());
                 has_value_ = false;
             } else {
                 storage_.error = std::move(error).error();
@@ -1059,13 +1002,11 @@ namespace tay {
             }
         }
 
-        constexpr void swap(expected& other) noexcept(
-            std::is_nothrow_move_constructible_v<E> &&
-            noexcept(std::swap(storage_.error, other.storage_.error)))
+        constexpr void swap(expected& other) noexcept(std::is_nothrow_move_constructible_v<E> &&
+                                                      noexcept(std::swap(storage_.error,
+                                                                         other.storage_.error)))
             requires(std::is_move_constructible_v<E> &&
-                     requires {
-                         std::swap(storage_.error, other.storage_.error);
-                     })
+                     requires { std::swap(storage_.error, other.storage_.error); })
         {
             if (has_value_ && other.has_value_) {
                 return;
@@ -1082,8 +1023,7 @@ namespace tay {
                 detail::construct_at(std::addressof(value_side->storage_.error),
                                      std::move(error_side->storage_.error));
             } catch (...) {
-                detail::construct_at(std::addressof(value_side->storage_.value),
-                                     char{});
+                detail::construct_at(std::addressof(value_side->storage_.value), char{});
                 throw;
             }
 #else
@@ -1091,8 +1031,7 @@ namespace tay {
                                  std::move(error_side->storage_.error));
 #endif
             detail::destroy_at(std::addressof(error_side->storage_.error));
-            detail::construct_at(std::addressof(error_side->storage_.value),
-                                 char{});
+            detail::construct_at(std::addressof(error_side->storage_.value), char{});
             value_side->has_value_ = false;
             error_side->has_value_ = true;
         }
@@ -1107,13 +1046,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto and_then(F&& function) && {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto and_then(F&& function) const&& {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform(F&& function) & {
@@ -1125,13 +1062,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto transform(F&& function) && {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform(F&& function) const&& {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto or_else(F&& function) & {
@@ -1143,33 +1078,27 @@ namespace tay {
         }
         template <typename F>
         constexpr auto or_else(F&& function) && {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto or_else(F&& function) const&& {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) & {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const& {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) && {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const&& {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) & {
@@ -1181,13 +1110,11 @@ namespace tay {
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) && {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) const&& {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
         template <typename Visitor>
         constexpr decltype(auto) visit(Visitor&& visitor) & {
@@ -1209,9 +1136,8 @@ namespace tay {
 
     template <typename T, typename E>
     class expected<T&, E> {
-        static_assert(
-            detail::valid_error_type_v<E>,
-            "expected<T&, E> requires an unqualified non-array error object");
+        static_assert(detail::valid_error_type_v<E>,
+                      "expected<T&, E> requires an unqualified non-array error object");
 
         detail::storage<T*, E> storage_;
         bool has_value_;
@@ -1233,15 +1159,13 @@ namespace tay {
         template <typename U>
             requires std::is_convertible_v<U*, T*>
         constexpr expected(U& value) noexcept : storage_{}, has_value_(true) {
-            detail::construct_at(std::addressof(storage_.value),
-                                 std::addressof(value));
+            detail::construct_at(std::addressof(storage_.value), std::addressof(value));
         }
 
         template <typename G>
             requires std::is_constructible_v<E, const G&>
-        constexpr explicit(!std::is_convertible_v<const G&, E>)
-            expected(const unexpected<G>& error) noexcept(
-                std::is_nothrow_constructible_v<E, const G&>)
+        constexpr explicit(!std::is_convertible_v<const G&, E>) expected(
+            const unexpected<G>& error) noexcept(std::is_nothrow_constructible_v<E, const G&>)
             : storage_{}, has_value_(false) {
             detail::construct_at(std::addressof(storage_.error), error.error());
         }
@@ -1249,11 +1173,9 @@ namespace tay {
         template <typename G>
             requires std::is_constructible_v<E, G&&>
         constexpr explicit(!std::is_convertible_v<G&&, E>)
-            expected(unexpected<G>&& error) noexcept(
-                std::is_nothrow_constructible_v<E, G&&>)
+            expected(unexpected<G>&& error) noexcept(std::is_nothrow_constructible_v<E, G&&>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::move(error).error());
+            detail::construct_at(std::addressof(storage_.error), std::move(error).error());
         }
 
         template <typename... Args>
@@ -1261,20 +1183,16 @@ namespace tay {
         constexpr explicit expected(unexpect_t, Args&&... args) noexcept(
             std::is_nothrow_constructible_v<E, Args&&...>)
             : storage_{}, has_value_(false) {
-            detail::construct_at(std::addressof(storage_.error),
-                                 std::forward<Args>(args)...);
+            detail::construct_at(std::addressof(storage_.error), std::forward<Args>(args)...);
         }
 
-        constexpr expected(const expected& other) noexcept(
-            std::is_nothrow_copy_constructible_v<E>)
+        constexpr expected(const expected& other) noexcept(std::is_nothrow_copy_constructible_v<E>)
             requires std::is_copy_constructible_v<E>
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
-                detail::construct_at(std::addressof(storage_.value),
-                                     other.storage_.value);
+                detail::construct_at(std::addressof(storage_.value), other.storage_.value);
             } else {
-                detail::construct_at(std::addressof(storage_.error),
-                                     other.storage_.error);
+                detail::construct_at(std::addressof(storage_.error), other.storage_.error);
             }
         }
 
@@ -1282,13 +1200,11 @@ namespace tay {
             requires(!std::is_copy_constructible_v<E>)
         = delete;
 
-        constexpr expected(expected&& other) noexcept(
-            std::is_nothrow_move_constructible_v<E>)
+        constexpr expected(expected&& other) noexcept(std::is_nothrow_move_constructible_v<E>)
             requires std::is_move_constructible_v<E>
             : storage_{}, has_value_(other.has_value_) {
             if (has_value_) {
-                detail::construct_at(std::addressof(storage_.value),
-                                     other.storage_.value);
+                detail::construct_at(std::addressof(storage_.value), other.storage_.value);
             } else {
                 detail::construct_at(std::addressof(storage_.error),
                                      std::move(other.storage_.error));
@@ -1304,8 +1220,7 @@ namespace tay {
         }
 
         constexpr expected& operator=(const expected& other)
-            requires(std::is_copy_constructible_v<E> &&
-                     std::is_copy_assignable_v<E>)
+            requires(std::is_copy_constructible_v<E> && std::is_copy_assignable_v<E>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -1315,29 +1230,24 @@ namespace tay {
             } else if (!has_value_ && !other.has_value_) {
                 storage_.error = other.storage_.error;
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     other.storage_.error);
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               other.storage_.error);
                 has_value_ = false;
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
-                detail::construct_at(std::addressof(storage_.value),
-                                     other.storage_.value);
+                detail::construct_at(std::addressof(storage_.value), other.storage_.value);
                 has_value_ = true;
             }
             return *this;
         }
 
         constexpr expected& operator=(const expected&)
-            requires(!std::is_copy_constructible_v<E> ||
-                     !std::is_copy_assignable_v<E>)
+            requires(!std::is_copy_constructible_v<E> || !std::is_copy_assignable_v<E>)
         = delete;
 
         constexpr expected& operator=(expected&& other) noexcept(
-            std::is_nothrow_move_constructible_v<E> &&
-            std::is_nothrow_move_assignable_v<E>)
-            requires(std::is_move_constructible_v<E> &&
-                     std::is_move_assignable_v<E>)
+            std::is_nothrow_move_constructible_v<E> && std::is_nothrow_move_assignable_v<E>)
+            requires(std::is_move_constructible_v<E> && std::is_move_assignable_v<E>)
         {
             if (this == std::addressof(other)) {
                 return *this;
@@ -1347,22 +1257,19 @@ namespace tay {
             } else if (!has_value_ && !other.has_value_) {
                 storage_.error = std::move(other.storage_.error);
             } else if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(other.storage_.error));
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(other.storage_.error));
                 has_value_ = false;
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
-                detail::construct_at(std::addressof(storage_.value),
-                                     other.storage_.value);
+                detail::construct_at(std::addressof(storage_.value), other.storage_.value);
                 has_value_ = true;
             }
             return *this;
         }
 
         constexpr expected& operator=(expected&&)
-            requires(!std::is_move_constructible_v<E> ||
-                     !std::is_move_assignable_v<E>)
+            requires(!std::is_move_constructible_v<E> || !std::is_move_assignable_v<E>)
         = delete;
 
         template <typename U>
@@ -1372,21 +1279,18 @@ namespace tay {
                 storage_.value = std::addressof(value);
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
-                detail::construct_at(std::addressof(storage_.value),
-                                     std::addressof(value));
+                detail::construct_at(std::addressof(storage_.value), std::addressof(value));
                 has_value_ = true;
             }
             return *this;
         }
 
         template <typename G>
-            requires(std::is_constructible_v<E, const G&> &&
-                     std::is_assignable_v<E&, const G&>)
+            requires(std::is_constructible_v<E, const G&> && std::is_assignable_v<E&, const G&>)
         constexpr expected& operator=(const unexpected<G>& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     error.error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               error.error());
                 has_value_ = false;
             } else {
                 storage_.error = error.error();
@@ -1395,13 +1299,11 @@ namespace tay {
         }
 
         template <typename G>
-            requires(std::is_constructible_v<E, G &&> &&
-                     std::is_assignable_v<E&, G &&>)
+            requires(std::is_constructible_v<E, G &&> && std::is_assignable_v<E&, G &&>)
         constexpr expected& operator=(unexpected<G>&& error) {
             if (has_value_) {
-                detail::reinitialize(std::addressof(storage_.error),
-                                     std::addressof(storage_.value),
-                                     std::move(error).error());
+                detail::reinit(std::addressof(storage_.error), std::addressof(storage_.value),
+                               std::move(error).error());
                 has_value_ = false;
             } else {
                 storage_.error = std::move(error).error();
@@ -1449,20 +1351,17 @@ namespace tay {
                 storage_.value = std::addressof(value);
             } else {
                 detail::destroy_at(std::addressof(storage_.error));
-                detail::construct_at(std::addressof(storage_.value),
-                                     std::addressof(value));
+                detail::construct_at(std::addressof(storage_.value), std::addressof(value));
                 has_value_ = true;
             }
             return *storage_.value;
         }
 
-        constexpr void swap(expected& other) noexcept(
-            std::is_nothrow_move_constructible_v<E> &&
-            noexcept(std::swap(storage_.error, other.storage_.error)))
+        constexpr void swap(expected& other) noexcept(std::is_nothrow_move_constructible_v<E> &&
+                                                      noexcept(std::swap(storage_.error,
+                                                                         other.storage_.error)))
             requires(std::is_move_constructible_v<E> &&
-                     requires {
-                         std::swap(storage_.error, other.storage_.error);
-                     })
+                     requires { std::swap(storage_.error, other.storage_.error); })
         {
             if (has_value_ && other.has_value_) {
                 std::swap(storage_.value, other.storage_.value);
@@ -1481,8 +1380,7 @@ namespace tay {
                 detail::construct_at(std::addressof(value_side->storage_.error),
                                      std::move(error_side->storage_.error));
             } catch (...) {
-                detail::construct_at(std::addressof(value_side->storage_.value),
-                                     saved);
+                detail::construct_at(std::addressof(value_side->storage_.value), saved);
                 throw;
             }
 #else
@@ -1490,8 +1388,7 @@ namespace tay {
                                  std::move(error_side->storage_.error));
 #endif
             detail::destroy_at(std::addressof(error_side->storage_.error));
-            detail::construct_at(std::addressof(error_side->storage_.value),
-                                 saved);
+            detail::construct_at(std::addressof(error_side->storage_.value), saved);
             value_side->has_value_ = false;
             error_side->has_value_ = true;
         }
@@ -1506,13 +1403,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto and_then(F&& function) && {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto and_then(F&& function) const&& {
-            return detail::and_then_impl(std::move(*this),
-                                         std::forward<F>(function));
+            return detail::and_then_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform(F&& function) & {
@@ -1524,13 +1419,11 @@ namespace tay {
         }
         template <typename F>
         constexpr auto transform(F&& function) && {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform(F&& function) const&& {
-            return detail::transform_impl(std::move(*this),
-                                          std::forward<F>(function));
+            return detail::transform_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto or_else(F&& function) & {
@@ -1542,33 +1435,27 @@ namespace tay {
         }
         template <typename F>
         constexpr auto or_else(F&& function) && {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto or_else(F&& function) const&& {
-            return detail::or_else_impl(std::move(*this),
-                                        std::forward<F>(function));
+            return detail::or_else_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) & {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const& {
-            return detail::transform_error_impl(*this,
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(*this, std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) && {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename F>
         constexpr auto transform_error(F&& function) const&& {
-            return detail::transform_error_impl(std::move(*this),
-                                                std::forward<F>(function));
+            return detail::transform_error_impl(std::move(*this), std::forward<F>(function));
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) & {
@@ -1580,13 +1467,11 @@ namespace tay {
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) && {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
         template <typename Visitor>
         constexpr decltype(auto) match(Visitor&& visitor) const&& {
-            return detail::match_impl(std::move(*this),
-                                      std::forward<Visitor>(visitor));
+            return detail::match_impl(std::move(*this), std::forward<Visitor>(visitor));
         }
         template <typename Visitor>
         constexpr decltype(auto) visit(Visitor&& visitor) & {
@@ -1612,16 +1497,14 @@ namespace tay {
             T* value_;
 
         public:
-            constexpr explicit ok_ref(T& value) noexcept
-                : value_(std::addressof(value)) {}
+            constexpr explicit ok_ref(T& value) noexcept : value_(std::addressof(value)) {}
 
             [[nodiscard]] constexpr T& get() const noexcept {
                 return *value_;
             }
 
             template <typename V, typename E>
-                requires(!std::is_void_v<V> &&
-                         requires { expected<V, E>(std::declval<T&>()); })
+                requires(!std::is_void_v<V> && requires { expected<V, E>(std::declval<T&>()); })
             constexpr operator expected<V, E>() const {
                 return expected<V, E>(get());
             }
@@ -1637,8 +1520,7 @@ namespace tay {
         public:
             template <typename U>
                 requires std::is_constructible_v<T, U&&>
-            constexpr explicit ok_value(U&& value) noexcept(
-                std::is_nothrow_constructible_v<T, U&&>)
+            constexpr explicit ok_value(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>)
                 : value_(std::forward<U>(value)) {}
 
             template <typename V, typename E>
@@ -1695,16 +1577,16 @@ namespace tay {
     }
 
     template <typename T, typename E>
-    constexpr void swap(expected<T, E>& left, expected<T, E>& right) noexcept(
-        noexcept(left.swap(right)))
+    constexpr void swap(expected<T, E>& left,
+                        expected<T, E>& right) noexcept(noexcept(left.swap(right)))
         requires requires { left.swap(right); }
     {
         left.swap(right);
     }
 
     template <typename E>
-    constexpr void swap(unexpected<E>& left, unexpected<E>& right) noexcept(
-        noexcept(left.swap(right)))
+    constexpr void swap(unexpected<E>& left,
+                        unexpected<E>& right) noexcept(noexcept(left.swap(right)))
         requires requires { left.swap(right); }
     {
         left.swap(right);

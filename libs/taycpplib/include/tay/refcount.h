@@ -1,9 +1,9 @@
 /**
  * @file refcount.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 引用计数框架
+ * @brief 提供侵入式引用计数对象和智能指针框架。
  * @version 0.1.0-dev.1
- * @date 2026-02-25
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -23,6 +23,7 @@ namespace tay {
         constexpr T *_this() {
             return static_cast<T *>(this);
         }
+
     public:
         constexpr refc() : __refcnt(0) {}
 
@@ -55,6 +56,7 @@ namespace tay {
     class refc_ptr {
     private:
         T *_ptr;
+
     public:
         constexpr refc_ptr(T *ptr) : _ptr(ptr) {
             if (_ptr)
@@ -74,7 +76,7 @@ namespace tay {
             if (_ptr) {
                 _ptr->release();
             }
-            _ptr = other._ptr;
+            _ptr       = other._ptr;
             other._ptr = nullptr;
             return *this;
         }
@@ -104,8 +106,8 @@ namespace tay {
         constexpr T &operator*() const {
             return *_ptr;
         }
-        constexpr operator T*() const {
+        constexpr operator T *() const {
             return _ptr;
         }
     };
-}  // namespace util
+}  // namespace tay

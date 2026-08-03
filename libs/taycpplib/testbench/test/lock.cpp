@@ -1,3 +1,14 @@
+/**
+ * @file lock.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 锁所有权和同步值工具的语义。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/lock.h>
 
 #include <array>
@@ -208,8 +219,7 @@ namespace {
 
     void test_context_lock_guard() {
         using guard_type =
-            tay::context_lock_guard<recording_lock,
-                                    tay::guard_stage<200, late_guard>,
+            tay::context_lock_guard<recording_lock, tay::guard_stage<200, late_guard>,
                                     tay::guard_stage<100, early_guard>>;
 
         std::vector<int> events;
@@ -236,8 +246,7 @@ namespace {
         const auto& readonly = state;
         {
             auto access = readonly.lock();
-            static_assert(
-                std::is_same_v<decltype(access.get()), const record*>);
+            static_assert(std::is_same_v<decltype(access.get()), const record*>);
             assert(access->ready && access->count == 8);
         }
 
@@ -255,10 +264,8 @@ namespace {
     }
 }  // namespace
 
-using basic_context_guard =
-    tay::context_lock_guard<test_lock, tay::guard_stage<100, early_guard>>;
-using synchronized_access =
-    decltype(std::declval<tay::synchronized<int>&>().lock());
+using basic_context_guard = tay::context_lock_guard<test_lock, tay::guard_stage<100, early_guard>>;
+using synchronized_access = decltype(std::declval<tay::synchronized<int>&>().lock());
 
 static_assert(!std::is_copy_constructible_v<tay::spinlock>);
 static_assert(!std::is_move_constructible_v<tay::spinlock>);
@@ -273,10 +280,8 @@ static_assert(std::is_move_constructible_v<tay::unique_lock<test_lock>>);
 static_assert(std::is_move_assignable_v<tay::unique_lock<test_lock>>);
 static_assert(!std::is_copy_constructible_v<synchronized_access>);
 static_assert(!std::is_move_constructible_v<synchronized_access>);
-static_assert(
-    std::is_same_v<
-        decltype(std::declval<const tay::synchronized<int>&>().lock().get()),
-        const int*>);
+static_assert(std::is_same_v<decltype(std::declval<const tay::synchronized<int>&>().lock().get()),
+                             const int*>);
 
 int main() {
     test_concurrent_lock<tay::spinlock>();

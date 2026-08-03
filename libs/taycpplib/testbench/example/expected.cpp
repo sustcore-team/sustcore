@@ -1,8 +1,12 @@
 /**
  * @file expected.cpp
- * @brief Demonstrate value-or-error handling with tay::expected.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::expected 的值或错误处理。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/expected.h>
@@ -22,12 +26,9 @@ namespace {
         auto result = divide(numerator, denominator);
 
         result.match(tay::overloaded{
-            [=](int value) {
-                std::printf("%d / %d = %d\n", numerator, denominator, value);
-            },
+            [=](int value) { std::printf("%d / %d = %d\n", numerator, denominator, value); },
             [=](const char* error) {
-                std::printf("%d / %d failed: %s\n", numerator, denominator,
-                            error);
+                std::printf("%d / %d failed: %s\n", numerator, denominator, error);
             },
         });
 

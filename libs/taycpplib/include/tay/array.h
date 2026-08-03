@@ -1,6 +1,12 @@
 /**
  * @file array.h
- * @brief Fixed-length arrays with dynamic, inline and borrowed storage.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供支持动态、内联和借用存储的定长数组。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -11,29 +17,28 @@
 #include <tay/panic.h>
 
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <type_traits>
 #include <utility>
 
 namespace tay {
-    inline constexpr std::size_t dynamic_extent = std::size_t(-1);
+    inline constexpr size_t dynamic_extent = size_t(-1);
 
-    template <class T, std::size_t N, class Allocator = allocator<T>>
+    template <class T, size_t N, class Allocator = allocator<T>>
     class dynamic_array_storage {
     public:
-        using value_type = T;
+        using value_type     = T;
         using allocator_type = Allocator;
-        using size_type = std::size_t;
+        using size_type      = size_t;
 
     private:
         struct empty_tag {};
         [[no_unique_address]] allocator_type allocator_{};
         value_type* data_ = nullptr;
-        size_type size_ = 0;
+        size_type size_   = 0;
 
-        constexpr dynamic_array_storage(empty_tag,
-                                        const allocator_type& allocator)
-            noexcept
+        constexpr dynamic_array_storage(empty_tag, const allocator_type& allocator) noexcept
             : allocator_(allocator) {}
 
         constexpr void reset() noexcept {
@@ -42,8 +47,7 @@ namespace tay {
                 return;
             }
             for (size_type i = 0; i < size_; ++i) {
-                allocator_traits<allocator_type>::destroy(allocator_,
-                                                           data_ + i);
+                allocator_traits<allocator_type>::destroy(allocator_, data_ + i);
             }
             allocator_traits<allocator_type>::deallocate(allocator_, data_, N);
             data_ = nullptr;
@@ -56,8 +60,7 @@ namespace tay {
                      std::is_nothrow_default_constructible_v<value_type>)
             : dynamic_array_storage(allocator_type{}) {}
 
-        constexpr explicit dynamic_array_storage(
-            const allocator_type& allocator) noexcept
+        constexpr explicit dynamic_array_storage(const allocator_type& allocator) noexcept
             requires std::is_nothrow_default_constructible_v<value_type>
             : allocator_(allocator) {
             auto created = try_create(allocator_);
@@ -67,88 +70,85 @@ namespace tay {
             *this = std::move(*created);
         }
 
-        constexpr dynamic_array_storage(
-            const dynamic_array_storage& other) noexcept
+        constexpr dynamic_array_storage(const dynamic_array_storage& other) noexcept
             requires std::is_nothrow_copy_constructible_v<value_type>
             : allocator_(other.allocator_) {
-            auto memory = allocator_traits<allocator_type>::try_allocate(
-                allocator_, N);
+            auto memory = allocator_traits<allocator_type>::try_allocate(allocator_, N);
             if (!memory) {
                 tay::panic("array allocation failed");
             }
             data_ = *memory;
             for (; size_ < other.size_; ++size_) {
-                allocator_traits<allocator_type>::construct(
-                    allocator_, data_ + size_, other.data_[size_]);
+                allocator_traits<allocator_type>::construct(allocator_, data_ + size_,
+                                                            other.data_[size_]);
             }
         }
 
-        constexpr dynamic_array_storage(
-            dynamic_array_storage&& other) noexcept
-            : allocator_(std::move(other.allocator_)), data_(other.data_),
-              size_(other.size_) {
+        constexpr dynamic_array_storage(dynamic_array_storage&& other) noexcept
+            : allocator_(std::move(other.allocator_)), data_(other.data_), size_(other.size_) {
             other.data_ = nullptr;
             other.size_ = 0;
         }
 
-        constexpr dynamic_array_storage& operator=(
-            dynamic_array_storage&& other) noexcept {
+        constexpr dynamic_array_storage& operator=(dynamic_array_storage&& other) noexcept {
             if (this != &other) {
                 reset();
-                allocator_ = std::move(other.allocator_);
-                data_ = other.data_;
-                size_ = other.size_;
+                allocator_  = std::move(other.allocator_);
+                data_       = other.data_;
+                size_       = other.size_;
                 other.data_ = nullptr;
                 other.size_ = 0;
             }
             return *this;
         }
 
-        constexpr ~dynamic_array_storage() noexcept { reset(); }
+        constexpr ~dynamic_array_storage() noexcept {
+            reset();
+        }
 
-        [[nodiscard]] static constexpr expected<dynamic_array_storage,
-                                                error_code>
-        try_create(const allocator_type& allocator = {}) noexcept
+        [[nodiscard]] static constexpr expected<dynamic_array_storage, error_code> try_create(
+            const allocator_type& allocator = {}) noexcept
             requires std::is_nothrow_default_constructible_v<value_type>
         {
             dynamic_array_storage result(empty_tag{}, allocator);
             if constexpr (N == 0) {
                 return result;
             }
-            auto memory = allocator_traits<allocator_type>::try_allocate(
-                result.allocator_, N);
+            auto memory = allocator_traits<allocator_type>::try_allocate(result.allocator_, N);
             if (!memory) {
-                return expected<dynamic_array_storage, error_code>(
-                    unexpect, memory.error());
+                return expected<dynamic_array_storage, error_code>(unexpect, memory.error());
             }
             result.data_ = *memory;
             for (; result.size_ < N; ++result.size_) {
-                allocator_traits<allocator_type>::construct(
-                    result.allocator_, result.data_ + result.size_);
+                allocator_traits<allocator_type>::construct(result.allocator_,
+                                                            result.data_ + result.size_);
             }
             return result;
         }
 
-        [[nodiscard]] constexpr value_type* data() noexcept { return data_; }
+        [[nodiscard]] constexpr value_type* data() noexcept {
+            return data_;
+        }
         [[nodiscard]] constexpr const value_type* data() const noexcept {
             return data_;
         }
-        [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
+        [[nodiscard]] constexpr size_type size() const noexcept {
+            return size_;
+        }
         [[nodiscard]] constexpr allocator_type get_allocator() const noexcept {
             return allocator_;
         }
     };
 
-    template <class T, std::size_t N>
+    template <class T, size_t N>
     class static_array_storage {
     public:
         using value_type = T;
-        using size_type = std::size_t;
+        using size_type  = size_t;
 
     private:
         struct zero_storage {};
-        using storage_type =
-            std::conditional_t<N == 0, zero_storage, value_type[N]>;
+        using storage_type = std::conditional_t<N == 0, zero_storage, value_type[N]>;
         storage_type values_{};
 
     public:
@@ -167,18 +167,35 @@ namespace tay {
                 return values_;
             }
         }
-        [[nodiscard]] static constexpr size_type size() noexcept { return N; }
+        [[nodiscard]] static constexpr size_type size() noexcept {
+            return N;
+        }
     };
 
-    template <class T, std::size_t N = dynamic_extent>
+    template <class T, size_t N = dynamic_extent>
     class array_view_storage {
     public:
         using value_type = T;
-        using size_type = std::size_t;
+        using size_type  = size_t;
 
     private:
         value_type* data_ = nullptr;
-        size_type size_ = N == dynamic_extent ? 0 : N;
+        size_type size_   = N == dynamic_extent ? 0 : N;
+
+        [[nodiscard]] static constexpr size_type distance(value_type* first,
+                                                          value_type* last) noexcept {
+            if (first == last) {
+                return 0;
+            }
+            if (first == nullptr || last == nullptr) {
+                tay::panic("array_view received an invalid pointer range");
+            }
+            const auto count = last - first;
+            if (count < 0) {
+                tay::panic("array_view received a reversed pointer range");
+            }
+            return static_cast<size_type>(count);
+        }
 
     public:
         constexpr array_view_storage() noexcept
@@ -197,39 +214,46 @@ namespace tay {
             }
         }
 
-        template <std::size_t M>
+        constexpr array_view_storage(value_type* first, value_type* last) noexcept
+            : array_view_storage(first, distance(first, last)) {}
+
+        template <size_t M>
             requires(N == dynamic_extent || M == N)
-        constexpr array_view_storage(value_type (&values)[M]) noexcept
-            : data_(values), size_(M) {}
+        constexpr array_view_storage(value_type (&values)[M]) noexcept : data_(values), size_(M) {}
 
         [[nodiscard]] constexpr value_type* data() const noexcept {
             return data_;
         }
-        [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
+        [[nodiscard]] constexpr size_type size() const noexcept {
+            return size_;
+        }
     };
 
     template <class Storage, class T>
-    concept array_storage = requires(Storage& storage,
-                                     const Storage& const_storage) {
-        { storage.data() } -> std::convertible_to<T*>;
-        { const_storage.size() } -> std::convertible_to<std::size_t>;
+    concept array_storage = requires(Storage& storage, const Storage& const_storage) {
+        {
+            storage.data()
+        } -> std::convertible_to<T*>;
+        {
+            const_storage.size()
+        } -> std::convertible_to<size_t>;
     };
 
-    template <class T, std::size_t N, class Storage>
+    template <class T, size_t N, class Storage>
         requires array_storage<Storage, T>
     class basic_array {
     public:
-        using value_type      = std::remove_cv_t<T>;
-        using element_type    = T;
-        using storage_type    = Storage;
-        using size_type       = std::size_t;
-        using difference_type = std::ptrdiff_t;
-        using reference       = element_type&;
-        using const_reference = const element_type&;
-        using pointer         = element_type*;
-        using const_pointer   = const element_type*;
-        using iterator        = pointer;
-        using const_iterator  = const_pointer;
+        using value_type                  = std::remove_cv_t<T>;
+        using element_type                = T;
+        using storage_type                = Storage;
+        using size_type                   = size_t;
+        using difference_type             = std::ptrdiff_t;
+        using reference                   = element_type&;
+        using const_reference             = const element_type&;
+        using pointer                     = element_type*;
+        using const_pointer               = const element_type*;
+        using iterator                    = pointer;
+        using const_iterator              = const_pointer;
         static constexpr size_type extent = N;
 
     private:
@@ -249,14 +273,12 @@ namespace tay {
             std::is_nothrow_constructible_v<storage_type, Args&&...>)
             : storage_(std::forward<Args>(args)...) {}
 
-        [[nodiscard]] static constexpr expected<basic_array, error_code>
-        try_create() noexcept
+        [[nodiscard]] static constexpr expected<basic_array, error_code> try_create() noexcept
             requires requires { storage_type::try_create(); }
         {
             auto storage = storage_type::try_create();
             if (!storage) {
-                return expected<basic_array, error_code>(unexpect,
-                                                         storage.error());
+                return expected<basic_array, error_code>(unexpect, storage.error());
             }
             return basic_array(std::move(*storage));
         }
@@ -279,38 +301,40 @@ namespace tay {
         [[nodiscard]] constexpr const_iterator cend() const noexcept {
             return end();
         }
-        [[nodiscard]] constexpr pointer data() noexcept { return begin(); }
+        [[nodiscard]] constexpr pointer data() noexcept {
+            return begin();
+        }
         [[nodiscard]] constexpr const_pointer data() const noexcept {
             return begin();
         }
         [[nodiscard]] constexpr size_type size() const noexcept {
             return storage_.size();
         }
-        [[nodiscard]] constexpr bool empty() const noexcept { return size() == 0; }
+        [[nodiscard]] constexpr bool empty() const noexcept {
+            return size() == 0;
+        }
         [[nodiscard]] constexpr reference operator[](size_type index) noexcept {
             return data()[index];
         }
-        [[nodiscard]] constexpr const_reference operator[](
-            size_type index) const noexcept {
+        [[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
             return data()[index];
         }
-        [[nodiscard]] constexpr expected<reference, error_code> at(
-            size_type index) noexcept {
+        [[nodiscard]] constexpr expected<reference, error_code> at(size_type index) noexcept {
             if (index >= size()) {
-                return expected<reference, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<reference, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return data()[index];
         }
         [[nodiscard]] constexpr expected<const_reference, error_code> at(
             size_type index) const noexcept {
             if (index >= size()) {
-                return expected<const_reference, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<const_reference, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return data()[index];
         }
-        [[nodiscard]] constexpr reference front() noexcept { return data()[0]; }
+        [[nodiscard]] constexpr reference front() noexcept {
+            return data()[0];
+        }
         [[nodiscard]] constexpr const_reference front() const noexcept {
             return data()[0];
         }
@@ -319,6 +343,24 @@ namespace tay {
         }
         [[nodiscard]] constexpr const_reference back() const noexcept {
             return data()[size() - 1];
+        }
+
+        template <class Function>
+            requires std::invocable<Function&, reference>
+        constexpr void foreach (Function&& function) noexcept(
+            std::is_nothrow_invocable_v<Function&, reference>) {
+            for (auto& element : *this) {
+                std::invoke(function, element);
+            }
+        }
+
+        template <class Function>
+            requires std::invocable<Function&, const_reference>
+        constexpr void foreach (Function&& function) const
+            noexcept(std::is_nothrow_invocable_v<Function&, const_reference>) {
+            for (const auto& element : *this) {
+                std::invoke(function, element);
+            }
         }
 
         constexpr void fill(const value_type& value) noexcept(
@@ -337,22 +379,22 @@ namespace tay {
         }
     };
 
-    template <class T, std::size_t N, class Allocator = allocator<T>>
+    template <class T, size_t N, class Allocator = allocator<T>>
     using array = basic_array<T, N, dynamic_array_storage<T, N, Allocator>>;
 
-    template <class T, std::size_t N>
+    template <class T, size_t N>
     using static_array = basic_array<T, N, static_array_storage<T, N>>;
 
-    template <class T, std::size_t N = dynamic_extent>
+    template <class T, size_t N = dynamic_extent>
     using array_view = basic_array<T, N, array_view_storage<T, N>>;
 
-    template <class T, std::size_t N, class S1, class S2>
+    template <class T, size_t N, class S1, class S2>
     [[nodiscard]] constexpr bool operator==(const basic_array<T, N, S1>& left,
                                             const basic_array<T, N, S2>& right) {
         if (left.size() != right.size()) {
             return false;
         }
-        for (std::size_t i = 0; i < left.size(); ++i) {
+        for (size_t i = 0; i < left.size(); ++i) {
             if (!(left[i] == right[i])) {
                 return false;
             }

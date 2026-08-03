@@ -54,4 +54,11 @@ build-kernel: build-initrd
 		kernel-path=$(kernel-path) \
 		build
 
+.PHONY: run
+run: build-kernel runonly
+
+.PHONY: dbg
+dbg: build-kernel dbgonly
+
+
 include $(path-s)/target/switch.mk

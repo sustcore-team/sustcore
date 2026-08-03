@@ -1,12 +1,12 @@
 /**
  * @file sbi_enum.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief SBI相关枚举值
+ * @brief 定义 RISC-V SBI 的扩展、函数与返回值枚举。
  * @version 0.1.0-dev.1
- * @date 2025-11-17
- * 
- * @copyright Copyright (c) 2025
- * 
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 enum {
-    SBI_SUCCESS               =  0,
+    SBI_SUCCESS               = 0,
     SBI_ERR_FAILED            = -1,
     SBI_ERR_NOT_SUPPORTED     = -2,
     SBI_ERR_INVALID_PARAM     = -3,
@@ -110,10 +110,10 @@ enum FID {
     SBI_REMOTE_HFENCE_VVMA      = 0x00000006,
 
     // HSM: Hart State Management
-    SBI_HART_START       = 0x00000000,
-    SBI_HART_STOP        = 0x00000001,
-    SBI_HART_GET_STATUS  = 0x00000002,
-    SBI_HART_SUSPEND     = 0x00000003,
+    SBI_HART_START      = 0x00000000,
+    SBI_HART_STOP       = 0x00000001,
+    SBI_HART_GET_STATUS = 0x00000002,
+    SBI_HART_SUSPEND    = 0x00000003,
 };
 
 // 所有可能的 HSM 状态

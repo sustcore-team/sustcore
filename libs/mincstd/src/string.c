@@ -1,11 +1,11 @@
 /**
  * @file string.c
  * @author theflysong (song_of_the_fly@163.com)
- * @brief string.h函数实现
+ * @brief 实现 mincstd <string.h> 兼容接口的内存和字符串操作例程。
  * @version 0.1.0-dev.1
- * @date 2025-11-17
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  *
  */
 

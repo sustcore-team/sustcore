@@ -1,4 +1,16 @@
+/**
+ * @file format.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 格式化接口的输出和格式串校验。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/allocator.h>
+#include <tay/bits.h>
 #include <tay/format.h>
 #include <tay/string.h>
 #include <tay/string_view.h>
@@ -20,13 +32,13 @@ namespace {
         };
 
         char buffer[4096]{};
-        std::size_t size      = 0;
-        std::size_t calls     = 0;
-        std::size_t fail_call = std::size_t(-1);
-        failure_mode failure  = failure_mode::none;
+        size_t size          = 0;
+        size_t calls         = 0;
+        size_t fail_call     = size_t(-1);
+        failure_mode failure = failure_mode::none;
 
-        int operator()(const char* data, std::size_t length) {
-            const std::size_t current_call = calls++;
+        int operator()(const char* data, size_t length) {
+            const size_t current_call = calls++;
             assert(size + length < sizeof(buffer));
             std::memcpy(buffer + size, data, length);
             size         += length;
@@ -36,12 +48,10 @@ namespace {
                 return static_cast<int>(length);
             }
             switch (failure) {
-                case failure_mode::negative: return -1;
-                case failure_mode::short_write:
-                    return static_cast<int>(length - 1);
-                case failure_mode::over_write:
-                    return static_cast<int>(length + 1);
-                case failure_mode::none: break;
+                case failure_mode::negative:    return -1;
+                case failure_mode::short_write: return static_cast<int>(length - 1);
+                case failure_mode::over_write:  return static_cast<int>(length + 1);
+                case failure_mode::none:        break;
             }
             return static_cast<int>(length);
         }
@@ -50,7 +60,7 @@ namespace {
             buffer[0] = '\0';
             size      = 0;
             calls     = 0;
-            fail_call = std::size_t(-1);
+            fail_call = size_t(-1);
             failure   = failure_mode::none;
         }
     };
@@ -86,8 +96,8 @@ namespace {
     };
 
     struct allocation_state {
-        bool fail               = false;
-        std::size_t allocations = 0;
+        bool fail          = false;
+        size_t allocations = 0;
     };
 
     template <class T>
@@ -97,31 +107,27 @@ namespace {
 
         allocation_state* state = nullptr;
 
-        constexpr explicit tracking_allocator(allocation_state& value) noexcept
-            : state(&value) {}
+        constexpr explicit tracking_allocator(allocation_state& value) noexcept : state(&value) {}
 
         template <class U>
-        constexpr tracking_allocator(
-            const tracking_allocator<U>& other) noexcept
+        constexpr tracking_allocator(const tracking_allocator<U>& other) noexcept
             : state(other.state) {}
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
             if (state->fail) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             ++state->allocations;
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ::operator delete(memory);
         }
 
@@ -150,22 +156,20 @@ namespace {
     struct tiny_allocator {
         using value_type = T;
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ::operator delete(memory);
         }
 
-        constexpr std::size_t max_size() const noexcept {
+        constexpr size_t max_size() const noexcept {
             return 8;
         }
     };
@@ -176,8 +180,7 @@ namespace tay {
     struct formatter<move_only_value> {
         bool doubled = false;
 
-        constexpr format_parse_context::iterator parse(
-            format_parse_context& context) noexcept {
+        constexpr format_parse_context::iterator parse(format_parse_context& context) noexcept {
             auto position = context.begin();
             if (position == context.end()) {
                 return position;
@@ -205,8 +208,7 @@ namespace tay {
 
     template <>
     struct formatter<cache_t> {
-        constexpr format_parse_context::iterator parse(
-            format_parse_context& context) noexcept {
+        constexpr format_parse_context::iterator parse(format_parse_context& context) noexcept {
             return context.begin();
         }
 
@@ -214,9 +216,9 @@ namespace tay {
         typename FormatContext::iterator format(const cache_t& cache,
                                                 FormatContext& context) const {
             context.write("cache{size=");
-            context.format(cache.size);
+            context.format("{}", cache.size);
             context.write(", enabled=");
-            context.template format<bool>(cache.enabled);
+            context.format("{}", cache.enabled);
             context.put('}');
             return context.out();
         }
@@ -224,8 +226,7 @@ namespace tay {
 
     template <>
     struct formatter<cpu_status> {
-        constexpr format_parse_context::iterator parse(
-            format_parse_context& context) noexcept {
+        constexpr format_parse_context::iterator parse(format_parse_context& context) noexcept {
             return context.begin();
         }
 
@@ -233,13 +234,13 @@ namespace tay {
         typename FormatContext::iterator format(const cpu_status& status,
                                                 FormatContext& context) const {
             context.write("cpu_status{id=");
-            context.format(status.id);
+            context.format("{}", status.id);
             context.write(", ready=");
-            context.format(status.ready);
+            context.format("{}", status.ready);
             context.write(", cause=");
-            context.template format<unsigned>(status.cause);
+            context.format("{:#08x}", status.cause);
             context.write(", cache=");
-            context.format(status.cache);
+            context.format("{}", status.cache);
             context.put('}');
             return context.out();
         }
@@ -261,14 +262,12 @@ namespace tay {
 
 namespace {
     template <class Context, class Value>
-    concept supports_context_format_spec =
-        requires(Context& context, Value&& value) {
-            context.format(std::forward<Value>(value), tay::string_view("x"));
-        };
+    concept supports_context_format = requires(Context& context, Value&& value) {
+        context.format("{:#x}", std::forward<Value>(value));
+    };
 
-    static_assert(!supports_context_format_spec<
-                  tay::detail::basic_format_context<collecting_sink>,
-                  unsigned>);
+    static_assert(
+        supports_context_format<tay::detail::basic_format_context<collecting_sink>, unsigned>);
 
     void expect_text(const collecting_sink& sink, const char* expected) {
         assert(std::strcmp(sink.buffer, expected) == 0);
@@ -288,8 +287,7 @@ namespace {
         expect_text(sink, "{left} right left");
 
         sink.clear();
-        result = tay::format_to(sink, "{} {:d} {:b} {:o} {:x} {:X}", -42, -42,
-                                42u, 42u, 42u, 42u);
+        result = tay::format_to(sink, "{} {:d} {:b} {:o} {:x} {:X}", -42, -42, 42u, 42u, 42u, 42u);
         assert(result);
         expect_text(sink, "-42 -42 101010 52 2a 2A");
 
@@ -299,24 +297,33 @@ namespace {
         expect_text(sink, "-101 -11 -2a -2A");
 
         sink.clear();
-        result = tay::format_to(sink, "{} {} {}",
-                                std::numeric_limits<std::int8_t>::min(),
-                                std::numeric_limits<std::uint64_t>::max(),
-                                static_cast<signed char>(-7));
+        result = tay::format_to(sink, "{:#x} {:#X} {:#x}", 42u, 42u, -42);
+        assert(result);
+        expect_text(sink, "0x2a 0X2A -0x2a");
+
+        sink.clear();
+        result = tay::format_to(sink, "{:#x} {:#X}", 0u, 0u);
+        assert(result);
+        expect_text(sink, "0x0 0X0");
+
+        sink.clear();
+        result = tay::format_to(sink, "{:08x} {:05d} {:05d} {:#08x}", 42u, 42, -42, 42u);
+        assert(result);
+        expect_text(sink, "0000002a 00042 -0042 0x00002a");
+
+        sink.clear();
+        result = tay::format_to(sink, "{} {} {}", std::numeric_limits<i8_t>::min(),
+                                std::numeric_limits<u64_t>::max(), static_cast<signed char>(-7));
         assert(result);
         expect_text(sink, "-128 18446744073709551615 -7");
 
         sink.clear();
-        result = tay::format_to(sink, "{:b}",
-                                std::numeric_limits<std::uint64_t>::max());
+        result = tay::format_to(sink, "{:b}", std::numeric_limits<u64_t>::max());
         assert(result && *result == 64);
-        expect_text(
-            sink,
-            "1111111111111111111111111111111111111111111111111111111111111111");
+        expect_text(sink, "1111111111111111111111111111111111111111111111111111111111111111");
 
         sink.clear();
-        result =
-            tay::format_to(sink, "{} {:b} {:d} {}", true, false, true, 'Z');
+        result = tay::format_to(sink, "{} {:b} {:d} {}", true, false, true, 'Z');
         assert(result);
         expect_text(sink, "true false 1 Z");
 
@@ -324,8 +331,7 @@ namespace {
         const char* null_text = nullptr;
         const tay::string_view view("view");
         tay::string<tay::allocator<char>> owned("owned");
-        result = tay::format_to(sink, "{} {} {} {}", "literal", null_text, view,
-                                owned);
+        result = tay::format_to(sink, "{} {} {} {}", "literal", null_text, view, owned);
         assert(result);
         expect_text(sink, "literal (null) view owned");
 
@@ -358,7 +364,7 @@ namespace {
         assert(result && *result == 0 && sink.calls == 0);
 
         char long_text[301]{};
-        for (std::size_t index = 0; index < sizeof(long_text) - 1; ++index) {
+        for (size_t index = 0; index < sizeof(long_text) - 1; ++index) {
             long_text[index] = static_cast<char>('a' + index % 26);
         }
         sink.clear();
@@ -366,7 +372,7 @@ namespace {
         assert(result && *result == 300 && sink.calls == 5);
         assert(std::memcmp(sink.buffer, long_text, 300) == 0);
 
-        for (std::size_t fail_call = 0; fail_call < 3; ++fail_call) {
+        for (size_t fail_call = 0; fail_call < 3; ++fail_call) {
             sink.clear();
             sink.fail_call = fail_call;
             sink.failure   = collecting_sink::failure_mode::negative;
@@ -374,10 +380,9 @@ namespace {
             assert(!result);
             assert(result.error() == tay::format_error::sink_error);
             assert(sink.calls == fail_call + 1);
-            const std::size_t expected_size = (fail_call + 1) * 4;
+            const size_t expected_size = (fail_call + 1) * 4;
             assert(sink.size == expected_size);
-            assert(std::memcmp(sink.buffer, "abcdefghijkl", expected_size) ==
-                   0);
+            assert(std::memcmp(sink.buffer, "abcdefghijkl", expected_size) == 0);
         }
 
         for (const auto mode : {collecting_sink::failure_mode::short_write,
@@ -409,7 +414,7 @@ namespace {
         auto result = tay::format_to(sink, "{}", status);
         assert(result);
         expect_text(sink,
-                    "cpu_status{id=3, ready=true, cause=42, "
+                    "cpu_status{id=3, ready=true, cause=0x00002a, "
                     "cache=cache{size=64, enabled=false}}");
     }
 
@@ -431,8 +436,7 @@ namespace {
         assert(std::memcmp(output, "abc", 3) == 0 && output[3] == '?');
         assert(first_calls == 0);
 
-        auto formatter =
-            tay::format_to_iter_s(output, 4, "{}{}", first, second);
+        auto formatter = tay::format_to_iter_s(output, 4, "{}{}", first, second);
         assert(formatter && *formatter == output + 4);
         assert(std::memcmp(output, "aaaa", 4) == 0 && output[4] == '?');
         assert(first_calls == 1 && second_calls == 0);
@@ -449,9 +453,8 @@ namespace {
     }
 
     void owning_format_uses_requested_allocator() {
-        static_assert(std::is_same_v<
-                      decltype(tay::format("{}", 1)),
-                      tay::expected<tay::string<>, tay::error_code>>);
+        static_assert(std::is_same_v<decltype(tay::format("{}", 1)),
+                                     tay::expected<tay::string<>, tay::error_code>>);
 
         auto default_result = tay::format("{} {:x} {}", "value", 42, true);
         assert(default_result && *default_result == "value 2a true");
@@ -466,22 +469,18 @@ namespace {
         assert(small && *small == "small=7");
         assert(state.allocations == 0);
 
-        auto large = tay::format(
-            allocator, "this output is long enough to allocate: {}", 42);
-        assert(large &&
-               *large == "this output is long enough to allocate: 42");
+        auto large = tay::format(allocator, "this output is long enough to allocate: {}", 42);
+        assert(large && *large == "this output is long enough to allocate: 42");
         assert(state.allocations > 0);
 
-        state.fail = true;
-        auto failed = tay::format(
-            allocator, "this output also requires dynamic allocation");
+        state.fail  = true;
+        auto failed = tay::format(allocator, "this output also requires dynamic allocation");
         assert(!failed && failed.error() == tay::error_code::OUT_OF_MEMORY);
 
         tiny_allocator<char> tiny;
         auto overflow = tay::format(tiny, "12345678");
         assert(!overflow);
-        assert(overflow.error() ==
-               tay::error_code::ALLOCATION_SIZE_OVERFLOW);
+        assert(overflow.error() == tay::error_code::ALLOCATION_SIZE_OVERFLOW);
     }
 }  // namespace
 

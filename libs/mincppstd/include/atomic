@@ -1,9 +1,9 @@
 /**
  * @file atomic
  * @author theflysong (song_of_the_fly@163.com)
- * @brief atomic
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <atomic> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-06-08
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -70,13 +70,11 @@ namespace std {
 
         static constexpr bool is_always_lock_free = ATOMIC_BOOL_LOCK_FREE == 2;
 
-        void store(bool value,
-                   memory_order order = memory_order_seq_cst) noexcept {
+        void store(bool value, memory_order order = memory_order_seq_cst) noexcept {
             _base.store(value, order);
         }
 
-        void store(bool value, memory_order order =
-                                   memory_order_seq_cst) volatile noexcept {
+        void store(bool value, memory_order order = memory_order_seq_cst) volatile noexcept {
             _base.store(value, order);
         }
 
@@ -84,70 +82,55 @@ namespace std {
             return _base.load(order);
         }
 
-        bool load(memory_order order = memory_order_seq_cst) const
-            volatile noexcept {
+        bool load(memory_order order = memory_order_seq_cst) const volatile noexcept {
             return _base.load(order);
         }
 
-        bool exchange(bool value,
-                      memory_order order = memory_order_seq_cst) noexcept {
+        bool exchange(bool value, memory_order order = memory_order_seq_cst) noexcept {
             return _base.exchange(value, order);
         }
 
-        bool exchange(bool value, memory_order order =
-                                      memory_order_seq_cst) volatile noexcept {
+        bool exchange(bool value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.exchange(value, order);
+        }
+
+        bool compare_exchange_weak(bool& expected, bool desired, memory_order success_order,
+                                   memory_order failure_order) noexcept {
+            return _base.compare_exchange_weak(expected, desired, success_order, failure_order);
+        }
+
+        bool compare_exchange_weak(bool& expected, bool desired, memory_order success_order,
+                                   memory_order failure_order) volatile noexcept {
+            return _base.compare_exchange_weak(expected, desired, success_order, failure_order);
         }
 
         bool compare_exchange_weak(bool& expected, bool desired,
-                                   memory_order success_order,
-                                   memory_order failure_order) noexcept {
-            return _base.compare_exchange_weak(expected, desired, success_order,
-                                               failure_order);
-        }
-
-        bool compare_exchange_weak(
-            bool& expected, bool desired, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return _base.compare_exchange_weak(expected, desired, success_order,
-                                               failure_order);
-        }
-
-        bool compare_exchange_weak(
-            bool& expected, bool desired,
-            memory_order order = memory_order_seq_cst) noexcept {
+                                   memory_order order = memory_order_seq_cst) noexcept {
             return _base.compare_exchange_weak(expected, desired, order);
         }
 
-        bool compare_exchange_weak(
-            bool& expected, bool desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        bool compare_exchange_weak(bool& expected, bool desired,
+                                   memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.compare_exchange_weak(expected, desired, order);
+        }
+
+        bool compare_exchange_strong(bool& expected, bool desired, memory_order success_order,
+                                     memory_order failure_order) noexcept {
+            return _base.compare_exchange_strong(expected, desired, success_order, failure_order);
+        }
+
+        bool compare_exchange_strong(bool& expected, bool desired, memory_order success_order,
+                                     memory_order failure_order) volatile noexcept {
+            return _base.compare_exchange_strong(expected, desired, success_order, failure_order);
         }
 
         bool compare_exchange_strong(bool& expected, bool desired,
-                                     memory_order success_order,
-                                     memory_order failure_order) noexcept {
-            return _base.compare_exchange_strong(expected, desired,
-                                                 success_order, failure_order);
-        }
-
-        bool compare_exchange_strong(
-            bool& expected, bool desired, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return _base.compare_exchange_strong(expected, desired,
-                                                 success_order, failure_order);
-        }
-
-        bool compare_exchange_strong(
-            bool& expected, bool desired,
-            memory_order order = memory_order_seq_cst) noexcept {
+                                     memory_order order = memory_order_seq_cst) noexcept {
             return _base.compare_exchange_strong(expected, desired, order);
         }
 
-        bool compare_exchange_strong(
-            bool& expected, bool desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        bool compare_exchange_strong(bool& expected, bool desired,
+                                     memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.compare_exchange_strong(expected, desired, order);
         }
     };
@@ -163,28 +146,24 @@ namespace std {
 
     private:
         // Align 1/2/4/8/16-byte types to at least their size.
-        static constexpr int _S_min_alignment = (sizeof(_Tp) &
-                                                 (sizeof(_Tp) - 1)) ||
+        static constexpr int _S_min_alignment = (sizeof(_Tp) & (sizeof(_Tp) - 1)) ||
                                                         sizeof(_Tp) > 16
                                                     ? 0
                                                     : sizeof(_Tp);
 
-        static constexpr int _S_alignment = _S_min_alignment > alignof(_Tp)
-                                                ? _S_min_alignment
-                                                : alignof(_Tp);
+        static constexpr int _S_alignment = _S_min_alignment > alignof(_Tp) ? _S_min_alignment
+                                                                            : alignof(_Tp);
 
         alignas(_S_alignment) _Tp _value;
 
         static_assert(__is_trivially_copyable(_Tp),
                       "std::atomic requires a trivially copyable type");
 
-        static_assert(sizeof(_Tp) > 0,
-                      "Incomplete or zero-sized types are not supported");
+        static_assert(sizeof(_Tp) > 0, "Incomplete or zero-sized types are not supported");
 
         // 模板实参不允许带 const / volatile 限定.
-        static_assert(
-            is_same_v<_Tp, remove_cv_t<_Tp>>,
-            "template argument for std::atomic must not be const or volatile");
+        static_assert(is_same_v<_Tp, remove_cv_t<_Tp>>,
+                      "template argument for std::atomic must not be const or volatile");
 
         static_assert(is_copy_constructible_v<_Tp>);
         static_assert(is_move_constructible_v<_Tp>);
@@ -230,29 +209,24 @@ namespace std {
 
         bool is_lock_free() const noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
+            return __atomic_is_lock_free(sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
         }
 
         bool is_lock_free() const volatile noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
+            return __atomic_is_lock_free(sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
         }
 
-        static constexpr bool is_always_lock_free =
-            __atomic_always_lock_free(sizeof(_value), 0);
+        static constexpr bool is_always_lock_free = __atomic_always_lock_free(sizeof(_value), 0);
 
-        void store(_Tp value,
-                   memory_order order = memory_order_seq_cst) noexcept {
-            __atomic_store(std::__addressof(_value),
-                           __atomic_impl::__clear_padding(value), int(order));
+        void store(_Tp value, memory_order order = memory_order_seq_cst) noexcept {
+            __atomic_store(std::__addressof(_value), __atomic_impl::__clear_padding(value),
+                           int(order));
         }
 
-        void store(_Tp value, memory_order order =
-                                  memory_order_seq_cst) volatile noexcept {
-            __atomic_store(std::__addressof(_value),
-                           __atomic_impl::__clear_padding(value), int(order));
+        void store(_Tp value, memory_order order = memory_order_seq_cst) volatile noexcept {
+            __atomic_store(std::__addressof(_value), __atomic_impl::__clear_padding(value),
+                           int(order));
         }
 
         _Tp load(memory_order order = memory_order_seq_cst) const noexcept {
@@ -262,88 +236,71 @@ namespace std {
             return *ptr;
         }
 
-        _Tp load(memory_order order = memory_order_seq_cst) const
-            volatile noexcept {
+        _Tp load(memory_order order = memory_order_seq_cst) const volatile noexcept {
             alignas(_Tp) unsigned char buf[sizeof(_Tp)];
             _Tp* ptr = reinterpret_cast<_Tp*>(buf);
             __atomic_load(std::__addressof(_value), ptr, int(order));
             return *ptr;
         }
 
-        _Tp exchange(_Tp value,
-                     memory_order order = memory_order_seq_cst) noexcept {
+        _Tp exchange(_Tp value, memory_order order = memory_order_seq_cst) noexcept {
             alignas(_Tp) unsigned char buf[sizeof(_Tp)];
             _Tp* ptr = reinterpret_cast<_Tp*>(buf);
-            __atomic_exchange(std::__addressof(_value),
-                              __atomic_impl::__clear_padding(value), ptr,
+            __atomic_exchange(std::__addressof(_value), __atomic_impl::__clear_padding(value), ptr,
                               int(order));
             return *ptr;
         }
 
-        _Tp exchange(_Tp value, memory_order order =
-                                    memory_order_seq_cst) volatile noexcept {
+        _Tp exchange(_Tp value, memory_order order = memory_order_seq_cst) volatile noexcept {
             alignas(_Tp) unsigned char buf[sizeof(_Tp)];
             _Tp* ptr = reinterpret_cast<_Tp*>(buf);
-            __atomic_exchange(std::__addressof(_value),
-                              __atomic_impl::__clear_padding(value), ptr,
+            __atomic_exchange(std::__addressof(_value), __atomic_impl::__clear_padding(value), ptr,
                               int(order));
             return *ptr;
+        }
+
+        bool compare_exchange_weak(_Tp& expected, _Tp value, memory_order success_order,
+                                   memory_order failure_order) noexcept {
+            return __atomic_impl::__compare_exchange(_value, expected, value, true, success_order,
+                                                     failure_order);
+        }
+
+        bool compare_exchange_weak(_Tp& expected, _Tp value, memory_order success_order,
+                                   memory_order failure_order) volatile noexcept {
+            return __atomic_impl::__compare_exchange(_value, expected, value, true, success_order,
+                                                     failure_order);
         }
 
         bool compare_exchange_weak(_Tp& expected, _Tp value,
-                                   memory_order success_order,
-                                   memory_order failure_order) noexcept {
-            return __atomic_impl::__compare_exchange(
-                _value, expected, value, true, success_order, failure_order);
+                                   memory_order order = memory_order_seq_cst) noexcept {
+            return compare_exchange_weak(expected, value, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_weak(
-            _Tp& expected, _Tp value, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return __atomic_impl::__compare_exchange(
-                _value, expected, value, true, success_order, failure_order);
+        bool compare_exchange_weak(_Tp& expected, _Tp value,
+                                   memory_order order = memory_order_seq_cst) volatile noexcept {
+            return compare_exchange_weak(expected, value, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_weak(
-            _Tp& expected, _Tp value,
-            memory_order order = memory_order_seq_cst) noexcept {
-            return compare_exchange_weak(expected, value, order,
-                                         __cmpexch_failure_order(order));
+        bool compare_exchange_strong(_Tp& expected, _Tp value, memory_order success_order,
+                                     memory_order failure_order) noexcept {
+            return __atomic_impl::__compare_exchange(_value, expected, value, false, success_order,
+                                                     failure_order);
         }
 
-        bool compare_exchange_weak(
-            _Tp& expected, _Tp value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return compare_exchange_weak(expected, value, order,
-                                         __cmpexch_failure_order(order));
+        bool compare_exchange_strong(_Tp& expected, _Tp value, memory_order success_order,
+                                     memory_order failure_order) volatile noexcept {
+            return __atomic_impl::__compare_exchange(_value, expected, value, false, success_order,
+                                                     failure_order);
         }
 
         bool compare_exchange_strong(_Tp& expected, _Tp value,
-                                     memory_order success_order,
-                                     memory_order failure_order) noexcept {
-            return __atomic_impl::__compare_exchange(
-                _value, expected, value, false, success_order, failure_order);
+                                     memory_order order = memory_order_seq_cst) noexcept {
+            return compare_exchange_strong(expected, value, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_strong(
-            _Tp& expected, _Tp value, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return __atomic_impl::__compare_exchange(
-                _value, expected, value, false, success_order, failure_order);
-        }
-
-        bool compare_exchange_strong(
-            _Tp& expected, _Tp value,
-            memory_order order = memory_order_seq_cst) noexcept {
-            return compare_exchange_strong(expected, value, order,
-                                           __cmpexch_failure_order(order));
-        }
-
-        bool compare_exchange_strong(
-            _Tp& expected, _Tp value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return compare_exchange_strong(expected, value, order,
-                                           __cmpexch_failure_order(order));
+        bool compare_exchange_strong(_Tp& expected, _Tp value,
+                                     memory_order order = memory_order_seq_cst) volatile noexcept {
+            return compare_exchange_strong(expected, value, order, __cmpexch_failure_order(order));
         }
     };
 
@@ -449,151 +406,122 @@ namespace std {
             return _base.is_lock_free();
         }
 
-        static constexpr bool is_always_lock_free =
-            ATOMIC_POINTER_LOCK_FREE == 2;
+        static constexpr bool is_always_lock_free = ATOMIC_POINTER_LOCK_FREE == 2;
+
+        void store(__pointer_type pointer, memory_order order = memory_order_seq_cst) noexcept {
+            return _base.store(pointer, order);
+        }
 
         void store(__pointer_type pointer,
-                   memory_order order = memory_order_seq_cst) noexcept {
+                   memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.store(pointer, order);
         }
 
-        void store(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return _base.store(pointer, order);
-        }
-
-        __pointer_type load(
-            memory_order order = memory_order_seq_cst) const noexcept {
+        __pointer_type load(memory_order order = memory_order_seq_cst) const noexcept {
             return _base.load(order);
         }
 
-        __pointer_type load(memory_order order = memory_order_seq_cst) const
-            volatile noexcept {
+        __pointer_type load(memory_order order = memory_order_seq_cst) const volatile noexcept {
             return _base.load(order);
         }
 
-        __pointer_type exchange(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) noexcept {
+        __pointer_type exchange(__pointer_type pointer,
+                                memory_order order = memory_order_seq_cst) noexcept {
             return _base.exchange(pointer, order);
         }
 
-        __pointer_type exchange(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        __pointer_type exchange(__pointer_type pointer,
+                                memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.exchange(pointer, order);
         }
 
-        bool compare_exchange_weak(__pointer_type& expected,
-                                   __pointer_type desired,
+        bool compare_exchange_weak(__pointer_type& expected, __pointer_type desired,
                                    memory_order success_order,
                                    memory_order failure_order) noexcept {
-            return _base.compare_exchange_weak(expected, desired, success_order,
-                                               failure_order);
+            return _base.compare_exchange_weak(expected, desired, success_order, failure_order);
         }
 
-        bool compare_exchange_weak(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return _base.compare_exchange_weak(expected, desired, success_order,
-                                               failure_order);
+        bool compare_exchange_weak(__pointer_type& expected, __pointer_type desired,
+                                   memory_order success_order,
+                                   memory_order failure_order) volatile noexcept {
+            return _base.compare_exchange_weak(expected, desired, success_order, failure_order);
         }
 
-        bool compare_exchange_weak(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order order = memory_order_seq_cst) noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
+        bool compare_exchange_weak(__pointer_type& expected, __pointer_type desired,
+                                   memory_order order = memory_order_seq_cst) noexcept {
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_weak(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
+        bool compare_exchange_weak(__pointer_type& expected, __pointer_type desired,
+                                   memory_order order = memory_order_seq_cst) volatile noexcept {
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_strong(__pointer_type& expected,
-                                     __pointer_type desired,
+        bool compare_exchange_strong(__pointer_type& expected, __pointer_type desired,
                                      memory_order success_order,
                                      memory_order failure_order) noexcept {
-            return _base.compare_exchange_strong(expected, desired,
-                                                 success_order, failure_order);
+            return _base.compare_exchange_strong(expected, desired, success_order, failure_order);
         }
 
-        bool compare_exchange_strong(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return _base.compare_exchange_strong(expected, desired,
-                                                 success_order, failure_order);
+        bool compare_exchange_strong(__pointer_type& expected, __pointer_type desired,
+                                     memory_order success_order,
+                                     memory_order failure_order) volatile noexcept {
+            return _base.compare_exchange_strong(expected, desired, success_order, failure_order);
         }
 
-        bool compare_exchange_strong(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order order = memory_order_seq_cst) noexcept {
-            return _base.compare_exchange_strong(
-                expected, desired, order, __cmpexch_failure_order(order));
+        bool compare_exchange_strong(__pointer_type& expected, __pointer_type desired,
+                                     memory_order order = memory_order_seq_cst) noexcept {
+            return _base.compare_exchange_strong(expected, desired, order,
+                                                 __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_strong(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return _base.compare_exchange_strong(
-                expected, desired, order, __cmpexch_failure_order(order));
+        bool compare_exchange_strong(__pointer_type& expected, __pointer_type desired,
+                                     memory_order order = memory_order_seq_cst) volatile noexcept {
+            return _base.compare_exchange_strong(expected, desired, order,
+                                                 __cmpexch_failure_order(order));
         }
 
-        __pointer_type fetch_add(
-            ptrdiff_t offset,
-            memory_order order = memory_order_seq_cst) noexcept {
+        __pointer_type fetch_add(ptrdiff_t offset,
+                                 memory_order order = memory_order_seq_cst) noexcept {
             static_assert(is_object_v<_Tp>, "pointer to object type");
             return _base.fetch_add(offset, order);
         }
 
-        __pointer_type fetch_add(
-            ptrdiff_t offset,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        __pointer_type fetch_add(ptrdiff_t offset,
+                                 memory_order order = memory_order_seq_cst) volatile noexcept {
             static_assert(is_object_v<_Tp>, "pointer to object type");
             return _base.fetch_add(offset, order);
         }
 
-        __pointer_type fetch_sub(
-            ptrdiff_t offset,
-            memory_order order = memory_order_seq_cst) noexcept {
+        __pointer_type fetch_sub(ptrdiff_t offset,
+                                 memory_order order = memory_order_seq_cst) noexcept {
             static_assert(is_object_v<_Tp>, "pointer to object type");
             return _base.fetch_sub(offset, order);
         }
 
-        __pointer_type fetch_sub(
-            ptrdiff_t offset,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        __pointer_type fetch_sub(ptrdiff_t offset,
+                                 memory_order order = memory_order_seq_cst) volatile noexcept {
             static_assert(is_object_v<_Tp>, "pointer to object type");
             return _base.fetch_sub(offset, order);
         }
 
-        __pointer_type fetch_min(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) noexcept {
+        __pointer_type fetch_min(__pointer_type pointer,
+                                 memory_order order = memory_order_seq_cst) noexcept {
             return _base.fetch_min(pointer, order);
         }
 
-        __pointer_type fetch_min(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        __pointer_type fetch_min(__pointer_type pointer,
+                                 memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.fetch_min(pointer, order);
         }
 
-        __pointer_type fetch_max(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) noexcept {
+        __pointer_type fetch_max(__pointer_type pointer,
+                                 memory_order order = memory_order_seq_cst) noexcept {
             return _base.fetch_max(pointer, order);
         }
 
-        __pointer_type fetch_max(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        __pointer_type fetch_max(__pointer_type pointer,
+                                 memory_order order = memory_order_seq_cst) volatile noexcept {
             return _base.fetch_max(pointer, order);
         }
     };
@@ -835,8 +763,7 @@ namespace std {
         using __base_type::operator __integral_type;
         using __base_type::operator=;
 
-        static constexpr bool is_always_lock_free =
-            ATOMIC_WCHAR_T_LOCK_FREE == 2;
+        static constexpr bool is_always_lock_free = ATOMIC_WCHAR_T_LOCK_FREE == 2;
     };
 
     /// char8_t 的原子特化.
@@ -856,8 +783,7 @@ namespace std {
         using __base_type::operator __integral_type;
         using __base_type::operator=;
 
-        static constexpr bool is_always_lock_free =
-            ATOMIC_CHAR8_T_LOCK_FREE == 2;
+        static constexpr bool is_always_lock_free = ATOMIC_CHAR8_T_LOCK_FREE == 2;
     };
 
     /// char16_t 的原子特化.
@@ -877,8 +803,7 @@ namespace std {
         using __base_type::operator __integral_type;
         using __base_type::operator=;
 
-        static constexpr bool is_always_lock_free =
-            ATOMIC_CHAR16_T_LOCK_FREE == 2;
+        static constexpr bool is_always_lock_free = ATOMIC_CHAR16_T_LOCK_FREE == 2;
     };
 
     /// char32_t 的原子特化.
@@ -898,8 +823,7 @@ namespace std {
         using __base_type::operator __integral_type;
         using __base_type::operator=;
 
-        static constexpr bool is_always_lock_free =
-            ATOMIC_CHAR32_T_LOCK_FREE == 2;
+        static constexpr bool is_always_lock_free = ATOMIC_CHAR32_T_LOCK_FREE == 2;
     };
 
     /// atomic_bool
@@ -1061,8 +985,7 @@ namespace std {
         return object->test();
     }
 
-    inline bool atomic_flag_test_explicit(const atomic_flag* object,
-                                          memory_order order) noexcept {
+    inline bool atomic_flag_test_explicit(const atomic_flag* object, memory_order order) noexcept {
         return object->test(order);
     }
 
@@ -1071,8 +994,7 @@ namespace std {
         return object->test(order);
     }
 
-    inline void atomic_flag_clear_explicit(atomic_flag* object,
-                                           memory_order order) noexcept {
+    inline void atomic_flag_clear_explicit(atomic_flag* object, memory_order order) noexcept {
         object->clear(order);
     }
 
@@ -1085,8 +1007,7 @@ namespace std {
         return atomic_flag_test_and_set_explicit(object, memory_order_seq_cst);
     }
 
-    inline bool atomic_flag_test_and_set(
-        volatile atomic_flag* object) noexcept {
+    inline bool atomic_flag_test_and_set(volatile atomic_flag* object) noexcept {
         return atomic_flag_test_and_set_explicit(object, memory_order_seq_cst);
     }
 
@@ -1113,40 +1034,34 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline bool atomic_is_lock_free(
-        const volatile atomic<_ITp>* object) noexcept {
+    inline bool atomic_is_lock_free(const volatile atomic<_ITp>* object) noexcept {
         return object->is_lock_free();
     }
 
     template <typename _ITp>
-    inline void atomic_init(atomic<_ITp>* object,
-                            __atomic_val_t<_ITp> value) noexcept {
+    inline void atomic_init(atomic<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         object->store(value, memory_order_relaxed);
     }
 
     template <typename _ITp>
-    inline void atomic_init(volatile atomic<_ITp>* object,
-                            __atomic_val_t<_ITp> value) noexcept {
+    inline void atomic_init(volatile atomic<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         object->store(value, memory_order_relaxed);
     }
 
     template <typename _ITp>
-    inline void atomic_store_explicit(atomic<_ITp>* object,
-                                      __atomic_val_t<_ITp> value,
+    inline void atomic_store_explicit(atomic<_ITp>* object, __atomic_val_t<_ITp> value,
                                       memory_order order) noexcept {
         object->store(value, order);
     }
 
     template <typename _ITp>
-    inline void atomic_store_explicit(volatile atomic<_ITp>* object,
-                                      __atomic_val_t<_ITp> value,
+    inline void atomic_store_explicit(volatile atomic<_ITp>* object, __atomic_val_t<_ITp> value,
                                       memory_order order) noexcept {
         object->store(value, order);
     }
 
     template <typename _ITp>
-    inline _ITp atomic_load_explicit(const atomic<_ITp>* object,
-                                     memory_order order) noexcept {
+    inline _ITp atomic_load_explicit(const atomic<_ITp>* object, memory_order order) noexcept {
         return object->load(order);
     }
 
@@ -1157,64 +1072,60 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_exchange_explicit(atomic<_ITp>* object,
-                                         __atomic_val_t<_ITp> value,
+    inline _ITp atomic_exchange_explicit(atomic<_ITp>* object, __atomic_val_t<_ITp> value,
                                          memory_order order) noexcept {
         return object->exchange(value, order);
     }
 
     template <typename _ITp>
-    inline _ITp atomic_exchange_explicit(volatile atomic<_ITp>* object,
-                                         __atomic_val_t<_ITp> value,
+    inline _ITp atomic_exchange_explicit(volatile atomic<_ITp>* object, __atomic_val_t<_ITp> value,
                                          memory_order order) noexcept {
         return object->exchange(value, order);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_weak_explicit(
-        atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired, memory_order success_order,
-        memory_order failure_order) noexcept {
-        return object->compare_exchange_weak(*expected, desired, success_order,
-                                             failure_order);
+    inline bool atomic_compare_exchange_weak_explicit(atomic<_ITp>* object,
+                                                      __atomic_val_t<_ITp>* expected,
+                                                      __atomic_val_t<_ITp> desired,
+                                                      memory_order success_order,
+                                                      memory_order failure_order) noexcept {
+        return object->compare_exchange_weak(*expected, desired, success_order, failure_order);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_weak_explicit(
-        volatile atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired, memory_order success_order,
-        memory_order failure_order) noexcept {
-        return object->compare_exchange_weak(*expected, desired, success_order,
-                                             failure_order);
+    inline bool atomic_compare_exchange_weak_explicit(volatile atomic<_ITp>* object,
+                                                      __atomic_val_t<_ITp>* expected,
+                                                      __atomic_val_t<_ITp> desired,
+                                                      memory_order success_order,
+                                                      memory_order failure_order) noexcept {
+        return object->compare_exchange_weak(*expected, desired, success_order, failure_order);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_strong_explicit(
-        atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired, memory_order success_order,
-        memory_order failure_order) noexcept {
-        return object->compare_exchange_strong(*expected, desired,
-                                               success_order, failure_order);
+    inline bool atomic_compare_exchange_strong_explicit(atomic<_ITp>* object,
+                                                        __atomic_val_t<_ITp>* expected,
+                                                        __atomic_val_t<_ITp> desired,
+                                                        memory_order success_order,
+                                                        memory_order failure_order) noexcept {
+        return object->compare_exchange_strong(*expected, desired, success_order, failure_order);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_strong_explicit(
-        volatile atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired, memory_order success_order,
-        memory_order failure_order) noexcept {
-        return object->compare_exchange_strong(*expected, desired,
-                                               success_order, failure_order);
+    inline bool atomic_compare_exchange_strong_explicit(volatile atomic<_ITp>* object,
+                                                        __atomic_val_t<_ITp>* expected,
+                                                        __atomic_val_t<_ITp> desired,
+                                                        memory_order success_order,
+                                                        memory_order failure_order) noexcept {
+        return object->compare_exchange_strong(*expected, desired, success_order, failure_order);
     }
 
     template <typename _ITp>
-    inline void atomic_store(atomic<_ITp>* object,
-                             __atomic_val_t<_ITp> value) noexcept {
+    inline void atomic_store(atomic<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         atomic_store_explicit(object, value, memory_order_seq_cst);
     }
 
     template <typename _ITp>
-    inline void atomic_store(volatile atomic<_ITp>* object,
-                             __atomic_val_t<_ITp> value) noexcept {
+    inline void atomic_store(volatile atomic<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         atomic_store_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1229,8 +1140,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_exchange(atomic<_ITp>* object,
-                                __atomic_val_t<_ITp> value) noexcept {
+    inline _ITp atomic_exchange(atomic<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         return atomic_exchange_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1241,39 +1151,33 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_weak(
-        atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired) noexcept {
+    inline bool atomic_compare_exchange_weak(atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
+                                             __atomic_val_t<_ITp> desired) noexcept {
         return atomic_compare_exchange_weak_explicit(object, expected, desired,
-                                                     memory_order_seq_cst,
-                                                     memory_order_seq_cst);
+                                                     memory_order_seq_cst, memory_order_seq_cst);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_weak(
-        volatile atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired) noexcept {
+    inline bool atomic_compare_exchange_weak(volatile atomic<_ITp>* object,
+                                             __atomic_val_t<_ITp>* expected,
+                                             __atomic_val_t<_ITp> desired) noexcept {
         return atomic_compare_exchange_weak_explicit(object, expected, desired,
-                                                     memory_order_seq_cst,
-                                                     memory_order_seq_cst);
+                                                     memory_order_seq_cst, memory_order_seq_cst);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_strong(
-        atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired) noexcept {
-        return atomic_compare_exchange_strong_explicit(
-            object, expected, desired, memory_order_seq_cst,
-            memory_order_seq_cst);
+    inline bool atomic_compare_exchange_strong(atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
+                                               __atomic_val_t<_ITp> desired) noexcept {
+        return atomic_compare_exchange_strong_explicit(object, expected, desired,
+                                                       memory_order_seq_cst, memory_order_seq_cst);
     }
 
     template <typename _ITp>
-    inline bool atomic_compare_exchange_strong(
-        volatile atomic<_ITp>* object, __atomic_val_t<_ITp>* expected,
-        __atomic_val_t<_ITp> desired) noexcept {
-        return atomic_compare_exchange_strong_explicit(
-            object, expected, desired, memory_order_seq_cst,
-            memory_order_seq_cst);
+    inline bool atomic_compare_exchange_strong(volatile atomic<_ITp>* object,
+                                               __atomic_val_t<_ITp>* expected,
+                                               __atomic_val_t<_ITp> desired) noexcept {
+        return atomic_compare_exchange_strong_explicit(object, expected, desired,
+                                                       memory_order_seq_cst, memory_order_seq_cst);
     }
 
     // 仅适用于整数原子或指针原子的非成员辅助接口.
@@ -1281,8 +1185,7 @@ namespace std {
     // __atomic_base<_ITp>*.
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_add_explicit(atomic<_ITp>* object,
-                                          __atomic_diff_t<_ITp> value,
+    inline _ITp atomic_fetch_add_explicit(atomic<_ITp>* object, __atomic_diff_t<_ITp> value,
                                           memory_order order) noexcept {
         return object->fetch_add(value, order);
     }
@@ -1295,8 +1198,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_sub_explicit(atomic<_ITp>* object,
-                                          __atomic_diff_t<_ITp> value,
+    inline _ITp atomic_fetch_sub_explicit(atomic<_ITp>* object, __atomic_diff_t<_ITp> value,
                                           memory_order order) noexcept {
         return object->fetch_sub(value, order);
     }
@@ -1309,78 +1211,67 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_and_explicit(__atomic_base<_ITp>* object,
-                                          __atomic_val_t<_ITp> value,
+    inline _ITp atomic_fetch_and_explicit(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value,
                                           memory_order order) noexcept {
         return object->fetch_and(value, order);
     }
 
     template <typename _ITp>
     inline _ITp atomic_fetch_and_explicit(volatile __atomic_base<_ITp>* object,
-                                          __atomic_val_t<_ITp> value,
-                                          memory_order order) noexcept {
+                                          __atomic_val_t<_ITp> value, memory_order order) noexcept {
         return object->fetch_and(value, order);
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_or_explicit(__atomic_base<_ITp>* object,
-                                         __atomic_val_t<_ITp> value,
+    inline _ITp atomic_fetch_or_explicit(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value,
                                          memory_order order) noexcept {
         return object->fetch_or(value, order);
     }
 
     template <typename _ITp>
     inline _ITp atomic_fetch_or_explicit(volatile __atomic_base<_ITp>* object,
-                                         __atomic_val_t<_ITp> value,
-                                         memory_order order) noexcept {
+                                         __atomic_val_t<_ITp> value, memory_order order) noexcept {
         return object->fetch_or(value, order);
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_xor_explicit(__atomic_base<_ITp>* object,
-                                          __atomic_val_t<_ITp> value,
+    inline _ITp atomic_fetch_xor_explicit(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value,
                                           memory_order order) noexcept {
         return object->fetch_xor(value, order);
     }
 
     template <typename _ITp>
     inline _ITp atomic_fetch_xor_explicit(volatile __atomic_base<_ITp>* object,
-                                          __atomic_val_t<_ITp> value,
-                                          memory_order order) noexcept {
+                                          __atomic_val_t<_ITp> value, memory_order order) noexcept {
         return object->fetch_xor(value, order);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_min_explicit(atomic<_Tp>* object,
-                                         __atomic_val_t<_Tp> value,
+    inline _Tp atomic_fetch_min_explicit(atomic<_Tp>* object, __atomic_val_t<_Tp> value,
                                          memory_order order) noexcept {
         return object->fetch_min(value, order);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_min_explicit(volatile atomic<_Tp>* object,
-                                         __atomic_val_t<_Tp> value,
+    inline _Tp atomic_fetch_min_explicit(volatile atomic<_Tp>* object, __atomic_val_t<_Tp> value,
                                          memory_order order) noexcept {
         return object->fetch_min(value, order);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_max_explicit(atomic<_Tp>* object,
-                                         __atomic_val_t<_Tp> value,
+    inline _Tp atomic_fetch_max_explicit(atomic<_Tp>* object, __atomic_val_t<_Tp> value,
                                          memory_order order) noexcept {
         return object->fetch_max(value, order);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_max_explicit(volatile atomic<_Tp>* object,
-                                         __atomic_val_t<_Tp> value,
+    inline _Tp atomic_fetch_max_explicit(volatile atomic<_Tp>* object, __atomic_val_t<_Tp> value,
                                          memory_order order) noexcept {
         return object->fetch_max(value, order);
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_add(atomic<_ITp>* object,
-                                 __atomic_diff_t<_ITp> value) noexcept {
+    inline _ITp atomic_fetch_add(atomic<_ITp>* object, __atomic_diff_t<_ITp> value) noexcept {
         return atomic_fetch_add_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1391,8 +1282,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_sub(atomic<_ITp>* object,
-                                 __atomic_diff_t<_ITp> value) noexcept {
+    inline _ITp atomic_fetch_sub(atomic<_ITp>* object, __atomic_diff_t<_ITp> value) noexcept {
         return atomic_fetch_sub_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1403,8 +1293,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_and(__atomic_base<_ITp>* object,
-                                 __atomic_val_t<_ITp> value) noexcept {
+    inline _ITp atomic_fetch_and(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         return atomic_fetch_and_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1415,8 +1304,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_or(__atomic_base<_ITp>* object,
-                                __atomic_val_t<_ITp> value) noexcept {
+    inline _ITp atomic_fetch_or(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         return atomic_fetch_or_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1427,8 +1315,7 @@ namespace std {
     }
 
     template <typename _ITp>
-    inline _ITp atomic_fetch_xor(__atomic_base<_ITp>* object,
-                                 __atomic_val_t<_ITp> value) noexcept {
+    inline _ITp atomic_fetch_xor(__atomic_base<_ITp>* object, __atomic_val_t<_ITp> value) noexcept {
         return atomic_fetch_xor_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1439,26 +1326,22 @@ namespace std {
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_min(atomic<_Tp>* object,
-                                __atomic_val_t<_Tp> value) noexcept {
+    inline _Tp atomic_fetch_min(atomic<_Tp>* object, __atomic_val_t<_Tp> value) noexcept {
         return atomic_fetch_min_explicit(object, value, memory_order_seq_cst);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_min(volatile atomic<_Tp>* object,
-                                __atomic_val_t<_Tp> value) noexcept {
+    inline _Tp atomic_fetch_min(volatile atomic<_Tp>* object, __atomic_val_t<_Tp> value) noexcept {
         return atomic_fetch_min_explicit(object, value, memory_order_seq_cst);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_max(atomic<_Tp>* object,
-                                __atomic_val_t<_Tp> value) noexcept {
+    inline _Tp atomic_fetch_max(atomic<_Tp>* object, __atomic_val_t<_Tp> value) noexcept {
         return atomic_fetch_max_explicit(object, value, memory_order_seq_cst);
     }
 
     template <typename _Tp>
-    inline _Tp atomic_fetch_max(volatile atomic<_Tp>* object,
-                                __atomic_val_t<_Tp> value) noexcept {
+    inline _Tp atomic_fetch_max(volatile atomic<_Tp>* object, __atomic_val_t<_Tp> value) noexcept {
         return atomic_fetch_max_explicit(object, value, memory_order_seq_cst);
     }
 
@@ -1478,8 +1361,7 @@ namespace std {
     struct atomic<double> : __atomic_float<double> {
         atomic() noexcept = default;
 
-        constexpr atomic(double value) noexcept
-            : __atomic_float<double>(value) {}
+        constexpr atomic(double value) noexcept : __atomic_float<double>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1491,8 +1373,7 @@ namespace std {
     struct atomic<long double> : __atomic_float<long double> {
         atomic() noexcept = default;
 
-        constexpr atomic(long double value) noexcept
-            : __atomic_float<long double>(value) {}
+        constexpr atomic(long double value) noexcept : __atomic_float<long double>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1505,8 +1386,7 @@ namespace std {
     struct atomic<_Float16> : __atomic_float<_Float16> {
         atomic() noexcept = default;
 
-        constexpr atomic(_Float16 value) noexcept
-            : __atomic_float<_Float16>(value) {}
+        constexpr atomic(_Float16 value) noexcept : __atomic_float<_Float16>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1520,8 +1400,7 @@ namespace std {
     struct atomic<_Float32> : __atomic_float<_Float32> {
         atomic() noexcept = default;
 
-        constexpr atomic(_Float32 value) noexcept
-            : __atomic_float<_Float32>(value) {}
+        constexpr atomic(_Float32 value) noexcept : __atomic_float<_Float32>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1535,8 +1414,7 @@ namespace std {
     struct atomic<_Float64> : __atomic_float<_Float64> {
         atomic() noexcept = default;
 
-        constexpr atomic(_Float64 value) noexcept
-            : __atomic_float<_Float64>(value) {}
+        constexpr atomic(_Float64 value) noexcept : __atomic_float<_Float64>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1550,8 +1428,7 @@ namespace std {
     struct atomic<_Float128> : __atomic_float<_Float128> {
         atomic() noexcept = default;
 
-        constexpr atomic(_Float128 value) noexcept
-            : __atomic_float<_Float128>(value) {}
+        constexpr atomic(_Float128 value) noexcept : __atomic_float<_Float128>(value) {}
 
         atomic& operator=(const atomic&) volatile = delete;
         atomic& operator=(const atomic&)          = delete;
@@ -1562,8 +1439,7 @@ namespace std {
 
 #if __CXX_HAS_BFLOAT16_T
     template <>
-    struct atomic<__gnu_cxx::__bfloat16_t>
-        : __atomic_float<__gnu_cxx::__bfloat16_t> {
+    struct atomic<__gnu_cxx::__bfloat16_t> : __atomic_float<__gnu_cxx::__bfloat16_t> {
         atomic() noexcept = default;
 
         constexpr atomic(__gnu_cxx::__bfloat16_t value) noexcept
@@ -1579,10 +1455,8 @@ namespace std {
     /// 为普通对象提供原子引用语义的包装类型.
     template <typename _Tp>
     struct atomic_ref : __atomic_ref<_Tp> {
-        explicit atomic_ref(_Tp& value) noexcept
-            : __atomic_ref<_Tp>(std::addressof(value)) {
-            __stdlib_assert(((__UINTPTR_TYPE__)this->_pointer %
-                             this->required_alignment) == 0);
+        explicit atomic_ref(_Tp& value) noexcept : __atomic_ref<_Tp>(std::addressof(value)) {
+            __stdlib_assert(((__UINTPTR_TYPE__)this->_pointer % this->required_alignment) == 0);
         }
 
         // 禁止从临时对象构造 atomic_ref.
@@ -1590,8 +1464,7 @@ namespace std {
 
         template <typename _Up>
             requires is_convertible_v<_Up (*)[1], _Tp (*)[1]>
-        atomic_ref(atomic_ref<_Up> other) noexcept
-            : __atomic_ref<_Tp>(other._pointer) {}
+        atomic_ref(atomic_ref<_Up> other) noexcept : __atomic_ref<_Tp>(other._pointer) {}
 
         atomic_ref& operator=(const atomic_ref&) = delete;
 

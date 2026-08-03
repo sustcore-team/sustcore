@@ -1,6 +1,12 @@
 /**
  * @file lock.cpp
- * @brief Demonstrate tay lock ownership and synchronized values.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 Tay 锁所有权和同步值工具。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/lock.h>
@@ -35,7 +41,6 @@ int main() {
 
     const auto& readonly = state;
     auto access          = readonly.lock();
-    std::printf("ready=%s updates=%d\n", access->ready ? "true" : "false",
-                access->updates);
+    std::printf("ready=%s updates=%d\n", access->ready ? "true" : "false", access->updates);
     return 0;
 }

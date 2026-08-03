@@ -31,7 +31,7 @@ result.match(tay::overloaded{
 `ALLOCATION_SIZE_OVERFLOW`。它是通用低层错误集合；更高层协议可使用自己
 的 error enum 作为 `expected` 的第二参数。
 
-## allocator
+## 分配器 `allocator`
 
 `<tay/allocator.h>` 提供 `allocator<T>` 与 `allocator_traits`。主机环境使用
 不抛异常的 new 路径；freestanding 环境调用由内核提供的 `tay::__alloc` 和

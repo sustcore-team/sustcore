@@ -1,4 +1,14 @@
-/* default module linker script */
+/**
+ * @file libc.ld
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief loongarch64 下 kmodlib 提供的模块默认链接脚本
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 ENTRY(_start)
 OUTPUT_ARCH(loongarch64)
 

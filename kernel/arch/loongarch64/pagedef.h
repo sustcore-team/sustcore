@@ -1,7 +1,7 @@
 /**
  * @file pagedef.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 页表相关宏
+ * @brief LoongArch 页表格式与地址转换常量
  * @version 0.1.0-dev.1
  * @date 2026-06-17
  *

@@ -1,9 +1,9 @@
 /**
  * @file move.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief move, forward, and other utilities
+ * @brief 为 mincppstd 的 C++ 标准库兼容层提供 move、forward 等值类别工具。
  * @version 0.1.0-dev.1
- * @date 2026-06-08
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -39,15 +39,13 @@ namespace std {
 
     template <typename T>
     [[nodiscard]]
-    __ATTR_ALWAYS_INLINE__ constexpr T&& forward(
-        remove_reference_t<T>& t) noexcept {
+    __ATTR_ALWAYS_INLINE__ constexpr T&& forward(remove_reference_t<T>& t) noexcept {
         return static_cast<T&&>(t);
     }
 
     template <typename T>
     [[nodiscard]]
-    __ATTR_ALWAYS_INLINE__ constexpr T&& forward(
-        remove_reference_t<T>&& t) noexcept {
+    __ATTR_ALWAYS_INLINE__ constexpr T&& forward(remove_reference_t<T>&& t) noexcept {
         return static_cast<T&&>(t);
     }
 
@@ -84,8 +82,7 @@ namespace std {
     // convert (cv U ref) -> (cv T ref)
     template <typename T, typename U>
     [[nodiscard]]
-    __ATTR_ALWAYS_INLINE__ constexpr detailed::like_t<T, U> forward_like(
-        U&& u) noexcept {
+    __ATTR_ALWAYS_INLINE__ constexpr detailed::like_t<T, U> forward_like(U&& u) noexcept {
         return static_cast<detailed::like_t<T, U>>(u);
     }
 }  // namespace std

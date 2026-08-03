@@ -1,8 +1,12 @@
 /**
  * @file intrusive_list.cpp
- * @brief Demonstrate non-owning linked storage with tay::intrusive_list.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 Tay 非拥有式侵入链表。
  * @version 0.1.0-dev.1
- * @date 2026-07-31
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/list.h>
@@ -18,9 +22,8 @@ namespace {
         number_hook hook;
     };
 
-    using locate_number =
-        tay::locate_member<number, number_hook, &number::hook>;
-    using number_list = tay::intrusive_list<number, locate_number>;
+    using locate_number = tay::locate_member<number, number_hook, &number::hook>;
+    using number_list   = tay::intrusive_list<number, locate_number>;
 
     void print(const char* label, number_list& values) {
         std::printf("%-12s [", label);

@@ -1,9 +1,9 @@
 /**
  * @file misc.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief miscellaneous algorithms
+ * @brief 提供 Tay C++ 库的补充通用算法。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -20,26 +20,21 @@
 namespace tay {
     namespace __algo {
         struct __unique {
-            template <std::forward_iterator I, std::sentinel_for<I> S,
-                      class Pred = __equal_to, class Proj = std::identity>
-                requires requires(I iterator, Pred& pred, Proj& proj,
-                                  std::iter_reference_t<I> left,
+            template <std::forward_iterator I, std::sentinel_for<I> S, class Pred = __equal_to,
+                      class Proj = std::identity>
+                requires requires(I iterator, Pred& pred, Proj& proj, std::iter_reference_t<I> left,
                                   std::iter_reference_t<I> right) {
-                    std::invoke(pred, std::invoke(proj, left),
-                                std::invoke(proj, right));
+                    std::invoke(pred, std::invoke(proj, left), std::invoke(proj, right));
                     *iterator = std::move(*iterator);
                 }
-            constexpr I operator()(I first, S last, Pred pred = {},
-                                   Proj proj = {}) const {
+            constexpr I operator()(I first, S last, Pred pred = {}, Proj proj = {}) const {
                 if (first == last) {
                     return first;
                 }
 
                 I result = first;
                 while (++first != last) {
-                    if (!std::invoke(pred, std::invoke(proj, *result),
-                                     std::invoke(proj, *first)))
-                    {
+                    if (!std::invoke(pred, std::invoke(proj, *result), std::invoke(proj, *first))) {
                         ++result;
                         if (result != first) {
                             *result = std::move(*first);
@@ -50,27 +45,21 @@ namespace tay {
                 return result;
             }
 
-            template <forward_range R, class Pred = __equal_to,
-                      class Proj = std::identity>
-                requires requires(range_iterator_t<R> iterator, Pred& pred,
-                                  Proj& proj, range_reference_t<R> left,
-                                  range_reference_t<R> right) {
-                    std::invoke(pred, std::invoke(proj, left),
-                                std::invoke(proj, right));
+            template <forward_range R, class Pred = __equal_to, class Proj = std::identity>
+                requires requires(range_iterator_t<R> iterator, Pred& pred, Proj& proj,
+                                  range_reference_t<R> left, range_reference_t<R> right) {
+                    std::invoke(pred, std::invoke(proj, left), std::invoke(proj, right));
                     *iterator = std::move(*iterator);
                 }
             constexpr range_iterator_t<R> operator()(R&& range, Pred pred = {},
                                                      Proj proj = {}) const {
-                return (*this)(begin(range), end(range), std::move(pred),
-                               std::move(proj));
+                return (*this)(begin(range), end(range), std::move(pred), std::move(proj));
             }
         };
 
         struct __reverse {
             template <std::bidirectional_iterator I, std::sentinel_for<I> S>
-                requires requires(I iterator) {
-                    *iterator = std::move(*iterator);
-                }
+                requires requires(I iterator) { *iterator = std::move(*iterator); }
             constexpr I operator()(I first, S last) const {
                 I final = first;
                 while (final != last) {

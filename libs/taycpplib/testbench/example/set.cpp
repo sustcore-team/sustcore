@@ -1,8 +1,12 @@
 /**
  * @file set.cpp
- * @brief Demonstrate unique-key storage with tay::set.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::set 的唯一键存储。
  * @version 0.1.0-dev.1
- * @date 2026-07-29
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/set.h>
@@ -40,14 +44,11 @@ int main() {
 
     auto inserted  = active_ids.insert(42);
     auto duplicate = active_ids.insert(11);
-    if (!succeeded(inserted, "insert(42)") ||
-        !succeeded(duplicate, "insert(11)"))
-    {
+    if (!succeeded(inserted, "insert(42)") || !succeeded(duplicate, "insert(11)")) {
         return 1;
     }
     std::printf("inserted 42: %s\n", inserted->second ? "yes" : "no");
-    std::printf("inserted duplicate 11: %s\n",
-                duplicate->second ? "yes" : "no");
+    std::printf("inserted duplicate 11: %s\n", duplicate->second ? "yes" : "no");
 
     std::printf("contains 23: %s\n", active_ids.contains(23) ? "yes" : "no");
     std::printf("contains 99: %s\n", active_ids.contains(99) ? "yes" : "no");
@@ -59,7 +60,7 @@ int main() {
         return 1;
     }
     print("edited:", active_ids);
-    std::printf("max load: %zu%%, buckets: %zu\n",
-                active_ids.max_load_percent(), active_ids.bucket_count());
+    std::printf("max load: %zu%%, buckets: %zu\n", active_ids.max_load_percent(),
+                active_ids.bucket_count());
     return 0;
 }

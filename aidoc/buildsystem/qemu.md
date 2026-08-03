@@ -1,31 +1,31 @@
-# QEMU Integration
+# QEMU 集成
 
-## Configuration Source
+## 配置来源
 
-QEMU settings are read from:
+QEMU 设置从以下文件读取：
 
 - `config/<name>/qemu.toml`
 
-and converted into:
+并转换为：
 
 - `script/.cache/qemu.mk`
 
-## Generated Variables
+## 生成变量
 
-Current generated variables include:
+当前生成的变量包括：
 
 - `<arch>-qemu`
 - `<arch>-qemu-generated-args`
 - `<arch>-qemu-attached-args`
 
-Examples:
+例如：
 
 - `riscv64-qemu`
 - `loongarch64-qemu-generated-args`
 
-## Generated Argument Sources
+## 参数来源
 
-`qemu.py` currently handles:
+`qemu.py` 当前处理：
 
 - `qemu`
 - `name`
@@ -37,7 +37,7 @@ Examples:
 
 ### `qemu_log`
 
-Example:
+示例：
 
 ```toml
 [riscv64.qemu_log]
@@ -46,46 +46,46 @@ type = ["guest_errors", "int"]
 trace = ["virtio_blk_*"]
 ```
 
-Generates:
+生成：
 
 - `-D qemu.log`
 - `-d guest_errors,int,trace:virtio_blk_*`
 
-## Top-Level Run Targets
+## 顶层运行目标
 
-Current top-level run targets are:
+当前顶层运行目标为：
 
 - `make runonly`
 - `make dbgonly`
 
-These are defined in:
+定义位置：
 
 - `script/target/run.mk`
 
-## Hardcoded Runtime Policy
+## 硬编码的运行策略
 
-`run.mk` currently hardcodes:
+`run.mk` 当前硬编码：
 
 - `-machine virt`
 - `-nographic`
-- `-bios default` for `riscv64`
+- RISC-V64 使用 `-bios default`
 
-It also injects:
+它还会注入：
 
 - `-kernel $(kernel-path)`
-- `-s -S` for `dbgonly`
+- `dbgonly` 使用 `-s -S`
 
-## Current Command Model
+## 当前命令模型
 
-The run command is built from:
+运行命令由以下部分组成：
 
 - `qemu := $($(arch)-qemu)`
 - `qemu-generated-args`
 - `qemu-attached-args`
 - `kernel-path`
-- fixed runtime flags from `run.mk`
+- `run.mk` 中的固定运行 flags
 
-This keeps QEMU configuration split between:
+因此，QEMU 配置被拆分为：
 
-- static policy in `run.mk`
-- user/configurable policy in `qemu.toml`
+- `run.mk` 中的静态策略；
+- `qemu.toml` 中由用户配置的策略。

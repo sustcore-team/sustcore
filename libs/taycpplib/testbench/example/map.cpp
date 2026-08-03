@@ -1,8 +1,12 @@
 /**
  * @file map.cpp
- * @brief Demonstrate exception-free key/value storage with tay::map.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::map 的无异常键值存储。
  * @version 0.1.0-dev.1
- * @date 2026-07-29
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/map.h>
@@ -33,10 +37,8 @@ namespace {
 int main() {
     status_map statuses;
     if (!succeeded(statuses.try_emplace(200, "OK"), "try_emplace(200)") ||
-        !succeeded(statuses.try_emplace(404, "Not Found"),
-                   "try_emplace(404)") ||
-        !succeeded(statuses.insert_or_assign(202, "Accepted"),
-                   "insert_or_assign(202)"))
+        !succeeded(statuses.try_emplace(404, "Not Found"), "try_emplace(404)") ||
+        !succeeded(statuses.insert_or_assign(202, "Accepted"), "insert_or_assign(202)"))
     {
         return 1;
     }
@@ -46,8 +48,7 @@ int main() {
     if (!succeeded(duplicate, "duplicate try_emplace")) {
         return 1;
     }
-    std::printf("inserted duplicate 200: %s\n",
-                duplicate->second ? "yes" : "no");
+    std::printf("inserted duplicate 200: %s\n", duplicate->second ? "yes" : "no");
 
     if (!succeeded(statuses.max_load_percent(75), "max_load_percent") ||
         !succeeded(statuses.reserve(16), "reserve"))
@@ -66,8 +67,7 @@ int main() {
 
     auto missing = statuses.at(500);
     if (!missing) {
-        std::printf("at(500) returned error code %u\n",
-                    static_cast<unsigned>(missing.error()));
+        std::printf("at(500) returned error code %u\n", static_cast<unsigned>(missing.error()));
     }
     return 0;
 }

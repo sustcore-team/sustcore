@@ -25,7 +25,7 @@ values.emplace_back(1);
 values.push_back(2);
 ```
 
-## array storage family
+## 数组存储族
 
 头文件：`<tay/array.h>`。
 

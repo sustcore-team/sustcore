@@ -1,6 +1,12 @@
 /**
  * @file allocator.h
- * @brief Exception-free allocator adaptation and stateless allocation.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供 Tay C++ 库无异常、无状态分配器接口及默认实现。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -16,10 +22,10 @@
 #include <utility>
 
 namespace tay {
-    void* __alloc(std::size_t size, std::size_t alignment) noexcept;
-    void __free(void* ptr, std::size_t size, std::size_t alignment) noexcept;
+    void* __alloc(size_t size, size_t alignment) noexcept;
+    void __free(void* ptr, size_t size, size_t alignment) noexcept;
 
-    template <class Pointer, class SizeType = std::size_t>
+    template <class Pointer, class SizeType = size_t>
     struct allocation_result {
         Pointer ptr;
         SizeType count;
@@ -28,10 +34,9 @@ namespace tay {
     namespace detail {
         [[noreturn]] inline void panic_allocation(error_code error) noexcept {
             switch (error) {
-                case error_code::ALLOCATION_SIZE_OVERFLOW:
-                    tay::panic("allocation size overflow");
-                case error_code::OUT_OF_MEMORY: tay::panic("out of memory");
-                default:                        tay::panic("allocator failure");
+                case error_code::ALLOCATION_SIZE_OVERFLOW: tay::panic("allocation size overflow");
+                case error_code::OUT_OF_MEMORY:            tay::panic("out of memory");
+                default:                                   tay::panic("allocator failure");
             }
         }
     }  // namespace detail
@@ -55,9 +60,8 @@ namespace tay {
             typename standard_traits::propagate_on_container_copy_assignment;
         using propagate_on_container_move_assignment =
             typename standard_traits::propagate_on_container_move_assignment;
-        using propagate_on_container_swap =
-            typename standard_traits::propagate_on_container_swap;
-        using is_always_equal = typename standard_traits::is_always_equal;
+        using propagate_on_container_swap = typename standard_traits::propagate_on_container_swap;
+        using is_always_equal             = typename standard_traits::is_always_equal;
 
         static_assert(std::is_same_v<pointer, value_type*>,
                       "tay allocators currently require raw pointers");
@@ -69,23 +73,21 @@ namespace tay {
         using rebind_traits = allocator_traits<rebind_alloc<U>>;
 
         [[nodiscard]]
-        static constexpr expected<pointer, error_code> try_allocate(
-            allocator_type& allocator, size_type count) noexcept {
+        static constexpr expected<pointer, error_code> try_allocate(allocator_type& allocator,
+                                                                    size_type count) noexcept {
             if (count == 0) {
                 return pointer{};
             }
             if (count > max_size(allocator)) {
-                return expected<pointer, error_code>(
-                    unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
+                return expected<pointer, error_code>(unexpect,
+                                                     error_code::ALLOCATION_SIZE_OVERFLOW);
             }
-            static_assert(noexcept(allocator.try_allocate(count)),
-                          "try_allocate must be noexcept");
+            static_assert(noexcept(allocator.try_allocate(count)), "try_allocate must be noexcept");
             return allocator.try_allocate(count);
         }
 
         [[nodiscard]]
-        static constexpr pointer allocate(allocator_type& allocator,
-                                          size_type count) noexcept {
+        static constexpr pointer allocate(allocator_type& allocator, size_type count) noexcept {
             auto result = try_allocate(allocator, count);
             if (!result) {
                 detail::panic_allocation(result.error());
@@ -94,36 +96,32 @@ namespace tay {
         }
 
         [[nodiscard]]
-        static constexpr expected<allocation_result<pointer, size_type>,
-                                  error_code>
-        try_allocate_at_least(allocator_type& allocator,
-                              size_type count) noexcept {
+        static constexpr expected<allocation_result<pointer, size_type>, error_code>
+        try_allocate_at_least(allocator_type& allocator, size_type count) noexcept {
             if (count == 0) {
                 return allocation_result<pointer, size_type>{pointer{}, 0};
             }
             if (count > max_size(allocator)) {
-                return expected<allocation_result<pointer, size_type>,
-                                error_code>(
+                return expected<allocation_result<pointer, size_type>, error_code>(
                     unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
             }
-            if constexpr (requires { allocator.try_allocate_at_least(count); })
-            {
+            if constexpr (requires { allocator.try_allocate_at_least(count); }) {
                 static_assert(noexcept(allocator.try_allocate_at_least(count)),
                               "try_allocate_at_least must be noexcept");
                 return allocator.try_allocate_at_least(count);
             } else {
                 auto result = try_allocate(allocator, count);
                 if (!result) {
-                    return expected<allocation_result<pointer, size_type>,
-                                    error_code>(unexpect, result.error());
+                    return expected<allocation_result<pointer, size_type>, error_code>(
+                        unexpect, result.error());
                 }
                 return allocation_result<pointer, size_type>{*result, count};
             }
         }
 
         [[nodiscard]]
-        static constexpr allocation_result<pointer, size_type>
-        allocate_at_least(allocator_type& allocator, size_type count) noexcept {
+        static constexpr allocation_result<pointer, size_type> allocate_at_least(
+            allocator_type& allocator, size_type count) noexcept {
             auto result = try_allocate_at_least(allocator, count);
             if (!result) {
                 detail::panic_allocation(result.error());
@@ -131,8 +129,7 @@ namespace tay {
             return *result;
         }
 
-        static constexpr void deallocate(allocator_type& allocator,
-                                         pointer memory,
+        static constexpr void deallocate(allocator_type& allocator, pointer memory,
                                          size_type count) noexcept {
             if (memory == nullptr) {
                 return;
@@ -143,37 +140,28 @@ namespace tay {
         }
 
         template <class T, class... Args>
-        static constexpr void construct(
-            allocator_type& allocator, T* location,
-            Args&&... args) noexcept(noexcept(standard_traits::
-                                                  construct(allocator, location,
-                                                            std::forward<Args>(
-                                                                args)...))) {
-            standard_traits::construct(allocator, location,
-                                       std::forward<Args>(args)...);
+        static constexpr void
+        construct(allocator_type& allocator, T* location, Args&&... args) noexcept(noexcept(
+            standard_traits::construct(allocator, location, std::forward<Args>(args)...))) {
+            standard_traits::construct(allocator, location, std::forward<Args>(args)...);
         }
 
         template <class T>
-        static constexpr void
-        destroy(allocator_type& allocator, T* location) noexcept(
+        static constexpr void destroy(allocator_type& allocator, T* location) noexcept(
             noexcept(standard_traits::destroy(allocator, location))) {
             standard_traits::destroy(allocator, location);
         }
 
         [[nodiscard]]
-        static constexpr size_type max_size(
-            const allocator_type& allocator) noexcept {
+        static constexpr size_type max_size(const allocator_type& allocator) noexcept {
             return standard_traits::max_size(allocator);
         }
 
         [[nodiscard]]
-        static constexpr allocator_type select_on_container_copy_construction(
-            const allocator_type&
-                allocator) noexcept(noexcept(standard_traits::
-                                                 select_on_container_copy_construction(
-                                                     allocator))) {
-            return standard_traits::select_on_container_copy_construction(
-                allocator);
+        static constexpr allocator_type
+        select_on_container_copy_construction(const allocator_type& allocator) noexcept(
+            noexcept(standard_traits::select_on_container_copy_construction(allocator))) {
+            return standard_traits::select_on_container_copy_construction(allocator);
         }
     };
 
@@ -183,7 +171,7 @@ namespace tay {
         using value_type                             = T;
         using pointer                                = T*;
         using const_pointer                          = const T*;
-        using size_type                              = std::size_t;
+        using size_type                              = size_t;
         using difference_type                        = std::ptrdiff_t;
         using propagate_on_container_move_assignment = std::true_type;
         using is_always_equal                        = std::true_type;
@@ -199,14 +187,13 @@ namespace tay {
         };
 
         [[nodiscard]]
-        constexpr expected<pointer, error_code> try_allocate(
-            size_type count) noexcept {
+        constexpr expected<pointer, error_code> try_allocate(size_type count) noexcept {
             if (count == 0) {
                 return pointer{};
             }
             if (count > max_size()) {
-                return expected<pointer, error_code>(
-                    unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
+                return expected<pointer, error_code>(unexpect,
+                                                     error_code::ALLOCATION_SIZE_OVERFLOW);
             }
 
             const size_type bytes = count * sizeof(value_type);
@@ -217,11 +204,8 @@ namespace tay {
 
             void* memory = nullptr;
 #if defined(TAY_ENV_HOST)
-            if constexpr (alignof(value_type) >
-                          __STDCPP_DEFAULT_NEW_ALIGNMENT__)
-            {
-                memory = ::operator new(
-                    bytes, std::align_val_t(alignof(value_type)), std::nothrow);
+            if constexpr (alignof(value_type) > __STDCPP_DEFAULT_NEW_ALIGNMENT__) {
+                memory = ::operator new(bytes, std::align_val_t(alignof(value_type)), std::nothrow);
             } else {
                 memory = ::operator new(bytes, std::nothrow);
             }
@@ -229,8 +213,7 @@ namespace tay {
             memory = tay::__alloc(bytes, alignof(value_type));
 #endif
             if (memory == nullptr) {
-                return expected<pointer, error_code>(unexpect,
-                                                     error_code::OUT_OF_MEMORY);
+                return expected<pointer, error_code>(unexpect, error_code::OUT_OF_MEMORY);
             }
             return static_cast<pointer>(memory);
         }
@@ -254,17 +237,13 @@ namespace tay {
                 return;
             }
 #if defined(TAY_ENV_HOST)
-            if constexpr (alignof(value_type) >
-                          __STDCPP_DEFAULT_NEW_ALIGNMENT__)
-            {
-                ::operator delete(memory,
-                                  std::align_val_t(alignof(value_type)));
+            if constexpr (alignof(value_type) > __STDCPP_DEFAULT_NEW_ALIGNMENT__) {
+                ::operator delete(memory, std::align_val_t(alignof(value_type)));
             } else {
                 ::operator delete(memory);
             }
 #else
-            tay::__free(memory, count * sizeof(value_type),
-                        alignof(value_type));
+            tay::__free(memory, count * sizeof(value_type), alignof(value_type));
 #endif
         }
 
@@ -275,14 +254,12 @@ namespace tay {
     };
 
     template <class T, class U>
-    constexpr bool operator==(const allocator<T>&,
-                              const allocator<U>&) noexcept {
+    constexpr bool operator==(const allocator<T>&, const allocator<U>&) noexcept {
         return true;
     }
 
     template <class T, class U>
-    constexpr bool operator!=(const allocator<T>&,
-                              const allocator<U>&) noexcept {
+    constexpr bool operator!=(const allocator<T>&, const allocator<U>&) noexcept {
         return false;
     }
 }  // namespace tay

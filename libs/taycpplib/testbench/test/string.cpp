@@ -1,3 +1,14 @@
+/**
+ * @file string.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 tay::string 的构造、修改和比较操作。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/string.h>
 
 #include <cassert>
@@ -7,9 +18,9 @@
 
 namespace {
     struct allocation_state {
-        bool fail                 = false;
-        std::size_t allocations   = 0;
-        std::size_t deallocations = 0;
+        bool fail            = false;
+        size_t allocations   = 0;
+        size_t deallocations = 0;
     };
 
     template <class T>
@@ -19,30 +30,27 @@ namespace {
 
         allocation_state* state = nullptr;
 
-        constexpr explicit checked_allocator(allocation_state& shared) noexcept
-            : state(&shared) {}
+        constexpr explicit checked_allocator(allocation_state& shared) noexcept : state(&shared) {}
 
         template <class U>
         constexpr checked_allocator(const checked_allocator<U>& other) noexcept
             : state(other.state) {}
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
             if (state->fail) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             ++state->allocations;
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ++state->deallocations;
             ::operator delete(memory);
         }
@@ -73,25 +81,21 @@ namespace {
         using value_type      = T;
         using is_always_equal = std::true_type;
 
-        tay::expected<T*, tay::error_code> try_allocate(std::size_t) noexcept {
-            return tay::expected<T*, tay::error_code>(
-                tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+        tay::expected<T*, tay::error_code> try_allocate(size_t) noexcept {
+            return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                      tay::error_code::OUT_OF_MEMORY);
         }
 
-        void deallocate(T*, std::size_t) noexcept {}
+        void deallocate(T*, size_t) noexcept {}
     };
 
 }  // namespace
 
-static_assert(sizeof(void*) != 8 ||
-              sizeof(tay::string<tay::allocator<char>>) == 32);
+static_assert(sizeof(void*) != 8 || sizeof(tay::string<tay::allocator<char>>) == 32);
+static_assert(std::is_default_constructible_v<tay::string<tay::allocator<char>>>);
 static_assert(
-    std::is_default_constructible_v<tay::string<tay::allocator<char>>>);
-static_assert(
-    std::is_same_v<
-        decltype(std::declval<tay::string<tay::allocator<char>>&>().append(
-            "x")),
-        tay::expected<tay::string<tay::allocator<char>>&, tay::error_code>>);
+    std::is_same_v<decltype(std::declval<tay::string<tay::allocator<char>>&>().append("x")),
+                   tay::expected<tay::string<tay::allocator<char>>&, tay::error_code>>);
 int main() {
     using host_string = tay::string<tay::allocator<char>>;
     tay::allocator<char> allocator;
@@ -129,16 +133,13 @@ int main() {
     assert(counted_created && *counted_created == "hell");
     auto created = host_string::try_create("a dynamically allocated string");
     assert(created && *created == "a dynamically allocated string");
-    auto viewed_created =
-        host_string::try_create(tay::string_view("created view"));
+    auto viewed_created = host_string::try_create(tay::string_view("created view"));
     assert(viewed_created && *viewed_created == "created view");
-    auto selected_created =
-        host_string::try_create(tay::string_view("slice"), 1, 3);
+    auto selected_created = host_string::try_create(tay::string_view("slice"), 1, 3);
     assert(selected_created && *selected_created == "lic");
 
     const char range_data[] = "a range that exceeds sso";
-    auto range_created      = host_string::try_create(
-        range_data, range_data + sizeof(range_data) - 1);
+    auto range_created = host_string::try_create(range_data, range_data + sizeof(range_data) - 1);
     assert(range_created && *range_created == "a range that exceeds sso");
     auto listed_created = host_string::try_create({'t', 'a', 'y'});
     assert(listed_created && *listed_created == "tay");
@@ -207,15 +208,14 @@ int main() {
     const auto old_view     = tay::string_view(short_text);
     const auto old_capacity = short_text.capacity();
     state.fail              = true;
-    auto failed             = short_text.append(
-        " this append needs a substantially larger allocation");
+    auto failed = short_text.append(" this append needs a substantially larger allocation");
     assert(!failed);
     assert(failed.error() == tay::error_code::OUT_OF_MEMORY);
     assert(tay::string_view(short_text) == old_view);
     assert(short_text.capacity() == old_capacity);
 
-    auto failed_create = checked_string::try_create(
-        "this string cannot be dynamically allocated", checked);
+    auto failed_create =
+        checked_string::try_create("this string cannot be dynamically allocated", checked);
     assert(!failed_create);
     assert(failed_create.error() == tay::error_code::OUT_OF_MEMORY);
 
@@ -233,8 +233,8 @@ int main() {
     assert(other == "other");
 
     using failing_string = tay::string<failing_allocator<char>>;
-    auto default_failed  = failing_string::try_create(
-        "this default allocator always fails dynamic allocation");
+    auto default_failed =
+        failing_string::try_create("this default allocator always fails dynamic allocation");
     assert(!default_failed);
     assert(default_failed.error() == tay::error_code::OUT_OF_MEMORY);
     return 0;

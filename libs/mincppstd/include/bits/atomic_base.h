@@ -1,9 +1,9 @@
 /**
  * @file atomic_base.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief atomic base
+ * @brief 为 mincppstd 的 C++ 标准原子接口兼容层提供底层原子操作。
  * @version 0.1.0-dev.1
- * @date 2026-06-08
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -40,14 +40,7 @@ namespace std {
      */
 
     /// Enumeration for memory_order
-    enum class memory_order : int {
-        relaxed,
-        consume,
-        acquire,
-        release,
-        acq_rel,
-        seq_cst
-    };
+    enum class memory_order : int { relaxed, consume, acquire, release, acq_rel, seq_cst };
 
     inline constexpr memory_order memory_order_relaxed = memory_order::relaxed;
     inline constexpr memory_order memory_order_consume = memory_order::consume;
@@ -65,35 +58,31 @@ namespace std {
     };
     /// @endcond
 
-    constexpr memory_order operator|(
-        memory_order order, __memory_order_modifier modifier) noexcept {
+    constexpr memory_order operator|(memory_order order,
+                                     __memory_order_modifier modifier) noexcept {
         return memory_order(int(order) | int(modifier));
     }
 
-    constexpr memory_order operator&(
-        memory_order order, __memory_order_modifier modifier) noexcept {
+    constexpr memory_order operator&(memory_order order,
+                                     __memory_order_modifier modifier) noexcept {
         return memory_order(int(order) & int(modifier));
     }
 
     /// @cond undocumented
 
     // 比较交换失败时, 失败序不能保留 release 语义.
-    constexpr memory_order __cmpexch_failure_order2(
-        memory_order order) noexcept {
+    constexpr memory_order __cmpexch_failure_order2(memory_order order) noexcept {
         return order == memory_order_acq_rel   ? memory_order_acquire
                : order == memory_order_release ? memory_order_relaxed
                                                : order;
     }
 
-    constexpr memory_order __cmpexch_failure_order(
-        memory_order order) noexcept {
-        return memory_order(
-            __cmpexch_failure_order2(order & __memory_order_mask) |
-            __memory_order_modifier(order & __memory_order_modifier_mask));
+    constexpr memory_order __cmpexch_failure_order(memory_order order) noexcept {
+        return memory_order(__cmpexch_failure_order2(order & __memory_order_mask) |
+                            __memory_order_modifier(order & __memory_order_modifier_mask));
     }
 
-    constexpr bool __is_valid_cmpexch_failure_order(
-        memory_order order) noexcept {
+    constexpr bool __is_valid_cmpexch_failure_order(memory_order order) noexcept {
         return (order & __memory_order_mask) != memory_order_release &&
                (order & __memory_order_mask) != memory_order_acq_rel;
     }
@@ -104,13 +93,11 @@ namespace std {
 
     /// @endcond
 
-    __ATTR_ALWAYS_INLINE__ void atomic_thread_fence(
-        memory_order order) noexcept {
+    __ATTR_ALWAYS_INLINE__ void atomic_thread_fence(memory_order order) noexcept {
         __atomic_thread_fence(int(order));
     }
 
-    __ATTR_ALWAYS_INLINE__ void atomic_signal_fence(
-        memory_order order) noexcept {
+    __ATTR_ALWAYS_INLINE__ void atomic_signal_fence(memory_order order) noexcept {
         __atomic_signal_fence(int(order));
     }
 
@@ -173,8 +160,7 @@ namespace std {
         atomic_flag& operator=(const atomic_flag&) volatile = delete;
 
         // 允许用与 ATOMIC_FLAG_INIT 对应的值初始化.
-        constexpr atomic_flag(bool value) noexcept
-            : __atomic_flag_base{_S_init(value)} {}
+        constexpr atomic_flag(bool value) noexcept : __atomic_flag_base{_S_init(value)} {}
 
         __ATTR_ALWAYS_INLINE__ bool test_and_set(
             memory_order order = memory_order_seq_cst) noexcept {
@@ -186,24 +172,21 @@ namespace std {
             return __atomic_test_and_set(&_value, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ bool test(
-            memory_order order = memory_order_seq_cst) const noexcept {
+        __ATTR_ALWAYS_INLINE__ bool test(memory_order order = memory_order_seq_cst) const noexcept {
             __atomic_flag_data_type current_value;
             __atomic_load(&_value, &current_value, int(order));
             return current_value == __GCC_ATOMIC_TEST_AND_SET_TRUEVAL;
         }
 
-        __ATTR_ALWAYS_INLINE__ bool test(
-            memory_order order = memory_order_seq_cst) const volatile noexcept {
+        __ATTR_ALWAYS_INLINE__ bool test(memory_order order = memory_order_seq_cst) const
+            volatile noexcept {
             __atomic_flag_data_type current_value;
             __atomic_load(&_value, &current_value, int(order));
             return current_value == __GCC_ATOMIC_TEST_AND_SET_TRUEVAL;
         }
 
-        __ATTR_ALWAYS_INLINE__ void clear(
-            memory_order order = memory_order_seq_cst) noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+        __ATTR_ALWAYS_INLINE__ void clear(memory_order order = memory_order_seq_cst) noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_consume);
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
@@ -213,8 +196,7 @@ namespace std {
 
         __ATTR_ALWAYS_INLINE__ void clear(
             memory_order order = memory_order_seq_cst) volatile noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_consume);
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
@@ -254,9 +236,8 @@ namespace std {
     private:
         using __int_type = _ITp;
 
-        static constexpr int _S_alignment = sizeof(_ITp) > alignof(_ITp)
-                                                ? sizeof(_ITp)
-                                                : alignof(_ITp);
+        static constexpr int _S_alignment = sizeof(_ITp) > alignof(_ITp) ? sizeof(_ITp)
+                                                                         : alignof(_ITp);
 
         alignas(_S_alignment) __int_type _value = 0;
 
@@ -320,33 +301,27 @@ namespace std {
         }
 
         __int_type operator+=(__int_type value) noexcept {
-            return __atomic_add_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator+=(__int_type value) volatile noexcept {
-            return __atomic_add_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator-=(__int_type value) noexcept {
-            return __atomic_sub_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator-=(__int_type value) volatile noexcept {
-            return __atomic_sub_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator&=(__int_type value) noexcept {
-            return __atomic_and_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_and_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator&=(__int_type value) volatile noexcept {
-            return __atomic_and_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_and_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator|=(__int_type value) noexcept {
@@ -358,32 +333,26 @@ namespace std {
         }
 
         __int_type operator^=(__int_type value) noexcept {
-            return __atomic_xor_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_xor_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         __int_type operator^=(__int_type value) volatile noexcept {
-            return __atomic_xor_fetch(&_value, value,
-                                      int(memory_order_seq_cst));
+            return __atomic_xor_fetch(&_value, value, int(memory_order_seq_cst));
         }
 
         bool is_lock_free() const noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
+            return __atomic_is_lock_free(sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
         }
 
         bool is_lock_free() const volatile noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
+            return __atomic_is_lock_free(sizeof(_value), reinterpret_cast<void*>(-_S_alignment));
         }
 
-        __ATTR_ALWAYS_INLINE__ void store(
-            __int_type value,
-            memory_order order = memory_order_seq_cst) noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+        __ATTR_ALWAYS_INLINE__ void store(__int_type value,
+                                          memory_order order = memory_order_seq_cst) noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
             __stdlib_assert(basic_order != memory_order_consume);
@@ -392,10 +361,8 @@ namespace std {
         }
 
         __ATTR_ALWAYS_INLINE__ void store(
-            __int_type value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+            __int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
             __stdlib_assert(basic_order != memory_order_consume);
@@ -405,18 +372,16 @@ namespace std {
 
         __ATTR_ALWAYS_INLINE__ __int_type
         load(memory_order order = memory_order_seq_cst) const noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_release);
             __stdlib_assert(basic_order != memory_order_acq_rel);
 
             return __atomic_load_n(&_value, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ __int_type load(
-            memory_order order = memory_order_seq_cst) const volatile noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+        __ATTR_ALWAYS_INLINE__ __int_type load(memory_order order = memory_order_seq_cst) const
+            volatile noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_release);
             __stdlib_assert(basic_order != memory_order_acq_rel);
 
@@ -424,70 +389,61 @@ namespace std {
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        exchange(__int_type value,
-                 memory_order order = memory_order_seq_cst) noexcept {
+        exchange(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_exchange_n(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        exchange(__int_type value,
-                 memory_order order = memory_order_seq_cst) volatile noexcept {
+        exchange(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_exchange_n(&_value, value, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
-            __int_type& expected, __int_type desired,
-            memory_order success_order, memory_order failure_order) noexcept {
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(__int_type& expected, __int_type desired,
+                                                          memory_order success_order,
+                                                          memory_order failure_order) noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_value, &expected, desired, 1,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_value, &expected, desired, 1, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
-            __int_type& expected, __int_type desired,
-            memory_order success_order,
+            __int_type& expected, __int_type desired, memory_order success_order,
             memory_order failure_order) volatile noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_value, &expected, desired, 1,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_value, &expected, desired, 1, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
             __int_type& expected, __int_type desired,
             memory_order order = memory_order_seq_cst) noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
             __int_type& expected, __int_type desired,
             memory_order order = memory_order_seq_cst) volatile noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(
-            __int_type& expected, __int_type desired,
-            memory_order success_order, memory_order failure_order) noexcept {
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(__int_type& expected,
+                                                            __int_type desired,
+                                                            memory_order success_order,
+                                                            memory_order failure_order) noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_value, &expected, desired, 0,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_value, &expected, desired, 0, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(
-            __int_type& expected, __int_type desired,
-            memory_order success_order,
+            __int_type& expected, __int_type desired, memory_order success_order,
             memory_order failure_order) volatile noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_value, &expected, desired, 0,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_value, &expected, desired, 0, int(success_order),
                                                int(failure_order));
         }
 
@@ -506,86 +462,72 @@ namespace std {
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_add(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_add(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_fetch_add(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_add(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_add(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_fetch_add(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_sub(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_sub(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_fetch_sub(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_sub(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_sub(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_fetch_sub(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_and(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_and(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_fetch_and(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_and(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_and(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_fetch_and(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_or(__int_type value,
-                 memory_order order = memory_order_seq_cst) noexcept {
+        fetch_or(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_fetch_or(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_or(__int_type value,
-                 memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_or(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_fetch_or(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_xor(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_xor(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_fetch_xor(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_xor(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_xor(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_fetch_xor(&_value, value, int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_min(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_min(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_min(&_value, value, order);
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_min(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_min(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_min(&_value, value, order);
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_max(__int_type value,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_max(__int_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_max(&_value, value, order);
         }
 
         __ATTR_ALWAYS_INLINE__ __int_type
-        fetch_max(__int_type value,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        fetch_max(__int_type value, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_max(&_value, value, order);
         }
     };
@@ -610,8 +552,7 @@ namespace std {
         __atomic_base& operator=(const __atomic_base&) volatile = delete;
 
         // 仅接收与底层指针类型兼容的初始值.
-        constexpr __atomic_base(__pointer_type pointer) noexcept
-            : _pointer(pointer) {}
+        constexpr __atomic_base(__pointer_type pointer) noexcept : _pointer(pointer) {}
 
         operator __pointer_type() const noexcept {
             return load();
@@ -648,64 +589,52 @@ namespace std {
         }
 
         __pointer_type operator++() noexcept {
-            return __atomic_add_fetch(&_pointer, _S_type_size(1),
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_pointer, _S_type_size(1), int(memory_order_seq_cst));
         }
 
         __pointer_type operator++() volatile noexcept {
-            return __atomic_add_fetch(&_pointer, _S_type_size(1),
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_pointer, _S_type_size(1), int(memory_order_seq_cst));
         }
 
         __pointer_type operator--() noexcept {
-            return __atomic_sub_fetch(&_pointer, _S_type_size(1),
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_pointer, _S_type_size(1), int(memory_order_seq_cst));
         }
 
         __pointer_type operator--() volatile noexcept {
-            return __atomic_sub_fetch(&_pointer, _S_type_size(1),
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_pointer, _S_type_size(1), int(memory_order_seq_cst));
         }
 
         __pointer_type operator+=(ptrdiff_t offset) noexcept {
-            return __atomic_add_fetch(&_pointer, _S_type_size(offset),
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_pointer, _S_type_size(offset), int(memory_order_seq_cst));
         }
 
         __pointer_type operator+=(ptrdiff_t offset) volatile noexcept {
-            return __atomic_add_fetch(&_pointer, _S_type_size(offset),
-                                      int(memory_order_seq_cst));
+            return __atomic_add_fetch(&_pointer, _S_type_size(offset), int(memory_order_seq_cst));
         }
 
         __pointer_type operator-=(ptrdiff_t offset) noexcept {
-            return __atomic_sub_fetch(&_pointer, _S_type_size(offset),
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_pointer, _S_type_size(offset), int(memory_order_seq_cst));
         }
 
         __pointer_type operator-=(ptrdiff_t offset) volatile noexcept {
-            return __atomic_sub_fetch(&_pointer, _S_type_size(offset),
-                                      int(memory_order_seq_cst));
+            return __atomic_sub_fetch(&_pointer, _S_type_size(offset), int(memory_order_seq_cst));
         }
 
         bool is_lock_free() const noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_pointer),
-                reinterpret_cast<void*>(-__alignof(_pointer)));
+            return __atomic_is_lock_free(sizeof(_pointer),
+                                         reinterpret_cast<void*>(-__alignof(_pointer)));
         }
 
         bool is_lock_free() const volatile noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(
-                sizeof(_pointer),
-                reinterpret_cast<void*>(-__alignof(_pointer)));
+            return __atomic_is_lock_free(sizeof(_pointer),
+                                         reinterpret_cast<void*>(-__alignof(_pointer)));
         }
 
-        __ATTR_ALWAYS_INLINE__ void store(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+        __ATTR_ALWAYS_INLINE__ void store(__pointer_type pointer,
+                                          memory_order order = memory_order_seq_cst) noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
 
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
@@ -715,10 +644,8 @@ namespace std {
         }
 
         __ATTR_ALWAYS_INLINE__ void store(
-            __pointer_type pointer,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+            __pointer_type pointer, memory_order order = memory_order_seq_cst) volatile noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_acquire);
             __stdlib_assert(basic_order != memory_order_acq_rel);
             __stdlib_assert(basic_order != memory_order_consume);
@@ -728,18 +655,16 @@ namespace std {
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
         load(memory_order order = memory_order_seq_cst) const noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_release);
             __stdlib_assert(basic_order != memory_order_acq_rel);
 
             return __atomic_load_n(&_pointer, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ __pointer_type load(
-            memory_order order = memory_order_seq_cst) const volatile noexcept {
-            memory_order basic_order __attribute__((__unused__)) =
-                order & __memory_order_mask;
+        __ATTR_ALWAYS_INLINE__ __pointer_type load(memory_order order = memory_order_seq_cst) const
+            volatile noexcept {
+            memory_order basic_order __attribute__((__unused__)) = order & __memory_order_mask;
             __stdlib_assert(basic_order != memory_order_release);
             __stdlib_assert(basic_order != memory_order_acq_rel);
 
@@ -747,108 +672,90 @@ namespace std {
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        exchange(__pointer_type pointer,
-                 memory_order order = memory_order_seq_cst) noexcept {
+        exchange(__pointer_type pointer, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_exchange_n(&_pointer, pointer, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ __pointer_type
-        exchange(__pointer_type pointer,
-                 memory_order order = memory_order_seq_cst) volatile noexcept {
+        __ATTR_ALWAYS_INLINE__ __pointer_type exchange(
+            __pointer_type pointer, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_exchange_n(&_pointer, pointer, int(order));
         }
 
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order, memory_order failure_order) noexcept {
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(__pointer_type& expected,
+                                                          __pointer_type desired,
+                                                          memory_order success_order,
+                                                          memory_order failure_order) noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 1,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 1, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order,
+            __pointer_type& expected, __pointer_type desired, memory_order success_order,
             memory_order failure_order) volatile noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 1,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 1, int(success_order),
+                                               int(failure_order));
+        }
+
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(__pointer_type& expected,
+                                                            __pointer_type desired,
+                                                            memory_order success_order,
+                                                            memory_order failure_order) noexcept {
+            __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
+
+            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 0, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order, memory_order failure_order) noexcept {
-            __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
-
-            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 0,
-                                               int(success_order),
-                                               int(failure_order));
-        }
-
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(
-            __pointer_type& expected, __pointer_type desired,
-            memory_order success_order,
+            __pointer_type& expected, __pointer_type desired, memory_order success_order,
             memory_order failure_order) volatile noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
-            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 0,
-                                               int(success_order),
+            return __atomic_compare_exchange_n(&_pointer, &expected, desired, 0, int(success_order),
                                                int(failure_order));
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_add(ptrdiff_t offset,
-                  memory_order order = memory_order_seq_cst) noexcept {
-            return __atomic_fetch_add(&_pointer, _S_type_size(offset),
-                                      int(order));
+        fetch_add(ptrdiff_t offset, memory_order order = memory_order_seq_cst) noexcept {
+            return __atomic_fetch_add(&_pointer, _S_type_size(offset), int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_add(ptrdiff_t offset,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
-            return __atomic_fetch_add(&_pointer, _S_type_size(offset),
-                                      int(order));
+        fetch_add(ptrdiff_t offset, memory_order order = memory_order_seq_cst) volatile noexcept {
+            return __atomic_fetch_add(&_pointer, _S_type_size(offset), int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_sub(ptrdiff_t offset,
-                  memory_order order = memory_order_seq_cst) noexcept {
-            return __atomic_fetch_sub(&_pointer, _S_type_size(offset),
-                                      int(order));
+        fetch_sub(ptrdiff_t offset, memory_order order = memory_order_seq_cst) noexcept {
+            return __atomic_fetch_sub(&_pointer, _S_type_size(offset), int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_sub(ptrdiff_t offset,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
-            return __atomic_fetch_sub(&_pointer, _S_type_size(offset),
-                                      int(order));
+        fetch_sub(ptrdiff_t offset, memory_order order = memory_order_seq_cst) volatile noexcept {
+            return __atomic_fetch_sub(&_pointer, _S_type_size(offset), int(order));
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_min(__pointer_type pointer,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_min(__pointer_type pointer, memory_order order = memory_order_seq_cst) noexcept {
+            return __atomic_impl::__fetch_min(&_pointer, pointer, order);
+        }
+
+        __ATTR_ALWAYS_INLINE__ __pointer_type fetch_min(
+            __pointer_type pointer, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_min(&_pointer, pointer, order);
         }
 
         __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_min(__pointer_type pointer,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
-            return __atomic_impl::__fetch_min(&_pointer, pointer, order);
-        }
-
-        __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_max(__pointer_type pointer,
-                  memory_order order = memory_order_seq_cst) noexcept {
+        fetch_max(__pointer_type pointer, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_max(&_pointer, pointer, order);
         }
 
-        __ATTR_ALWAYS_INLINE__ __pointer_type
-        fetch_max(__pointer_type pointer,
-                  memory_order order = memory_order_seq_cst) volatile noexcept {
+        __ATTR_ALWAYS_INLINE__ __pointer_type fetch_max(
+            __pointer_type pointer, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_max(&_pointer, pointer, order);
         }
     };
@@ -861,8 +768,8 @@ namespace std {
 #if !__has_builtin(__builtin_clear_padding)
             return false;
 #elif __has_builtin(__has_unique_object_representations)
-            return !__has_unique_object_representations(_Tp) &&
-                   !is_same<_Tp, float>::value && !is_same<_Tp, double>::value;
+            return !__has_unique_object_representations(_Tp) && !is_same<_Tp, float>::value &&
+                   !is_same<_Tp, double>::value;
 #else
             return true;
 #endif
@@ -872,8 +779,7 @@ namespace std {
 #pragma GCC diagnostic ignored "-Wc++17-extensions"
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ constexpr _Tp* __clear_padding(
-            _Tp& storage) noexcept {
+        __ATTR_ALWAYS_INLINE__ constexpr _Tp* __clear_padding(_Tp& storage) noexcept {
             auto* ptr = std::__addressof(storage);
 #if __has_builtin(__builtin_clear_padding)
             if constexpr (__atomic_impl::__maybe_has_padding<_Tp>())
@@ -883,38 +789,35 @@ namespace std {
         }
 
         template <bool _AtomicRef = false, typename _Tp>
-        __ATTR_ALWAYS_INLINE__ bool __compare_exchange(
-            _Tp& storage, _Val<_Tp>& expected, _Val<_Tp>& value, bool is_weak,
-            memory_order success_order, memory_order failure_order) noexcept {
+        __ATTR_ALWAYS_INLINE__ bool __compare_exchange(_Tp& storage, _Val<_Tp>& expected,
+                                                       _Val<_Tp>& value, bool is_weak,
+                                                       memory_order success_order,
+                                                       memory_order failure_order) noexcept {
             __stdlib_assert(__is_valid_cmpexch_failure_order(failure_order));
 
             using _Vp              = _Val<_Tp>;
             _Tp* const storage_ptr = std::__addressof(storage);
 
             if constexpr (!__atomic_impl::__maybe_has_padding<_Vp>()) {
-                return __atomic_compare_exchange(
-                    storage_ptr, std::__addressof(expected),
-                    std::__addressof(value), is_weak, int(success_order),
-                    int(failure_order));
+                return __atomic_compare_exchange(storage_ptr, std::__addressof(expected),
+                                                 std::__addressof(value), is_weak,
+                                                 int(success_order), int(failure_order));
             } else if constexpr (!_AtomicRef)  // atomic<T>
             {
                 // 先清理待写入值中的 padding 位.
-                _Vp* const desired_ptr = __atomic_impl::__clear_padding(value);
+                _Vp* const desired_ptr  = __atomic_impl::__clear_padding(value);
                 // 失败时才允许回写 expected, 因此先保留一份副本.
-                _Vp expected_copy      = expected;
+                _Vp expected_copy       = expected;
                 // 再清理期望值副本中的 padding 位.
-                _Vp* const expected_ptr =
-                    __atomic_impl::__clear_padding(expected_copy);
+                _Vp* const expected_ptr = __atomic_impl::__clear_padding(expected_copy);
 
                 // atomic<T> 内部保存的值会在写入前清理 padding,
                 // 因此这里可以直接按值表示比较.
-                if (__atomic_compare_exchange(
-                        storage_ptr, expected_ptr, desired_ptr, is_weak,
-                        int(success_order), int(failure_order)))
+                if (__atomic_compare_exchange(storage_ptr, expected_ptr, desired_ptr, is_weak,
+                                              int(success_order), int(failure_order)))
                     return true;
                 // 如果失败源自值表示不同, 需要把期望值副本写回 expected.
-                __builtin_memcpy(std::__addressof(expected), expected_ptr,
-                                 sizeof(_Vp));
+                __builtin_memcpy(std::__addressof(expected), expected_ptr, sizeof(_Vp));
                 return false;
             } else  // atomic_ref<T> 且 T 含有 padding 位.
             {
@@ -922,10 +825,9 @@ namespace std {
                 _Vp* const desired_ptr = __atomic_impl::__clear_padding(value);
 
                 // 失败时才允许回写 expected, 因此先保留一份副本.
-                _Vp expected_copy = expected;
+                _Vp expected_copy       = expected;
                 // 先按“目标值此前已经清理过 padding”这一常见情况构造期望值.
-                _Vp* const expected_ptr =
-                    __atomic_impl::__clear_padding(expected_copy);
+                _Vp* const expected_ptr = __atomic_impl::__clear_padding(expected_copy);
 
                 // atomic_ref 直接引用外部对象, 失败既可能是真正的值不同,
                 // 也可能只是 padding 位不同. 这里通过有限次重试把两者区分开.
@@ -933,23 +835,19 @@ namespace std {
                     // 保留本轮比较前的期望值表示.
                     _Vp original_value = expected_copy;
 
-                    if (__atomic_compare_exchange(
-                            storage_ptr, expected_ptr, desired_ptr, is_weak,
-                            int(success_order), int(failure_order)))
+                    if (__atomic_compare_exchange(storage_ptr, expected_ptr, desired_ptr, is_weak,
+                                                  int(success_order), int(failure_order)))
                         return true;
 
                     // 保存本轮读到的实际值表示.
                     _Vp current_copy = expected_copy;
 
                     // 忽略 padding 后再比较真实值表示.
-                    if (__builtin_memcmp(
-                            __atomic_impl::__clear_padding(original_value),
-                            __atomic_impl::__clear_padding(current_copy),
-                            sizeof(_Vp)))
+                    if (__builtin_memcmp(__atomic_impl::__clear_padding(original_value),
+                                         __atomic_impl::__clear_padding(current_copy), sizeof(_Vp)))
                     {
                         // 清理 padding 后仍不同, 说明这是一次真实失败.
-                        __builtin_memcpy(std::__addressof(expected),
-                                         expected_ptr, sizeof(_Vp));
+                        __builtin_memcpy(std::__addressof(expected), expected_ptr, sizeof(_Vp));
                         return false;
                     }
                 }
@@ -967,20 +865,16 @@ namespace std {
         template <size_t _Size, size_t _Align>
         __ATTR_ALWAYS_INLINE__ bool is_lock_free() noexcept {
             // 传入按最小对齐构造的伪地址, 仅用于查询 lock-free 属性.
-            return __atomic_is_lock_free(_Size,
-                                         reinterpret_cast<void*>(-_Align));
+            return __atomic_is_lock_free(_Size, reinterpret_cast<void*>(-_Align));
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ void store(_Tp* ptr, _Val<_Tp> value,
-                                          memory_order order) noexcept {
-            __atomic_store(ptr, __atomic_impl::__clear_padding(value),
-                           int(order));
+        __ATTR_ALWAYS_INLINE__ void store(_Tp* ptr, _Val<_Tp> value, memory_order order) noexcept {
+            __atomic_store(ptr, __atomic_impl::__clear_padding(value), int(order));
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Val<_Tp> load(const _Tp* ptr,
-                                              memory_order order) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Val<_Tp> load(const _Tp* ptr, memory_order order) noexcept {
             alignas(_Tp) unsigned char buf[sizeof(_Tp)];
             auto* dest = reinterpret_cast<_Val<_Tp>*>(buf);
             __atomic_load(ptr, dest, int(order));
@@ -992,25 +886,26 @@ namespace std {
                                                   memory_order order) noexcept {
             alignas(_Tp) unsigned char buf[sizeof(_Tp)];
             auto* dest = reinterpret_cast<_Val<_Tp>*>(buf);
-            __atomic_exchange(ptr, __atomic_impl::__clear_padding(desired),
-                              dest, int(order));
+            __atomic_exchange(ptr, __atomic_impl::__clear_padding(desired), dest, int(order));
             return *dest;
         }
 
         template <bool _AtomicRef = false, typename _Tp>
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(
-            _Tp* ptr, _Val<_Tp>& expected, _Val<_Tp> desired,
-            memory_order success_order, memory_order failure_order) noexcept {
-            return __atomic_impl::__compare_exchange<_AtomicRef>(
-                *ptr, expected, desired, true, success_order, failure_order);
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_weak(_Tp* ptr, _Val<_Tp>& expected,
+                                                          _Val<_Tp> desired,
+                                                          memory_order success_order,
+                                                          memory_order failure_order) noexcept {
+            return __atomic_impl::__compare_exchange<_AtomicRef>(*ptr, expected, desired, true,
+                                                                 success_order, failure_order);
         }
 
         template <bool _AtomicRef = false, typename _Tp>
-        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(
-            _Tp* ptr, _Val<_Tp>& expected, _Val<_Tp> desired,
-            memory_order success_order, memory_order failure_order) noexcept {
-            return __atomic_impl::__compare_exchange<_AtomicRef>(
-                *ptr, expected, desired, false, success_order, failure_order);
+        __ATTR_ALWAYS_INLINE__ bool compare_exchange_strong(_Tp* ptr, _Val<_Tp>& expected,
+                                                            _Val<_Tp> desired,
+                                                            memory_order success_order,
+                                                            memory_order failure_order) noexcept {
+            return __atomic_impl::__compare_exchange<_AtomicRef>(*ptr, expected, desired, false,
+                                                                 success_order, failure_order);
         }
 
         template <typename _Tp>
@@ -1044,32 +939,27 @@ namespace std {
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Tp __add_fetch(_Tp* ptr,
-                                               _Diff<_Tp> value) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Tp __add_fetch(_Tp* ptr, _Diff<_Tp> value) noexcept {
             return __atomic_add_fetch(ptr, value, __ATOMIC_SEQ_CST);
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Tp __sub_fetch(_Tp* ptr,
-                                               _Diff<_Tp> value) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Tp __sub_fetch(_Tp* ptr, _Diff<_Tp> value) noexcept {
             return __atomic_sub_fetch(ptr, value, __ATOMIC_SEQ_CST);
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Tp __and_fetch(_Tp* ptr,
-                                               _Val<_Tp> value) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Tp __and_fetch(_Tp* ptr, _Val<_Tp> value) noexcept {
             return __atomic_and_fetch(ptr, value, __ATOMIC_SEQ_CST);
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Tp __or_fetch(_Tp* ptr,
-                                              _Val<_Tp> value) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Tp __or_fetch(_Tp* ptr, _Val<_Tp> value) noexcept {
             return __atomic_or_fetch(ptr, value, __ATOMIC_SEQ_CST);
         }
 
         template <typename _Tp>
-        __ATTR_ALWAYS_INLINE__ _Tp __xor_fetch(_Tp* ptr,
-                                               _Val<_Tp> value) noexcept {
+        __ATTR_ALWAYS_INLINE__ _Tp __xor_fetch(_Tp* ptr, _Val<_Tp> value) noexcept {
             return __atomic_xor_fetch(ptr, value, __ATOMIC_SEQ_CST);
         }
 
@@ -1078,15 +968,14 @@ namespace std {
             requires(_Tp value) { __atomic_fetch_add(&value, value, 0); };
 
         template <typename _Tp>
-        _Tp __fetch_add_flt(_Tp* ptr, _Val<_Tp> value,
-                            memory_order order) noexcept {
+        _Tp __fetch_add_flt(_Tp* ptr, _Val<_Tp> value, memory_order order) noexcept {
             if constexpr (__atomic_fetch_addable<_Tp>)
                 return __atomic_fetch_add(ptr, value, int(order));
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value + value;
-                while (!compare_exchange_weak(ptr, old_value, new_value, order,
-                                              memory_order_relaxed))
+                while (
+                    !compare_exchange_weak(ptr, old_value, new_value, order, memory_order_relaxed))
                     new_value = old_value + value;
                 return old_value;
             }
@@ -1097,15 +986,14 @@ namespace std {
             requires(_Tp value) { __atomic_fetch_sub(&value, value, 0); };
 
         template <typename _Tp>
-        _Tp __fetch_sub_flt(_Tp* ptr, _Val<_Tp> value,
-                            memory_order order) noexcept {
+        _Tp __fetch_sub_flt(_Tp* ptr, _Val<_Tp> value, memory_order order) noexcept {
             if constexpr (__atomic_fetch_subtractable<_Tp>)
                 return __atomic_fetch_sub(ptr, value, int(order));
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value - value;
-                while (!compare_exchange_weak(ptr, old_value, new_value, order,
-                                              memory_order_relaxed))
+                while (
+                    !compare_exchange_weak(ptr, old_value, new_value, order, memory_order_relaxed))
                     new_value = old_value - value;
                 return old_value;
             }
@@ -1122,8 +1010,7 @@ namespace std {
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value + value;
-                while (!compare_exchange_weak(ptr, old_value, new_value,
-                                              memory_order_seq_cst,
+                while (!compare_exchange_weak(ptr, old_value, new_value, memory_order_seq_cst,
                                               memory_order_relaxed))
                     new_value = old_value + value;
                 return new_value;
@@ -1141,8 +1028,7 @@ namespace std {
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value - value;
-                while (!compare_exchange_weak(ptr, old_value, new_value,
-                                              memory_order_seq_cst,
+                while (!compare_exchange_weak(ptr, old_value, new_value, memory_order_seq_cst,
                                               memory_order_relaxed))
                     new_value = old_value - value;
                 return new_value;
@@ -1156,30 +1042,28 @@ namespace std {
         };
 
         template <typename _Tp>
-        _Tp __fetch_min(_Tp* ptr, _Val<_Tp> value,
-                        memory_order order) noexcept {
+        _Tp __fetch_min(_Tp* ptr, _Val<_Tp> value, memory_order order) noexcept {
             if constexpr (__atomic_fetch_minmaxable<_Tp>)
                 return __atomic_fetch_min(ptr, value, int(order));
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value < value ? old_value : value;
-                while (!compare_exchange_weak(ptr, old_value, new_value, order,
-                                              memory_order_relaxed))
+                while (
+                    !compare_exchange_weak(ptr, old_value, new_value, order, memory_order_relaxed))
                     new_value = old_value < value ? old_value : value;
                 return old_value;
             }
         }
 
         template <typename _Tp>
-        _Tp __fetch_max(_Tp* ptr, _Val<_Tp> value,
-                        memory_order order) noexcept {
+        _Tp __fetch_max(_Tp* ptr, _Val<_Tp> value, memory_order order) noexcept {
             if constexpr (__atomic_fetch_minmaxable<_Tp>)
                 return __atomic_fetch_max(ptr, value, int(order));
             else {
                 _Val<_Tp> old_value = load(ptr, memory_order_relaxed);
                 _Val<_Tp> new_value = old_value > value ? old_value : value;
-                while (!compare_exchange_weak(ptr, old_value, new_value, order,
-                                              memory_order_relaxed))
+                while (
+                    !compare_exchange_weak(ptr, old_value, new_value, order, memory_order_relaxed))
                     new_value = old_value > value ? old_value : value;
                 return old_value;
             }
@@ -1197,8 +1081,7 @@ namespace std {
         using value_type      = _Fp;
         using difference_type = value_type;
 
-        static constexpr bool is_always_lock_free =
-            __atomic_always_lock_free(sizeof(_Fp), 0);
+        static constexpr bool is_always_lock_free = __atomic_always_lock_free(sizeof(_Fp), 0);
 
         __atomic_float() = default;
 
@@ -1229,18 +1112,15 @@ namespace std {
             return __atomic_impl::is_lock_free<sizeof(_Fp), _S_alignment>();
         }
 
-        void store(_Fp value, memory_order order =
-                                  memory_order_seq_cst) volatile noexcept {
+        void store(_Fp value, memory_order order = memory_order_seq_cst) volatile noexcept {
             __atomic_impl::store(&_value, value, order);
         }
 
-        void store(_Fp value,
-                   memory_order order = memory_order_seq_cst) noexcept {
+        void store(_Fp value, memory_order order = memory_order_seq_cst) noexcept {
             __atomic_impl::store(&_value, value, order);
         }
 
-        _Fp load(memory_order order = memory_order_seq_cst) const
-            volatile noexcept {
+        _Fp load(memory_order order = memory_order_seq_cst) const volatile noexcept {
             return __atomic_impl::load(&_value, order);
         }
 
@@ -1255,117 +1135,93 @@ namespace std {
             return this->load();
         }
 
-        _Fp exchange(_Fp desired, memory_order order =
-                                      memory_order_seq_cst) volatile noexcept {
+        _Fp exchange(_Fp desired, memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::exchange(&_value, desired, order);
         }
 
-        _Fp exchange(_Fp desired,
-                     memory_order order = memory_order_seq_cst) noexcept {
+        _Fp exchange(_Fp desired, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::exchange(&_value, desired, order);
+        }
+
+        bool compare_exchange_weak(_Fp& expected, _Fp desired, memory_order success_order,
+                                   memory_order failure_order) noexcept {
+            return __atomic_impl::compare_exchange_weak(&_value, expected, desired, success_order,
+                                                        failure_order);
+        }
+
+        bool compare_exchange_weak(_Fp& expected, _Fp desired, memory_order success_order,
+                                   memory_order failure_order) volatile noexcept {
+            return __atomic_impl::compare_exchange_weak(&_value, expected, desired, success_order,
+                                                        failure_order);
+        }
+
+        bool compare_exchange_strong(_Fp& expected, _Fp desired, memory_order success_order,
+                                     memory_order failure_order) noexcept {
+            return __atomic_impl::compare_exchange_strong(&_value, expected, desired, success_order,
+                                                          failure_order);
+        }
+
+        bool compare_exchange_strong(_Fp& expected, _Fp desired, memory_order success_order,
+                                     memory_order failure_order) volatile noexcept {
+            return __atomic_impl::compare_exchange_strong(&_value, expected, desired, success_order,
+                                                          failure_order);
         }
 
         bool compare_exchange_weak(_Fp& expected, _Fp desired,
-                                   memory_order success_order,
-                                   memory_order failure_order) noexcept {
-            return __atomic_impl::compare_exchange_weak(
-                &_value, expected, desired, success_order, failure_order);
+                                   memory_order order = memory_order_seq_cst) noexcept {
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_weak(
-            _Fp& expected, _Fp desired, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return __atomic_impl::compare_exchange_weak(
-                &_value, expected, desired, success_order, failure_order);
+        bool compare_exchange_weak(_Fp& expected, _Fp desired,
+                                   memory_order order = memory_order_seq_cst) volatile noexcept {
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
         bool compare_exchange_strong(_Fp& expected, _Fp desired,
-                                     memory_order success_order,
-                                     memory_order failure_order) noexcept {
-            return __atomic_impl::compare_exchange_strong(
-                &_value, expected, desired, success_order, failure_order);
-        }
-
-        bool compare_exchange_strong(
-            _Fp& expected, _Fp desired, memory_order success_order,
-            memory_order failure_order) volatile noexcept {
-            return __atomic_impl::compare_exchange_strong(
-                &_value, expected, desired, success_order, failure_order);
-        }
-
-        bool compare_exchange_weak(
-            _Fp& expected, _Fp desired,
-            memory_order order = memory_order_seq_cst) noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
-        }
-
-        bool compare_exchange_weak(
-            _Fp& expected, _Fp desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
-        }
-
-        bool compare_exchange_strong(
-            _Fp& expected, _Fp desired,
-            memory_order order = memory_order_seq_cst) noexcept {
+                                     memory_order order = memory_order_seq_cst) noexcept {
             return compare_exchange_strong(expected, desired, order,
                                            __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_strong(
-            _Fp& expected, _Fp desired,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        bool compare_exchange_strong(_Fp& expected, _Fp desired,
+                                     memory_order order = memory_order_seq_cst) volatile noexcept {
             return compare_exchange_strong(expected, desired, order,
                                            __cmpexch_failure_order(order));
         }
 
-        value_type fetch_add(
-            value_type value,
-            memory_order order = memory_order_seq_cst) noexcept {
+        value_type fetch_add(value_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_add_flt(&_value, value, order);
         }
 
-        value_type fetch_add(
-            value_type value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        value_type fetch_add(value_type value,
+                             memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_add_flt(&_value, value, order);
         }
 
-        value_type fetch_sub(
-            value_type value,
-            memory_order order = memory_order_seq_cst) noexcept {
+        value_type fetch_sub(value_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_sub_flt(&_value, value, order);
         }
 
-        value_type fetch_sub(
-            value_type value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        value_type fetch_sub(value_type value,
+                             memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_sub_flt(&_value, value, order);
         }
 
-        value_type fetch_min(
-            value_type value,
-            memory_order order = memory_order_seq_cst) noexcept {
+        value_type fetch_min(value_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_min(&_value, value, order);
         }
 
-        value_type fetch_min(
-            value_type value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        value_type fetch_min(value_type value,
+                             memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_min(&_value, value, order);
         }
 
-        value_type fetch_max(
-            value_type value,
-            memory_order order = memory_order_seq_cst) noexcept {
+        value_type fetch_max(value_type value, memory_order order = memory_order_seq_cst) noexcept {
             return __atomic_impl::__fetch_max(&_value, value, order);
         }
 
-        value_type fetch_max(
-            value_type value,
-            memory_order order = memory_order_seq_cst) volatile noexcept {
+        value_type fetch_max(value_type value,
+                             memory_order order = memory_order_seq_cst) volatile noexcept {
             return __atomic_impl::__fetch_max(&_value, value, order);
         }
 
@@ -1413,13 +1269,11 @@ namespace std {
         static consteval int _S_required_alignment() {
             if constexpr (is_floating_point_v<_Vt> || is_pointer_v<_Vt>)
                 return __alignof__(_Vt);
-            else if constexpr ((sizeof(_Vt) & (sizeof(_Vt) - 1)) ||
-                               sizeof(_Vt) > 16)
+            else if constexpr ((sizeof(_Vt) & (sizeof(_Vt) - 1)) || sizeof(_Vt) > 16)
                 return alignof(_Vt);
             else
                 // 1/2/4/8/16 字节类型至少按自身大小对齐.
-                return (sizeof(_Vt) > alignof(_Vt)) ? sizeof(_Vt)
-                                                    : alignof(_Vt);
+                return (sizeof(_Vt) > alignof(_Vt)) ? sizeof(_Vt) : alignof(_Vt);
         }
 
     public:
@@ -1435,8 +1289,7 @@ namespace std {
         __atomic_ref_base()                                    = delete;
         __atomic_ref_base& operator=(const __atomic_ref_base&) = delete;
 
-        explicit __atomic_ref_base(const _Tp* ptr) noexcept
-            : _pointer(const_cast<_Tp*>(ptr)) {}
+        explicit __atomic_ref_base(const _Tp* ptr) noexcept : _pointer(const_cast<_Tp*>(ptr)) {}
 
         __atomic_ref_base(const __atomic_ref_base&) noexcept = default;
 
@@ -1445,12 +1298,10 @@ namespace std {
         }
 
         bool is_lock_free() const noexcept {
-            return __atomic_impl::is_lock_free<sizeof(_Tp),
-                                               required_alignment>();
+            return __atomic_impl::is_lock_free<sizeof(_Tp), required_alignment>();
         }
 
-        value_type load(
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type load(memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::load(_pointer, order);
         }
 
@@ -1466,52 +1317,43 @@ namespace std {
     struct __atomic_ref_base : __atomic_ref_base<const _Tp> {
         using value_type = typename __atomic_ref_base<const _Tp>::value_type;
 
-        explicit __atomic_ref_base(_Tp* ptr) noexcept
-            : __atomic_ref_base<const _Tp>(ptr) {}
+        explicit __atomic_ref_base(_Tp* ptr) noexcept : __atomic_ref_base<const _Tp>(ptr) {}
 
         value_type operator=(value_type value) const noexcept {
             this->store(value);
             return value;
         }
 
-        void store(value_type value,
-                   memory_order order = memory_order_seq_cst) const noexcept {
+        void store(value_type value, memory_order order = memory_order_seq_cst) const noexcept {
             __atomic_impl::store(this->_pointer, value, order);
         }
 
-        value_type exchange(
-            value_type desired,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type exchange(value_type desired,
+                            memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::exchange(this->_pointer, desired, order);
         }
 
         bool compare_exchange_weak(value_type& expected, value_type desired,
                                    memory_order success_order,
                                    memory_order failure_order) const noexcept {
-            return __atomic_impl::compare_exchange_weak<true>(
-                this->_pointer, expected, desired, success_order,
-                failure_order);
+            return __atomic_impl::compare_exchange_weak<true>(this->_pointer, expected, desired,
+                                                              success_order, failure_order);
         }
 
-        bool compare_exchange_strong(
-            value_type& expected, value_type desired,
-            memory_order success_order,
-            memory_order failure_order) const noexcept {
-            return __atomic_impl::compare_exchange_strong<true>(
-                this->_pointer, expected, desired, success_order,
-                failure_order);
+        bool compare_exchange_strong(value_type& expected, value_type desired,
+                                     memory_order success_order,
+                                     memory_order failure_order) const noexcept {
+            return __atomic_impl::compare_exchange_strong<true>(this->_pointer, expected, desired,
+                                                                success_order, failure_order);
         }
 
-        bool compare_exchange_weak(
-            value_type& expected, value_type desired,
-            memory_order order = memory_order_seq_cst) const noexcept {
-            return compare_exchange_weak(expected, desired, order,
-                                         __cmpexch_failure_order(order));
+        bool compare_exchange_weak(value_type& expected, value_type desired,
+                                   memory_order order = memory_order_seq_cst) const noexcept {
+            return compare_exchange_weak(expected, desired, order, __cmpexch_failure_order(order));
         }
 
-        bool compare_exchange_strong(
-            value_type& expected, value_type desired,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        bool compare_exchange_strong(value_type& expected, value_type desired,
+                                     memory_order order = memory_order_seq_cst) const noexcept {
             return compare_exchange_strong(expected, desired, order,
                                            __cmpexch_failure_order(order));
         }
@@ -1521,8 +1363,7 @@ namespace std {
         }
     };
 
-    template <typename _Tp,
-              bool = is_integral_v<_Tp> && !is_same_v<remove_cv_t<_Tp>, bool>,
+    template <typename _Tp, bool = is_integral_v<_Tp> && !is_same_v<remove_cv_t<_Tp>, bool>,
               bool = is_floating_point_v<_Tp>, bool = is_pointer_v<_Tp>>
     struct __atomic_ref;
 
@@ -1534,8 +1375,7 @@ namespace std {
     };
 
     template <typename _Tp>
-    struct __atomic_ref<const _Tp, false, false, false>
-        : __atomic_ref_base<const _Tp> {
+    struct __atomic_ref<const _Tp, false, false, false> : __atomic_ref_base<const _Tp> {
         using __atomic_ref_base<const _Tp>::__atomic_ref_base;
     };
 
@@ -1548,45 +1388,38 @@ namespace std {
         using __atomic_ref_base<_Tp>::__atomic_ref_base;
         using __atomic_ref_base<_Tp>::operator=;
 
-        value_type fetch_add(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_add(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::fetch_add(this->_pointer, value, order);
         }
 
-        value_type fetch_sub(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_sub(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::fetch_sub(this->_pointer, value, order);
         }
 
-        value_type fetch_and(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_and(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::fetch_and(this->_pointer, value, order);
         }
 
-        value_type fetch_or(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_or(value_type value,
+                            memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::fetch_or(this->_pointer, value, order);
         }
 
-        value_type fetch_xor(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_xor(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::fetch_xor(this->_pointer, value, order);
         }
 
-        value_type fetch_min(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_min(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_min(this->_pointer, value, order);
         }
 
-        value_type fetch_max(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_max(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_max(this->_pointer, value, order);
         }
 
@@ -1628,10 +1461,8 @@ namespace std {
     };
 
     template <typename _Tp>
-    struct __atomic_ref<const _Tp, true, false, false>
-        : __atomic_ref_base<const _Tp> {
-        using difference_type =
-            typename __atomic_ref_base<const _Tp>::value_type;
+    struct __atomic_ref<const _Tp, true, false, false> : __atomic_ref_base<const _Tp> {
+        using difference_type = typename __atomic_ref_base<const _Tp>::value_type;
         using __atomic_ref_base<const _Tp>::__atomic_ref_base;
     };
 
@@ -1644,27 +1475,23 @@ namespace std {
         using __atomic_ref_base<_Fp>::__atomic_ref_base;
         using __atomic_ref_base<_Fp>::operator=;
 
-        value_type fetch_add(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_add(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_add_flt(this->_pointer, value, order);
         }
 
-        value_type fetch_sub(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_sub(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_sub_flt(this->_pointer, value, order);
         }
 
-        value_type fetch_min(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_min(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_min(this->_pointer, value, order);
         }
 
-        value_type fetch_max(
-            value_type value,
-            memory_order order = memory_order_seq_cst) const noexcept {
+        value_type fetch_max(value_type value,
+                             memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_max(this->_pointer, value, order);
         }
 
@@ -1678,10 +1505,8 @@ namespace std {
     };
 
     template <typename _Fp>
-    struct __atomic_ref<const _Fp, false, true, false>
-        : __atomic_ref_base<const _Fp> {
-        using difference_type =
-            typename __atomic_ref_base<const _Fp>::value_type;
+    struct __atomic_ref<const _Fp, false, true, false> : __atomic_ref_base<const _Fp> {
+        using difference_type = typename __atomic_ref_base<const _Fp>::value_type;
         using __atomic_ref_base<const _Fp>::__atomic_ref_base;
     };
 
@@ -1693,29 +1518,23 @@ namespace std {
 
         using __atomic_ref_base<_Pt>::__atomic_ref_base;
         using __atomic_ref_base<_Pt>::operator=;
-        __ATTR_ALWAYS_INLINE__ value_type
-        fetch_add(difference_type offset,
-                  memory_order order = memory_order_seq_cst) const noexcept {
-            return __atomic_impl::fetch_add(this->_pointer,
-                                            _S_type_size(offset), order);
+        __ATTR_ALWAYS_INLINE__ value_type fetch_add(
+            difference_type offset, memory_order order = memory_order_seq_cst) const noexcept {
+            return __atomic_impl::fetch_add(this->_pointer, _S_type_size(offset), order);
+        }
+
+        __ATTR_ALWAYS_INLINE__ value_type fetch_sub(
+            difference_type offset, memory_order order = memory_order_seq_cst) const noexcept {
+            return __atomic_impl::fetch_sub(this->_pointer, _S_type_size(offset), order);
         }
 
         __ATTR_ALWAYS_INLINE__ value_type
-        fetch_sub(difference_type offset,
-                  memory_order order = memory_order_seq_cst) const noexcept {
-            return __atomic_impl::fetch_sub(this->_pointer,
-                                            _S_type_size(offset), order);
-        }
-
-        __ATTR_ALWAYS_INLINE__ value_type
-        fetch_min(value_type value,
-                  memory_order order = memory_order_seq_cst) const noexcept {
+        fetch_min(value_type value, memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_min(this->_pointer, value, order);
         }
 
         __ATTR_ALWAYS_INLINE__ value_type
-        fetch_max(value_type value,
-                  memory_order order = memory_order_seq_cst) const noexcept {
+        fetch_max(value_type value, memory_order order = memory_order_seq_cst) const noexcept {
             return __atomic_impl::__fetch_max(this->_pointer, value, order);
         }
 
@@ -1736,13 +1555,11 @@ namespace std {
         }
 
         value_type operator+=(difference_type offset) const noexcept {
-            return __atomic_impl::__add_fetch(this->_pointer,
-                                              _S_type_size(offset));
+            return __atomic_impl::__add_fetch(this->_pointer, _S_type_size(offset));
         }
 
         value_type operator-=(difference_type offset) const noexcept {
-            return __atomic_impl::__sub_fetch(this->_pointer,
-                                              _S_type_size(offset));
+            return __atomic_impl::__sub_fetch(this->_pointer, _S_type_size(offset));
         }
 
     private:
@@ -1754,8 +1571,7 @@ namespace std {
     };
 
     template <typename _Pt>
-    struct __atomic_ref<const _Pt, false, false, true>
-        : __atomic_ref_base<const _Pt> {
+    struct __atomic_ref<const _Pt, false, false, true> : __atomic_ref_base<const _Pt> {
         using difference_type = ptrdiff_t;
         using __atomic_ref_base<const _Pt>::__atomic_ref_base;
     };

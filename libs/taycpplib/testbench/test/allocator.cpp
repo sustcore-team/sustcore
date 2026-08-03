@@ -1,5 +1,17 @@
+/**
+ * @file allocator.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 tay::allocator 的分配、释放和失败处理。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/allocator.h>
 #include <tay/array_list.h>
+#include <tay/bits.h>
 #include <tay/map.h>
 #include <tay/set.h>
 #include <tay/string.h>
@@ -14,9 +26,9 @@
 
 namespace {
     struct allocation_state {
-        bool fail                 = false;
-        std::size_t allocations   = 0;
-        std::size_t deallocations = 0;
+        bool fail            = false;
+        size_t allocations   = 0;
+        size_t deallocations = 0;
     };
 
     template <class T>
@@ -27,29 +39,25 @@ namespace {
         allocation_state* state = nullptr;
 
         template <class U>
-        constexpr test_allocator(const test_allocator<U>& other) noexcept
-            : state(other.state) {}
+        constexpr test_allocator(const test_allocator<U>& other) noexcept : state(other.state) {}
 
-        constexpr explicit test_allocator(allocation_state& shared) noexcept
-            : state(&shared) {}
+        constexpr explicit test_allocator(allocation_state& shared) noexcept : state(&shared) {}
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
             if (state->fail) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             ++state->allocations;
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ++state->deallocations;
             ::operator delete(memory);
         }
@@ -100,34 +108,26 @@ namespace {
     }
 }  // namespace
 
-static_assert(std::is_same_v<
-              tay::allocator_traits<tay::allocator<int>>::rebind_alloc<char>,
-              tay::allocator<char>>);
+static_assert(std::is_same_v<tay::allocator_traits<tay::allocator<int>>::rebind_alloc<char>,
+                             tay::allocator<char>>);
 static_assert(std::is_empty_v<tay::allocator<int>>);
 static_assert(std::is_nothrow_default_constructible_v<tay::allocator<int>>);
-static_assert(
-    tay::allocator_traits<tay::allocator<int>>::is_always_equal::value);
+static_assert(tay::allocator_traits<tay::allocator<int>>::is_always_equal::value);
 static_assert(tay::allocator<int>{} == tay::allocator<int>{});
-static_assert(std::is_same_v<
-              decltype(tay::allocator_traits<tay::allocator<int>>::try_allocate(
-                  std::declval<tay::allocator<int>&>(), 1)),
-              tay::expected<int*, tay::error_code>>);
+static_assert(std::is_same_v<decltype(tay::allocator_traits<tay::allocator<int>>::try_allocate(
+                                 std::declval<tay::allocator<int>&>(), 1)),
+                             tay::expected<int*, tay::error_code>>);
 static_assert(constexpr_allocation_works());
-static_assert(std::is_same_v<tay::string<>,
-                             tay::string<tay::allocator<char>>>);
-static_assert(std::is_same_v<tay::array_list<int>,
-                             tay::array_list<int, tay::allocator<int>>>);
-static_assert(std::is_same_v<tay::array_list<int>,
-                             tay::array_list<int, tay::allocator<int>>>);
-static_assert(std::is_same_v<tay::hash_set<int>,
-                             tay::hash_set<int, std::hash<int>,
-                                           std::equal_to<int>,
-                                           tay::allocator<int>>>);
+static_assert(std::is_same_v<tay::string<>, tay::string<tay::allocator<char>>>);
+static_assert(std::is_same_v<tay::array_list<int>, tay::array_list<int, tay::allocator<int>>>);
+static_assert(std::is_same_v<tay::array_list<int>, tay::array_list<int, tay::allocator<int>>>);
+static_assert(
+    std::is_same_v<tay::hash_set<int>,
+                   tay::hash_set<int, std::hash<int>, std::equal_to<int>, tay::allocator<int>>>);
 using default_map_value = std::pair<const int, int>;
-static_assert(std::is_same_v<
-              tay::hash_map<int, int>,
-              tay::hash_map<int, int, std::hash<int>, std::equal_to<int>,
-                            tay::allocator<default_map_value>>>);
+static_assert(std::is_same_v<tay::hash_map<int, int>,
+                             tay::hash_map<int, int, std::hash<int>, std::equal_to<int>,
+                                           tay::allocator<default_map_value>>>);
 
 int main() {
     tay::allocator<int> host_allocator;
@@ -143,12 +143,11 @@ int main() {
     tay::allocator<over_aligned> aligned_allocator;
     auto aligned = aligned_allocator.try_allocate(1);
     assert(aligned);
-    assert(reinterpret_cast<std::uintptr_t>(*aligned) % alignof(over_aligned) ==
-           0);
+    assert(reinterpret_cast<std::uintptr_t>(*aligned) % alignof(over_aligned) == 0);
     aligned_allocator.deallocate(*aligned, 1);
 
-    auto overflow = host_traits::try_allocate(
-        host_allocator, host_traits::max_size(host_allocator) + 1);
+    auto overflow =
+        host_traits::try_allocate(host_allocator, host_traits::max_size(host_allocator) + 1);
     assert(!overflow);
     assert(overflow.error() == tay::error_code::ALLOCATION_SIZE_OVERFLOW);
 

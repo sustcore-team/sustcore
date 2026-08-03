@@ -1,3 +1,14 @@
+/**
+ * @file container_failure.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 容器在分配或容量失败时的错误处理。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/array_list.h>
 #include <tay/map.h>
 #include <tay/set.h>
@@ -18,29 +29,25 @@ namespace {
 
         allocation_state* state;
 
-        explicit checked_allocator(allocation_state& shared) noexcept
-            : state(&shared) {}
+        explicit checked_allocator(allocation_state& shared) noexcept : state(&shared) {}
 
         template <class U>
-        checked_allocator(const checked_allocator<U>& other) noexcept
-            : state(other.state) {}
+        checked_allocator(const checked_allocator<U>& other) noexcept : state(other.state) {}
 
-        tay::expected<T*, tay::error_code> try_allocate(
-            std::size_t count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_t count) noexcept {
             if (state->fail) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
-            auto* memory = static_cast<T*>(
-                ::operator new(count * sizeof(T), std::nothrow));
+            auto* memory = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
             if (memory == nullptr) {
-                return tay::expected<T*, tay::error_code>(
-                    tay::unexpect, tay::error_code::OUT_OF_MEMORY);
+                return tay::expected<T*, tay::error_code>(tay::unexpect,
+                                                          tay::error_code::OUT_OF_MEMORY);
             }
             return memory;
         }
 
-        void deallocate(T* memory, std::size_t) noexcept {
+        void deallocate(T* memory, size_t) noexcept {
             ::operator delete(memory);
         }
 
@@ -54,14 +61,12 @@ namespace {
     };
 
     template <class T, class U>
-    bool operator==(const checked_allocator<T>& left,
-                    const checked_allocator<U>& right) noexcept {
+    bool operator==(const checked_allocator<T>& left, const checked_allocator<U>& right) noexcept {
         return left.state == right.state;
     }
 
     template <class T, class U>
-    bool operator!=(const checked_allocator<T>& left,
-                    const checked_allocator<U>& right) noexcept {
+    bool operator!=(const checked_allocator<T>& left, const checked_allocator<U>& right) noexcept {
         return !(left == right);
     }
 
@@ -80,9 +85,8 @@ int main() {
     assert(list.empty() && list.capacity() == 0);
 
     using map_value = std::pair<const int, int>;
-    using map_type  = tay::hash_map<int, int, std::hash<int>,
-                                    std::equal_to<int>,
-                                    checked_allocator<map_value>>;
+    using map_type =
+        tay::hash_map<int, int, std::hash<int>, std::equal_to<int>, checked_allocator<map_value>>;
     static_assert(!has_subscript<map_type>);
 
     checked_allocator<map_value> map_allocator(state);
@@ -109,8 +113,7 @@ int main() {
     assert(map_created->bucket_count() == old_buckets);
     assert(map_created->contains(1));
 
-    using set_type  = tay::hash_set<int, std::hash<int>, std::equal_to<int>,
-                                    checked_allocator<int>>;
+    using set_type = tay::hash_set<int, std::hash<int>, std::equal_to<int>, checked_allocator<int>>;
     auto set_failed = set_type::try_create(list_allocator);
     assert(!set_failed);
     assert(set_failed.error() == tay::error_code::OUT_OF_MEMORY);

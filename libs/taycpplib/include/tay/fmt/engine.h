@@ -1,6 +1,12 @@
 /**
  * @file engine.h
- * @brief Compile-time validation and callback formatting engine.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 实现编译期格式校验和回调格式化引擎。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -35,21 +41,18 @@ namespace tay::detail {
     };
 
     template <class Formatter>
-    concept has_parse =
-        requires(Formatter value, format_parse_context& context) {
-            {
-                value.parse(context)
-            } -> std::same_as<format_parse_context::iterator>;
-        };
+    concept has_parse = requires(Formatter value, format_parse_context& context) {
+        {
+            value.parse(context)
+        } -> std::same_as<format_parse_context::iterator>;
+    };
 
-    inline constexpr parse_error validate_argument_spec(std::size_t,
-                                                        string_view) noexcept {
+    inline constexpr parse_error validate_argument_spec(size_t, string_view) noexcept {
         return parse_error::argument_out_of_range;
     }
 
     template <class Head, class... Tail>
-    constexpr parse_error validate_argument_spec(std::size_t index,
-                                                 string_view spec) noexcept {
+    constexpr parse_error validate_argument_spec(size_t index, string_view spec) noexcept {
         if (index != 0) {
             if constexpr (sizeof...(Tail) == 0) {
                 return parse_error::argument_out_of_range;
@@ -65,29 +68,24 @@ namespace tay::detail {
             formatter_type selected{};
             format_parse_context context(spec);
             const auto consumed = selected.parse(context);
-            return consumed == context.end() ? parse_error::none
-                                             : parse_error::invalid_format_spec;
+            return consumed == context.end() ? parse_error::none : parse_error::invalid_format_spec;
         }
     }
 
     template <class LiteralHandler, class FieldHandler>
-    constexpr parse_error scan_format(string_view text,
-                                      LiteralHandler&& literal,
+    constexpr parse_error scan_format(string_view text, LiteralHandler&& literal,
                                       FieldHandler&& field) {
-        std::size_t position      = 0;
-        std::size_t next_argument = 0;
-        indexing_mode index_mode  = indexing_mode::unknown;
+        size_t position          = 0;
+        size_t next_argument     = 0;
+        indexing_mode index_mode = indexing_mode::unknown;
 
         while (position < text.size()) {
-            const std::size_t literal_start = position;
-            while (position < text.size() && text[position] != '{' &&
-                   text[position] != '}')
-            {
+            const size_t literal_start = position;
+            while (position < text.size() && text[position] != '{' && text[position] != '}') {
                 ++position;
             }
             if (position != literal_start) {
-                literal(string_view(text.data() + literal_start,
-                                    position - literal_start));
+                literal(string_view(text.data() + literal_start, position - literal_start));
             }
             if (position == text.size()) {
                 return parse_error::none;
@@ -109,18 +107,13 @@ namespace tay::detail {
             }
 
             ++position;
-            bool has_index       = false;
-            std::size_t argument = 0;
+            bool has_index  = false;
+            size_t argument = 0;
 
-            while (position < text.size() && text[position] >= '0' &&
-                   text[position] <= '9')
-            {
-                has_index = true;
-                const std::size_t digit =
-                    static_cast<std::size_t>(text[position] - '0');
-                if (argument >
-                    (std::numeric_limits<std::size_t>::max() - digit) / 10)
-                {
+            while (position < text.size() && text[position] >= '0' && text[position] <= '9') {
+                has_index          = true;
+                const size_t digit = static_cast<size_t>(text[position] - '0');
+                if (argument > (std::numeric_limits<size_t>::max() - digit) / 10) {
                     return parse_error::index_overflow;
                 }
                 argument = argument * 10 + digit;
@@ -140,7 +133,7 @@ namespace tay::detail {
                 argument   = next_argument++;
             }
 
-            std::size_t spec_start = position;
+            size_t spec_start = position;
             if (position < text.size() && text[position] == ':') {
                 spec_start = ++position;
                 while (position < text.size() && text[position] != '}') {
@@ -155,8 +148,7 @@ namespace tay::detail {
                 return parse_error::unmatched_open;
             }
 
-            const string_view spec(text.data() + spec_start,
-                                   position - spec_start);
+            const string_view spec(text.data() + spec_start, position - spec_start);
             const parse_error field_error = field(argument, spec);
             if (field_error != parse_error::none) {
                 return field_error;
@@ -196,49 +188,57 @@ namespace tay::detail {
 
     consteval void report_parse_error(parse_error error) {
         switch (error) {
-            case parse_error::unmatched_open:  fail_unmatched_open();
-            case parse_error::unescaped_close: fail_unescaped_close();
-            case parse_error::index_overflow:  fail_index_overflow();
-            case parse_error::argument_out_of_range:
-                fail_argument_out_of_range();
-            case parse_error::mixed_argument_indexing:
-                fail_mixed_argument_indexing();
-            case parse_error::invalid_format_spec: fail_invalid_format_spec();
-            case parse_error::missing_formatter:   fail_missing_formatter();
-            case parse_error::none:                break;
+            case parse_error::unmatched_open:          fail_unmatched_open();
+            case parse_error::unescaped_close:         fail_unescaped_close();
+            case parse_error::index_overflow:          fail_index_overflow();
+            case parse_error::argument_out_of_range:   fail_argument_out_of_range();
+            case parse_error::mixed_argument_indexing: fail_mixed_argument_indexing();
+            case parse_error::invalid_format_spec:     fail_invalid_format_spec();
+            case parse_error::missing_formatter:       fail_missing_formatter();
+            case parse_error::none:                    break;
         }
     }
 
     template <class... Args>
     consteval void validate_format(string_view text) {
         const auto ignore_literal = [](string_view) constexpr {};
-        const auto validate_field = [](std::size_t index,
-                                       string_view spec) constexpr {
+        const auto validate_field = [](size_t index, string_view spec) constexpr {
             if constexpr (sizeof...(Args) == 0) {
                 return parse_error::argument_out_of_range;
             } else {
                 return validate_argument_spec<Args...>(index, spec);
             }
         };
-        const parse_error error =
-            scan_format(text, ignore_literal, validate_field);
+        const parse_error error = scan_format(text, ignore_literal, validate_field);
         if (error != parse_error::none) {
             report_parse_error(error);
         }
     }
+}  // namespace tay::detail
 
-    template <std::size_t ChunkSize, class Callback>
+namespace tay {
+    template <class... Args>
+    template <size_t N>
+    consteval format_string<Args...>::format_string(const char (&text)[N]) noexcept
+        : text_(text, N - 1) {
+        detail::validate_format<Args...>(text_);
+    }
+}  // namespace tay
+
+namespace tay::detail {
+
+    template <size_t ChunkSize, class Callback>
     class callback_sink {
     private:
         Callback* callback_ = nullptr;
         char chunk_[ChunkSize];
-        std::size_t offset_    = 0;
-        std::size_t generated_ = 0;
-        bool sink_failed_      = false;
-        bool size_overflow_    = false;
+        size_t offset_      = 0;
+        size_t generated_   = 0;
+        bool sink_failed_   = false;
+        bool size_overflow_ = false;
 
         void count_character() noexcept {
-            if (generated_ == std::numeric_limits<std::size_t>::max()) {
+            if (generated_ == std::numeric_limits<size_t>::max()) {
                 size_overflow_ = true;
             } else {
                 ++generated_;
@@ -250,15 +250,14 @@ namespace tay::detail {
                 return;
             }
             const auto written = (*callback_)(chunk_, offset_);
-            if (written < 0 || static_cast<std::size_t>(written) != offset_) {
+            if (written < 0 || static_cast<size_t>(written) != offset_) {
                 sink_failed_ = true;
             }
             offset_ = 0;
         }
 
     public:
-        explicit callback_sink(Callback& callback) noexcept
-            : callback_(&callback) {}
+        explicit callback_sink(Callback& callback) noexcept : callback_(&callback) {}
 
         void put(char character) {
             if (stopped()) {
@@ -271,8 +270,8 @@ namespace tay::detail {
             }
         }
 
-        void write(const char* data, std::size_t size) {
-            for (std::size_t index = 0; index < size; ++index) {
+        void write(const char* data, size_t size) {
+            for (size_t index = 0; index < size; ++index) {
                 put(data[index]);
             }
         }
@@ -285,29 +284,26 @@ namespace tay::detail {
             return sink_failed_ || size_overflow_;
         }
 
-        [[nodiscard]] expected<std::size_t, format_error> result() const {
+        [[nodiscard]] expected<size_t, format_error> result() const {
             if (size_overflow_) {
-                return expected<std::size_t, format_error>(
-                    unexpect, format_error::output_size_overflow);
+                return expected<size_t, format_error>(unexpect, format_error::output_size_overflow);
             }
             if (sink_failed_) {
-                return expected<std::size_t, format_error>(
-                    unexpect, format_error::sink_error);
+                return expected<size_t, format_error>(unexpect, format_error::sink_error);
             }
             return generated_;
         }
     };
 
     template <class Context>
-    void format_argument(std::size_t, string_view, Context&) {}
+    void format_argument(size_t, string_view, Context&) {}
 
     template <class Context, class Head, class... Tail>
-    void format_argument(std::size_t index, string_view spec, Context& context,
-                         Head&& head, Tail&&... tail) {
+    void format_argument(size_t index, string_view spec, Context& context, Head&& head,
+                         Tail&&... tail) {
         if (index != 0) {
             if constexpr (sizeof...(Tail) != 0) {
-                format_argument(index - 1, spec, context,
-                                std::forward<Tail>(tail)...);
+                format_argument(index - 1, spec, context, std::forward<Tail>(tail)...);
             }
             return;
         }
@@ -328,14 +324,20 @@ namespace tay::detail {
                 context.write(literal);
             }
         };
-        const auto write_field = [&context, &args...](std::size_t index,
-                                                      string_view spec) {
+        const auto write_field = [&context, &args...](size_t index, string_view spec) {
             if (!context.stopped()) {
-                format_argument(index, spec, context,
-                                std::forward<Args>(args)...);
+                format_argument(index, spec, context, std::forward<Args>(args)...);
             }
             return parse_error::none;
         };
         (void)scan_format(text, write_literal, write_field);
+    }
+
+    template <class Sink>
+    template <class... Args>
+    typename basic_format_context<Sink>::iterator basic_format_context<Sink>::format(
+        format_string<std::type_identity_t<Args>...> fmt, Args&&... args) {
+        execute_format(*this, fmt.get(), std::forward<Args>(args)...);
+        return out();
     }
 }  // namespace tay::detail

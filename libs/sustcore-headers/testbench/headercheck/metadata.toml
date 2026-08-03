@@ -1,0 +1,5 @@
+[[headercheck]]
+id = "sustcore-capability"
+header = "sustcore/capability.h"
+language = "c++"
+environments = ["freestanding"]

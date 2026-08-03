@@ -1,11 +1,11 @@
 /**
  * @file sbi.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief SBI接口
+ * @brief 声明 RISC-V SBI 的调用封装和标准扩展接口。
  * @version 0.1.0-dev.1
- * @date 2025-11-17
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  *
  */
 
@@ -44,8 +44,8 @@ typedef struct {
  * @param arg5  第6个参数
  * @return SBIRet 返回值
  */
-SBIRet sbi_ecall(dword eid, dword fid, xlen_t arg0, xlen_t arg1, xlen_t arg2,
-                 xlen_t arg3, xlen_t arg4, xlen_t arg5);
+SBIRet sbi_ecall(dword eid, dword fid, xlen_t arg0, xlen_t arg1, xlen_t arg2, xlen_t arg3,
+                 xlen_t arg4, xlen_t arg5);
 
 //-----------------------
 // Legacy SBI Calls
@@ -111,8 +111,7 @@ SBIRet sbi_legacy_remote_fence_i(const void *hart_mask_ptr);
  * @param size 大小
  * @return SBIRet 返回值
  */
-SBIRet sbi_legacy_remote_sfence_vma(const void *hart_mask_ptr, xlen_t start_addr,
-                                    xlen_t size);
+SBIRet sbi_legacy_remote_sfence_vma(const void *hart_mask_ptr, xlen_t start_addr, xlen_t size);
 
 /**
  * @brief 远程虚拟地址刷新(带ASID)
@@ -123,8 +122,7 @@ SBIRet sbi_legacy_remote_sfence_vma(const void *hart_mask_ptr, xlen_t start_addr
  * @param asid 地址空间标识符
  * @return SBIRet 返回值
  */
-SBIRet sbi_legacy_remote_sfence_vma_asid(const void *hart_mask_ptr,
-                                         xlen_t start_addr, xlen_t size,
+SBIRet sbi_legacy_remote_sfence_vma_asid(const void *hart_mask_ptr, xlen_t start_addr, xlen_t size,
                                          xlen_t asid);
 
 /**
@@ -231,12 +229,12 @@ SBIRet sbi_dbcn_console_write_byte(char ch);
  * @param stime_value 绝对时间
  * @return SBIRet 返回值
  * @note
- * 如果 supervisor 希望清除定时器中断而不安排下一个定时器事件, 
- * 它可以请求一个无限远的定时器中断, 即 `(uint64_t)-1`. 
+ * 如果 supervisor 希望清除定时器中断而不安排下一个定时器事件,
+ * 它可以请求一个无限远的定时器中断, 即 `(uint64_t)-1`.
  * 或者, 为了不接收定时器中断, 它可以通过清除 `sie.STIE` CSR 位
- * 来屏蔽定时器中断. 当 `stime_value` 被设置为未来的某个时间时, 
- * 此功能必须清除挂起的定时器中断位, 无论定时器中断是否被屏蔽. 
- * 此功能总是在 `sbiret.error` 中返回 SBI_SUCCESS. 
+ * 来屏蔽定时器中断. 当 `stime_value` 被设置为未来的某个时间时,
+ * 此功能必须清除挂起的定时器中断位, 无论定时器中断是否被屏蔽.
+ * 此功能总是在 `sbiret.error` 中返回 SBI_SUCCESS.
  */
 SBIRet sbi_set_timer(qword stime_value);
 
@@ -250,7 +248,7 @@ SBIRet sbi_set_timer(qword stime_value);
  *
  * @return SBIRet 返回值
  * @note
- * 处理器间的中断在接收方的 harts 上表现为监控程序软件中断. 
+ * 处理器间的中断在接收方的 harts 上表现为监控程序软件中断.
  */
 SBIRet sbi_send_ipi(xlen_t hart_mask, xlen_t hart_mask_base);
 
@@ -262,7 +260,7 @@ SBIRet sbi_send_ipi(xlen_t hart_mask, xlen_t hart_mask_base);
 /**
  * @brief 远程 FENCE.I (FID #0)
  *
- * 指示远程 harts 执行 FENCE.I 指令. 
+ * 指示远程 harts 执行 FENCE.I 指令.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -274,7 +272,7 @@ SBIRet sbi_remote_fence_i(xlen_t hart_mask, xlen_t hart_mask_base);
  * @brief 远程 SFENCE.VMA (FID #1)
  *
  * 指示远程 harts 执行一个或多个 SFENCE.VMA 指令, 覆盖从 start_addr 到
- * start_addr + size 的虚拟地址范围. 
+ * start_addr + size 的虚拟地址范围.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -282,14 +280,14 @@ SBIRet sbi_remote_fence_i(xlen_t hart_mask, xlen_t hart_mask_base);
  * @param size 大小
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_sfence_vma(xlen_t hart_mask, xlen_t hart_mask_base,
-                             xlen_t start_addr, xlen_t size);
+SBIRet sbi_remote_sfence_vma(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                             xlen_t size);
 
 /**
  * @brief 远程 SFENCE.VMA with ASID (FID #2)
  *
  * 指示远程 harts 执行一个或多个 SFENCE.VMA 指令, 覆盖从 start_addr 到
- * start_addr + size 的虚拟地址范围, 仅覆盖指定的 ASID. 
+ * start_addr + size 的虚拟地址范围, 仅覆盖指定的 ASID.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -298,15 +296,15 @@ SBIRet sbi_remote_sfence_vma(xlen_t hart_mask, xlen_t hart_mask_base,
  * @param asid 地址空间标识符
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_sfence_vma_asid(xlen_t hart_mask, xlen_t hart_mask_base,
-                                  xlen_t start_addr, xlen_t size, xlen_t asid);
+SBIRet sbi_remote_sfence_vma_asid(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                                  xlen_t size, xlen_t asid);
 
 /**
  * @brief 带 VMID 的远程 HFENCE.GVMA (FID #3)
  *
  * 指示远程 harts 执行一个或多个 HFENCE.GVMA 指令, 覆盖从 start_addr 到
  * start_addr + size 的客户机物理地址范围, 且仅针对给定的
- * VMID. 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效. 
+ * VMID. 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -315,15 +313,15 @@ SBIRet sbi_remote_sfence_vma_asid(xlen_t hart_mask, xlen_t hart_mask_base,
  * @param vmid 虚拟机标识符
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_hfence_gvma_vmid(xlen_t hart_mask, xlen_t hart_mask_base,
-                                   xlen_t start_addr, xlen_t size, xlen_t vmid);
+SBIRet sbi_remote_hfence_gvma_vmid(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                                   xlen_t size, xlen_t vmid);
 
 /**
  * @brief 远程 HFENCE.GVMA (FID #4)
  *
  * 指示远程 harts 执行一个或多个 HFENCE.GVMA 指令, 覆盖从 start_addr 到
- * start_addr + size 的客户机物理地址范围, 针对所有客户机. 
- * 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效. 
+ * start_addr + size 的客户机物理地址范围, 针对所有客户机.
+ * 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -331,15 +329,15 @@ SBIRet sbi_remote_hfence_gvma_vmid(xlen_t hart_mask, xlen_t hart_mask_base,
  * @param size 大小
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_hfence_gvma(xlen_t hart_mask, xlen_t hart_mask_base,
-                              xlen_t start_addr, xlen_t size);
+SBIRet sbi_remote_hfence_gvma(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                              xlen_t size);
 
 /**
  * @brief 带 ASID 的远程 HFENCE.VVMA (FID #5)
  *
  * 指示远程 harts 执行一个或多个 HFENCE.VVMA 指令, 覆盖从 start_addr 到
  * start_addr + size 的客户机虚拟地址范围, 针对给定的 ASID 和调用 hart 的当前
- * VMID (在 hgatp CSR 中）. 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效. 
+ * VMID (在 hgatp CSR 中）. 此函数调用仅对实现了虚拟机监控器扩展的 harts 有效.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -348,8 +346,8 @@ SBIRet sbi_remote_hfence_gvma(xlen_t hart_mask, xlen_t hart_mask_base,
  * @param asid 地址空间标识符
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_hfence_vvma_asid(xlen_t hart_mask, xlen_t hart_mask_base,
-                                   xlen_t start_addr, xlen_t size, xlen_t asid);
+SBIRet sbi_remote_hfence_vvma_asid(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                                   xlen_t size, xlen_t asid);
 
 /**
  * @brief 远程 HFENCE.VVMA (FID #6)
@@ -357,7 +355,7 @@ SBIRet sbi_remote_hfence_vvma_asid(xlen_t hart_mask, xlen_t hart_mask_base,
  * 指示远程 harts 执行一个或多个 HFENCE.VVMA 指令, 覆盖从 start_addr 到
  * start_addr + size 的客户机虚拟地址范围, 针对调用 hart 的当前 VMID (在
  * hgatp CSR 中）和所有 ASID. 此函数调用仅对实现了虚拟机监控器扩展的 harts
- * 有效. 
+ * 有效.
  *
  * @param hart_mask hart掩码
  * @param hart_mask_base hart掩码基址
@@ -365,8 +363,8 @@ SBIRet sbi_remote_hfence_vvma_asid(xlen_t hart_mask, xlen_t hart_mask_base,
  * @param size 大小
  * @return SBIRet 返回值
  */
-SBIRet sbi_remote_hfence_vvma(xlen_t hart_mask, xlen_t hart_mask_base,
-                              xlen_t start_addr, xlen_t size);
+SBIRet sbi_remote_hfence_vvma(xlen_t hart_mask, xlen_t hart_mask_base, xlen_t start_addr,
+                              xlen_t size);
 
 #ifdef __cplusplus
 }

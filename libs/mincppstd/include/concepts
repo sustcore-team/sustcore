@@ -1,9 +1,9 @@
 /**
- * @file concept
+ * @file concepts
  * @author theflysong (song_of_the_fly@163.com)
- * @brief C++概念
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <concepts> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-01-19
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -19,19 +19,17 @@ namespace std {
     concept same_as = is_same_v<T, U> && is_same_v<U, T>;
 
     template <class From, class To>
-    concept convertible_to = is_convertible_v<From, To> &&
-                             requires { static_cast<To>(declval<From>()); };
+    concept convertible_to =
+        is_convertible_v<From, To> && requires { static_cast<To>(declval<From>()); };
 
     template <class Derived, class Base>
-    concept derived_from =
-        is_base_of_v<Base, Derived> &&
-        is_convertible_v<const volatile Derived*, const volatile Base*>;
+    concept derived_from = is_base_of_v<Base, Derived> &&
+                           is_convertible_v<const volatile Derived*, const volatile Base*>;
 
     template <class T, class U>
     concept common_reference_with =
         same_as<common_reference_t<T, U>, common_reference_t<U, T>> &&
-        convertible_to<T, common_reference_t<T, U>> &&
-        convertible_to<U, common_reference_t<T, U>>;
+        convertible_to<T, common_reference_t<T, U>> && convertible_to<U, common_reference_t<T, U>>;
 
     template <class T>
     concept integral = is_integral_v<T>;
@@ -54,21 +52,19 @@ namespace std {
     }  // namespace __detail
 
     template <class LHS, class RHS>
-    concept assignable_from =
-        is_lvalue_reference_v<LHS> &&
-        common_reference_with<__detail::cref_t<LHS>, __detail::cref_t<RHS>> &&
-        requires(LHS lhs, RHS&& rhs) {
-            {
-                lhs = static_cast<RHS&&>(rhs)
-            } -> same_as<LHS>;
-        };
+    concept assignable_from = is_lvalue_reference_v<LHS> &&
+                              common_reference_with<__detail::cref_t<LHS>, __detail::cref_t<RHS>> &&
+                              requires(LHS lhs, RHS&& rhs) {
+                                  {
+                                      lhs = static_cast<RHS&&>(rhs)
+                                  } -> same_as<LHS>;
+                              };
 
     template <class T>
     concept destructible = is_nothrow_destructible_v<T>;
 
     template <class T, class... Args>
-    concept constructible_from =
-        destructible<T> && is_constructible_v<T, Args...>;
+    concept constructible_from = destructible<T> && is_constructible_v<T, Args...>;
 
     template <class T>
     concept default_initializable = constructible_from<T> && requires {
@@ -77,15 +73,13 @@ namespace std {
     };
 
     template <class T>
-    concept move_constructible =
-        constructible_from<T, T> && convertible_to<T, T>;
+    concept move_constructible = constructible_from<T, T> && convertible_to<T, T>;
 
     template <class T>
     concept copy_constructible =
-        move_constructible<T> && constructible_from<T, T&> &&
-        convertible_to<T&, T> && constructible_from<T, const T&> &&
-        convertible_to<const T&, T> && constructible_from<T, const T> &&
-        convertible_to<const T, T>;
+        move_constructible<T> && constructible_from<T, T&> && convertible_to<T&, T> &&
+        constructible_from<T, const T&> && convertible_to<const T&, T> &&
+        constructible_from<T, const T> && convertible_to<const T, T>;
 
     namespace ranges {
         namespace __swap {
@@ -93,12 +87,11 @@ namespace std {
             void swap(T&, T&) = delete;
 
             template <class T, class U>
-            concept adl_swap =
-                (__detail::class_or_enum<remove_reference_t<T>> ||
-                 __detail::class_or_enum<remove_reference_t<U>>) &&
-                requires(T&& value, U&& other) {
-                    swap(static_cast<T&&>(value), static_cast<U&&>(other));
-                };
+            concept adl_swap = (__detail::class_or_enum<remove_reference_t<T>> ||
+                                __detail::class_or_enum<remove_reference_t<U>>) &&
+                               requires(T&& value, U&& other) {
+                                   swap(static_cast<T&&>(value), static_cast<U&&>(other));
+                               };
 
             struct swap_fn {
             private:
@@ -107,19 +100,16 @@ namespace std {
                     if constexpr (adl_swap<T, U>) {
                         return noexcept(swap(declval<T>(), declval<U>()));
                     } else {
-                        return is_nothrow_move_constructible_v<
-                                   remove_reference_t<T>> &&
-                               is_nothrow_assignable_v<T,
-                                                       remove_reference_t<T>>;
+                        return is_nothrow_move_constructible_v<remove_reference_t<T>> &&
+                               is_nothrow_assignable_v<T, remove_reference_t<T>>;
                     }
                 }
 
             public:
                 template <class T, class U>
-                    requires adl_swap<T, U> ||
-                             (same_as<T, U> && is_lvalue_reference_v<T> &&
-                              move_constructible<remove_reference_t<T>> &&
-                              assignable_from<T, remove_reference_t<T>>)
+                    requires adl_swap<T, U> || (same_as<T, U> && is_lvalue_reference_v<T> &&
+                                                move_constructible<remove_reference_t<T>> &&
+                                                assignable_from<T, remove_reference_t<T>>)
                 constexpr void operator()(T&& value, U&& other) const
                     noexcept(is_noexcept<T, U>()) {
                     if constexpr (adl_swap<T, U>) {
@@ -133,12 +123,11 @@ namespace std {
                 }
 
                 template <class T, class U, size_t Size>
-                    requires requires(const swap_fn& swapper, T& value,
-                                      U& other) { swapper(value, other); }
-                constexpr void operator()(T (&left)[Size],
-                                          U (&right)[Size]) const
-                    noexcept(noexcept(declval<const swap_fn&>()(*left,
-                                                                *right))) {
+                    requires requires(const swap_fn& swapper, T& value, U& other) {
+                        swapper(value, other);
+                    }
+                constexpr void operator()(T (&left)[Size], U (&right)[Size]) const
+                    noexcept(noexcept(declval<const swap_fn&>()(*left, *right))) {
                     for (size_t index = 0; index < Size; ++index) {
                         (*this)(left[index], right[index]);
                     }
@@ -150,26 +139,23 @@ namespace std {
     }  // namespace ranges
 
     template <class T>
-    concept swappable =
-        requires(T& left, T& right) { ranges::swap(left, right); };
+    concept swappable = requires(T& left, T& right) { ranges::swap(left, right); };
 
     template <class T, class U>
-    concept swappable_with =
-        common_reference_with<T, U> && requires(T&& value, U&& other) {
-            ranges::swap(static_cast<T&&>(value), static_cast<T&&>(value));
-            ranges::swap(static_cast<U&&>(other), static_cast<U&&>(other));
-            ranges::swap(static_cast<T&&>(value), static_cast<U&&>(other));
-            ranges::swap(static_cast<U&&>(other), static_cast<T&&>(value));
-        };
+    concept swappable_with = common_reference_with<T, U> && requires(T&& value, U&& other) {
+        ranges::swap(static_cast<T&&>(value), static_cast<T&&>(value));
+        ranges::swap(static_cast<U&&>(other), static_cast<U&&>(other));
+        ranges::swap(static_cast<T&&>(value), static_cast<U&&>(other));
+        ranges::swap(static_cast<U&&>(other), static_cast<T&&>(value));
+    };
 
     template <class T>
-    concept movable = is_object_v<T> && move_constructible<T> &&
-                      assignable_from<T&, T> && swappable<T>;
+    concept movable =
+        is_object_v<T> && move_constructible<T> && assignable_from<T&, T> && swappable<T>;
 
     template <class T>
-    concept copyable =
-        copy_constructible<T> && movable<T> && assignable_from<T&, T&> &&
-        assignable_from<T&, const T&> && assignable_from<T&, const T>;
+    concept copyable = copy_constructible<T> && movable<T> && assignable_from<T&, T&> &&
+                       assignable_from<T&, const T&> && assignable_from<T&, const T>;
 
     template <class T>
     concept semiregular = copyable<T> && default_initializable<T>;
@@ -179,105 +165,92 @@ namespace std {
         concept boolean_testable_impl = convertible_to<T, bool>;
 
         template <class T>
-        concept boolean_testable =
-            boolean_testable_impl<T> && requires(T&& value) {
-                {
-                    !static_cast<T&&>(value)
-                } -> boolean_testable_impl;
-            };
+        concept boolean_testable = boolean_testable_impl<T> && requires(T&& value) {
+            {
+                !static_cast<T&&>(value)
+            } -> boolean_testable_impl;
+        };
 
         template <class T, class U>
-        concept weakly_equality_comparable_with =
-            requires(cref_t<T> value, cref_t<U> other) {
-                {
-                    value == other
-                } -> boolean_testable;
-                {
-                    value != other
-                } -> boolean_testable;
-                {
-                    other == value
-                } -> boolean_testable;
-                {
-                    other != value
-                } -> boolean_testable;
-            };
+        concept weakly_equality_comparable_with = requires(cref_t<T> value, cref_t<U> other) {
+            {
+                value == other
+            } -> boolean_testable;
+            {
+                value != other
+            } -> boolean_testable;
+            {
+                other == value
+            } -> boolean_testable;
+            {
+                other != value
+            } -> boolean_testable;
+        };
 
         template <class T, class U,
-                  class Common =
-                      common_reference_t<const remove_reference_t<T>&,
-                                         const remove_reference_t<U>&>>
+                  class Common = common_reference_t<const remove_reference_t<T>&,
+                                                    const remove_reference_t<U>&>>
         concept comparison_common_type_with_impl =
-            same_as<common_reference_t<const remove_reference_t<T>&,
-                                       const remove_reference_t<U>&>,
-                    common_reference_t<const remove_reference_t<U>&,
-                                       const remove_reference_t<T>&>> &&
+            same_as<
+                common_reference_t<const remove_reference_t<T>&, const remove_reference_t<U>&>,
+                common_reference_t<const remove_reference_t<U>&, const remove_reference_t<T>&>> &&
             requires {
-                requires convertible_to<const remove_reference_t<T>&,
-                                        const Common&> ||
+                requires convertible_to<const remove_reference_t<T>&, const Common&> ||
                              convertible_to<T, const Common&>;
-                requires convertible_to<const remove_reference_t<U>&,
-                                        const Common&> ||
+                requires convertible_to<const remove_reference_t<U>&, const Common&> ||
                              convertible_to<U, const Common&>;
             };
 
         template <class T, class U>
         concept comparison_common_type_with =
-            comparison_common_type_with_impl<remove_cvref_t<T>,
-                                             remove_cvref_t<U>>;
+            comparison_common_type_with_impl<remove_cvref_t<T>, remove_cvref_t<U>>;
 
         template <class T, class U>
-        concept partially_ordered_with =
-            requires(cref_t<T> value, cref_t<U> other) {
-                {
-                    value < other
-                } -> boolean_testable;
-                {
-                    value > other
-                } -> boolean_testable;
-                {
-                    value <= other
-                } -> boolean_testable;
-                {
-                    value >= other
-                } -> boolean_testable;
-                {
-                    other < value
-                } -> boolean_testable;
-                {
-                    other > value
-                } -> boolean_testable;
-                {
-                    other <= value
-                } -> boolean_testable;
-                {
-                    other >= value
-                } -> boolean_testable;
-            };
+        concept partially_ordered_with = requires(cref_t<T> value, cref_t<U> other) {
+            {
+                value < other
+            } -> boolean_testable;
+            {
+                value > other
+            } -> boolean_testable;
+            {
+                value <= other
+            } -> boolean_testable;
+            {
+                value >= other
+            } -> boolean_testable;
+            {
+                other < value
+            } -> boolean_testable;
+            {
+                other > value
+            } -> boolean_testable;
+            {
+                other <= value
+            } -> boolean_testable;
+            {
+                other >= value
+            } -> boolean_testable;
+        };
     }  // namespace __detail
 
     template <class T>
-    concept equality_comparable =
-        __detail::weakly_equality_comparable_with<T, T>;
+    concept equality_comparable = __detail::weakly_equality_comparable_with<T, T>;
 
     template <class T, class U>
     concept equality_comparable_with =
         equality_comparable<T> && equality_comparable<U> &&
         __detail::comparison_common_type_with<T, U> &&
-        equality_comparable<
-            common_reference_t<__detail::cref_t<T>, __detail::cref_t<U>>> &&
+        equality_comparable<common_reference_t<__detail::cref_t<T>, __detail::cref_t<U>>> &&
         __detail::weakly_equality_comparable_with<T, U>;
 
     template <class T>
-    concept totally_ordered =
-        equality_comparable<T> && __detail::partially_ordered_with<T, T>;
+    concept totally_ordered = equality_comparable<T> && __detail::partially_ordered_with<T, T>;
 
     template <class T, class U>
     concept totally_ordered_with =
-        totally_ordered<T> && totally_ordered<U> &&
-        equality_comparable_with<T, U> &&
-        totally_ordered<
-            common_reference_t<__detail::cref_t<T>, __detail::cref_t<U>>> &&
+        totally_ordered<T> && totally_ordered<U> && equality_comparable_with<T, U> &&
+        totally_ordered<common_reference_t<__detail::cref_t<T>, __detail::cref_t<U>>> &&
         __detail::partially_ordered_with<T, U>;
 
     template <class T>
@@ -290,12 +263,12 @@ namespace std {
     concept regular_invocable = invocable<F, Args...>;
 
     template <class F, class... Args>
-    concept predicate = regular_invocable<F, Args...> &&
-                        __detail::boolean_testable<invoke_result_t<F, Args...>>;
+    concept predicate =
+        regular_invocable<F, Args...> && __detail::boolean_testable<invoke_result_t<F, Args...>>;
 
     template <class R, class T, class U>
-    concept relation = predicate<R, T, T> && predicate<R, U, U> &&
-                       predicate<R, T, U> && predicate<R, U, T>;
+    concept relation =
+        predicate<R, T, T> && predicate<R, U, U> && predicate<R, T, U> && predicate<R, U, T>;
 
     template <class R, class T, class U>
     concept strict_weak_order = relation<R, T, U>;

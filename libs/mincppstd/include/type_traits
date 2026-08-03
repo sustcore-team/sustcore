@@ -1,9 +1,9 @@
 /**
- * @file type_trait
+ * @file type_traits
  * @author theflysong (song_of_the_fly@163.com)
- * @brief type_trait
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <type_traits> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-01-19
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -45,17 +45,14 @@ namespace std {
 
     // is_constructible
     template <typename _Tp, typename... _Args>
-    struct is_constructible
-        : public bool_constant<__is_constructible(_Tp, _Args...)> {};
+    struct is_constructible : public bool_constant<__is_constructible(_Tp, _Args...)> {};
     template <typename _Tp, typename... _Args>
-    inline constexpr bool is_constructible_v =
-        is_constructible<_Tp, _Args...>::value;
+    inline constexpr bool is_constructible_v = is_constructible<_Tp, _Args...>::value;
 
     template <typename _Tp>
     struct is_copy_constructible : public is_constructible<_Tp, const _Tp&> {};
     template <typename _Tp>
-    inline constexpr bool is_copy_constructible_v =
-        is_copy_constructible<_Tp>::value;
+    inline constexpr bool is_copy_constructible_v = is_copy_constructible<_Tp>::value;
 
     template <typename _Tp>
     struct type_identity {
@@ -97,29 +94,24 @@ namespace std {
 
     // is_member_pointer
     template <typename _Tp>
-    struct is_member_pointer : public bool_constant<__is_member_pointer(_Tp)> {
-    };
+    struct is_member_pointer : public bool_constant<__is_member_pointer(_Tp)> {};
 
     // is_member_function_pointer
     template <typename _Tp>
-    struct is_member_function_pointer
-        : public bool_constant<__is_member_function_pointer(_Tp)> {};
+    struct is_member_function_pointer : public bool_constant<__is_member_function_pointer(_Tp)> {};
 
     // is_member_object_pointer
     template <typename _Tp>
-    struct is_member_object_pointer
-        : public bool_constant<__is_member_object_pointer(_Tp)> {};
+    struct is_member_object_pointer : public bool_constant<__is_member_object_pointer(_Tp)> {};
 
     template <typename _Tp>
     struct is_reference : public bool_constant<__is_reference(_Tp)> {};
 
     template <typename _Tp>
-    struct is_lvalue_reference
-        : public bool_constant<__is_lvalue_reference(_Tp)> {};
+    struct is_lvalue_reference : public bool_constant<__is_lvalue_reference(_Tp)> {};
 
     template <typename _Tp>
-    struct is_rvalue_reference
-        : public bool_constant<__is_rvalue_reference(_Tp)> {};
+    struct is_rvalue_reference : public bool_constant<__is_rvalue_reference(_Tp)> {};
 
     // is_object
     template <typename _Tp>
@@ -129,13 +121,16 @@ namespace std {
     template <typename _Tp>
     struct is_pod : public bool_constant<__is_pod(_Tp)> {};
 
+    // is_standard_layout
     template <typename _Tp>
-    struct is_trivially_copyable
-        : public bool_constant<__is_trivially_copyable(_Tp)> {};
+    struct is_standard_layout : public bool_constant<__is_standard_layout(_Tp)> {};
+
+    // is_trivially_copyable
+    template <typename _Tp>
+    struct is_trivially_copyable : public bool_constant<__is_trivially_copyable(_Tp)> {};
 
     template <typename _Tp>
-    struct is_default_constructible
-        : public bool_constant<__is_constructible(_Tp)> {};
+    struct is_default_constructible : public bool_constant<__is_constructible(_Tp)> {};
 
     template <typename _Tp>
     struct is_move_constructible : public is_constructible<_Tp, _Tp&&> {};
@@ -154,32 +149,25 @@ namespace std {
         : public bool_constant<__is_nothrow_constructible(_Tp, _Args...)> {};
 
     template <typename _Tp>
-    struct is_nothrow_default_constructible
-        : public is_nothrow_constructible<_Tp> {};
+    struct is_nothrow_default_constructible : public is_nothrow_constructible<_Tp> {};
 
     template <typename _Tp>
-    struct is_nothrow_copy_constructible
-        : public is_nothrow_constructible<_Tp, const _Tp&> {};
+    struct is_nothrow_copy_constructible : public is_nothrow_constructible<_Tp, const _Tp&> {};
 
     template <typename _Tp>
-    struct is_nothrow_move_constructible
-        : public is_nothrow_constructible<_Tp, _Tp&&> {};
+    struct is_nothrow_move_constructible : public is_nothrow_constructible<_Tp, _Tp&&> {};
 
     template <typename _Tp, typename _Up>
-    struct is_nothrow_assignable
-        : public bool_constant<__is_nothrow_assignable(_Tp, _Up)> {};
+    struct is_nothrow_assignable : public bool_constant<__is_nothrow_assignable(_Tp, _Up)> {};
 
     template <typename _Tp>
-    struct is_nothrow_copy_assignable
-        : public is_nothrow_assignable<_Tp&, const _Tp&> {};
+    struct is_nothrow_copy_assignable : public is_nothrow_assignable<_Tp&, const _Tp&> {};
 
     template <typename _Tp>
-    struct is_nothrow_move_assignable
-        : public is_nothrow_assignable<_Tp&, _Tp&&> {};
+    struct is_nothrow_move_assignable : public is_nothrow_assignable<_Tp&, _Tp&&> {};
 
     template <typename _Tp>
-    struct is_nothrow_destructible
-        : public bool_constant<__is_nothrow_destructible(_Tp)> {};
+    struct is_nothrow_destructible : public bool_constant<__is_nothrow_destructible(_Tp)> {};
 
     template <typename _Tp>
     struct is_destructible : public bool_constant<__is_destructible(_Tp)> {};
@@ -188,8 +176,7 @@ namespace std {
     struct is_integral : public bool_constant<__is_integral(_Tp)> {};
 
     template <typename _Tp>
-    struct is_floating_point : public bool_constant<__is_floating_point(_Tp)> {
-    };
+    struct is_floating_point : public bool_constant<__is_floating_point(_Tp)> {};
 
     template <typename _Tp>
     struct is_volatile : public bool_constant<__is_volatile(_Tp)> {};
@@ -225,34 +212,29 @@ namespace std {
     template <typename _Tp>
     inline constexpr bool is_reference_v = is_reference<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_lvalue_reference_v =
-        is_lvalue_reference<_Tp>::value;
+    inline constexpr bool is_lvalue_reference_v = is_lvalue_reference<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_rvalue_reference_v =
-        is_rvalue_reference<_Tp>::value;
+    inline constexpr bool is_rvalue_reference_v = is_rvalue_reference<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_void_v = is_void<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_member_pointer_v = is_member_pointer<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_member_function_pointer_v =
-        is_member_function_pointer<_Tp>::value;
+    inline constexpr bool is_member_function_pointer_v = is_member_function_pointer<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_member_object_pointer_v =
-        is_member_object_pointer<_Tp>::value;
+    inline constexpr bool is_member_object_pointer_v = is_member_object_pointer<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_object_v = is_object<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_pod_v = is_pod<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_trivially_copyable_v =
-        is_trivially_copyable<_Tp>::value;
+    inline constexpr bool is_standard_layout_v = is_standard_layout<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_default_constructible_v =
-        is_default_constructible<_Tp>::value;
+    inline constexpr bool is_trivially_copyable_v = is_trivially_copyable<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_move_constructible_v =
-        is_move_constructible<_Tp>::value;
+    inline constexpr bool is_default_constructible_v = is_default_constructible<_Tp>::value;
+    template <typename _Tp>
+    inline constexpr bool is_move_constructible_v = is_move_constructible<_Tp>::value;
     template <typename _Tp, typename _Up>
     inline constexpr bool is_assignable_v = is_assignable<_Tp, _Up>::value;
     template <typename _Tp>
@@ -272,17 +254,13 @@ namespace std {
     inline constexpr bool is_nothrow_move_constructible_v =
         is_nothrow_move_constructible<_Tp>::value;
     template <typename _Tp, typename _Up>
-    inline constexpr bool is_nothrow_assignable_v =
-        is_nothrow_assignable<_Tp, _Up>::value;
+    inline constexpr bool is_nothrow_assignable_v = is_nothrow_assignable<_Tp, _Up>::value;
     template <typename _Tp>
-    inline constexpr bool is_nothrow_copy_assignable_v =
-        is_nothrow_copy_assignable<_Tp>::value;
+    inline constexpr bool is_nothrow_copy_assignable_v = is_nothrow_copy_assignable<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_nothrow_move_assignable_v =
-        is_nothrow_move_assignable<_Tp>::value;
+    inline constexpr bool is_nothrow_move_assignable_v = is_nothrow_move_assignable<_Tp>::value;
     template <typename _Tp>
-    inline constexpr bool is_nothrow_destructible_v =
-        is_nothrow_destructible<_Tp>::value;
+    inline constexpr bool is_nothrow_destructible_v = is_nothrow_destructible<_Tp>::value;
     template <typename _Tp>
     inline constexpr bool is_destructible_v = is_destructible<_Tp>::value;
     template <typename _Tp>
@@ -350,8 +328,7 @@ namespace std {
         struct is_reference_wrapper<reference_wrapper<T>> : true_type {};
 
         template <typename T>
-        inline constexpr bool is_reference_wrapper_v =
-            is_reference_wrapper<T>::value;
+        inline constexpr bool is_reference_wrapper_v = is_reference_wrapper<T>::value;
 
         template <typename MemberPointer, typename Object>
         inline constexpr bool is_member_object_instance_v =
@@ -361,12 +338,9 @@ namespace std {
         // pointer-to-member function, reference_wrapper as object
         template <typename F, typename T, typename... Args>
             requires is_member_function_pointer_v<decay_t<F>>
-        constexpr auto
-        invoke_impl(F&& f, reference_wrapper<T> t, Args&&... args) noexcept(
-            noexcept((t.get().*
-                      std::forward<F>(f))(std::forward<Args>(args)...)))
-            -> decltype((t.get().*
-                         std::forward<F>(f))(std::forward<Args>(args)...)) {
+        constexpr auto invoke_impl(F&& f, reference_wrapper<T> t, Args&&... args) noexcept(
+            noexcept((t.get().*std::forward<F>(f))(std::forward<Args>(args)...)))
+            -> decltype((t.get().*std::forward<F>(f))(std::forward<Args>(args)...)) {
             return (t.get().*std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
@@ -375,35 +349,28 @@ namespace std {
             requires is_member_function_pointer_v<decay_t<F>> &&
                          is_member_object_instance_v<decay_t<F>, decay_t<T1>>
         constexpr auto invoke_impl(F&& f, T1&& t1, Args&&... args) noexcept(
-            noexcept((std::forward<T1>(t1).*
-                      std::forward<F>(f))(std::forward<Args>(args)...)))
-            -> decltype((std::forward<T1>(t1).*
-                         std::forward<F>(f))(std::forward<Args>(args)...)) {
-            return (std::forward<T1>(t1).*
-                    std::forward<F>(f))(std::forward<Args>(args)...);
+            noexcept((std::forward<T1>(t1).*std::forward<F>(f))(std::forward<Args>(args)...)))
+            -> decltype((std::forward<T1>(t1).*std::forward<F>(f))(std::forward<Args>(args)...)) {
+            return (std::forward<T1>(t1).*std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
         // pointer-to-member function, dereferenceable object
         template <typename F, typename T1, typename... Args>
             requires is_member_function_pointer_v<decay_t<F>> &&
-                         (!is_member_object_instance_v<decay_t<F>,
-                                                       decay_t<T1>>) &&
+                         (!is_member_object_instance_v<decay_t<F>, decay_t<T1>>) &&
                          (!is_reference_wrapper_v<decay_t<T1>>)
         constexpr auto invoke_impl(F&& f, T1&& t1, Args&&... args) noexcept(
-            noexcept(((*std::forward<T1>(t1)).*
-                      std::forward<F>(f))(std::forward<Args>(args)...)))
+            noexcept(((*std::forward<T1>(t1)).*std::forward<F>(f))(std::forward<Args>(args)...)))
             -> decltype(((*std::forward<T1>(t1)).*
                          std::forward<F>(f))(std::forward<Args>(args)...)) {
-            return ((*std::forward<T1>(t1)).*
-                    std::forward<F>(f))(std::forward<Args>(args)...);
+            return ((*std::forward<T1>(t1)).*std::forward<F>(f))(std::forward<Args>(args)...);
         }
 
         // pointer-to-data member, reference_wrapper as object
         template <typename F, typename T>
             requires is_member_object_pointer_v<decay_t<F>>
         constexpr auto invoke_impl(F&& f, reference_wrapper<T> t) noexcept(
-            noexcept(t.get().*std::forward<F>(f)))
-            -> decltype(t.get().*std::forward<F>(f)) {
+            noexcept(t.get().*std::forward<F>(f))) -> decltype(t.get().*std::forward<F>(f)) {
             return t.get().*std::forward<F>(f);
         }
 
@@ -411,8 +378,8 @@ namespace std {
         template <typename F, typename T1>
             requires is_member_object_pointer_v<decay_t<F>> &&
                          is_member_object_instance_v<decay_t<F>, decay_t<T1>>
-        constexpr auto invoke_impl(F&& f, T1&& t1) noexcept(
-            noexcept(std::forward<T1>(t1).*std::forward<F>(f)))
+        constexpr auto invoke_impl(F&& f, T1&& t1) noexcept(noexcept(std::forward<T1>(t1).*
+                                                                     std::forward<F>(f)))
             -> decltype(std::forward<T1>(t1).*std::forward<F>(f)) {
             return std::forward<T1>(t1).*std::forward<F>(f);
         }
@@ -420,11 +387,10 @@ namespace std {
         // pointer-to-data member, dereferenceable object
         template <typename F, typename T1>
             requires is_member_object_pointer_v<decay_t<F>> &&
-                         (!is_member_object_instance_v<decay_t<F>,
-                                                       decay_t<T1>>) &&
+                         (!is_member_object_instance_v<decay_t<F>, decay_t<T1>>) &&
                          (!is_reference_wrapper_v<decay_t<T1>>)
-        constexpr auto invoke_impl(F&& f, T1&& t1) noexcept(
-            noexcept((*std::forward<T1>(t1)).*std::forward<F>(f)))
+        constexpr auto invoke_impl(F&& f, T1&& t1) noexcept(noexcept((*std::forward<T1>(t1)).*
+                                                                     std::forward<F>(f)))
             -> decltype((*std::forward<T1>(t1)).*std::forward<F>(f)) {
             return (*std::forward<T1>(t1)).*std::forward<F>(f);
         }
@@ -450,10 +416,8 @@ namespace std {
         constexpr explicit reference_wrapper(T& ref) noexcept : __ptr(&ref) {}
         constexpr reference_wrapper(T&&) = delete;
 
-        constexpr reference_wrapper(const reference_wrapper&) noexcept =
-            default;
-        constexpr reference_wrapper& operator=(
-            const reference_wrapper&) noexcept = default;
+        constexpr reference_wrapper(const reference_wrapper&) noexcept            = default;
+        constexpr reference_wrapper& operator=(const reference_wrapper&) noexcept = default;
 
         constexpr operator T&() const noexcept {
             return *__ptr;
@@ -467,8 +431,8 @@ namespace std {
             requires requires(T& callable, Args&&... args) {
                 detail::invoke_impl(callable, std::forward<Args>(args)...);
             }
-        constexpr decltype(auto) operator()(Args&&... args) const noexcept(
-            noexcept(detail::invoke_impl(get(), std::forward<Args>(args)...))) {
+        constexpr decltype(auto) operator()(Args&&... args) const
+            noexcept(noexcept(detail::invoke_impl(get(), std::forward<Args>(args)...))) {
             return detail::invoke_impl(get(), std::forward<Args>(args)...);
         }
     };
@@ -478,11 +442,10 @@ namespace std {
         struct invoke_result_impl {};
 
         template <typename _Fp, typename... _Args>
-        struct invoke_result_impl<void_t<decltype(detail::invoke_impl(
-                                      declval<_Fp>(), declval<_Args>()...))>,
-                                  _Fp, _Args...> {
-            using type = decltype(detail::invoke_impl(declval<_Fp>(),
-                                                      declval<_Args>()...));
+        struct invoke_result_impl<
+            void_t<decltype(detail::invoke_impl(declval<_Fp>(), declval<_Args>()...))>, _Fp,
+            _Args...> {
+            using type = decltype(detail::invoke_impl(declval<_Fp>(), declval<_Args>()...));
         };
     }  // namespace detail
 
@@ -507,19 +470,16 @@ namespace std {
 
         template <typename _Rp, typename _Fp, typename... _Args>
         struct is_invocable_r_impl<true, _Rp, _Fp, _Args...>
-            : bool_constant<
-                  is_void_v<_Rp> ||
-                  is_convertible_v<invoke_result_t<_Fp, _Args...>, _Rp>> {};
+            : bool_constant<is_void_v<_Rp> ||
+                            is_convertible_v<invoke_result_t<_Fp, _Args...>, _Rp>> {};
     }  // namespace detail
 
     template <typename _Rp, typename _Fp, typename... _Args>
     struct is_invocable_r
-        : detail::is_invocable_r_impl<is_invocable_v<_Fp, _Args...>, _Rp, _Fp,
-                                      _Args...> {};
+        : detail::is_invocable_r_impl<is_invocable_v<_Fp, _Args...>, _Rp, _Fp, _Args...> {};
 
     template <typename _Rp, typename _Fp, typename... _Args>
-    inline constexpr bool is_invocable_r_v =
-        is_invocable_r<_Rp, _Fp, _Args...>::value;
+    inline constexpr bool is_invocable_r_v = is_invocable_r<_Rp, _Fp, _Args...>::value;
 
     namespace detail {
         template <bool, typename _Fp, typename... _Args>
@@ -527,18 +487,15 @@ namespace std {
 
         template <typename _Fp, typename... _Args>
         struct is_nothrow_invocable_impl<true, _Fp, _Args...>
-            : bool_constant<noexcept(
-                  detail::invoke_impl(declval<_Fp>(), declval<_Args>()...))> {};
+            : bool_constant<noexcept(detail::invoke_impl(declval<_Fp>(), declval<_Args>()...))> {};
     }  // namespace detail
 
     template <typename _Fp, typename... _Args>
     struct is_nothrow_invocable
-        : detail::is_nothrow_invocable_impl<is_invocable_v<_Fp, _Args...>, _Fp,
-                                            _Args...> {};
+        : detail::is_nothrow_invocable_impl<is_invocable_v<_Fp, _Args...>, _Fp, _Args...> {};
 
     template <typename _Fp, typename... _Args>
-    inline constexpr bool is_nothrow_invocable_v =
-        is_nothrow_invocable<_Fp, _Args...>::value;
+    inline constexpr bool is_nothrow_invocable_v = is_nothrow_invocable<_Fp, _Args...>::value;
 
     namespace detail {
         template <typename _Rp>
@@ -551,46 +508,40 @@ namespace std {
         struct is_nothrow_invocable_r_impl<true, _Rp, _Fp, _Args...>
             : bool_constant<[]() consteval {
                 if constexpr (is_void_v<_Rp>) {
-                    return noexcept(detail::invoke_impl(declval<_Fp>(),
-                                                        declval<_Args>()...));
+                    return noexcept(detail::invoke_impl(declval<_Fp>(), declval<_Args>()...));
                 } else {
-                    return noexcept(
-                        detail::invoke_r_sink<_Rp>(detail::invoke_impl(
-                            declval<_Fp>(), declval<_Args>()...)));
+                    return noexcept(detail::invoke_r_sink<_Rp>(
+                        detail::invoke_impl(declval<_Fp>(), declval<_Args>()...)));
                 }
             }()> {};
     }  // namespace detail
 
     template <typename _Rp, typename _Fp, typename... _Args>
     struct is_nothrow_invocable_r
-        : detail::is_nothrow_invocable_r_impl<
-              is_invocable_r_v<_Rp, _Fp, _Args...>, _Rp, _Fp, _Args...> {};
+        : detail::is_nothrow_invocable_r_impl<is_invocable_r_v<_Rp, _Fp, _Args...>, _Rp, _Fp,
+                                              _Args...> {};
 
     template <typename _Rp, typename _Fp, typename... _Args>
     inline constexpr bool is_nothrow_invocable_r_v =
         is_nothrow_invocable_r<_Rp, _Fp, _Args...>::value;
 
     // 探测某个表达式是否有效(无效)
-    template <typename _Default, template <typename...> class _Operation,
-              typename... _Args>
+    template <typename _Default, template <typename...> class _Operation, typename... _Args>
     struct __detected_or {
         using type          = _Default;
         using __is_detected = false_type;
     };
 
     // 探测某个表达式是否有效(有效)
-    template <typename _Default, template <typename...> class _Operation,
-              typename... _Args>
+    template <typename _Default, template <typename...> class _Operation, typename... _Args>
         requires requires { typename _Operation<_Args...>; }
     struct __detected_or<_Default, _Operation, _Args...> {
         using type          = _Operation<_Args...>;
         using __is_detected = true_type;
     };
 
-    template <typename _Default, template <typename...> class _Operation,
-              typename... _Args>
-    using __detected_or_t =
-        typename __detected_or<_Default, _Operation, _Args...>::type;
+    template <typename _Default, template <typename...> class _Operation, typename... _Args>
+    using __detected_or_t = typename __detected_or<_Default, _Operation, _Args...>::type;
 
     template <typename T>
     struct make_unsigned {
@@ -635,12 +586,10 @@ namespace std {
 
     namespace detail {
         template <typename _Tp, typename _Up>
-        using conditional_result_t =
-            decltype(false ? declval<_Tp>() : declval<_Up>());
+        using conditional_result_t = decltype(false ? declval<_Tp>() : declval<_Up>());
 
         template <typename _Tp, typename _Up, int _Priority = 1>
-        struct common_type_decayed
-            : common_type_decayed<_Tp, _Up, _Priority + 1> {};
+        struct common_type_decayed : common_type_decayed<_Tp, _Up, _Priority + 1> {};
 
         template <typename _Tp, typename _Up>
             requires requires { typename conditional_result_t<_Tp, _Up>; }
@@ -649,25 +598,20 @@ namespace std {
         };
 
         template <typename _Tp, typename _Up>
-            requires requires {
-                typename conditional_result_t<const _Tp&, const _Up&>;
-            }
+            requires requires { typename conditional_result_t<const _Tp&, const _Up&>; }
         struct common_type_decayed<_Tp, _Up, 2> {
-            using type =
-                remove_cvref_t<conditional_result_t<const _Tp&, const _Up&>>;
+            using type = remove_cvref_t<conditional_result_t<const _Tp&, const _Up&>>;
         };
 
         template <typename _Tp, typename _Up>
         struct common_type_decayed<_Tp, _Up, 3> {};
 
         template <typename _Tp, typename _Up,
-                  bool = is_same_v<_Tp, decay_t<_Tp>> &&
-                         is_same_v<_Up, decay_t<_Up>>>
+                  bool = is_same_v<_Tp, decay_t<_Tp>> && is_same_v<_Up, decay_t<_Up>>>
         struct common_type_two : common_type<decay_t<_Tp>, decay_t<_Up>> {};
 
         template <typename _Tp, typename _Up>
-        struct common_type_two<_Tp, _Up, true> : common_type_decayed<_Tp, _Up> {
-        };
+        struct common_type_two<_Tp, _Up, true> : common_type_decayed<_Tp, _Up> {};
     }  // namespace detail
 
     template <>
@@ -681,19 +625,16 @@ namespace std {
 
     template <typename _Tp, typename _Up, typename... _Rest>
         requires requires { typename common_type_t<_Tp, _Up>; }
-    struct common_type<_Tp, _Up, _Rest...>
-        : common_type<common_type_t<_Tp, _Up>, _Rest...> {};
+    struct common_type<_Tp, _Up, _Rest...> : common_type<common_type_t<_Tp, _Up>, _Rest...> {};
 
     namespace detail {
         template <typename _From, typename _To>
         struct copy_cv {
         private:
-            using _Const =
-                conditional_t<is_const_v<_From>, add_const_t<_To>, _To>;
+            using _Const = conditional_t<is_const_v<_From>, add_const_t<_To>, _To>;
 
         public:
-            using type = conditional_t<is_volatile_v<_From>,
-                                       add_volatile_t<_Const>, _Const>;
+            using type = conditional_t<is_volatile_v<_From>, add_volatile_t<_Const>, _Const>;
         };
 
         template <typename _From, typename _To>
@@ -706,24 +647,20 @@ namespace std {
         using common_ref_t = typename common_ref_impl<_Tp, _Up>::type;
 
         template <typename _Xp, typename _Yp>
-        using condres_cvref_t =
-            conditional_result_t<copy_cv_t<_Xp, _Yp>&, copy_cv_t<_Yp, _Xp>&>;
+        using condres_cvref_t = conditional_result_t<copy_cv_t<_Xp, _Yp>&, copy_cv_t<_Yp, _Xp>&>;
 
         template <typename _Xp, typename _Yp>
         struct common_ref_impl<_Xp&, _Yp&, void_t<condres_cvref_t<_Xp, _Yp>>>
-            : enable_if<is_reference_v<condres_cvref_t<_Xp, _Yp>>,
-                        condres_cvref_t<_Xp, _Yp>> {};
+            : enable_if<is_reference_v<condres_cvref_t<_Xp, _Yp>>, condres_cvref_t<_Xp, _Yp>> {};
 
         template <typename _Xp, typename _Yp>
-        using common_ref_rvalue_t =
-            remove_reference_t<common_ref_t<_Xp&, _Yp&>>&&;
+        using common_ref_rvalue_t = remove_reference_t<common_ref_t<_Xp&, _Yp&>>&&;
 
         template <typename _Xp, typename _Yp>
         struct common_ref_impl<
             _Xp&&, _Yp&&,
-            enable_if_t<
-                is_convertible_v<_Xp&&, common_ref_rvalue_t<_Xp, _Yp>> &&
-                is_convertible_v<_Yp&&, common_ref_rvalue_t<_Xp, _Yp>>>> {
+            enable_if_t<is_convertible_v<_Xp&&, common_ref_rvalue_t<_Xp, _Yp>> &&
+                        is_convertible_v<_Yp&&, common_ref_rvalue_t<_Xp, _Yp>>>> {
             using type = common_ref_rvalue_t<_Xp, _Yp>;
         };
 
@@ -732,8 +669,7 @@ namespace std {
 
         template <typename _Xp, typename _Yp>
         struct common_ref_impl<_Xp&&, _Yp&,
-                               enable_if_t<is_convertible_v<
-                                   _Xp&&, common_ref_mixed_t<_Xp, _Yp>>>> {
+                               enable_if_t<is_convertible_v<_Xp&&, common_ref_mixed_t<_Xp, _Yp>>>> {
             using type = common_ref_mixed_t<_Xp, _Yp>;
         };
 
@@ -765,9 +701,10 @@ namespace std {
 
     namespace detail {
         template <typename _Tp, typename _Up>
-        using basic_common_ref_t = typename basic_common_reference<
-            remove_cvref_t<_Tp>, remove_cvref_t<_Up>, xref<_Tp>::template type,
-            xref<_Up>::template type>::type;
+        using basic_common_ref_t =
+            typename basic_common_reference<remove_cvref_t<_Tp>, remove_cvref_t<_Up>,
+                                            xref<_Tp>::template type,
+                                            xref<_Up>::template type>::type;
     }  // namespace detail
 
     template <typename... _Types>
@@ -786,8 +723,7 @@ namespace std {
 
     namespace detail {
         template <typename _Tp, typename _Up, int _Priority = 1>
-        struct common_reference_two
-            : common_reference_two<_Tp, _Up, _Priority + 1> {};
+        struct common_reference_two : common_reference_two<_Tp, _Up, _Priority + 1> {};
 
         template <typename _Tp, typename _Up>
             requires is_reference_v<_Tp> && is_reference_v<_Up> &&
@@ -819,8 +755,7 @@ namespace std {
     }  // namespace detail
 
     template <typename _Tp, typename _Up>
-    struct common_reference<_Tp, _Up> : detail::common_reference_two<_Tp, _Up> {
-    };
+    struct common_reference<_Tp, _Up> : detail::common_reference_two<_Tp, _Up> {};
 
     template <typename _Tp, typename _Up, typename... _Rest>
         requires requires { typename common_reference_t<_Tp, _Up>; }
@@ -835,8 +770,7 @@ namespace std {
     template <typename _Tp>
     using remove_pointer_t = typename remove_pointer<_Tp>::type;
 
-    [[nodiscard]] __ATTR_ALWAYS_INLINE__ constexpr bool
-    is_constant_evaluated() noexcept {
+    [[nodiscard]] __ATTR_ALWAYS_INLINE__ constexpr bool is_constant_evaluated() noexcept {
         return __builtin_is_constant_evaluated();
     }
 

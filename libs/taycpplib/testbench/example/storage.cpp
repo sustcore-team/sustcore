@@ -1,3 +1,14 @@
+/**
+ * @file storage.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 Tay 容器存储策略的选择和使用。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/bitmap.h>
 #include <tay/fifo.h>
 #include <tay/set.h>
@@ -24,8 +35,7 @@ int main() {
     tay::static_slot_map<int, 4> objects;
     auto handle = objects.emplace(42);
 
-    std::printf("values=%zu unique=%zu bits=%zu fifo=%zu object=%d\n",
-                values.size(), unique.size(), flags.count(), work.size(),
-                handle ? *objects.get(*handle) : -1);
+    std::printf("values=%zu unique=%zu bits=%zu fifo=%zu object=%d\n", values.size(), unique.size(),
+                flags.count(), work.size(), handle ? *objects.get(*handle) : -1);
     return 0;
 }

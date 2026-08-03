@@ -21,7 +21,7 @@ class hash_map;
 节点地址通常不会因 rehash 改变，但桶和迭代次序会改变；擦除使对应节点的
 引用与迭代器失效。普通失败使用 `expected`。
 
-## hash set storage family
+## 哈希集合存储族
 
 头文件：`<tay/set.h>`。
 
@@ -36,7 +36,7 @@ static_hash_set<Key, N, Hash, KeyEqual>
 容量耗尽返回 `OVERFLOW_ERROR`。`Hash` 与 `KeyEqual` 通过 composition
 保存，空策略通常不增加对象大小，状态化策略仍保持实例状态。
 
-## flat containers
+## 扁平关联容器
 
 头文件：`<tay/flat.h>`。
 

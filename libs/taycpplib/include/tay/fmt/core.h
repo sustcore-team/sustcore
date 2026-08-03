@@ -1,6 +1,12 @@
 /**
  * @file core.h
- * @brief Public building blocks for tay formatting.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 定义 Tay 格式化设施的公共基础组件。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -56,19 +62,18 @@ namespace tay {
             using type = std::remove_cv_t<T>;
         };
 
-        template <std::size_t N>
+        template <size_t N>
         struct format_arg_type_impl<char[N]> {
-            using type = char*;
+            using type = char *;
         };
 
-        template <std::size_t N>
+        template <size_t N>
         struct format_arg_type_impl<const char[N]> {
-            using type = const char*;
+            using type = const char *;
         };
 
         template <class T>
-        using format_arg_t =
-            typename format_arg_type_impl<std::remove_reference_t<T>>::type;
+        using format_arg_t = typename format_arg_type_impl<std::remove_reference_t<T>>::type;
     }  // namespace detail
 
     template <class... Args>
@@ -77,7 +82,7 @@ namespace tay {
         string_view text_{};
 
     public:
-        template <std::size_t N>
+        template <size_t N>
         consteval format_string(const char (&text)[N]) noexcept;
 
         [[nodiscard]] constexpr string_view get() const noexcept {

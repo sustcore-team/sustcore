@@ -1,6 +1,12 @@
 /**
- * @file detail/hash_table.h
- * @brief Shared exception-free chained hash table storage.
+ * @file hash_table.h
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 实现无异常链式哈希容器共享的底层存储。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -22,8 +28,7 @@ namespace tay::detail {
 
     template <class T>
     struct hash_equal {
-        [[nodiscard]] constexpr bool operator()(const T& left,
-                                                const T& right) const
+        [[nodiscard]] constexpr bool operator()(const T& left, const T& right) const
             noexcept(noexcept(left == right)) {
             return left == right;
         }
@@ -40,8 +45,8 @@ namespace tay::detail {
             : value(std::forward<Args>(args)...), next(nullptr) {}
     };
 
-    template <class Value, class Key, class KeyOfValue, class Allocator,
-              class Hash, class KeyEqual, bool ImmutableIterator>
+    template <class Value, class Key, class KeyOfValue, class Allocator, class Hash, class KeyEqual,
+              bool ImmutableIterator>
     class hash_table : private composition<hash_table_allocator_tag, Allocator>,
                        private composition<hash_table_hash_tag, Hash>,
                        private composition<hash_table_equal_tag, KeyEqual> {
@@ -51,41 +56,35 @@ namespace tay::detail {
         using allocator_type        = Allocator;
         using allocator_traits_type = allocator_traits<allocator_type>;
         using size_type             = typename allocator_traits_type::size_type;
-        using difference_type = typename allocator_traits_type::difference_type;
-        using hasher          = Hash;
-        using key_equal       = KeyEqual;
-        using reference       = value_type&;
-        using const_reference = const value_type&;
-        using pointer         = value_type*;
-        using const_pointer   = const value_type*;
+        using difference_type       = typename allocator_traits_type::difference_type;
+        using hasher                = Hash;
+        using key_equal             = KeyEqual;
+        using reference             = value_type&;
+        using const_reference       = const value_type&;
+        using pointer               = value_type*;
+        using const_pointer         = const value_type*;
 
     private:
-        using node_type = hash_node<value_type>;
-        using node_allocator =
-            typename allocator_traits_type::template rebind_alloc<node_type>;
-        using node_traits = allocator_traits<node_allocator>;
-        using bucket_allocator =
-            typename allocator_traits_type::template rebind_alloc<node_type*>;
-        using bucket_traits = allocator_traits<bucket_allocator>;
+        using node_type        = hash_node<value_type>;
+        using node_allocator   = typename allocator_traits_type::template rebind_alloc<node_type>;
+        using node_traits      = allocator_traits<node_allocator>;
+        using bucket_allocator = typename allocator_traits_type::template rebind_alloc<node_type*>;
+        using bucket_traits    = allocator_traits<bucket_allocator>;
 
-        static_assert(std::is_same_v<typename allocator_traits_type::value_type,
-                                     value_type>,
+        static_assert(std::is_same_v<typename allocator_traits_type::value_type, value_type>,
                       "hash table allocator value_type must match value_type");
         static_assert(std::is_nothrow_destructible_v<value_type>,
                       "hash containers require a nothrow destructor");
-        static_assert(
-            std::is_convertible_v<decltype(std::declval<const hasher&>()(
-                                      std::declval<const key_type&>())),
-                                  size_type> &&
-                noexcept(std::declval<const hasher&>()(
-                    std::declval<const key_type&>())),
-            "hash containers require a noexcept Hash");
-        static_assert(
-            std::is_convertible_v<decltype(std::declval<const key_equal&>()(
-                                      std::declval<const key_type&>(),
-                                      std::declval<const key_type&>())),
-                                  bool>,
-            "hash containers require a boolean KeyEqual");
+        static_assert(std::is_convertible_v<
+                          decltype(std::declval<const hasher&>()(std::declval<const key_type&>())),
+                          size_type> &&
+                          noexcept(std::declval<const hasher&>()(std::declval<const key_type&>())),
+                      "hash containers require a noexcept Hash");
+        static_assert(std::is_convertible_v<decltype(std::declval<const key_equal&>()(
+                                                std::declval<const key_type&>(),
+                                                std::declval<const key_type&>())),
+                                            bool>,
+                      "hash containers require a boolean KeyEqual");
 
         node_type** buckets_        = nullptr;
         size_type bucket_count_     = 0;
@@ -96,8 +95,7 @@ namespace tay::detail {
             return get<hash_table_allocator_tag>(this);
         }
 
-        [[nodiscard]] constexpr const allocator_type& allocator_ref()
-            const noexcept {
+        [[nodiscard]] constexpr const allocator_type& allocator_ref() const noexcept {
             return get<hash_table_allocator_tag>(this);
         }
 
@@ -117,8 +115,7 @@ namespace tay::detail {
             return get<hash_table_equal_tag>(this);
         }
 
-        [[nodiscard]] static constexpr const key_type& key_of(
-            const value_type& value) noexcept {
+        [[nodiscard]] static constexpr const key_type& key_of(const value_type& value) noexcept {
             return KeyOfValue{}(value);
         }
 
@@ -130,14 +127,12 @@ namespace tay::detail {
             return bucket_allocator(allocator_ref());
         }
 
-        [[nodiscard]] constexpr size_type bucket_index_for(
-            const key_type& key, size_type count) const noexcept {
-            return count == 0 ? 0
-                              : static_cast<size_type>(hash_ref()(key)) % count;
+        [[nodiscard]] constexpr size_type bucket_index_for(const key_type& key,
+                                                           size_type count) const noexcept {
+            return count == 0 ? 0 : static_cast<size_type>(hash_ref()(key)) % count;
         }
 
-        [[nodiscard]] constexpr size_type max_elements_for_buckets(
-            size_type count) const noexcept {
+        [[nodiscard]] constexpr size_type max_elements_for_buckets(size_type count) const noexcept {
             const size_type maximum   = size_type(-1);
             const size_type whole     = max_load_percent_ / 100;
             const size_type remainder = max_load_percent_ % 100;
@@ -159,15 +154,15 @@ namespace tay::detail {
             return result + tail;
         }
 
-        [[nodiscard]] constexpr expected<size_type, error_code>
-        minimum_bucket_count(size_type elements) const noexcept {
+        [[nodiscard]] constexpr expected<size_type, error_code> minimum_bucket_count(
+            size_type elements) const noexcept {
             if (elements == 0) {
                 return size_type{1};
             }
             const size_type maximum = max_bucket_count();
             if (maximum == 0 || max_elements_for_buckets(maximum) < elements) {
-                return expected<size_type, error_code>(
-                    unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
+                return expected<size_type, error_code>(unexpect,
+                                                       error_code::ALLOCATION_SIZE_OVERFLOW);
             }
 
             size_type low  = 1;
@@ -183,13 +178,12 @@ namespace tay::detail {
             return low;
         }
 
-        [[nodiscard]] constexpr expected<node_type**, error_code>
-        allocate_buckets(size_type count) noexcept {
+        [[nodiscard]] constexpr expected<node_type**, error_code> allocate_buckets(
+            size_type count) noexcept {
             bucket_allocator allocator = bucket_alloc();
-            auto allocation = bucket_traits::try_allocate(allocator, count);
+            auto allocation            = bucket_traits::try_allocate(allocator, count);
             if (!allocation) {
-                return expected<node_type**, error_code>(unexpect,
-                                                         allocation.error());
+                return expected<node_type**, error_code>(unexpect, allocation.error());
             }
             for (size_type index = 0; index < count; ++index) {
                 (*allocation)[index] = nullptr;
@@ -197,8 +191,7 @@ namespace tay::detail {
             return *allocation;
         }
 
-        constexpr void deallocate_buckets(node_type** buckets,
-                                          size_type count) noexcept {
+        constexpr void deallocate_buckets(node_type** buckets, size_type count) noexcept {
             if (buckets == nullptr) {
                 return;
             }
@@ -213,11 +206,9 @@ namespace tay::detail {
             node_allocator allocator = node_alloc();
             auto allocation          = node_traits::try_allocate(allocator, 1);
             if (!allocation) {
-                return expected<node_type*, error_code>(unexpect,
-                                                        allocation.error());
+                return expected<node_type*, error_code>(unexpect, allocation.error());
             }
-            node_traits::construct(allocator, *allocation,
-                                   std::forward<Args>(args)...);
+            node_traits::construct(allocator, *allocation, std::forward<Args>(args)...);
             return *allocation;
         }
 
@@ -251,14 +242,12 @@ namespace tay::detail {
             template <bool>
             friend class basic_iterator;
 
-            using table_type =
-                std::conditional_t<Constant, const hash_table, hash_table>;
+            using table_type   = std::conditional_t<Constant, const hash_table, hash_table>;
             table_type* table_ = nullptr;
             size_type bucket_  = 0;
             node_type* node_   = nullptr;
 
-            constexpr basic_iterator(table_type* table, size_type bucket,
-                                     node_type* node) noexcept
+            constexpr basic_iterator(table_type* table, size_type bucket, node_type* node) noexcept
                 : table_(table), bucket_(bucket), node_(node) {}
 
         public:
@@ -266,23 +255,18 @@ namespace tay::detail {
             using value_type        = hash_table::value_type;
             using difference_type   = hash_table::difference_type;
             using reference =
-                std::conditional_t<Constant || ImmutableIterator,
-                                   const value_type&, value_type&>;
-            using pointer = std::conditional_t<Constant || ImmutableIterator,
-                                               const value_type*, value_type*>;
+                std::conditional_t<Constant || ImmutableIterator, const value_type&, value_type&>;
+            using pointer =
+                std::conditional_t<Constant || ImmutableIterator, const value_type*, value_type*>;
 
-            constexpr basic_iterator() noexcept                      = default;
-            constexpr basic_iterator(const basic_iterator&) noexcept = default;
-            constexpr basic_iterator& operator=(
-                const basic_iterator&) noexcept = default;
+            constexpr basic_iterator() noexcept                                 = default;
+            constexpr basic_iterator(const basic_iterator&) noexcept            = default;
+            constexpr basic_iterator& operator=(const basic_iterator&) noexcept = default;
 
             template <bool Other>
                 requires(Constant && !Other)
-            constexpr basic_iterator(
-                const basic_iterator<Other>& other) noexcept
-                : table_(other.table_),
-                  bucket_(other.bucket_),
-                  node_(other.node_) {}
+            constexpr basic_iterator(const basic_iterator<Other>& other) noexcept
+                : table_(other.table_), bucket_(other.bucket_), node_(other.node_) {}
 
             [[nodiscard]] constexpr reference operator*() const noexcept {
                 return node_->value;
@@ -318,8 +302,7 @@ namespace tay::detail {
         using iterator       = basic_iterator<false>;
         using const_iterator = basic_iterator<true>;
 
-        constexpr hash_table(const allocator_type& allocator,
-                             const hasher& hash,
+        constexpr hash_table(const allocator_type& allocator, const hasher& hash,
                              const key_equal& equal) noexcept
             : composition<hash_table_allocator_tag, allocator_type>(allocator),
               composition<hash_table_hash_tag, hasher>(hash),
@@ -328,10 +311,8 @@ namespace tay::detail {
         constexpr hash_table(hash_table&& other) noexcept
             : composition<hash_table_allocator_tag, allocator_type>(
                   std::move(other.allocator_ref())),
-              composition<hash_table_hash_tag, hasher>(
-                  std::move(other.hash_ref())),
-              composition<hash_table_equal_tag, key_equal>(
-                  std::move(other.equal_ref())) {
+              composition<hash_table_hash_tag, hasher>(std::move(other.hash_ref())),
+              composition<hash_table_equal_tag, key_equal>(std::move(other.equal_ref())) {
             take_storage(std::move(other));
         }
 
@@ -343,18 +324,15 @@ namespace tay::detail {
             reset();
         }
 
-        [[nodiscard]] constexpr expected<void, error_code> initialize(
-            size_type bucket_count) noexcept {
+        [[nodiscard]] constexpr expected<void, error_code> init(size_type bucket_count) noexcept {
             if (buckets_ != nullptr) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::INVALID_ARGUMENT);
+                return expected<void, error_code>(unexpect, error_code::INVALID_ARGUMENT);
             }
             if (bucket_count == 0) {
                 bucket_count = 1;
             }
             if (bucket_count > max_bucket_count()) {
-                return expected<void, error_code>(
-                    unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
+                return expected<void, error_code>(unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
             }
             auto allocation = allocate_buckets(bucket_count);
             if (!allocation) {
@@ -425,11 +403,9 @@ namespace tay::detail {
             return max_load_percent_;
         }
 
-        constexpr expected<void, error_code> max_load_percent(
-            size_type percent) noexcept {
+        constexpr expected<void, error_code> max_load_percent(size_type percent) noexcept {
             if (percent == 0) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::INVALID_ARGUMENT);
+                return expected<void, error_code>(unexpect, error_code::INVALID_ARGUMENT);
             }
             max_load_percent_ = percent;
             return {};
@@ -457,9 +433,7 @@ namespace tay::detail {
                 return end();
             }
             const size_type index = bucket_index_for(key, bucket_count_);
-            for (node_type* node = buckets_[index]; node != nullptr;
-                 node            = node->next)
-            {
+            for (node_type* node = buckets_[index]; node != nullptr; node = node->next) {
                 if (equal_ref()(key_of(node->value), key)) {
                     return iterator(this, index, node);
                 }
@@ -467,15 +441,12 @@ namespace tay::detail {
             return end();
         }
 
-        [[nodiscard]] constexpr const_iterator find(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr const_iterator find(const key_type& key) const noexcept {
             if (buckets_ == nullptr) {
                 return cend();
             }
             const size_type index = bucket_index_for(key, bucket_count_);
-            for (node_type* node = buckets_[index]; node != nullptr;
-                 node            = node->next)
-            {
+            for (node_type* node = buckets_[index]; node != nullptr; node = node->next) {
                 if (equal_ref()(key_of(node->value), key)) {
                     return const_iterator(this, index, node);
                 }
@@ -483,13 +454,11 @@ namespace tay::detail {
             return cend();
         }
 
-        [[nodiscard]] constexpr bool contains(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr bool contains(const key_type& key) const noexcept {
             return find(key) != cend();
         }
 
-        [[nodiscard]] constexpr size_type count(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr size_type count(const key_type& key) const noexcept {
             return contains(key) ? 1 : 0;
         }
 
@@ -504,8 +473,8 @@ namespace tay::detail {
             return {found, next};
         }
 
-        [[nodiscard]] constexpr std::pair<const_iterator, const_iterator>
-        equal_range(const key_type& key) const noexcept {
+        [[nodiscard]] constexpr std::pair<const_iterator, const_iterator> equal_range(
+            const key_type& key) const noexcept {
             const_iterator found = find(key);
             if (found == cend()) {
                 return {found, found};
@@ -515,27 +484,22 @@ namespace tay::detail {
             return {found, next};
         }
 
-        [[nodiscard]] constexpr size_type bucket_size(
-            size_type index) const noexcept {
+        [[nodiscard]] constexpr size_type bucket_size(size_type index) const noexcept {
             if (index >= bucket_count_ || buckets_ == nullptr) {
                 return 0;
             }
             size_type result = 0;
-            for (node_type* node = buckets_[index]; node != nullptr;
-                 node            = node->next)
-            {
+            for (node_type* node = buckets_[index]; node != nullptr; node = node->next) {
                 ++result;
             }
             return result;
         }
 
-        [[nodiscard]] constexpr size_type bucket(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr size_type bucket(const key_type& key) const noexcept {
             return bucket_index_for(key, bucket_count_);
         }
 
-        constexpr expected<void, error_code> rehash(
-            size_type requested) noexcept {
+        constexpr expected<void, error_code> rehash(size_type requested) noexcept {
             auto minimum = minimum_bucket_count(size_);
             if (!minimum) {
                 return expected<void, error_code>(unexpect, minimum.error());
@@ -550,8 +514,7 @@ namespace tay::detail {
                 return {};
             }
             if (requested > max_bucket_count()) {
-                return expected<void, error_code>(
-                    unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
+                return expected<void, error_code>(unexpect, error_code::ALLOCATION_SIZE_OVERFLOW);
             }
             auto allocation = allocate_buckets(requested);
             if (!allocation) {
@@ -561,12 +524,11 @@ namespace tay::detail {
             for (size_type index = 0; index < bucket_count_; ++index) {
                 node_type* node = buckets_[index];
                 while (node != nullptr) {
-                    node_type* next = node->next;
-                    const size_type target =
-                        bucket_index_for(key_of(node->value), requested);
-                    node->next          = replacement[target];
-                    replacement[target] = node;
-                    node                = next;
+                    node_type* next        = node->next;
+                    const size_type target = bucket_index_for(key_of(node->value), requested);
+                    node->next             = replacement[target];
+                    replacement[target]    = node;
+                    node                   = next;
                 }
             }
             deallocate_buckets(buckets_, bucket_count_);
@@ -575,20 +537,18 @@ namespace tay::detail {
             return {};
         }
 
-        constexpr expected<void, error_code> reserve(
-            size_type elements) noexcept {
+        constexpr expected<void, error_code> reserve(size_type elements) noexcept {
             auto required = minimum_bucket_count(elements);
             if (!required) {
                 return expected<void, error_code>(unexpect, required.error());
             }
-            return *required > bucket_count_ ? rehash(*required)
-                                             : expected<void, error_code>{};
+            return *required > bucket_count_ ? rehash(*required) : expected<void, error_code>{};
         }
 
         template <class... Args>
             requires(std::is_nothrow_constructible_v<value_type, Args && ...>)
-        [[nodiscard]] constexpr expected<std::pair<iterator, bool>, error_code>
-        emplace_unique(const key_type& lookup_key, Args&&... args) noexcept {
+        [[nodiscard]] constexpr expected<std::pair<iterator, bool>, error_code> emplace_unique(
+            const key_type& lookup_key, Args&&... args) noexcept {
             iterator existing = find(lookup_key);
             if (existing != end()) {
                 return std::pair<iterator, bool>{existing, false};
@@ -600,24 +560,19 @@ namespace tay::detail {
 
             auto created = create_node(std::forward<Args>(args)...);
             if (!created) {
-                return expected<std::pair<iterator, bool>, error_code>(
-                    unexpect, created.error());
+                return expected<std::pair<iterator, bool>, error_code>(unexpect, created.error());
             }
             node_type* new_node = *created;
 
-            if (buckets_ == nullptr ||
-                size_ + 1 > max_elements_for_buckets(bucket_count_))
-            {
+            if (buckets_ == nullptr || size_ + 1 > max_elements_for_buckets(bucket_count_)) {
                 auto minimum = minimum_bucket_count(size_ + 1);
                 if (!minimum) {
                     destroy_node(new_node);
-                    return expected<std::pair<iterator, bool>, error_code>(
-                        unexpect, minimum.error());
+                    return expected<std::pair<iterator, bool>, error_code>(unexpect,
+                                                                           minimum.error());
                 }
                 size_type target = *minimum;
-                if (bucket_count_ != 0 &&
-                    bucket_count_ <= max_bucket_count() - bucket_count_)
-                {
+                if (bucket_count_ != 0 && bucket_count_ <= max_bucket_count() - bucket_count_) {
                     const size_type doubled = bucket_count_ + bucket_count_;
                     if (doubled > target) {
                         target = doubled;
@@ -626,18 +581,15 @@ namespace tay::detail {
                 auto grown = rehash(target);
                 if (!grown) {
                     destroy_node(new_node);
-                    return expected<std::pair<iterator, bool>, error_code>(
-                        unexpect, grown.error());
+                    return expected<std::pair<iterator, bool>, error_code>(unexpect, grown.error());
                 }
             }
 
-            const size_type index =
-                bucket_index_for(key_of(new_node->value), bucket_count_);
-            new_node->next  = buckets_[index];
-            buckets_[index] = new_node;
+            const size_type index = bucket_index_for(key_of(new_node->value), bucket_count_);
+            new_node->next        = buckets_[index];
+            buckets_[index]       = new_node;
             ++size_;
-            return std::pair<iterator, bool>{iterator(this, index, new_node),
-                                             true};
+            return std::pair<iterator, bool>{iterator(this, index, new_node), true};
         }
 
         constexpr iterator erase(const_iterator position) noexcept {
@@ -667,8 +619,7 @@ namespace tay::detail {
             if (next != nullptr) {
                 return iterator(this, index, next);
             }
-            for (size_type bucket = index + 1; bucket < bucket_count_; ++bucket)
-            {
+            for (size_type bucket = index + 1; bucket < bucket_count_; ++bucket) {
                 if (buckets_[bucket] != nullptr) {
                     return iterator(this, bucket, buckets_[bucket]);
                 }
@@ -680,13 +631,11 @@ namespace tay::detail {
             return erase(const_iterator(position));
         }
 
-        constexpr iterator erase(const_iterator first,
-                                 const_iterator last) noexcept {
+        constexpr iterator erase(const_iterator first, const_iterator last) noexcept {
             while (first != last && first != cend()) {
                 first = erase(first);
             }
-            return first == cend() ? end()
-                                   : iterator(this, first.bucket_, first.node_);
+            return first == cend() ? end() : iterator(this, first.bucket_, first.node_);
         }
 
         constexpr size_type erase(const key_type& key) noexcept {
@@ -702,16 +651,12 @@ namespace tay::detail {
             if (this == &other) {
                 return {};
             }
-            if constexpr (allocator_traits_type::propagate_on_container_swap::
-                              value)
-            {
+            if constexpr (allocator_traits_type::propagate_on_container_swap::value) {
                 using std::swap;
                 swap(allocator_ref(), other.allocator_ref());
-            } else if constexpr (!allocator_traits_type::is_always_equal::value)
-            {
+            } else if constexpr (!allocator_traits_type::is_always_equal::value) {
                 if (allocator_ref() != other.allocator_ref()) {
-                    return expected<void, error_code>(
-                        unexpect, error_code::INVALID_ARGUMENT);
+                    return expected<void, error_code>(unexpect, error_code::INVALID_ARGUMENT);
                 }
             }
             using std::swap;

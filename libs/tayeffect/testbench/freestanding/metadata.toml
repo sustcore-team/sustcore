@@ -1,0 +1,55 @@
+[[freestanding-check]]
+id = "tayeffect-effect"
+kind = "compile"
+language = "c++"
+sources = ["effect_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "tayeffect-staged"
+kind = "compile"
+language = "c++"
+sources = ["staged_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "tayeffect-integration"
+kind = "compile"
+language = "c++"
+sources = ["integration_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "tayeffect-endpoint-rejects-unhandled-effect"
+kind = "compile"
+language = "c++"
+sources = ["invalid_unhandled_effect.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "tayeffect-handler-contract"
+kind = "compile"
+language = "c++"
+sources = ["invalid_handler.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "tayeffect-effectful-linear"
+kind = "compile"
+language = "c++"
+sources = ["invalid_effectful_copy.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "tayeffect-close-rvalue-only"
+kind = "compile"
+language = "c++"
+sources = ["invalid_close_lvalue.cpp"]
+expect = "failure"
+
+[[freestanding-check]]
+id = "tayeffect-staged-commit-contract"
+kind = "compile"
+language = "c++"
+sources = ["invalid_staged_commit.cpp"]
+expect = "failure"

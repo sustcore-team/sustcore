@@ -1,9 +1,9 @@
 /**
  * @file ansi.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief ANSI转义序列
+ * @brief 定义终端 ANSI 转义序列和颜色控制宏。
  * @version 0.1.0-dev.1
- * @date 2026-02-19
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -23,8 +23,7 @@
 #define __ANSI_ARGPS(...) SCFOREACH(__ANSI_ARGP, __VA_ARGS__)
 
 // 图形模式
-#define ANSI_GRAPHIC(m, ...) \
-    ANSI_CSI SCSTRINGIFY(m) __ANSI_ARGPS(__VA_ARGS__) "m"
+#define ANSI_GRAPHIC(m, ...) ANSI_CSI SCSTRINGIFY(m) __ANSI_ARGPS(__VA_ARGS__) "m"
 
 // 图形模式
 #define ANSI_GM_RESET      0

@@ -1,3 +1,14 @@
+/**
+ * @file logger.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 日志接口的格式化和输出行为。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/logger.h>
 
 #include <cassert>
@@ -9,29 +20,28 @@
 namespace {
     struct output_state {
         char buffer[4096]{};
-        std::size_t size          = 0;
-        std::size_t calls         = 0;
-        std::size_t constructions = 0;
-        std::size_t fail_call     = std::size_t(-1);
+        size_t size          = 0;
+        size_t calls         = 0;
+        size_t constructions = 0;
+        size_t fail_call     = size_t(-1);
 
         void clear() noexcept {
             buffer[0] = '\0';
             size      = 0;
             calls     = 0;
-            fail_call = std::size_t(-1);
+            fail_call = size_t(-1);
         }
     };
 
     struct collecting_output {
         output_state* state;
 
-        explicit collecting_output(output_state& state_ref) noexcept
-            : state(&state_ref) {
+        explicit collecting_output(output_state& state_ref) noexcept : state(&state_ref) {
             ++state->constructions;
         }
 
-        int operator()(const char* data, std::size_t size) {
-            const std::size_t call = state->calls++;
+        int operator()(const char* data, size_t size) {
+            const size_t call = state->calls++;
             assert(state->size + size < sizeof(state->buffer));
             std::memcpy(state->buffer + state->size, data, size);
             state->size                += size;
@@ -67,13 +77,12 @@ namespace {
     }
 
     void expect_log(const output_state& state, unsigned line, const char* level,
-                    const char* message, bool newline = true,
-                    const char* function = "main") {
+                    const char* message, bool newline = true, const char* function = "main") {
         char expected[4096]{};
-        const int written = std::snprintf(
-            expected, sizeof(expected),
-            "(libs/taycpplib/testbench/test/logger.cpp:%u:%s)[%s]: %s%s", line,
-            function, level, message, newline ? "\n" : "");
+        const int written =
+            std::snprintf(expected, sizeof(expected),
+                          "(libs/taycpplib/testbench/test/logger.cpp:%u:%s)[%s]: %s%s", line,
+                          function, level, message, newline ? "\n" : "");
         assert(written > 0);
         expect_text(state, expected);
     }
@@ -108,8 +117,7 @@ int main() {
     unsigned helper_line = 0;
     auto helper          = log_from_helper(logger, helper_line);
     assert(helper && *helper == state.size);
-    expect_log(state, helper_line, "\x1b[32mINFO\x1b[0m", "from helper", true,
-               "log_from_helper");
+    expect_log(state, helper_line, "\x1b[32mINFO\x1b[0m", "from helper", true, "log_from_helper");
 
     state.clear();
     const unsigned warning_line = __LINE__ + 1;

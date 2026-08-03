@@ -1,9 +1,9 @@
 /**
  * @file list.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief intrusive linked list
+ * @brief 提供非拥有式侵入链表容器。
  * @version 0.1.0-dev.1
- * @date 2026-07-30
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -37,8 +37,7 @@ namespace tay {
     namespace detail {
         struct intrusive_list_locate_tag {};
 
-        constexpr void intrusive_list_require(bool condition,
-                                              const char *message) noexcept {
+        constexpr void intrusive_list_require(bool condition, const char *message) noexcept {
             if (!condition) {
                 tay::panic(message);
             }
@@ -46,19 +45,17 @@ namespace tay {
     }  // namespace detail
 
     template <typename T, typename Locate>
-    class intrusive_list
-        : private composition<detail::intrusive_list_locate_tag, Locate> {
+    class intrusive_list : private composition<detail::intrusive_list_locate_tag, Locate> {
     private:
         using locate_tag = detail::intrusive_list_locate_tag;
-        using hook =
-            std::remove_reference_t<std::invoke_result_t<Locate &, T &>>;
+        using hook       = std::remove_reference_t<std::invoke_result_t<Locate &, T &>>;
 
     public:
-        using value_type     = T;
-        using locate_type    = Locate;
-        using owner_pointer  = typename hook::owner_pointer;
-        using borrow_pointer = typename hook::borrow_pointer;
-        using traits = intrusive_traits<T, owner_pointer, borrow_pointer>;
+        using value_type           = T;
+        using locate_type          = Locate;
+        using owner_pointer        = typename hook::owner_pointer;
+        using borrow_pointer       = typename hook::borrow_pointer;
+        using traits               = intrusive_traits<T, owner_pointer, borrow_pointer>;
         using const_borrow_pointer = typename traits::const_borrow_pointer;
 
     private:
@@ -66,13 +63,11 @@ namespace tay {
             return get<locate_tag>(this)(*pointer);
         }
 
-        constexpr const hook &hook_of(const_borrow_pointer pointer) const
-            noexcept {
+        constexpr const hook &hook_of(const_borrow_pointer pointer) const noexcept {
             return get<locate_tag>(this)(*pointer);
         }
 
-        static constexpr void require(bool condition,
-                                      const char *message) noexcept {
+        static constexpr void require(bool condition, const char *message) noexcept {
             detail::intrusive_list_require(condition, message);
         }
 
@@ -97,8 +92,7 @@ namespace tay {
         public:
             constexpr iterator() noexcept = default;
 
-            explicit constexpr iterator(intrusive_list *owner,
-                                        borrow_pointer current) noexcept
+            explicit constexpr iterator(intrusive_list *owner, borrow_pointer current) noexcept
                 : owner_(owner), current_(current) {}
 
             [[nodiscard]] constexpr borrow_pointer operator*() const noexcept {
@@ -109,20 +103,18 @@ namespace tay {
                 return current_;
             }
 
-            [[nodiscard]] friend constexpr bool operator==(
-                const iterator &left, const iterator &right) noexcept {
-                return left.owner_ == right.owner_ &&
-                       left.current_ == right.current_;
+            [[nodiscard]] friend constexpr bool operator==(const iterator &left,
+                                                           const iterator &right) noexcept {
+                return left.owner_ == right.owner_ && left.current_ == right.current_;
             }
 
-            [[nodiscard]] friend constexpr bool operator!=(
-                const iterator &left, const iterator &right) noexcept {
+            [[nodiscard]] friend constexpr bool operator!=(const iterator &left,
+                                                           const iterator &right) noexcept {
                 return !(left == right);
             }
 
             constexpr iterator &operator++() noexcept {
-                require(current_ != nullptr,
-                        "intrusive_list cannot increment end iterator");
+                require(current_ != nullptr, "intrusive_list cannot increment end iterator");
                 current_ = traits::decay(hook_of(current_).next);
                 return *this;
             }
@@ -134,15 +126,13 @@ namespace tay {
             }
 
             constexpr iterator &operator--() noexcept {
-                require(owner_ != nullptr,
-                        "intrusive_list iterator has no owner");
+                require(owner_ != nullptr, "intrusive_list iterator has no owner");
                 if (current_ == nullptr) {
                     current_ = owner_->back_;
                 } else {
                     current_ = hook_of(current_).previous;
                 }
-                require(current_ != nullptr,
-                        "intrusive_list cannot decrement begin iterator");
+                require(current_ != nullptr, "intrusive_list cannot decrement begin iterator");
                 return *this;
             }
 
@@ -153,25 +143,24 @@ namespace tay {
             }
 
         private:
-            intrusive_list *owner_ = nullptr;
+            intrusive_list *owner_  = nullptr;
             borrow_pointer current_ = nullptr;
         };
 
         class reverse_iterator {
             friend class intrusive_list;
-            intrusive_list *owner_ = nullptr;
+            intrusive_list *owner_  = nullptr;
             borrow_pointer current_ = nullptr;
-            constexpr reverse_iterator(intrusive_list *owner,
-                                       borrow_pointer current) noexcept
+            constexpr reverse_iterator(intrusive_list *owner, borrow_pointer current) noexcept
                 : owner_(owner), current_(current) {}
 
         public:
-            using iterator_category = std::bidirectional_iterator_tag;
-            using iterator_concept = std::bidirectional_iterator_tag;
-            using difference_type = std::ptrdiff_t;
-            using value_type = borrow_pointer;
-            using reference = borrow_pointer;
-            using pointer = borrow_pointer;
+            using iterator_category               = std::bidirectional_iterator_tag;
+            using iterator_concept                = std::bidirectional_iterator_tag;
+            using difference_type                 = std::ptrdiff_t;
+            using value_type                      = borrow_pointer;
+            using reference                       = borrow_pointer;
+            using pointer                         = borrow_pointer;
             constexpr reverse_iterator() noexcept = default;
             [[nodiscard]] constexpr borrow_pointer operator*() const noexcept {
                 return current_;
@@ -179,9 +168,8 @@ namespace tay {
             [[nodiscard]] constexpr borrow_pointer operator->() const noexcept {
                 return current_;
             }
-            constexpr reverse_iterator& operator++() noexcept {
-                require(current_ != nullptr,
-                        "intrusive_list cannot increment rend iterator");
+            constexpr reverse_iterator &operator++() noexcept {
+                require(current_ != nullptr, "intrusive_list cannot increment rend iterator");
                 current_ = owner_->hook_of(current_).previous;
                 return *this;
             }
@@ -190,31 +178,29 @@ namespace tay {
                 ++*this;
                 return copy;
             }
-            friend constexpr bool operator==(const reverse_iterator& left,
-                                             const reverse_iterator& right)
-                noexcept {
-                return left.owner_ == right.owner_ &&
-                       left.current_ == right.current_;
+            friend constexpr bool operator==(const reverse_iterator &left,
+                                             const reverse_iterator &right) noexcept {
+                return left.owner_ == right.owner_ && left.current_ == right.current_;
             }
         };
 
         class const_iterator {
             friend class intrusive_list;
-            const intrusive_list *owner_ = nullptr;
+            const intrusive_list *owner_  = nullptr;
             const_borrow_pointer current_ = nullptr;
             constexpr const_iterator(const intrusive_list *owner,
                                      const_borrow_pointer current) noexcept
                 : owner_(owner), current_(current) {}
 
         public:
-            using iterator_category = std::bidirectional_iterator_tag;
-            using iterator_concept = std::bidirectional_iterator_tag;
-            using difference_type = std::ptrdiff_t;
-            using value_type = const_borrow_pointer;
-            using reference = const_borrow_pointer;
-            using pointer = const_borrow_pointer;
+            using iterator_category             = std::bidirectional_iterator_tag;
+            using iterator_concept              = std::bidirectional_iterator_tag;
+            using difference_type               = std::ptrdiff_t;
+            using value_type                    = const_borrow_pointer;
+            using reference                     = const_borrow_pointer;
+            using pointer                       = const_borrow_pointer;
             constexpr const_iterator() noexcept = default;
-            constexpr const_iterator(const iterator& other) noexcept
+            constexpr const_iterator(const iterator &other) noexcept
                 : owner_(other.owner_), current_(other.current_) {}
             [[nodiscard]] constexpr reference operator*() const noexcept {
                 return current_;
@@ -222,9 +208,8 @@ namespace tay {
             [[nodiscard]] constexpr pointer operator->() const noexcept {
                 return current_;
             }
-            constexpr const_iterator& operator++() noexcept {
-                require(current_ != nullptr,
-                        "intrusive_list cannot increment end iterator");
+            constexpr const_iterator &operator++() noexcept {
+                require(current_ != nullptr, "intrusive_list cannot increment end iterator");
                 current_ = traits::decay(owner_->hook_of(current_).next);
                 return *this;
             }
@@ -233,21 +218,18 @@ namespace tay {
                 ++*this;
                 return copy;
             }
-            constexpr const_iterator& operator--() noexcept {
+            constexpr const_iterator &operator--() noexcept {
                 if (current_ == nullptr) {
                     current_ = owner_->back_;
                 } else {
                     current_ = owner_->hook_of(current_).previous;
                 }
-                require(current_ != nullptr,
-                        "intrusive_list cannot decrement begin iterator");
+                require(current_ != nullptr, "intrusive_list cannot decrement begin iterator");
                 return *this;
             }
-            friend constexpr bool operator==(const const_iterator& left,
-                                             const const_iterator& right)
-                noexcept {
-                return left.owner_ == right.owner_ &&
-                       left.current_ == right.current_;
+            friend constexpr bool operator==(const const_iterator &left,
+                                             const const_iterator &right) noexcept {
+                return left.owner_ == right.owner_ && left.current_ == right.current_;
             }
         };
 
@@ -256,30 +238,25 @@ namespace tay {
             : front_(nullptr), back_(nullptr) {}
 
         constexpr explicit intrusive_list(Locate locate) noexcept
-            : composition<detail::intrusive_list_locate_tag, Locate>(
-                  std::move(locate)),
-              front_(nullptr), back_(nullptr) {}
+            : composition<detail::intrusive_list_locate_tag, Locate>(std::move(locate)),
+              front_(nullptr),
+              back_(nullptr) {}
 
         intrusive_list(const intrusive_list &)            = delete;
         intrusive_list &operator=(const intrusive_list &) = delete;
         intrusive_list(intrusive_list &&)                 = delete;
         intrusive_list &operator=(intrusive_list &&)      = delete;
 
-        [[nodiscard]] constexpr iterator iterator_to(
-            borrow_pointer pointer) noexcept {
-            require(pointer != nullptr,
-                    "intrusive_list iterator_to received a null pointer");
-            require(hook_of(pointer).in_list,
-                    "intrusive_list element is not linked");
+        [[nodiscard]] constexpr iterator iterator_to(borrow_pointer pointer) noexcept {
+            require(pointer != nullptr, "intrusive_list iterator_to received a null pointer");
+            require(hook_of(pointer).in_list, "intrusive_list element is not linked");
             return iterator(this, pointer);
         }
 
         constexpr iterator push_front(owner_pointer element) noexcept {
-            require(static_cast<bool>(element),
-                    "intrusive_list cannot insert a null pointer");
+            require(static_cast<bool>(element), "intrusive_list cannot insert a null pointer");
             borrow_pointer borrow = traits::decay(element);
-            require(!hook_of(borrow).in_list,
-                    "intrusive_list element is already linked");
+            require(!hook_of(borrow).in_list, "intrusive_list element is already linked");
             require(!static_cast<bool>(hook_of(borrow).next),
                     "intrusive_list element has a stale next pointer");
             require(!static_cast<bool>(hook_of(borrow).previous),
@@ -298,11 +275,9 @@ namespace tay {
         }
 
         constexpr iterator push_back(owner_pointer element) noexcept {
-            require(static_cast<bool>(element),
-                    "intrusive_list cannot insert a null pointer");
+            require(static_cast<bool>(element), "intrusive_list cannot insert a null pointer");
             borrow_pointer borrow = traits::decay(element);
-            require(!hook_of(borrow).in_list,
-                    "intrusive_list element is already linked");
+            require(!hook_of(borrow).in_list, "intrusive_list element is already linked");
             require(!static_cast<bool>(hook_of(borrow).next),
                     "intrusive_list element has a stale next pointer");
             require(!static_cast<bool>(hook_of(borrow).previous),
@@ -320,8 +295,7 @@ namespace tay {
             return iterator(this, borrow);
         }
 
-        constexpr iterator insert(iterator before,
-                                  owner_pointer element) noexcept {
+        constexpr iterator insert(iterator before, owner_pointer element) noexcept {
             if (before.current_ == nullptr) {
                 return push_back(std::move(element));
             }
@@ -329,22 +303,20 @@ namespace tay {
                 return push_front(std::move(element));
             }
 
-            require(static_cast<bool>(element),
-                    "intrusive_list cannot insert a null pointer");
+            require(static_cast<bool>(element), "intrusive_list cannot insert a null pointer");
             require(hook_of(before.current_).in_list,
                     "intrusive_list insertion iterator is not linked");
 
             borrow_pointer borrow = traits::decay(element);
-            require(!hook_of(borrow).in_list,
-                    "intrusive_list element is already linked");
+            require(!hook_of(borrow).in_list, "intrusive_list element is already linked");
             require(!static_cast<bool>(hook_of(borrow).next),
                     "intrusive_list element has a stale next pointer");
             require(!static_cast<bool>(hook_of(borrow).previous),
                     "intrusive_list element has a stale previous pointer");
 
-            borrow_pointer previous = hook_of(before.current_).previous;
-            owner_pointer next      = std::move(hook_of(previous).next);
-            hook_of(previous).next  = std::move(element);
+            borrow_pointer previous               = hook_of(before.current_).previous;
+            owner_pointer next                    = std::move(hook_of(previous).next);
+            hook_of(previous).next                = std::move(element);
             hook_of(traits::decay(next)).previous = borrow;
             hook_of(borrow).previous              = previous;
             hook_of(borrow).next                  = std::move(next);
@@ -357,7 +329,7 @@ namespace tay {
             return !static_cast<bool>(front_);
         }
 
-        [[nodiscard]] constexpr std::size_t size() const noexcept {
+        [[nodiscard]] constexpr size_t size() const noexcept {
             return size_;
         }
 
@@ -382,24 +354,20 @@ namespace tay {
         }
 
         constexpr owner_pointer pop_front() noexcept {
-            require(static_cast<bool>(front_),
-                    "intrusive_list cannot pop from an empty list");
+            require(static_cast<bool>(front_), "intrusive_list cannot pop from an empty list");
             return erase(iterator(this, traits::decay(front_)));
         }
 
         constexpr owner_pointer pop_back() noexcept {
-            require(static_cast<bool>(back_),
-                    "intrusive_list cannot pop from an empty list");
+            require(static_cast<bool>(back_), "intrusive_list cannot pop from an empty list");
             return erase(iterator(this, back_));
         }
 
         constexpr owner_pointer erase(iterator position) noexcept {
-            require(position.current_ != nullptr,
-                    "intrusive_list cannot erase end iterator");
-            require(hook_of(position.current_).in_list,
-                    "intrusive_list element is not linked");
+            require(position.current_ != nullptr, "intrusive_list cannot erase end iterator");
+            require(hook_of(position.current_).in_list, "intrusive_list element is not linked");
 
-            owner_pointer next = std::move(hook_of(position.current_).next);
+            owner_pointer next      = std::move(hook_of(position.current_).next);
             borrow_pointer previous = hook_of(position.current_).previous;
 
             if (!static_cast<bool>(next)) {
@@ -420,9 +388,8 @@ namespace tay {
                 erased = std::move(front_);
                 front_ = std::move(next);
             } else {
-                require(
-                    traits::decay(hook_of(previous).next) == position.current_,
-                    "intrusive_list has inconsistent links");
+                require(traits::decay(hook_of(previous).next) == position.current_,
+                        "intrusive_list has inconsistent links");
                 erased                 = std::move(hook_of(previous).next);
                 hook_of(previous).next = std::move(next);
             }
@@ -456,8 +423,7 @@ namespace tay {
             }
         }
 
-        constexpr void splice(iterator position,
-                              intrusive_list &other) noexcept {
+        constexpr void splice(iterator position, intrusive_list &other) noexcept {
             if (other.empty()) {
                 return;
             }
@@ -468,50 +434,47 @@ namespace tay {
                     "intrusive_list splice iterator belongs to another list");
 
             borrow_pointer other_front = traits::decay(other.front_);
-            require(hook_of(other_front).in_list,
-                    "intrusive_list splice source is inconsistent");
+            require(hook_of(other_front).in_list, "intrusive_list splice source is inconsistent");
             require(!static_cast<bool>(hook_of(other_front).previous),
                     "intrusive_list splice source has a previous element");
 
             if (empty()) {
                 front_ = std::move(other.front_);
-                back_ = other.back_;
+                back_  = other.back_;
             } else if (position.current_ == nullptr) {
                 hook_of(other_front).previous = back_;
-                hook_of(back_).next = std::move(other.front_);
-                back_ = other.back_;
+                hook_of(back_).next           = std::move(other.front_);
+                back_                         = other.back_;
             } else if (position.current_ == traits::decay(front_)) {
-                owner_pointer displaced = std::move(front_);
-                front_ = std::move(other.front_);
-                hook_of(other.back_).next = std::move(displaced);
+                owner_pointer displaced             = std::move(front_);
+                front_                              = std::move(other.front_);
+                hook_of(other.back_).next           = std::move(displaced);
                 hook_of(position.current_).previous = other.back_;
             } else {
-                borrow_pointer previous = hook_of(position.current_).previous;
-                owner_pointer displaced = std::move(hook_of(previous).next);
-                hook_of(previous).next = std::move(other.front_);
-                hook_of(other_front).previous = previous;
-                hook_of(other.back_).next = std::move(displaced);
+                borrow_pointer previous             = hook_of(position.current_).previous;
+                owner_pointer displaced             = std::move(hook_of(previous).next);
+                hook_of(previous).next              = std::move(other.front_);
+                hook_of(other_front).previous       = previous;
+                hook_of(other.back_).next           = std::move(displaced);
                 hook_of(position.current_).previous = other.back_;
             }
-            size_ += other.size_;
-            other.front_ = nullptr;
-            other.back_  = nullptr;
-            other.size_ = 0;
+            size_        += other.size_;
+            other.front_  = nullptr;
+            other.back_   = nullptr;
+            other.size_   = 0;
         }
 
-        constexpr void splice(iterator position, intrusive_list& other,
-                              iterator element) noexcept {
+        constexpr void splice(iterator position, intrusive_list &other, iterator element) noexcept {
             iterator next = element;
             ++next;
-            if (this == &other &&
-                (position == element || position == next)) {
+            if (this == &other && (position == element || position == next)) {
                 return;
             }
             splice(position, other, element, next);
         }
 
-        constexpr void splice(iterator position, intrusive_list& other,
-                              iterator first, iterator last) noexcept {
+        constexpr void splice(iterator position, intrusive_list &other, iterator first,
+                              iterator last) noexcept {
             if (this == &other) {
                 for (iterator current = first; current != last; ++current) {
                     if (current == position) {
@@ -563,6 +526,6 @@ namespace tay {
     private:
         owner_pointer front_;
         borrow_pointer back_;
-        std::size_t size_ = 0;
+        size_t size_ = 0;
     };
 }  // namespace tay

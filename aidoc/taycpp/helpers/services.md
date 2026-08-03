@@ -1,13 +1,13 @@
 # 格式化、日志及其他辅助类型
 
-## format
+## 格式化 `format`
 
 `<tay/format.h>` 及 `<tay/fmt/*.h>` 提供编译期检查的格式字符串、格式上下文、
 格式引擎与内建 formatter。输出通过回调分块写出，结果为
 `expected<size_t, format_error>`，因此可在无 iostream、无动态分配环境使用。
 格式字符串错误会在编译期诊断；自定义类型可提供 formatter。
 
-## logger
+## 日志器 `logger`
 
 `<tay/logger.h>` 的 `logger<Output, MinimumLevel, ...>` 把 Output 作为状态化
 策略保存。Output 可以持有串口、缓冲区或测试收集器状态，不要求全局静态

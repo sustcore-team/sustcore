@@ -1,11 +1,17 @@
 /**
  * @file guard.cpp
- * @brief Demonstrate scope cleanup and commit with tay::guard.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::guard 的作用域清理和提交操作。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
-#include <cstdio>
-
 #include <tay/guard.h>
+
+#include <cstdio>
 
 int main() {
     bool locked = true;

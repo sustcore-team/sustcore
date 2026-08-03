@@ -1,6 +1,12 @@
 /**
  * @file flat.h
- * @brief Sorted contiguous flat set and flat map containers.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供有序连续存储的 flat_set 和 flat_map 容器。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -20,18 +26,17 @@
 namespace tay {
     namespace detail {
         struct flat_compare_tag {};
-    }
+    }  // namespace detail
 
     template <class Key, class Sequence, class Compare = std::ranges::less>
-    class basic_flat_set
-        : private composition<detail::flat_compare_tag, Compare> {
+    class basic_flat_set : private composition<detail::flat_compare_tag, Compare> {
     public:
-        using key_type = Key;
-        using value_type = Key;
-        using sequence_type = Sequence;
-        using key_compare = Compare;
-        using size_type = typename sequence_type::size_type;
-        using iterator = typename sequence_type::const_iterator;
+        using key_type       = Key;
+        using value_type     = Key;
+        using sequence_type  = Sequence;
+        using key_compare    = Compare;
+        using size_type      = typename sequence_type::size_type;
+        using iterator       = typename sequence_type::const_iterator;
         using const_iterator = typename sequence_type::const_iterator;
 
     private:
@@ -45,10 +50,8 @@ namespace tay {
 
     public:
         constexpr basic_flat_set() noexcept = default;
-        constexpr explicit basic_flat_set(sequence_type sequence,
-                                          key_compare compare = {}) noexcept
-            : composition<detail::flat_compare_tag, Compare>(
-                  std::move(compare)),
+        constexpr explicit basic_flat_set(sequence_type sequence, key_compare compare = {}) noexcept
+            : composition<detail::flat_compare_tag, Compare>(std::move(compare)),
               values_(std::move(sequence)) {}
 
         [[nodiscard]] constexpr iterator begin() const noexcept {
@@ -68,8 +71,7 @@ namespace tay {
         }
         [[nodiscard]] constexpr iterator find(const key_type& key) const {
             iterator position = lower_bound(key);
-            if (position == end() || compare()(key, *position) ||
-                compare()(*position, key))
+            if (position == end() || compare()(key, *position) || compare()(*position, key))
                 return end();
             return position;
         }
@@ -81,38 +83,36 @@ namespace tay {
             requires std::is_nothrow_copy_constructible_v<value_type>
         {
             iterator position = lower_bound(value);
-            if (position != end() && !compare()(value, *position) &&
-                !compare()(*position, value))
+            if (position != end() && !compare()(value, *position) && !compare()(*position, value))
                 return std::pair<iterator, bool>{position, false};
             auto inserted = values_.insert(position, value);
             if (!inserted)
-                return expected<std::pair<iterator, bool>, error_code>(
-                    unexpect, inserted.error());
+                return expected<std::pair<iterator, bool>, error_code>(unexpect, inserted.error());
             return std::pair<iterator, bool>{*inserted, true};
         }
         constexpr expected<std::pair<iterator, bool>, error_code> insert(
             value_type&& value) noexcept {
             iterator position = lower_bound(value);
-            if (position != end() && !compare()(value, *position) &&
-                !compare()(*position, value))
+            if (position != end() && !compare()(value, *position) && !compare()(*position, value))
                 return std::pair<iterator, bool>{position, false};
             auto inserted = values_.insert(position, std::move(value));
             if (!inserted)
-                return expected<std::pair<iterator, bool>, error_code>(
-                    unexpect, inserted.error());
+                return expected<std::pair<iterator, bool>, error_code>(unexpect, inserted.error());
             return std::pair<iterator, bool>{*inserted, true};
         }
         constexpr size_type erase(const key_type& key) noexcept {
             iterator position = find(key);
-            if (position == end()) return 0;
+            if (position == end())
+                return 0;
             static_cast<void>(values_.erase(position));
             return 1;
         }
-        constexpr void clear() noexcept { values_.clear(); }
+        constexpr void clear() noexcept {
+            values_.clear();
+        }
     };
 
-    template <class Key, class Compare = std::ranges::less,
-              class Allocator = allocator<Key>>
+    template <class Key, class Compare = std::ranges::less, class Allocator = allocator<Key>>
     using flat_set = basic_flat_set<Key, array_list<Key, Allocator>, Compare>;
 
     template <class Key, class T>
@@ -121,18 +121,16 @@ namespace tay {
         T mapped;
     };
 
-    template <class Key, class T, class Sequence,
-              class Compare = std::ranges::less>
-    class basic_flat_map
-        : private composition<detail::flat_compare_tag, Compare> {
+    template <class Key, class T, class Sequence, class Compare = std::ranges::less>
+    class basic_flat_map : private composition<detail::flat_compare_tag, Compare> {
         using stored_type = flat_map_storage_value<Key, T>;
 
     public:
-        using key_type = Key;
-        using mapped_type = T;
+        using key_type      = Key;
+        using mapped_type   = T;
         using sequence_type = Sequence;
-        using key_compare = Compare;
-        using size_type = typename sequence_type::size_type;
+        using key_compare   = Compare;
+        using size_type     = typename sequence_type::size_type;
 
         struct reference {
             const key_type& first;
@@ -155,25 +153,25 @@ namespace tay {
         template <bool Constant>
         class basic_iterator {
             friend class basic_flat_map;
-            using base_iterator = std::conditional_t<
-                Constant, typename sequence_type::const_iterator,
-                typename sequence_type::iterator>;
+            using base_iterator =
+                std::conditional_t<Constant, typename sequence_type::const_iterator,
+                                   typename sequence_type::iterator>;
             base_iterator current_{};
-            constexpr explicit basic_iterator(base_iterator current) noexcept
-                : current_(current) {}
+            constexpr explicit basic_iterator(base_iterator current) noexcept : current_(current) {}
 
         public:
             using iterator_category = std::random_access_iterator_tag;
-            using iterator_concept = std::random_access_iterator_tag;
-            using value_type = std::pair<const Key, T>;
-            using difference_type = std::ptrdiff_t;
-            using reference_type = std::conditional_t<
-                Constant, typename basic_flat_map::const_reference,
-                typename basic_flat_map::reference>;
+            using iterator_concept  = std::random_access_iterator_tag;
+            using value_type        = std::pair<const Key, T>;
+            using difference_type   = std::ptrdiff_t;
+            using reference_type =
+                std::conditional_t<Constant, typename basic_flat_map::const_reference,
+                                   typename basic_flat_map::reference>;
             struct arrow_proxy {
                 reference_type value;
-                [[nodiscard]] constexpr const reference_type* operator->()
-                    const noexcept { return &value; }
+                [[nodiscard]] constexpr const reference_type* operator->() const noexcept {
+                    return &value;
+                }
             };
             constexpr basic_iterator() noexcept = default;
             [[nodiscard]] constexpr reference_type operator*() const noexcept {
@@ -182,27 +180,52 @@ namespace tay {
             [[nodiscard]] constexpr arrow_proxy operator->() const noexcept {
                 return {**this};
             }
-            constexpr basic_iterator& operator++() noexcept { ++current_; return *this; }
-            constexpr basic_iterator operator++(int) noexcept { auto c=*this; ++*this; return c; }
-            constexpr basic_iterator& operator--() noexcept { --current_; return *this; }
-            constexpr basic_iterator& operator+=(difference_type n) noexcept { current_ += n; return *this; }
-            constexpr basic_iterator& operator-=(difference_type n) noexcept { current_ -= n; return *this; }
-            [[nodiscard]] constexpr basic_iterator operator+(difference_type n) const noexcept { auto c=*this; return c+=n; }
-            [[nodiscard]] constexpr basic_iterator operator-(difference_type n) const noexcept { auto c=*this; return c-=n; }
-            [[nodiscard]] constexpr difference_type operator-(const basic_iterator& other) const noexcept { return current_-other.current_; }
-            [[nodiscard]] friend constexpr bool operator==(const basic_iterator&, const basic_iterator&) noexcept = default;
-            [[nodiscard]] friend constexpr auto operator<=>(const basic_iterator&, const basic_iterator&) noexcept = default;
+            constexpr basic_iterator& operator++() noexcept {
+                ++current_;
+                return *this;
+            }
+            constexpr basic_iterator operator++(int) noexcept {
+                auto c = *this;
+                ++*this;
+                return c;
+            }
+            constexpr basic_iterator& operator--() noexcept {
+                --current_;
+                return *this;
+            }
+            constexpr basic_iterator& operator+=(difference_type n) noexcept {
+                current_ += n;
+                return *this;
+            }
+            constexpr basic_iterator& operator-=(difference_type n) noexcept {
+                current_ -= n;
+                return *this;
+            }
+            [[nodiscard]] constexpr basic_iterator operator+(difference_type n) const noexcept {
+                auto c    = *this;
+                return c += n;
+            }
+            [[nodiscard]] constexpr basic_iterator operator-(difference_type n) const noexcept {
+                auto c    = *this;
+                return c -= n;
+            }
+            [[nodiscard]] constexpr difference_type operator-(
+                const basic_iterator& other) const noexcept {
+                return current_ - other.current_;
+            }
+            [[nodiscard]] friend constexpr bool operator==(
+                const basic_iterator&, const basic_iterator&) noexcept = default;
+            [[nodiscard]] friend constexpr auto operator<=>(
+                const basic_iterator&, const basic_iterator&) noexcept = default;
         };
 
     public:
-        using iterator = basic_iterator<false>;
+        using iterator       = basic_iterator<false>;
         using const_iterator = basic_iterator<true>;
 
         constexpr basic_flat_map() noexcept = default;
-        constexpr explicit basic_flat_map(sequence_type sequence,
-                                          key_compare compare = {}) noexcept
-            : composition<detail::flat_compare_tag, Compare>(
-                  std::move(compare)),
+        constexpr explicit basic_flat_map(sequence_type sequence, key_compare compare = {}) noexcept
+            : composition<detail::flat_compare_tag, Compare>(std::move(compare)),
               values_(std::move(sequence)) {}
 
         [[nodiscard]] constexpr iterator begin() noexcept {
@@ -217,39 +240,38 @@ namespace tay {
         [[nodiscard]] constexpr const_iterator end() const noexcept {
             return const_iterator(values_.end());
         }
-        [[nodiscard]] constexpr bool empty() const noexcept { return values_.empty(); }
-        [[nodiscard]] constexpr size_type size() const noexcept { return values_.size(); }
+        [[nodiscard]] constexpr bool empty() const noexcept {
+            return values_.empty();
+        }
+        [[nodiscard]] constexpr size_type size() const noexcept {
+            return values_.size();
+        }
 
         [[nodiscard]] constexpr iterator lower_bound(const key_type& key) {
             auto position = tay::lower_bound(
                 values_, key, compare(),
-                [](const stored_type& value) -> const key_type& {
-                    return value.key;
-                });
+                [](const stored_type& value) -> const key_type& { return value.key; });
             return iterator(position);
         }
-        [[nodiscard]] constexpr const_iterator lower_bound(
-            const key_type& key) const {
+        [[nodiscard]] constexpr const_iterator lower_bound(const key_type& key) const {
             auto position = tay::lower_bound(
                 values_, key, compare(),
-                [](const stored_type& value) -> const key_type& {
-                    return value.key;
-                });
+                [](const stored_type& value) -> const key_type& { return value.key; });
             return const_iterator(position);
         }
         [[nodiscard]] constexpr iterator find(const key_type& key) {
             auto position = lower_bound(key);
-            if (position == end()) return end();
+            if (position == end())
+                return end();
             auto value = *position;
-            return compare()(key, value.first) || compare()(value.first, key)
-                       ? end() : position;
+            return compare()(key, value.first) || compare()(value.first, key) ? end() : position;
         }
         [[nodiscard]] constexpr const_iterator find(const key_type& key) const {
             auto position = lower_bound(key);
-            if (position == end()) return end();
+            if (position == end())
+                return end();
             auto value = *position;
-            return compare()(key, value.first) || compare()(value.first, key)
-                       ? end() : position;
+            return compare()(key, value.first) || compare()(value.first, key) ? end() : position;
         }
         [[nodiscard]] constexpr bool contains(const key_type& key) const {
             return find(key) != end();
@@ -258,8 +280,7 @@ namespace tay {
             const key_type& key) noexcept {
             auto position = find(key);
             if (position == end())
-                return expected<mapped_type&, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<mapped_type&, error_code>(unexpect, error_code::OUT_OF_RANGE);
             return (*position).second;
         }
 
@@ -269,22 +290,18 @@ namespace tay {
             auto position = lower_bound(key);
             if (position != end()) {
                 auto value = *position;
-                if (!compare()(key, value.first) &&
-                    !compare()(value.first, key))
+                if (!compare()(key, value.first) && !compare()(value.first, key))
                     return std::pair<iterator, bool>{position, false};
             }
-            stored_type stored{key,
-                               mapped_type(std::forward<Args>(args)...)};
-            auto inserted = values_.insert(position.current_,
-                                           std::move(stored));
+            stored_type stored{key, mapped_type(std::forward<Args>(args)...)};
+            auto inserted = values_.insert(position.current_, std::move(stored));
             if (!inserted)
-                return expected<std::pair<iterator, bool>, error_code>(
-                    unexpect, inserted.error());
+                return expected<std::pair<iterator, bool>, error_code>(unexpect, inserted.error());
             return std::pair<iterator, bool>{iterator(*inserted), true};
         }
         template <class M>
-        constexpr expected<std::pair<iterator, bool>, error_code>
-        insert_or_assign(const key_type& key, M&& mapped) noexcept {
+        constexpr expected<std::pair<iterator, bool>, error_code> insert_or_assign(
+            const key_type& key, M&& mapped) noexcept {
             auto position = find(key);
             if (position != end()) {
                 (*position).second = std::forward<M>(mapped);
@@ -294,15 +311,18 @@ namespace tay {
         }
         constexpr size_type erase(const key_type& key) noexcept {
             auto position = find(key);
-            if (position == end()) return 0;
+            if (position == end())
+                return 0;
             static_cast<void>(values_.erase(position.current_));
             return 1;
         }
-        constexpr void clear() noexcept { values_.clear(); }
+        constexpr void clear() noexcept {
+            values_.clear();
+        }
     };
 
     template <class Key, class T, class Compare = std::ranges::less,
               class Allocator = allocator<flat_map_storage_value<Key, T>>>
-    using flat_map = basic_flat_map<
-        Key, T, array_list<flat_map_storage_value<Key, T>, Allocator>, Compare>;
+    using flat_map =
+        basic_flat_map<Key, T, array_list<flat_map_storage_value<Key, T>, Allocator>, Compare>;
 }  // namespace tay

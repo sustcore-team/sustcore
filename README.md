@@ -18,14 +18,16 @@ Sustcore 是从 0 开始设计与实现的, 其不基于任何现有的内核. �
     > 一个简单而强悍的宏内核. 例如 ELF 加载器, 辅助向量填充, loongarch 架构支持, virtio 与 pci 驱动以及部分系统调用的实现都参考了这个系统. 此外, 在进行 debug 时, 我们也常常通过与该系统进行对比来定位和解决问题.
 5. [Managarm](https://github.com/managarm/managarm)
     > 另一个著名的微内核, 其是使用 C++ 实现的, 在本内核进行 C++ 运行时支持的实现时部分地参考了该内核的实现.
-6. [Tayhuang OS](https://github.com/TayhuangOS-Development-Team/TayHuangOS)
+6. [frigg](https://github.com/managarm/frigg)
+    > Managarm 的 C++ 库, 其实现了许多 C++ 模板容器与工具, 本项目的 C++ 容器与工具的实现也参考了该库的实现.
+7. [Tayhuang OS](https://github.com/TayhuangOS-Development-Team/TayHuangOS)
     > 本人的早期操作系统项目. 其构建系统是本内核构建系统的前身. 也为本内核提供了部分头文件(如 types.h, stdint.h 等)与部分工具(stat.sh, calc_magic, cc_modifier, comments_stat, get_loop_devices)
-7. Orange'S: 一个操作系统的实现
+8. Orange'S: 一个操作系统的实现
    > 操作系统开发与实践的入门级书籍. 是本人实现 Tayhuang OS 时的主要书籍
-8. Operating System: Three Easy Pieces
-9.  计算机的心智: 操作系统之哲学原理
+9.  Operating System: Three Easy Pieces
+10.  计算机的心智: 操作系统之哲学原理
     > 提供了重要的理论知识以支撑开发过程中的设计决策
-10. [操作系统实验文档](https://yuk1i.github.io/os-next-docs/)
+11. [操作系统实验文档](https://yuk1i.github.io/os-next-docs/)
     > 提供了对 riscv64 启动流程的部分介绍以供参考
 12. RiscV 官方文档
     > 是进行 riscv64 架构相关的开发时重要的参考资料

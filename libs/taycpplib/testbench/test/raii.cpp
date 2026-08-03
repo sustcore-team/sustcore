@@ -1,3 +1,14 @@
+/**
+ * @file raii.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay RAII 守卫和资源所有权类型。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/guard.h>
 #include <tay/owner.h>
 #include <tay/unique_ptr.h>
@@ -8,8 +19,7 @@
 
 namespace {
     struct tracked {
-        explicit tracked(int* destroyed, int value = 0)
-            : destroyed(destroyed), value(value) {}
+        explicit tracked(int* destroyed, int value = 0) : destroyed(destroyed), value(value) {}
 
         virtual ~tracked() {
             ++*destroyed;
@@ -87,7 +97,7 @@ int main() {
 
     array_element::destroyed = 0;
     {
-        auto values = tay::make_unique<array_element[]>(3);
+        auto values     = tay::make_unique<array_element[]>(3);
         values[0].value = 4;
         values[2].value = 8;
         assert(values[0].value == 4 && values[2].value == 8);

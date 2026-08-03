@@ -1,3 +1,14 @@
+/**
+ * @file storage.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 容器存储策略和容量管理。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/algo/binary_search.h>
 #include <tay/algo/heap.h>
 #include <tay/array.h>
@@ -22,13 +33,14 @@ namespace {
         list_hook list;
         tay::intrusive_tree_hook<list_node> tree;
     };
-    using locate_list = tay::locate_member<list_node, list_hook,
-                                           &list_node::list>;
-    using locate_tree = tay::locate_member<
-        list_node, tay::intrusive_tree_hook<list_node>, &list_node::tree>;
+    using locate_list = tay::locate_member<list_node, list_hook, &list_node::list>;
+    using locate_tree =
+        tay::locate_member<list_node, tay::intrusive_tree_hook<list_node>, &list_node::tree>;
 
-    int double_value(int value) noexcept { return value * 2; }
-}
+    int double_value(int value) noexcept {
+        return value * 2;
+    }
+}  // namespace
 
 int main() {
     tay::static_vector<int, 4> vector{1, 3};
@@ -44,6 +56,22 @@ int main() {
     tay::array_view<int, 3> view(borrowed);
     view[1] = 9;
     assert(borrowed[1] == 9);
+
+    tay::array_view<int> pointer_range(borrowed, borrowed + 3);
+    int sum = 0;
+    for (int value : pointer_range) {
+        sum += value;
+    }
+    assert(sum == 13);
+
+    pointer_range.foreach ([](int& value) noexcept { ++value; });
+    assert(borrowed[0] == 2 && borrowed[1] == 10 && borrowed[2] == 4);
+
+    const tay::array_view<int, 3> const_pointer_range(borrowed, borrowed + 3);
+    assert(const_pointer_range.front() == 2 && const_pointer_range.back() == 4);
+    int view_sum = 0;
+    const_pointer_range.foreach ([&view_sum](const int& value) noexcept { view_sum += value; });
+    assert(view_sum == 16);
     auto dynamic_array = tay::array<int, 2>::try_create();
     assert(dynamic_array && dynamic_array->size() == 2);
 
@@ -73,7 +101,7 @@ int main() {
     assert(bytes->try_read(tay::array_view<std::byte>(output, 2)));
     assert(output[0] == std::byte{1} && bytes->size() == 1);
 
-    int offset = 3;
+    int offset    = 3;
     auto callable = [&offset](int value) noexcept { return value + offset; };
     tay::function_ref<int(int) noexcept> ref(callable);
     assert(ref(4) == 7);
@@ -104,7 +132,7 @@ int main() {
     assert(flat_pairs.at(2) && *flat_pairs.at(2) == 20);
 
     tay::static_slot_map<int, 3> slots;
-    auto first_handle = slots.emplace(10);
+    auto first_handle  = slots.emplace(10);
     auto second_handle = slots.emplace(20);
     assert(first_handle && second_handle);
     assert(slots.erase(*first_handle));
@@ -130,7 +158,7 @@ int main() {
     list.push_back(&c);
     assert(list.size() == 3);
     const auto& const_list = list;
-    int const_sum = 0;
+    int const_sum          = 0;
     for (const list_node* node : const_list) const_sum += node->value;
     assert(const_sum == 6);
     auto reverse = list.rbegin();

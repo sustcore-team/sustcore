@@ -1,3 +1,14 @@
+/**
+ * @file slot_map.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::slot_map 的稳定句柄和元素访问。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/slot_map.h>
 
 #include <cstdio>
@@ -5,20 +16,20 @@
 int main() {
     tay::static_slot_map<const char*, 3> objects;
     auto alpha = objects.emplace("alpha");
-    auto beta = objects.emplace("beta");
-    if (!alpha || !beta) return 1;
+    auto beta  = objects.emplace("beta");
+    if (!alpha || !beta)
+        return 1;
 
-    std::printf("alpha handle=(%zu, %zu), value=%s\n",
-                alpha->index, alpha->generation, *objects.get(*alpha));
+    std::printf("alpha handle=(%zu, %zu), value=%s\n", alpha->index, alpha->generation,
+                *objects.get(*alpha));
 
     static_cast<void>(objects.erase(*alpha));
     auto gamma = objects.emplace("gamma");
-    if (!gamma) return 1;
+    if (!gamma)
+        return 1;
 
-    std::printf("old alpha valid: %s\n",
-                objects.contains(*alpha) ? "yes" : "no");
-    std::printf("gamma handle=(%zu, %zu), reused-index=%s\n",
-                gamma->index, gamma->generation,
+    std::printf("old alpha valid: %s\n", objects.contains(*alpha) ? "yes" : "no");
+    std::printf("gamma handle=(%zu, %zu), reused-index=%s\n", gamma->index, gamma->generation,
                 gamma->index == alpha->index ? "yes" : "no");
 
     std::printf("dense values:");

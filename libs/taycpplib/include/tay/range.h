@@ -1,9 +1,9 @@
 /**
  * @file range.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 区间相关操作
+ * @brief 提供区间的交集、包含和边界操作。
  * @version 0.1.0-dev.1
- * @date 2026-04-06
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -11,9 +11,10 @@
 
 #pragma once
 
+#include <tay/algobase.h>
+
 #include <compare>
 #include <cstddef>
-#include <tay/algobase.h>
 
 namespace tay {
     template <typename T>
@@ -21,12 +22,12 @@ namespace tay {
         T begin;
         T end;
 
-        constexpr range() = default;
-        constexpr range(const range &other) = default;
-        constexpr range(range &&other) = default;
+        constexpr range()                              = default;
+        constexpr range(const range &other)            = default;
+        constexpr range(range &&other)                 = default;
         constexpr range &operator=(const range &other) = default;
-        constexpr range &operator=(range &&other) = default;
-        constexpr ~range() = default;
+        constexpr range &operator=(range &&other)      = default;
+        constexpr ~range()                             = default;
 
         constexpr range(T begin, T end) : begin(begin), end(end) {}
 
@@ -48,17 +49,15 @@ namespace tay {
     }
 
     template <typename T>
-    constexpr bool operator==(range<T> a, range<T> b)
-    {
+    constexpr bool operator==(range<T> a, range<T> b) {
         return a.begin == b.begin && a.end == b.end;
     }
 
     // 计算两个区间的交集
     template <typename T>
-    constexpr range<T> intersection(range<T> a, range<T> b)
-    {
+    constexpr range<T> intersection(range<T> a, range<T> b) {
         T cbegin = max(a.begin, b.begin);
-        T cend = min(a.end, b.end);
+        T cend   = min(a.end, b.end);
         if (cbegin >= cend) {
             return range<T>();
         }
@@ -66,20 +65,30 @@ namespace tay {
     }
 
     template <typename T>
-    constexpr bool is_intersecting(range<T> a, range<T> b)
-    {
+    constexpr bool is_intersecting(range<T> a, range<T> b) {
         return max(a.begin, b.begin) < min(a.end, b.end);
     }
 
     template <typename T>
-    constexpr bool within(range<T> r, T v)
-    {
+    constexpr bool within(range<T> r, T v) {
         return r.begin <= v && v < r.end;
     }
 
     template <typename T>
-    constexpr bool within(range<T> r, range<T> s)
-    {
+    constexpr bool within(range<T> r, range<T> s) {
         return r.begin <= s.begin && s.end <= r.end;
+    }
+
+    // 计算 a - b 的前向差集和后向差集
+    template <typename T>
+    constexpr range<T> forward_diff(range<T> a, range<T> b) {
+        range<T> r = range<T>(a.begin, min(a.end, b.begin));
+        return r.nullable() ? range<T>() : r;
+    }
+
+    template <typename T>
+    constexpr range<T> backward_diff(range<T> a, range<T> b) {
+        range<T> r = range<T>(max(a.begin, b.end), a.end);
+        return r.nullable() ? range<T>() : r;
     }
 }  // namespace tay

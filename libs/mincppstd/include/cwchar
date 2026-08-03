@@ -1,12 +1,12 @@
 /**
  * @file cwchar
  * @author theflysong (song_of_the_fly@163.com)
- * @brief cwchar
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <cwchar> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-03-01
- * 
+ * @date 2026-08-02
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -26,9 +26,9 @@ extern "C" {
 #include <functional>
 
 namespace std {
-    using ::wint_t;
     using ::mbstate_t;
+    using ::wint_t;
 
     template <>
     struct hash<wchar_t> : public __trival_hash<wchar_t> {};
-}
+}  // namespace std

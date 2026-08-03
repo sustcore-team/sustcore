@@ -1,8 +1,12 @@
 /**
  * @file guard.h
- * @brief Scope-bound cleanup guard.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供作用域绑定的清理与提交守卫。
  * @version 0.1.0-dev.1
- * @date 2026-07-31
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -23,8 +27,7 @@ namespace tay {
         requires std::invocable<Fn&>
     class guard {
     public:
-        constexpr explicit guard(Fn fn) noexcept(
-            std::is_nothrow_move_constructible_v<Fn>)
+        constexpr explicit guard(Fn fn) noexcept(std::is_nothrow_move_constructible_v<Fn>)
             : fn_(std::move(fn)), active_(true) {}
 
         guard(const guard&)            = delete;

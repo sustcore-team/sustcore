@@ -1,0 +1,23 @@
+[[dependencies]]
+lib = "taycpplib"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[freestanding.dependencies]]
+lib = "gcc-cheaders"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[freestanding.dependencies]]
+lib = "mini-cstd"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[freestanding.dependencies]]
+lib = "mini-cppstd"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[freestanding.dependencies]]
+lib = "tayclib"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[host.dependencies]]
+lib = "tayclib"
+version = ">=0.1.0-dev.0 <0.1.0"

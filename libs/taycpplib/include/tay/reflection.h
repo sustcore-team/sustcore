@@ -1,9 +1,9 @@
 /**
  * @file reflection.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief C++ 静态反射
+ * @brief 提供 C++ 编译期静态反射工具。
  * @version 0.1.0-dev.1
- * @date 2026-05-19
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *

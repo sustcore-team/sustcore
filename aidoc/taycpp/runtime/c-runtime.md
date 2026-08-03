@@ -1,6 +1,6 @@
 # tayclib 与 mini-cstd
 
-## tayclib
+## `tayclib`
 
 公开头文件位于 `libs/tayclib/include/tay/`：
 
@@ -15,7 +15,7 @@
 tayclib 公开 C ABI，头文件可从 C++ 使用。当前静态库的主要实现源是整数到
 字符串转换。
 
-## mini-cstd
+## `mini-cstd`
 
 实现源当前集中在 `ctype.c` 与 `string.c`：
 

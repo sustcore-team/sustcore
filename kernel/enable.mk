@@ -47,4 +47,12 @@ ifneq ($(call yes,$(enable-sbi) $(enable-laboot)),1)
 $(error exactly one boot method must be enabled: enable-sbi=y or enable-laboot=y)
 endif
 
-boot-link-script ?= $(owner-root)/boot/$(if $(filter y,$(enable-sbi)),sbi/sbi.ld,laboot/laboot.ld)
+boot-link-script ?= $(owner-root)/boot/$(if $(filter y,$(enable-sbi)),sbi/arch/riscv64/sbi.ld,laboot/arch/loongarch64/laboot.ld)
+
+enable-kernel-selftests ?= $($(mode)-kernel-selftests)
+ifeq ($(call yes,$(enable-kernel-selftests)),1)
+enable-kernel-selftests := y
+macros-cpp += -DCONFIG_KERNEL_SELFTEST=1
+else
+enable-kernel-selftests := n
+endif

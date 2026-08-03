@@ -1,9 +1,9 @@
 /**
  * @file string_view.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief Exception-free, non-owning character string view.
+ * @brief 提供无异常、非拥有型字符字符串视图。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -29,7 +29,7 @@ namespace tay {
         using const_reference     = const char&;
         using const_iterator      = const_pointer;
         using iterator            = const_iterator;
-        using size_type           = std::size_t;
+        using size_type           = size_t;
         using difference_type     = std::ptrdiff_t;
         using comparison_category = std::strong_ordering;
 
@@ -54,9 +54,8 @@ namespace tay {
         static constexpr int M_cmemcmp(const_pointer left, const_pointer right,
                                        size_type count) noexcept {
             for (size_type index = 0; index < count; ++index) {
-                const auto left_char = static_cast<unsigned char>(left[index]);
-                const auto right_char =
-                    static_cast<unsigned char>(right[index]);
+                const auto left_char  = static_cast<unsigned char>(left[index]);
+                const auto right_char = static_cast<unsigned char>(right[index]);
                 if (left_char < right_char) {
                     return -1;
                 }
@@ -68,8 +67,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        static constexpr bool M_contain(const_pointer characters,
-                                        size_type count,
+        static constexpr bool M_contain(const_pointer characters, size_type count,
                                         char character) noexcept {
             for (size_type index = 0; index < count; ++index) {
                 if (characters[index] == character) {
@@ -81,12 +79,11 @@ namespace tay {
 
         template <detail::__search_direction direction>
         [[nodiscard]]
-        static constexpr size_type M_naive_search(
-            const_pointer text, size_type text_length, const_pointer pattern,
-            size_type pattern_length) noexcept {
+        static constexpr size_type M_naive_search(const_pointer text, size_type text_length,
+                                                  const_pointer pattern,
+                                                  size_type pattern_length) noexcept {
             if (pattern_length == 0) {
-                if constexpr (direction == detail::__search_direction::FORWARD)
-                {
+                if constexpr (direction == detail::__search_direction::FORWARD) {
                     return 0;
                 } else {
                     return text_length;
@@ -99,9 +96,7 @@ namespace tay {
             const size_type last = text_length - pattern_length;
             if constexpr (direction == detail::__search_direction::FORWARD) {
                 for (size_type position = 0; position <= last; ++position) {
-                    if (M_cmemcmp(text + position, pattern, pattern_length) ==
-                        0)
-                    {
+                    if (M_cmemcmp(text + position, pattern, pattern_length) == 0) {
                         return position;
                     }
                 }
@@ -109,9 +104,7 @@ namespace tay {
             }
 
             for (size_type position = last + 1; position > 0; --position) {
-                if (M_cmemcmp(text + position - 1, pattern, pattern_length) ==
-                    0)
-                {
+                if (M_cmemcmp(text + position - 1, pattern, pattern_length) == 0) {
                     return position - 1;
                 }
             }
@@ -120,21 +113,17 @@ namespace tay {
 
         template <detail::__search_direction direction>
         [[nodiscard]]
-        static constexpr size_type M_search(const_pointer text,
-                                            size_type text_length,
+        static constexpr size_type M_search(const_pointer text, size_type text_length,
                                             const_pointer pattern,
                                             size_type pattern_length) noexcept {
             if consteval {
-                return M_naive_search<direction>(text, text_length, pattern,
-                                                 pattern_length);
+                return M_naive_search<direction>(text, text_length, pattern, pattern_length);
 
                 if (pattern_length <= M_naive_search_threshold) {
-                    return M_naive_search<direction>(text, text_length, pattern,
-                                                     pattern_length);
+                    return M_naive_search<direction>(text, text_length, pattern, pattern_length);
                 }
             }
-            return detail::__str_two_way<direction>(text, text_length, pattern,
-                                                    pattern_length);
+            return detail::__str_two_way<direction>(text, text_length, pattern, pattern_length);
         }
 
         [[nodiscard]]
@@ -185,17 +174,14 @@ namespace tay {
         // shouldn't be used unless you can make sure if position is smaller
         // than its length
         [[nodiscard]]
-        constexpr const_reference operator[](
-            size_type position) const noexcept {
+        constexpr const_reference operator[](size_type position) const noexcept {
             return data_[position];
         }
 
         [[nodiscard]]
-        constexpr expected<const_reference, error_code> at(
-            size_type position) const noexcept {
+        constexpr expected<const_reference, error_code> at(size_type position) const noexcept {
             if (position >= size_) {
-                return expected<const_reference, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<const_reference, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return data_[position];
         }
@@ -235,22 +221,18 @@ namespace tay {
             return size_ == 0;
         }
 
-        constexpr expected<void, error_code> remove_prefix(
-            size_type count) noexcept {
+        constexpr expected<void, error_code> remove_prefix(size_type count) noexcept {
             if (count > size_) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::OUT_OF_RANGE);
+                return expected<void, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             data_  = data_offset(count);
             size_ -= count;
             return {};
         }
 
-        constexpr expected<void, error_code> remove_suffix(
-            size_type count) noexcept {
+        constexpr expected<void, error_code> remove_suffix(size_type count) noexcept {
             if (count > size_) {
-                return expected<void, error_code>(unexpect,
-                                                  error_code::OUT_OF_RANGE);
+                return expected<void, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             size_ -= count;
             return {};
@@ -262,12 +244,10 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr expected<size_type, error_code> copy(
-            pointer destination, size_type count,
-            size_type position = 0) const noexcept {
+        constexpr expected<size_type, error_code> copy(pointer destination, size_type count,
+                                                       size_type position = 0) const noexcept {
             if (position > size_) {
-                return expected<size_type, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<size_type, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
 
             const size_type available = size_ - position;
@@ -279,11 +259,10 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr expected<string_view, error_code> substr(
-            size_type position = 0, size_type count = npos) const noexcept {
+        constexpr expected<string_view, error_code> substr(size_type position = 0,
+                                                           size_type count = npos) const noexcept {
             if (position > size_) {
-                return expected<string_view, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<string_view, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
 
             const size_type available = size_ - position;
@@ -308,9 +287,8 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr expected<int, error_code> compare(
-            size_type position, size_type count,
-            string_view other) const noexcept {
+        constexpr expected<int, error_code> compare(size_type position, size_type count,
+                                                    string_view other) const noexcept {
             auto selected = substr(position, count);
             if (!selected) {
                 return expected<int, error_code>(unexpect, selected.error());
@@ -319,17 +297,16 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr expected<int, error_code> compare(
-            size_type position, size_type count, string_view other,
-            size_type other_position, size_type other_count) const noexcept {
+        constexpr expected<int, error_code> compare(size_type position, size_type count,
+                                                    string_view other, size_type other_position,
+                                                    size_type other_count) const noexcept {
             auto selected       = substr(position, count);
             auto other_selected = other.substr(other_position, other_count);
             if (!selected) {
                 return expected<int, error_code>(unexpect, selected.error());
             }
             if (!other_selected) {
-                return expected<int, error_code>(unexpect,
-                                                 other_selected.error());
+                return expected<int, error_code>(unexpect, other_selected.error());
             }
             return (*selected).compare(*other_selected);
         }
@@ -340,23 +317,21 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr expected<int, error_code> compare(
-            size_type position, size_type count,
-            const_pointer string) const noexcept {
+        constexpr expected<int, error_code> compare(size_type position, size_type count,
+                                                    const_pointer string) const noexcept {
             return compare(position, count, string_view(string));
         }
 
         [[nodiscard]]
-        constexpr expected<int, error_code> compare(
-            size_type position, size_type count, const_pointer string,
-            size_type string_count) const noexcept {
+        constexpr expected<int, error_code> compare(size_type position, size_type count,
+                                                    const_pointer string,
+                                                    size_type string_count) const noexcept {
             return compare(position, count, string_view(string, string_count));
         }
 
         [[nodiscard]]
         constexpr bool starts_with(string_view prefix) const noexcept {
-            return prefix.size_ <= size_ &&
-                   M_cmemcmp(data_, prefix.data_, prefix.size_) == 0;
+            return prefix.size_ <= size_ && M_cmemcmp(data_, prefix.data_, prefix.size_) == 0;
         }
 
         [[nodiscard]]
@@ -372,8 +347,7 @@ namespace tay {
         [[nodiscard]]
         constexpr bool ends_with(string_view suffix) const noexcept {
             return suffix.size_ <= size_ &&
-                   M_cmemcmp(data_offset(size_ - suffix.size_), suffix.data_,
-                             suffix.size_) == 0;
+                   M_cmemcmp(data_offset(size_ - suffix.size_), suffix.data_, suffix.size_) == 0;
         }
 
         [[nodiscard]]
@@ -402,8 +376,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type find(char character,
-                                 size_type position = 0) const noexcept {
+        constexpr size_type find(char character, size_type position = 0) const noexcept {
             if (position >= size_) {
                 return npos;
             }
@@ -416,14 +389,12 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type find(string_view string,
-                                 size_type position = 0) const noexcept {
+        constexpr size_type find(string_view string, size_type position = 0) const noexcept {
             return find(string.data_, position, string.size_);
         }
 
         [[nodiscard]]
-        constexpr size_type find(const_pointer string,
-                                 size_type position = 0) const noexcept {
+        constexpr size_type find(const_pointer string, size_type position = 0) const noexcept {
             return find(string, position, M_cstrlen(string));
         }
 
@@ -440,15 +411,13 @@ namespace tay {
                 return npos;
             }
 
-            const size_type result =
-                M_search<detail::__search_direction::FORWARD>(
-                    data_ + position, size_ - position, string, count);
+            const size_type result = M_search<detail::__search_direction::FORWARD>(
+                data_ + position, size_ - position, string, count);
             return result == npos ? npos : position + result;
         }
 
         [[nodiscard]]
-        constexpr size_type rfind(char character,
-                                  size_type position = npos) const noexcept {
+        constexpr size_type rfind(char character, size_type position = npos) const noexcept {
             if (empty()) {
                 return npos;
             }
@@ -463,14 +432,12 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type rfind(string_view string,
-                                  size_type position = npos) const noexcept {
+        constexpr size_type rfind(string_view string, size_type position = npos) const noexcept {
             return rfind(string.data_, position, string.size_);
         }
 
         [[nodiscard]]
-        constexpr size_type rfind(const_pointer string,
-                                  size_type position = npos) const noexcept {
+        constexpr size_type rfind(const_pointer string, size_type position = npos) const noexcept {
             return rfind(string, position, M_cstrlen(string));
         }
 
@@ -486,31 +453,29 @@ namespace tay {
 
             const size_type last  = size_ - count;
             const size_type start = position < last ? position : last;
-            return M_search<detail::__search_direction::BACKWARD>(
-                data_, start + count, string, count);
+            return M_search<detail::__search_direction::BACKWARD>(data_, start + count, string,
+                                                                  count);
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_of(
-            char character, size_type position = 0) const noexcept {
+        constexpr size_type find_first_of(char character, size_type position = 0) const noexcept {
             return find(character, position);
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_of(
-            string_view characters, size_type position = 0) const noexcept {
+        constexpr size_type find_first_of(string_view characters,
+                                          size_type position = 0) const noexcept {
             return find_first_of(characters.data_, position, characters.size_);
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_of(
-            const_pointer characters, size_type position = 0) const noexcept {
+        constexpr size_type find_first_of(const_pointer characters,
+                                          size_type position = 0) const noexcept {
             return find_first_of(characters, position, M_cstrlen(characters));
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_of(const_pointer characters,
-                                          size_type position,
+        constexpr size_type find_first_of(const_pointer characters, size_type position,
                                           size_type count) const noexcept {
             for (size_type index = position; index < size_; ++index) {
                 if (M_contain(characters, count, data_[index])) {
@@ -521,27 +486,24 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_of(
-            char character, size_type position = npos) const noexcept {
+        constexpr size_type find_last_of(char character, size_type position = npos) const noexcept {
             return rfind(character, position);
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_of(
-            string_view characters, size_type position = npos) const noexcept {
+        constexpr size_type find_last_of(string_view characters,
+                                         size_type position = npos) const noexcept {
             return find_last_of(characters.data_, position, characters.size_);
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_of(
-            const_pointer characters,
-            size_type position = npos) const noexcept {
+        constexpr size_type find_last_of(const_pointer characters,
+                                         size_type position = npos) const noexcept {
             return find_last_of(characters, position, M_cstrlen(characters));
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_of(const_pointer characters,
-                                         size_type position,
+        constexpr size_type find_last_of(const_pointer characters, size_type position,
                                          size_type count) const noexcept {
             if (size_ == 0 || count == 0) {
                 return npos;
@@ -557,28 +519,25 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_not_of(
-            char character, size_type position = 0) const noexcept {
+        constexpr size_type find_first_not_of(char character,
+                                              size_type position = 0) const noexcept {
             return find_first_not_of(&character, position, 1);
         }
 
         [[nodiscard]]
-        constexpr size_type find_first_not_of(
-            string_view characters, size_type position = 0) const noexcept {
-            return find_first_not_of(characters.data_, position,
-                                     characters.size_);
-        }
-
-        [[nodiscard]]
-        constexpr size_type find_first_not_of(
-            const_pointer characters, size_type position = 0) const noexcept {
-            return find_first_not_of(characters, position,
-                                     M_cstrlen(characters));
+        constexpr size_type find_first_not_of(string_view characters,
+                                              size_type position = 0) const noexcept {
+            return find_first_not_of(characters.data_, position, characters.size_);
         }
 
         [[nodiscard]]
         constexpr size_type find_first_not_of(const_pointer characters,
-                                              size_type position,
+                                              size_type position = 0) const noexcept {
+            return find_first_not_of(characters, position, M_cstrlen(characters));
+        }
+
+        [[nodiscard]]
+        constexpr size_type find_first_not_of(const_pointer characters, size_type position,
                                               size_type count) const noexcept {
             for (size_type index = position; index < size_; ++index) {
                 if (!M_contain(characters, count, data_[index])) {
@@ -589,29 +548,25 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_not_of(
-            char character, size_type position = npos) const noexcept {
+        constexpr size_type find_last_not_of(char character,
+                                             size_type position = npos) const noexcept {
             return find_last_not_of(&character, position, 1);
         }
 
         [[nodiscard]]
-        constexpr size_type find_last_not_of(
-            string_view characters, size_type position = npos) const noexcept {
-            return find_last_not_of(characters.data_, position,
-                                    characters.size_);
-        }
-
-        [[nodiscard]]
-        constexpr size_type find_last_not_of(
-            const_pointer characters,
-            size_type position = npos) const noexcept {
-            return find_last_not_of(characters, position,
-                                    M_cstrlen(characters));
+        constexpr size_type find_last_not_of(string_view characters,
+                                             size_type position = npos) const noexcept {
+            return find_last_not_of(characters.data_, position, characters.size_);
         }
 
         [[nodiscard]]
         constexpr size_type find_last_not_of(const_pointer characters,
-                                             size_type position,
+                                             size_type position = npos) const noexcept {
+            return find_last_not_of(characters, position, M_cstrlen(characters));
+        }
+
+        [[nodiscard]]
+        constexpr size_type find_last_not_of(const_pointer characters, size_type position,
                                              size_type count) const noexcept {
             if (size_ == 0) {
                 return npos;
@@ -637,8 +592,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr comparison_category operator<=>(
-            string_view other) const noexcept {
+        constexpr comparison_category operator<=>(string_view other) const noexcept {
             const int result = compare(other);
             if (result < 0) {
                 return comparison_category::less;
@@ -650,8 +604,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr comparison_category operator<=>(
-            const_pointer other) const noexcept {
+        constexpr comparison_category operator<=>(const_pointer other) const noexcept {
             return *this <=> string_view(other);
         }
     };
@@ -662,12 +615,11 @@ namespace tay {
 
     struct string_view_hash {
         [[nodiscard]]
-        constexpr std::size_t operator()(string_view string) const noexcept {
-            constexpr std::size_t magic_number = 42;
-            std::size_t hash                   = 0;
+        constexpr size_t operator()(string_view string) const noexcept {
+            constexpr size_t magic_number = 42;
+            size_t hash                   = 0;
             for (char character : string) {
-                hash =
-                    hash * magic_number + static_cast<unsigned char>(character);
+                hash = hash * magic_number + static_cast<unsigned char>(character);
             }
             return hash;
         }
@@ -676,8 +628,7 @@ namespace tay {
     inline namespace literals {
         inline namespace string_view_literals {
             [[nodiscard]]
-            constexpr string_view operator""_sv(const char* string,
-                                                std::size_t length) noexcept {
+            constexpr string_view operator""_sv(const char* string, size_t length) noexcept {
                 return {string, length};
             }
         }  // namespace string_view_literals

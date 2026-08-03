@@ -1,14 +1,19 @@
 /**
  * @file spinlock.h
- * @brief Freestanding spin locks.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供适用于 freestanding 环境的自旋锁。
  * @version 0.1.0-dev.1
- * @date 2026-08-01
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
 
+#include <tay/bits.h>
+
 #include <atomic>
-#include <cstdint>
 
 namespace tay {
     namespace detail {
@@ -60,33 +65,29 @@ namespace tay {
         ticket_spinlock& operator=(ticket_spinlock&&)      = delete;
 
         void lock() noexcept {
-            const auto ticket =
-                next_ticket_.fetch_add(1, std::memory_order_relaxed);
+            const auto ticket = next_ticket_.fetch_add(1, std::memory_order_relaxed);
             while (serving_ticket_.load(std::memory_order_acquire) != ticket) {
                 detail::spin_wait_hint();
             }
         }
 
         [[nodiscard]] bool try_lock() noexcept {
-            const auto serving =
-                serving_ticket_.load(std::memory_order_acquire);
-            auto expected = serving;
+            const auto serving = serving_ticket_.load(std::memory_order_acquire);
+            auto expected      = serving;
             return next_ticket_.compare_exchange_strong(
-                expected, serving + 1, std::memory_order_acquire,
-                std::memory_order_relaxed);
+                expected, serving + 1, std::memory_order_acquire, std::memory_order_relaxed);
         }
 
         void unlock() noexcept {
-            const auto serving =
-                serving_ticket_.load(std::memory_order_relaxed);
+            const auto serving = serving_ticket_.load(std::memory_order_relaxed);
             serving_ticket_.store(serving + 1, std::memory_order_release);
         }
 
     private:
-        static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
+        static_assert(std::atomic<u32_t>::is_always_lock_free,
                       "ticket_spinlock requires lock-free 32-bit atomics");
 
-        std::atomic<std::uint32_t> next_ticket_{0};
-        std::atomic<std::uint32_t> serving_ticket_{0};
+        std::atomic<u32_t> next_ticket_{0};
+        std::atomic<u32_t> serving_ticket_{0};
     };
 }  // namespace tay

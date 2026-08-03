@@ -1,12 +1,12 @@
 /**
  * @file cctype
  * @author theflysong (song_of_the_fly@163.com)
- * @brief ctype.h
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <cctype> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-01-19
- * 
+ * @date 2026-08-02
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once

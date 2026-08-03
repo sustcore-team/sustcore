@@ -1,9 +1,9 @@
 /**
  * @file qualifier.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief qualifiers (const, volatile, references and etc.)
+ * @brief 为 mincppstd 的 C++ 标准库兼容层提供 cv 与引用限定符工具。
  * @version 0.1.0-dev.1
- * @date 2026-06-08
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *

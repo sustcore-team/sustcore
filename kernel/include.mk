@@ -1,1 +1,1 @@
-
+src-y += log.cpp

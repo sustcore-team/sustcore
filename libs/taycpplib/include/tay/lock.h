@@ -1,8 +1,12 @@
 /**
  * @file lock.h
- * @brief Generic lock ownership and synchronized-value utilities.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供通用锁所有权和同步值工具。
  * @version 0.1.0-dev.1
- * @date 2026-08-01
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -66,11 +70,9 @@ namespace tay {
             this->lock();
         }
 
-        constexpr unique_lock(Lock& lock, defer_lock_t) noexcept
-            : lock_(&lock) {}
+        constexpr unique_lock(Lock& lock, defer_lock_t) noexcept : lock_(&lock) {}
 
-        constexpr unique_lock(Lock& lock, adopt_lock_t) noexcept
-            : lock_(&lock), owns_lock_(true) {}
+        constexpr unique_lock(Lock& lock, adopt_lock_t) noexcept : lock_(&lock), owns_lock_(true) {}
 
         unique_lock(Lock& lock, try_to_lock_t) : lock_(&lock) {
             owns_lock_ = lock_->try_lock();
@@ -164,10 +166,10 @@ namespace tay {
         bool owns_lock_ = false;
     };
 
-    template <std::size_t Order, class Guard>
+    template <size_t Order, class Guard>
     struct guard_stage {
-        static constexpr std::size_t order = Order;
-        using guard_type                   = Guard;
+        static constexpr size_t order = Order;
+        using guard_type              = Guard;
     };
 
     namespace detail {
@@ -177,13 +179,11 @@ namespace tay {
         template <class T>
         inline constexpr bool is_guard_stage_v = false;
 
-        template <std::size_t Order, class Guard>
-        inline constexpr bool is_guard_stage_v<guard_stage<Order, Guard>> =
-            true;
+        template <size_t Order, class Guard>
+        inline constexpr bool is_guard_stage_v<guard_stage<Order, Guard>> = true;
 
         template <class... Stages>
-        inline constexpr bool are_guard_stages_v =
-            (is_guard_stage_v<Stages> && ...);
+        inline constexpr bool are_guard_stages_v = (is_guard_stage_v<Stages> && ...);
 
         template <class... Stages>
         struct orders_are_unique : std::true_type {};
@@ -213,9 +213,8 @@ namespace tay {
         struct insert_guard_stage<Stage, type_list<Head, Tail...>> {
             using type = std::conditional_t<
                 (Stage::order < Head::order), type_list<Stage, Head, Tail...>,
-                typename prepend<Head,
-                                 typename insert_guard_stage<
-                                     Stage, type_list<Tail...>>::type>::type>;
+                typename prepend<
+                    Head, typename insert_guard_stage<Stage, type_list<Tail...>>::type>::type>;
         };
 
         template <class Sorted, class... Stages>
@@ -229,12 +228,11 @@ namespace tay {
         template <class Sorted, class Stage, class... Rest>
         struct sort_guard_stages<Sorted, Stage, Rest...> {
             using inserted = typename insert_guard_stage<Stage, Sorted>::type;
-            using type = typename sort_guard_stages<inserted, Rest...>::type;
+            using type     = typename sort_guard_stages<inserted, Rest...>::type;
         };
 
         template <class... Stages>
-        using sort_guard_stages_t =
-            typename sort_guard_stages<type_list<>, Stages...>::type;
+        using sort_guard_stages_t = typename sort_guard_stages<type_list<>, Stages...>::type;
 
         template <bool Valid, class... Stages>
         struct context_stage_info {
@@ -244,9 +242,8 @@ namespace tay {
 
         template <class... Stages>
         struct context_stage_info<true, Stages...> {
-            static constexpr bool orders_are_unique =
-                detail::orders_are_unique<Stages...>::value;
-            using sorted_stages = sort_guard_stages_t<Stages...>;
+            static constexpr bool orders_are_unique = detail::orders_are_unique<Stages...>::value;
+            using sorted_stages                     = sort_guard_stages_t<Stages...>;
         };
 
         template <class... Stages>
@@ -289,21 +286,17 @@ namespace tay {
 
     template <class Lock, class... Stages>
     class context_lock_guard {
-        static constexpr bool valid_stages =
-            detail::are_guard_stages_v<Stages...>;
-        using stage_info = detail::context_stage_info<valid_stages, Stages...>;
+        static constexpr bool valid_stages = detail::are_guard_stages_v<Stages...>;
+        using stage_info                   = detail::context_stage_info<valid_stages, Stages...>;
 
-        static_assert(valid_stages,
-                      "context_lock_guard requires guard_stage<Order, Guard>");
-        static_assert(stage_info::orders_are_unique,
-                      "context guard orders must be unique");
+        static_assert(valid_stages, "context_lock_guard requires guard_stage<Order, Guard>");
+        static_assert(stage_info::orders_are_unique, "context guard orders must be unique");
 
-        using guard_chain_type = typename detail::make_guard_chain<
-            typename stage_info::sorted_stages>::type;
+        using guard_chain_type =
+            typename detail::make_guard_chain<typename stage_info::sorted_stages>::type;
 
     public:
-        explicit context_lock_guard(Lock& lock) noexcept
-            : guards_{}, lock_{lock} {}
+        explicit context_lock_guard(Lock& lock) noexcept : guards_{}, lock_{lock} {}
 
         context_lock_guard(const context_lock_guard&)            = delete;
         context_lock_guard& operator=(const context_lock_guard&) = delete;
@@ -318,8 +311,7 @@ namespace tay {
     template <class T, class Lock, template <class> class Locker>
     class locked_ref;
 
-    template <class T, class Lock = spinlock,
-              template <class> class Locker = lock_guard>
+    template <class T, class Lock = spinlock, template <class> class Locker = lock_guard>
     class synchronized;
 
     template <class T, class Lock, template <class> class Locker>
@@ -346,8 +338,7 @@ namespace tay {
         }
 
     private:
-        constexpr locked_ref(Lock& lock, T* value) noexcept
-            : locker_(lock), value_(value) {}
+        constexpr locked_ref(Lock& lock, T* value) noexcept : locker_(lock), value_(value) {}
 
         [[no_unique_address]] Locker<Lock> locker_;
         T* value_;

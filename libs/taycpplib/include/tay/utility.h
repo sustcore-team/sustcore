@@ -1,9 +1,9 @@
 /**
  * @file utility.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief utilities for taycpp
+ * @brief 提供 Tay C++ 库通用的移动、交换和类型工具。
  * @version 0.1.0-dev.1
- * @date 2026-07-30
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -18,15 +18,13 @@
 namespace tay {
     template <typename Tag, typename T>
     struct composition : private T {
-        constexpr composition() noexcept(
-            std::is_nothrow_default_constructible_v<T>)
+        constexpr composition() noexcept(std::is_nothrow_default_constructible_v<T>)
             requires std::is_default_constructible_v<T>
         = default;
 
         template <typename U>
             requires std::constructible_from<T, U &&>
-        constexpr explicit composition(U &&value) noexcept(
-            std::is_nothrow_constructible_v<T, U &&>)
+        constexpr explicit composition(U &&value) noexcept(std::is_nothrow_constructible_v<T, U &&>)
             : T(std::forward<U>(value)) {}
 
         static constexpr T &get(composition<Tag, T> *p) noexcept {
@@ -41,15 +39,13 @@ namespace tay {
     template <typename Tag, typename T>
         requires(!std::is_class_v<T>)
     struct composition<Tag, T> {
-        constexpr composition() noexcept(
-            std::is_nothrow_default_constructible_v<T>)
+        constexpr composition() noexcept(std::is_nothrow_default_constructible_v<T>)
             requires std::is_default_constructible_v<T>
         = default;
 
         template <typename U>
             requires std::constructible_from<T, U &&>
-        constexpr explicit composition(U &&value) noexcept(
-            std::is_nothrow_constructible_v<T, U &&>)
+        constexpr explicit composition(U &&value) noexcept(std::is_nothrow_constructible_v<T, U &&>)
             : value_(std::forward<U>(value)) {}
 
         static constexpr T &get(composition<Tag, T> *p) noexcept {
@@ -85,4 +81,10 @@ namespace tay {
 
     template <typename... Ts>
     overloaded(Ts &&...) -> overloaded<std::decay_t<Ts>...>;
+
+    template <typename T>
+    struct dependent_false : std::false_type {};
+
+    template <typename T>
+    constexpr bool dependent_false_v = dependent_false<T>::value;
 }  // namespace tay

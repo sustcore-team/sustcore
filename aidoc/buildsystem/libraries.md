@@ -1,11 +1,10 @@
-# Library Registry And Dependency Resolution
+# 库注册表与依赖解析
 
-## Metadata Schema
+## 元数据结构
 
-Libraries are registered through `metadata.toml`.
-The current schema uses `[[libmeta]]`.
+库通过 `metadata.toml` 注册，当前结构使用 `[[libmeta]]`。
 
-Example:
+示例：
 
 ```toml
 [[libmeta]]
@@ -32,45 +31,42 @@ makefile = "Makefile"
 target = "build-host-static"
 ```
 
-## Current Field Meanings
+## 当前字段含义
 
 - `id`
-  - global logical identifier
+  - 全局逻辑标识符。
 - `libname`
-  - freestanding archive file name; an empty string marks that variant
-    header-only
+  - Freestanding 静态库文件名；空字符串表示该变体为纯头文件库。
 - `makefile`
-  - path relative to the metadata file
+  - 相对于元数据文件的路径。
 - `target`
-  - sub-make target used to build that library
+  - 用于构建该库的子 Make 目标。
 - `version`
-  - concrete SemVer 2.0 library release version
+  - 具体的 SemVer 2.0 库发布版本。
 - `support-archs`
-  - allow-list of supported freestanding architectures
+  - 支持的 freestanding 架构允许列表。
 - `support-environments`
-  - allow-list containing `freestanding` and/or `host`; defaults to freestanding
+  - 包含 `freestanding` 和/或 `host` 的允许列表；默认只支持 freestanding。
 - `include-c/cpp/asm`
-  - exported include roots for each language
+  - 分别为各语言导出的 include 根目录。
 - `testbench.test/headercheck/bench/freestanding/example`
-  - explicit lists of testbench TOML files relative to this library metadata
+  - 相对于当前库元数据的 testbench TOML 文件显式列表。
 - `host.libname/makefile/target`
-  - optional host-specific build override; omitted fields inherit the common
-    values, while `host.libname = ""` marks only the host variant header-only
+  - 可选的 Host 专用构建覆盖；省略字段继承通用值，`host.libname = ""` 只把 Host 变体标记为纯头文件库。
 
-## Current Rules
+## 当前规则
 
-- `id` must be globally unique across all dependency owners
-- one metadata file may contain multiple `[[libmeta]]`
-- missing `support-archs` means “available on all architectures”
-- `support-archs` never restricts native host visibility
-- missing `include-*` means “export nothing”
-- `libname = ""` means the freestanding variant is header-only
-- a `[libmeta.host]` override may independently add or remove the host archive
+- `id` 在所有依赖 owner 中必须全局唯一。
+- 一个元数据文件可以包含多个 `[[libmeta]]`。
+- 缺少 `support-archs` 表示“在所有架构上可用”。
+- `support-archs` 绝不会限制本机 Host 可见性。
+- 缺少 `include-*` 表示“不导出任何内容”。
+- `libname = ""` 表示 freestanding 变体是纯头文件库。
+- `[libmeta.host]` 覆盖可以独立增加或移除 Host 静态库。
 
-## Version Naming And Requirements
+## 版本命名与依赖要求
 
-`metadata.toml` uses `version` for the concrete version provided by a library.
-It must use a full SemVer 2.0 form without a `v` prefix, for example:
+`metadata.toml` 使用 `version` 表示库提供的具体版本。它必须是不带 `v` 前缀的完整 SemVer 2.0 形式，例如：
 
 ```toml
 version = "0.1.0"
@@ -78,92 +74,76 @@ version = "0.2.0-rc.1"
 version = "0.2.0-dev.3+git.abc1234"
 ```
 
-`dependencies.toml` uses `version` as a version-range requirement rather than
-the dependency's concrete version. Supported forms include:
+`dependencies.toml` 中的 `version` 表示版本范围要求，而不是依赖的具体版本。支持的形式包括：
 
-- `*` for any version
-- exact and partial versions such as `1.2.3`, `1.2`, and `1.x`
-- comparator and conjunction ranges such as `>=1.2.0 <2.0.0`
-- compatibility ranges such as `^0.2.0`, `~1.2`, and `1.2 - 2.0`
-- logical OR, for example `^1.2 || ^2.0`
+- `*`：任意版本；
+- 精确或不完整版本，例如 `1.2.3`、`1.2` 和 `1.x`；
+- 比较器和范围交集，例如 `>=1.2.0 <2.0.0`；
+- 兼容范围，例如 `^0.2.0`、`~1.2` 和 `1.2 - 2.0`；
+- 逻辑 OR，例如 `^1.2 || ^2.0`。
 
-Build metadata is retained for traceability but ignored for version precedence
-and range matching. Ranges exclude prerelease versions by default; a range
-clause must explicitly contain a prerelease comparator for the same
-`MAJOR.MINOR.PATCH` core version to match one.
+构建元数据会被保留用于追踪，但不参与版本优先级和范围匹配。默认情况下，版本范围排除预发布版本；要匹配预发布版本，范围子句必须显式包含相同 `MAJOR.MINOR.PATCH` 核心版本的预发布比较器。
 
-## Registry Generation
+## 注册表生成
 
-The shared registry is built by:
+共享注册表由以下脚本构建：
 
 - `script/py/libregistry.py`
 - `script/py/build_libs.py`
 
-Generated output:
+生成输出：
 
 - `script/.cache/libraries.mk`
 
-This registry fragment contains:
+该注册表片段包含：
 
-- `library-ids-all` for cross-environment validation and matrix enumeration
-- `library-ids-$(is-freestanding-<arch>)` and `library-ids-$(is-host)`
-- `library-ids`, resolved from the active selector's `library-ids-y` bucket
-- `library-<id>-version`
-- `library-<id>-libname`
-- `library-<id>-makefile`
-- `library-<id>-target`
-- `library-<id>-archive`
-- `library-<id>-is-header-only`
-- `library-<id>-include-c`
-- `library-<id>-include-cpp`
-- `library-<id>-include-asm`
-- `library-<id>-crt0-$(is-<arch>)`, `crti`, `crtn`, and `ldscript` variants
+- 用于跨环境验证和矩阵枚举的 `library-ids-all`；
+- `library-ids-$(is-freestanding-<arch>)` 和 `library-ids-$(is-host)`；
+- 根据活动选择器的 `library-ids-y` 桶解析出的 `library-ids`；
+- `library-<id>-version`；
+- `library-<id>-libname`；
+- `library-<id>-makefile`；
+- `library-<id>-target`；
+- `library-<id>-archive`；
+- `library-<id>-is-header-only`；
+- `library-<id>-include-c`；
+- `library-<id>-include-cpp`；
+- `library-<id>-include-asm`；
+- `library-<id>-crt0-$(is-<arch>)`、`crti`、`crtn` 和 `ldscript` 变体。
 
-Generated build-target output:
+生成的构建目标输出为：
 
 - `script/.cache/build-libs.mk`
 
-This build-target fragment contains:
+该构建目标片段包含：
 
-- `build-lib-<id>`
-- `build-lib-targets-$(is-freestanding-<arch>)`
-- `host-build-lib-targets-$(is-host)`
-- `build-libs`
+- `build-lib-<id>`；
+- `build-lib-targets-$(is-freestanding-<arch>)`；
+- `host-build-lib-targets-$(is-host)`；
+- `build-libs`。
 
-Each buildable target passes its matching
-`$(path-ctx)/lib-<id>.mk` file through `ctx=` to the library sub-make. The context declares
-the library owner and source root, with defaults for its object directory
-(`$(path-obj)/libs/<id>`) and final archive
-(`$(path-bin)/libs/<libname>`). The archive name and header-only status are
-selected independently for freestanding and host. Header-only variants still
-receive a context, whose selected archive value expands to empty.
+每个可构建目标都通过 `ctx=` 把匹配的 `$(path-ctx)/lib-<id>.mk` 传给库子 Make。上下文声明库 owner 和源文件根目录，并为对象目录 `$(path-obj)/libs/<id>` 与最终静态库 `$(path-bin)/libs/<libname>` 提供默认值。Freestanding 与 Host 的静态库名及纯头文件状态互相独立选择。纯头文件变体仍会收到上下文，但其所选 archive 值展开为空。
 
-## Component Build Fragments
+## 组件构建片段
 
-Each buildable library or module uses three root fragments:
+每个可构建的库或模块使用三个根片段：
 
-- `Makefile` identifies the component root and selects its artifact layer.
-- `flags.mk` declares component-local compiler flags and include paths.
-- `collect.mk` invokes `script/build/collector.mk` for the component root.
+- `Makefile` 标识组件根目录并选择产物层。
+- `flags.mk` 声明组件局部编译 flags 和 include 路径。
+- `collect.mk` 为组件根目录调用 `script/build/collector.mk`。
 
-Project static libraries stack `script/build/static-library.mk` on top of
-`script/build/component.mk`. The component layer owns buildpath/context loading,
-dependency includes, source normalization, toolchain selection, object rules,
-Host toolchain stamps, and depfiles. The static-library layer adds only `ar` and
-the `build-static` entry point. A normal library Makefile is therefore:
+项目静态库在 `script/build/component.mk` 之上叠加 `script/build/static-library.mk`。组件层负责 buildpath/上下文加载、依赖包含、源文件规范化、工具链选择、对象规则、Host 工具链 stamp 和 depfile。静态库层只增加 `ar` 和 `build-static` 入口。因此，普通库 Makefile 为：
 
 ```make
 component-root := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(component-root)/../../script/build/static-library.mk
 ```
 
-Source selection belongs exclusively in `include.mk`. The collector reads the
-root and all nested `include.mk` files, classifies their `src-y` and `src-n`
-entries by language, and prefixes nested paths relative to the component root.
+源文件选择只能出现在 `include.mk` 中。收集器读取根目录和所有嵌套的 `include.mk`，按语言分类其中的 `src-y` 与 `src-n` 条目，并相对于组件根目录为嵌套路径添加前缀。每个 `include.mk` 只能登记其所在目录的源码，不得通过相对路径收集子目录；子目录应提供独立的 `include.mk`。同类源码可以合并在一条赋值中，不同实现类别应另起一条 `src-y +=` 或 `src-n +=`，但赋值行之间不留空行。
 
-## Testbench Metadata
+## Testbench 元数据
 
-Each `[[libmeta]]` explicitly registers all of its testbench metadata files:
+每个 `[[libmeta]]` 显式注册其所有 testbench 元数据文件：
 
 ```toml
 testbench.test = ["testbench/test/metadata.toml"]
@@ -173,13 +153,9 @@ testbench.freestanding = ["testbench/freestanding/metadata.toml"]
 testbench.example = ["testbench/example/metadata.toml"]
 ```
 
-All five `testbench` fields are optional arrays. An omitted field is equivalent
-to an empty array and means that the library has no metadata registered for
-that category. Paths must name existing TOML files relative to the library
-metadata. A metadata file may contain multiple `[[libmeta]]` entries, each with
-independent testbench lists.
+五个 `testbench` 字段都是可选数组。省略字段等价于空数组，表示该库没有为该类别注册元数据。路径必须指向相对于库元数据存在的 TOML 文件。一个元数据文件可以包含多个 `[[libmeta]]`，每个条目拥有独立的 testbench 列表。
 
-Test and benchmark files register executable programs:
+测试和基准文件注册可执行程序：
 
 ```toml
 [[hostprog]]
@@ -190,15 +166,9 @@ target = "build"
 output = "example-test"
 ```
 
-`kind = "test"`, `kind = "bench"`, and `kind = "example"` are valid only in
-files listed by the corresponding `testbench.test`, `testbench.bench`, and
-`testbench.example` fields.
-Header-check files listed by `testbench.headercheck` contain only
-`[[headercheck]]` entries. The scanner does not discover unregistered files by
-directory or file name.
+`kind = "test"`、`kind = "bench"` 和 `kind = "example"` 只能分别出现在对应 `testbench.test`、`testbench.bench` 和 `testbench.example` 字段列出的文件中。`testbench.headercheck` 列出的头文件检查文件只能包含 `[[headercheck]]` 条目。扫描器不会按目录或文件名发现未注册文件。
 
-Freestanding files register compile/link checks that are built for the selected
-target architecture but never executed on the host:
+Freestanding 文件注册为所选目标架构构建、但绝不在 Host 上执行的编译/链接检查：
 
 ```toml
 [[freestanding-check]]
@@ -209,48 +179,37 @@ sources = ["consumer.cpp", "provider.cpp"]
 expect = "success"
 ```
 
-`kind` is `compile` or `link`; `expect` is `success` or `failure`. Sources must
-exist beside the registered metadata file and match the declared C or C++
-language. These checks are available through `make freestanding-check`,
-`check-lib`, and `build-lib-matrix`.
+`kind` 为 `compile` 或 `link`；`expect` 为 `success` 或 `failure`。源文件必须与已注册的元数据文件位于同一目录，并匹配声明的 C 或 C++ 语言。这些检查可通过 `make freestanding-check`、`check-lib` 和 `build-lib-matrix` 使用。
 
-## Dependency File Schema
+## 依赖文件结构
 
-Dependency owners use:
+依赖 owner 使用：
 
 ```toml
 [[dependencies]]
 lib = "mini-cstd"
-
 
 [[riscv64.dependencies]]
 lib = "sbi"
 
 [[host.dependencies]]
 lib = "tayclib"
-
 ```
 
-The resolver combines the public section, selected environment section, and
-each applicable architecture section. A single `make configure` resolves and
-validates every known freestanding architecture. Repeated dependencies are
-deduplicated only when
-their version expressions are identical; conflicting expressions are errors.
-It then:
+解析器会合并公共段、所选环境段和每个适用的架构段。一次 `make configure` 会解析并验证全部已知 freestanding 架构。重复依赖只有在版本表达式完全相同时才会去重；表达式冲突会报错。随后解析器会：
 
-- reads top-level `[[dependencies]]`
-- reads arch-specific `[[<arch>.dependencies]]`
-- matches them against the current registry
-- validates that all transitive dependencies are explicitly listed by the owner
-- reuses the child dependency version expression in missing-dependency diagnostics
+- 读取顶层 `[[dependencies]]`；
+- 读取架构专用 `[[<arch>.dependencies]]`；
+- 与当前注册表匹配；
+- 验证 owner 显式列出了所有传递依赖；
+- 在缺失依赖诊断中复用子依赖的版本表达式。
 
-Generated output:
+生成输出：
 
 - `script/.cache/deps/<id>.mk`
-- `script/.cache/deps/host-<id>.mk` after host validation
+- Host 验证后的 `script/.cache/deps/host-<id>.mk`
 
-Each file uses the build dimension selectors internally and exports only the
-selected final values:
+每个文件在内部使用构建维度选择器，并只导出最终选中的值：
 
 - `<id>-dep-ids`
 - `<id>-dep-archives`
@@ -258,25 +217,22 @@ selected final values:
 - `<id>-includes-cpp`
 - `<id>-includes-asm`
 
-For example, public dependencies append to `<id>-dep-ids-y`, while an
-architecture dependency appends through `<id>-dep-ids-$(is-<arch>)`; the final
-`<id>-dep-ids` is assigned from the active `y` bucket. Host fragments use the
-same interface but are generated only after native architecture validation.
+例如，公共依赖追加到 `<id>-dep-ids-y`，架构依赖通过 `<id>-dep-ids-$(is-<arch>)` 追加；最终 `<id>-dep-ids` 从活动的 `y` 桶赋值。Host 片段使用相同接口，但只在本机架构验证后生成。
 
-## Current Examples
+## 当前示例
 
 - `mini-cstd`
-  - architecture-neutral
-  - exports no include paths
+  - 与架构无关；
+  - 不导出 include 路径。
 - `fdt`
-  - architecture-neutral
-  - exports libfdt headers
+  - 与架构无关；
+  - 导出 libfdt 头文件。
 - `sbi`
-  - `support-archs = ["riscv64"]`
-  - only visible to `riscv64`
+  - `support-archs = ["riscv64"]`；
+  - 只对 `riscv64` 可见。
 
-## Current Limitations
+## 当前限制
 
-- repeated `id` values are not supported
-- multiple versions under the same `id` are not supported
-- library-local `dependencies.toml` is shared by all `[[libmeta]]` entries in the same directory
+- 不支持重复的 `id`；
+- 不支持同一 `id` 下的多个版本；
+- 同一目录中的所有 `[[libmeta]]` 条目共享库局部 `dependencies.toml`。

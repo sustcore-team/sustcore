@@ -78,7 +78,7 @@ tay::unique_lock attempted{lock, tay::try_to_lock};
 
 普通锁竞争由阻塞或 `try_lock()` 的 false 结果表达，不使用异常。
 
-## Context Guard
+## 执行上下文 Guard
 
 `guard_stage<Order, Guard>` 为默认可构造的 RAII Guard 指定编译期顺序，
 `context_lock_guard<Lock, Stages...>` 在获取锁前进入这些 Guard：

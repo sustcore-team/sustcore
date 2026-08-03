@@ -1,6 +1,12 @@
 /**
  * @file context.h
- * @brief Sink-backed formatting context and output iterator.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 定义面向输出接收器的格式化上下文和迭代器。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -23,8 +29,7 @@ namespace tay::detail {
             Sink* sink_ = nullptr;
 
         public:
-            constexpr explicit output_proxy(Sink* sink) noexcept
-                : sink_(sink) {}
+            constexpr explicit output_proxy(Sink* sink) noexcept : sink_(sink) {}
 
             constexpr output_proxy& operator=(char character) {
                 sink_->put(character);
@@ -41,8 +46,7 @@ namespace tay::detail {
 
         constexpr format_output_iterator() noexcept = default;
 
-        constexpr explicit format_output_iterator(Sink& sink) noexcept
-            : sink_(&sink) {}
+        constexpr explicit format_output_iterator(Sink& sink) noexcept : sink_(&sink) {}
 
         [[nodiscard]] constexpr output_proxy operator*() const noexcept {
             return output_proxy(sink_);
@@ -66,8 +70,7 @@ namespace tay::detail {
         Sink* sink_ = nullptr;
 
     public:
-        constexpr explicit basic_format_context(Sink& sink) noexcept
-            : sink_(&sink) {}
+        constexpr explicit basic_format_context(Sink& sink) noexcept : sink_(&sink) {}
 
         [[nodiscard]] constexpr iterator out() noexcept {
             return iterator(*sink_);
@@ -79,7 +82,7 @@ namespace tay::detail {
             sink_->put(character);
         }
 
-        constexpr void write(const char* data, std::size_t size) {
+        constexpr void write(const char* data, size_t size) {
             sink_->write(data, size);
         }
 
@@ -91,18 +94,13 @@ namespace tay::detail {
             return sink_->stopped();
         }
 
-        template <class As = infer_format_type, class Value>
-        typename basic_format_context::iterator format(Value&& value) {
-            using selected_type = std::conditional_t<
-                std::is_same_v<As, infer_format_type>, format_arg_t<Value>, As>;
-
-            formatter<selected_type> selected{};
-            format_parse_context parse_context(string_view{});
-            (void)selected.parse(parse_context);
-            return selected.format(std::forward<Value>(value), *this);
-        }
+        template <class... Args>
+        typename basic_format_context::iterator format(
+            format_string<std::type_identity_t<Args>...> fmt, Args&&... args);
     };
 
     template <class Sink>
     basic_format_context(Sink&) -> basic_format_context<Sink>;
 }  // namespace tay::detail
+
+#include <tay/fmt/engine.h>

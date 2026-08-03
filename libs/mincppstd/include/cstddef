@@ -1,12 +1,12 @@
 /**
  * @file cstddef
  * @author theflysong (song_of_the_fly@163.com)
- * @brief stddef.h
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <cstddef> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-01-19
- * 
+ * @date 2026-08-02
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -19,10 +19,10 @@ extern "C" {
 #include <stddef.h>
 
 namespace std {
+    using ::max_align_t;
+    using ::nullptr_t;
     using ::ptrdiff_t;
     using ::size_t;
-    using ::nullptr_t;
-    using ::max_align_t;
 
     enum class byte : unsigned char {};
 }  // namespace std

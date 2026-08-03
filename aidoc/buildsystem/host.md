@@ -1,12 +1,10 @@
-# Host Builds, Tests, Examples, And Benchmarks
+# Host 构建、测试、示例与基准测试
 
-## Current Scope
+## 当前范围
 
-Host commands validate a native Clang toolchain, resolve environment-specific
-dependencies, and build isolated libraries, tests, examples, header checks,
-and benchmarks.
+Host 命令负责验证本机 Clang 工具链、解析环境专用依赖，并在隔离目录中构建库、测试、示例、头文件检查和基准测试。
 
-Run validation after selecting a configuration:
+选择配置后执行验证：
 
 ```text
 make configure config=custom
@@ -23,37 +21,28 @@ make clangd-host [mode=debug] [sanitize=address,undefined]
 make clangd-target [arch=riscv64] [mode=debug]
 ```
 
-Validation never invokes `make switch`, reads no cached target architecture,
-and does not publish host configuration until every probe succeeds.
+验证过程绝不会调用 `make switch`，不会读取缓存的目标架构，并且只有全部探测成功后才发布 Host 配置。
 
-## Validation Contract
+## 验证契约
 
-The C and C++ commands must both be Clang and must report the same target
-triple. Its normalized architecture must match both `uname -m` and an optional
-`host-arch` assertion. The archive command must report an LLVM version.
+C 和 C++ 命令都必须是 Clang，并报告相同的目标 triple。规范化后的架构必须同时匹配 `uname -m` 和可选的 `host-arch` 断言。归档命令必须报告 LLVM 版本。
 
-Every compiler probe uses the configured `--sysroot`. Verbose include search
-may use that sysroot, Clang's resource directory, and an explicitly selected
-GCC installation. Other system roots are rejected. C and C++ probes are then
-linked with their matching compiler drivers and run as native executables.
+每个编译器探测都使用配置的 `--sysroot`。详细头文件搜索只能使用该 sysroot、Clang resource directory 和显式选择的 GCC 安装；其他系统根目录会被拒绝。随后使用对应的编译器驱动链接 C/C++ 探测程序，并作为本机可执行文件运行。
 
-For C++, `cppstdlib=libstdc++` selects `-stdlib=libstdc++`, while
-`cppstdlib=libc++` selects `-stdlib=libc++`. `auto` records whichever provider
-the standard-header probe detects. A GCC installation can be fixed through a
-`--gcc-install-dir=...` entry in `cxxflags`.
+对于 C++，`cppstdlib=libstdc++` 选择 `-stdlib=libstdc++`，`cppstdlib=libc++` 选择 `-stdlib=libc++`。`auto` 会记录标准头文件探测发现的提供方。可以在 `cxxflags` 中使用 `--gcc-install-dir=...` 固定 GCC 安装。
 
-## Generated State
+## 生成状态
 
-Successful validation writes `script/.cache/host.mk` atomically. It records:
+验证成功后，以原子方式写入 `script/.cache/host.mk`。其中记录：
 
-- normalized host architecture and full target triple
-- resolved compiler-driver and archiver invocation paths
-- compiler, archiver, and C++ standard library versions
-- sysroot and effective C/C++/link flags
-- a fingerprint covering all validated toolchain inputs
-- optional features discovered by non-fatal compiler probes
+- 规范化的 Host 架构和完整目标 triple；
+- 解析后的编译器驱动与归档器调用路径；
+- 编译器、归档器和 C++ 标准库版本；
+- sysroot 以及实际 C/C++/链接 flags；
+- 覆盖全部已验证工具链输入的指纹；
+- 非致命编译器探测发现的可选特性。
 
-Dedicated host sub-makes load `script/env/host-buildpath.mk`, which produces:
+专用 Host 子 Make 加载 `script/env/host-buildpath.mk`，生成：
 
 ```text
 build/<mode>/host/<host-triple>/bin/
@@ -63,53 +52,31 @@ build/<mode>/host/<host-triple>/bench/
 build/<mode>/host/<host-triple>/example/
 ```
 
-The freestanding build path remains `build/<mode>/<arch>/`. Shared C++ rules
-force exactly one environment macro at the end of the compiler command:
-`TAY_ENV_HOST=1` or `TAY_ENV_FREESTANDING=1`.
+Freestanding 构建路径仍为 `build/<mode>/<arch>/`。共享 C++ 规则会在编译命令末尾强制加入且仅加入一个环境宏：`TAY_ENV_HOST=1` 或 `TAY_ENV_FREESTANDING=1`。
 
-The static `script/toolchain/c.mk`, `cpp.mk`, `ar.mk`, and `ld.mk` fragments are
-shared by both environments. `toolchain/environment.mk` resolves
-`is-host`/`is-freestanding` to `y`/`n`; each toolchain fragment writes its two
-candidates through those computed variable names and consumes only the
-resulting `y-toolchain-*` value. Validated host values still come from the
-generated `script/.cache/host.mk` fragment.
+静态片段 `script/toolchain/c.mk`、`cpp.mk`、`ar.mk` 和 `ld.mk` 由两个环境共享。`toolchain/environment.mk` 把 `is-host`/`is-freestanding` 解析为 `y`/`n`；每个工具链片段通过这些计算变量名写入两个候选值，并只消费最终的 `y-toolchain-*` 值。验证后的 Host 值仍来自生成的 `script/.cache/host.mk`。
 
-Sanitized builds use
-`build/<mode>/host/<host-triple>/sanitize/<profile>/`; unsanitized paths remain
-unchanged. Supported profiles are `address`, `undefined`, and
-`address,undefined`.
+Sanitizer 构建使用 `build/<mode>/host/<host-triple>/sanitize/<profile>/`，未启用 sanitizer 的路径保持不变。支持的配置为 `address`、`undefined` 和 `address,undefined`。
 
-## Command Semantics
+## 命令语义
 
-- `build-host-libs` builds all host variants that declare an archive.
-- `build-host-lib lib=<id>` builds the selected host archive, or runs host
-  header checks when that specific host variant is header-only.
-- `host-test` builds and runs every matching functionality test, including
-  abort/stderr assertions. It continues after individual failures, reports
-  `PASS`, `FAIL`, and `SKIP` for every selected program, then fails overall if
-  any program failed.
-- `example` builds every matching demonstration program without running it.
-- `host-example` sequentially runs every matching demonstration, including
-  declared abort/stderr expectations.
-- `bench` defaults to release and only builds every registered benchmark.
-- `host-bench` defaults to release and sequentially runs every matching
-  performance benchmark through the same aggregate runner.
-- `host-header-check` compiles each applicable public header independently.
-- `freestanding-check` performs registered target compile/link checks without
-  executing cross-architecture output.
-- `update-host` captures host libraries and all test/benchmark/example translation
-  units through Bear without running the executables.
-- `clangd-host` and `clangd-target` select the stable clangd database without
-  changing the persisted target build selection.
+- `build-host-libs` 构建所有声明了静态库的 Host 变体。
+- `build-host-lib lib=<id>` 构建所选 Host 静态库；如果该 Host 变体是纯头文件库，则运行 Host 头文件检查。
+- `host-test` 构建并运行全部匹配的功能测试，包括 abort/stderr 断言。单个测试失败后仍会继续，为每个所选程序报告 `PASS`、`FAIL` 或 `SKIP`；只要有任一程序失败，汇总结果即失败。
+- `example` 构建全部匹配的演示程序，但不运行。
+- `host-example` 按顺序运行全部匹配的演示，包括声明的 abort/stderr 预期。
+- `bench` 默认使用 release，只构建全部已注册基准测试。
+- `host-bench` 默认使用 release，并通过同一汇总运行器依次执行全部匹配的性能基准测试。
+- `host-header-check` 独立编译每个适用的公开头文件。
+- `freestanding-check` 执行已注册的目标编译/链接检查，不运行跨架构输出。
+- `update-host` 通过 Bear 捕获 Host 库以及全部测试、基准和示例翻译单元，但不运行可执行文件。
+- `clangd-host` 和 `clangd-target` 选择稳定的 clangd 数据库，不改变持久化的目标构建选择。
 
-Every host command validates first, resolves `deps/host-<owner>.mk` using the
-validated native architecture, and then enters a recursive host sub-make.
-These steps never update `.switch.mk`.
+每条 Host 命令都会先验证工具链，再根据已验证的本机架构解析 `deps/host-<owner>.mk`，随后进入递归 Host 子 Make。这些步骤都不会更新 `.switch.mk`。
 
-## Testbench Layout
+## Testbench 布局
 
-Library testbenches use separate functionality, performance, and example roots
-while retaining the `kind = "test"|"bench"|"example"` metadata interface:
+库 testbench 分别使用功能、性能和示例目录，同时保留 `kind = "test"|"bench"|"example"` 元数据接口：
 
 ```text
 libs/<library>/testbench/test/metadata.toml
@@ -119,14 +86,6 @@ libs/<library>/testbench/freestanding/metadata.toml
 libs/<library>/testbench/example/metadata.toml
 ```
 
-The owning `[[libmeta]]` registers every file through the
-`testbench.test`, `testbench.headercheck`, `testbench.bench`,
-`testbench.freestanding`, and `testbench.example` lists. Test, benchmark, and
-example files contain matching `[[hostprog]]` entries; header-check files
-contain only `[[headercheck]]`, and freestanding files contain only
-`[[freestanding-check]]`. Unregistered files are ignored and no legacy
-directory scan is performed.
+所属 `[[libmeta]]` 通过 `testbench.test`、`testbench.headercheck`、`testbench.bench`、`testbench.freestanding` 和 `testbench.example` 列表注册每个文件。测试、基准和示例文件包含相应的 `[[hostprog]]` 条目；头文件检查只包含 `[[headercheck]]`，freestanding 检查只包含 `[[freestanding-check]]`。未注册文件会被忽略，也不会执行旧式目录扫描。
 
-The aggregate Python runner handles executable Host testbenches only. Header
-checks remain under their dedicated targets. Freestanding contracts use the
-generic compile/link checker and are never run as native programs.
+汇总 Python 运行器只处理可执行的 Host testbench。头文件检查仍由专用目标处理。Freestanding 契约使用通用编译/链接检查器，绝不会作为本机程序运行。

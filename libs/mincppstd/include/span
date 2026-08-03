@@ -1,9 +1,9 @@
 /**
  * @file span
  * @author theflysong (song_of_the_fly@163.com)
- * @brief span
- * @version alpha-1.0.0
- * @date 2026-03-02
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <span> 对应的受限兼容接口。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -17,8 +17,7 @@
 #include <memory>
 
 namespace std {
-    inline constexpr std::size_t dynamic_extent =
-        std::numeric_limits<std::size_t>::max();
+    inline constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
     template <class T, std::size_t exteExtentnt = std::dynamic_extent>
     class span;
@@ -50,8 +49,7 @@ namespace std {
         constexpr span() noexcept = default;
 
         template <class It>
-        explicit(extent != dynamic_extent) constexpr span(It first,
-                                                          size_type cnt)
+        explicit(extent != dynamic_extent) constexpr span(It first, size_type cnt)
             : data_(std::to_address(first)), size_(cnt) {
             if constexpr (Extent != dynamic_extent) {
                 if (cnt != Extent) {
@@ -66,14 +64,12 @@ namespace std {
 
         template <size_t ArrayExtent>
             requires(Extent == dynamic_extent || ArrayExtent == Extent)
-        constexpr span(
-            type_identity_t<element_type> (&__arr)[ArrayExtent]) noexcept
+        constexpr span(type_identity_t<element_type> (&__arr)[ArrayExtent]) noexcept
             : span(static_cast<pointer>(__arr), ArrayExtent) {}
 
         template <size_t ArrayExtent>
             requires(Extent == dynamic_extent || ArrayExtent == Extent)
-        constexpr span(type_identity_t<element_type> (&__arr)[ArrayExtent],
-                       size_t extent) noexcept
+        constexpr span(type_identity_t<element_type> (&__arr)[ArrayExtent], size_t extent) noexcept
             : span(static_cast<pointer>(__arr), ArrayExtent) {
             if (extent != ArrayExtent) {
                 // do something...
@@ -154,8 +150,7 @@ namespace std {
         template <std::size_t Offset, std::size_t Count = dynamic_extent>
         constexpr span<element_type, Count> subspan() const {
             static_assert(Offset <= Extent, "Offset exceeds span extent");
-            static_assert(Count <= Extent - Offset,
-                          "Count exceeds span extent");
+            static_assert(Count <= Extent - Offset, "Count exceeds span extent");
             return span<element_type, Count>(data_ + Offset, Count);
         }
     };

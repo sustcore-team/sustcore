@@ -1,0 +1,11 @@
+[[libmeta]]
+id = "tayeffect"
+libname = ""
+version = "0.1.0-dev.1"
+support-environments = ["freestanding", "host"]
+testbench.test = ["testbench/test/metadata.toml"]
+testbench.headercheck = ["testbench/headercheck/metadata.toml"]
+testbench.freestanding = ["testbench/freestanding/metadata.toml"]
+testbench.example = ["testbench/example/metadata.toml"]
+
+include-cpp = ["include"]

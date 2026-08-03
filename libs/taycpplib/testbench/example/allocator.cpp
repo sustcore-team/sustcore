@@ -1,8 +1,12 @@
 /**
  * @file allocator.cpp
- * @brief Demonstrate a custom tay allocator through tay::string.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::allocator 的分配和释放用法。
  * @version 0.1.0-dev.1
- * @date 2026-07-29
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/allocator.h>
@@ -17,9 +21,9 @@
 
 namespace {
     struct allocation_stats {
-        std::size_t allocations   = 0;
-        std::size_t deallocations = 0;
-        std::size_t bytes_in_use  = 0;
+        size_t allocations   = 0;
+        size_t deallocations = 0;
+        size_t bytes_in_use  = 0;
     };
 
     struct counting_allocator_state {
@@ -32,7 +36,7 @@ namespace {
         using value_type      = T;
         using pointer         = T*;
         using const_pointer   = const T*;
-        using size_type       = std::size_t;
+        using size_type       = size_t;
         using difference_type = std::ptrdiff_t;
         using is_always_equal = std::true_type;
 
@@ -52,14 +56,12 @@ namespace {
 
         // tay containers use this non-panicking allocation entry point.
         [[nodiscard]]
-        tay::expected<T*, tay::error_code> try_allocate(
-            size_type count) noexcept {
+        tay::expected<T*, tay::error_code> try_allocate(size_type count) noexcept {
             tay::allocator<T> upstream;
             auto result = upstream.try_allocate(count);
             if (result) {
                 ++counting_allocator_state::stats->allocations;
-                counting_allocator_state::stats->bytes_in_use +=
-                    count * sizeof(T);
+                counting_allocator_state::stats->bytes_in_use += count * sizeof(T);
             }
             return result;
         }
@@ -68,8 +70,7 @@ namespace {
         // generic code; tay::allocator_traits supplies its panic policy.
         [[nodiscard]]
         pointer allocate(size_type count) noexcept {
-            return tay::allocator_traits<counting_allocator>::allocate(*this,
-                                                                       count);
+            return tay::allocator_traits<counting_allocator>::allocate(*this, count);
         }
 
         // A tay allocator's deallocation path must also be noexcept.
@@ -89,16 +90,15 @@ namespace {
         }
 
         template <class U>
-        friend constexpr bool operator==(
-            const counting_allocator&, const counting_allocator<U>&) noexcept {
+        friend constexpr bool operator==(const counting_allocator&,
+                                         const counting_allocator<U>&) noexcept {
             return true;
         }
     };
 
     void print_stats(const char* label, const allocation_stats& stats) {
-        std::printf("%-22s allocations=%zu, deallocations=%zu, in-use=%zu B\n",
-                    label, stats.allocations, stats.deallocations,
-                    stats.bytes_in_use);
+        std::printf("%-22s allocations=%zu, deallocations=%zu, in-use=%zu B\n", label,
+                    stats.allocations, stats.deallocations, stats.bytes_in_use);
     }
 }  // namespace
 

@@ -1,12 +1,12 @@
 /**
  * @file uchar.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief uchar.h
+ * @brief 为 freestanding C 环境提供与标准 <uchar.h> 对应的 Unicode 字符类型定义。
  * @version 0.1.0-dev.1
- * @date 2026-03-01
- * 
+ * @date 2026-08-02
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once

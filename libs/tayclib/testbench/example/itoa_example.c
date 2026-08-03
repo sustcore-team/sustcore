@@ -1,12 +1,15 @@
 /**
  * @file itoa_example.c
- * @brief Demonstrate integer conversion with tayclib.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 Tay C 库整数到字符串转换接口的用法。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <stdio.h>
-
 #include <tay/itoa.h>
 
 int main(void) {

@@ -1,9 +1,9 @@
 /**
  * @file utility
  * @author theflysong (song_of_the_fly@163.com)
- * @brief utility 工具
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <utility> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-01-20
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -12,6 +12,7 @@
 #pragma once
 
 #include <bits/move.h>
+
 #include <type_traits>
 
 namespace std {
@@ -46,7 +47,7 @@ namespace std {
 
     template <class _T1, class _T2>
     struct pair {
-        using first_type = _T1;
+        using first_type  = _T1;
         using second_type = _T2;
 
         _T1 first;
@@ -56,29 +57,26 @@ namespace std {
                                   is_nothrow_default_constructible_v<_T2>)
             : first(), second() {}
 
-        constexpr pair(const _T1& __a, const _T2& __b) noexcept(
-            is_nothrow_copy_constructible_v<_T1> &&
-            is_nothrow_copy_constructible_v<_T2>)
+        constexpr pair(const _T1& __a,
+                       const _T2& __b) noexcept(is_nothrow_copy_constructible_v<_T1> &&
+                                                is_nothrow_copy_constructible_v<_T2>)
             : first(__a), second(__b) {}
 
         template <class _U1, class _U2>
-        constexpr pair(_U1&& __x, _U2&& __y) noexcept(
-            is_nothrow_constructible_v<_T1, _U1&&> &&
-            is_nothrow_constructible_v<_T2, _U2&&>)
+        constexpr pair(_U1&& __x, _U2&& __y) noexcept(is_nothrow_constructible_v<_T1, _U1&&> &&
+                                                      is_nothrow_constructible_v<_T2, _U2&&>)
             : first(std::forward<_U1>(__x)), second(std::forward<_U2>(__y)) {}
 
         constexpr pair(const pair&) = default;
 
-        constexpr pair(pair&& __p) noexcept(
-            is_nothrow_move_constructible_v<_T1> &&
-            is_nothrow_move_constructible_v<_T2>)
+        constexpr pair(pair&& __p) noexcept(is_nothrow_move_constructible_v<_T1> &&
+                                            is_nothrow_move_constructible_v<_T2>)
             : first(std::move(__p.first)), second(std::move(__p.second)) {}
 
         constexpr pair& operator=(const pair&) = default;
 
-        constexpr pair& operator=(pair&& __p) noexcept(
-            is_nothrow_move_assignable_v<_T1> &&
-            is_nothrow_move_assignable_v<_T2>) {
+        constexpr pair& operator=(pair&& __p) noexcept(is_nothrow_move_assignable_v<_T1> &&
+                                                       is_nothrow_move_assignable_v<_T2>) {
             first  = std::move(__p.first);
             second = std::move(__p.second);
             return *this;
@@ -86,16 +84,14 @@ namespace std {
 
         template <class _U1, class _U2>
         constexpr pair& operator=(pair<_U1, _U2>&& __p) noexcept(
-            is_nothrow_assignable_v<_T1&, _U1&&> &&
-            is_nothrow_assignable_v<_T2&, _U2&&>) {
+            is_nothrow_assignable_v<_T1&, _U1&&> && is_nothrow_assignable_v<_T2&, _U2&&>) {
             first  = std::move(__p.first);
             second = std::move(__p.second);
             return *this;
         }
 
-        constexpr void swap(pair& __p) noexcept(
-            noexcept(std::swap(first, __p.first)) &&
-            noexcept(std::swap(second, __p.second))) {
+        constexpr void swap(pair& __p) noexcept(noexcept(std::swap(first, __p.first)) &&
+                                                noexcept(std::swap(second, __p.second))) {
             using std::swap;
             swap(first, __p.first);
             swap(second, __p.second);
@@ -104,44 +100,37 @@ namespace std {
 
     /// Two pairs of the same type are equal iff their members are equal.
     template <class _T1, class _T2>
-    inline bool operator==(const pair<_T1, _T2>& __x,
-                           const pair<_T1, _T2>& __y) {
+    inline bool operator==(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
         return __x.first == __y.first && __x.second == __y.second;
     }
 
     /// <http://gcc.gnu.org/onlinedocs/libstdc++/20_util/howto.html#pairlt>
     template <class _T1, class _T2>
-    inline bool operator<(const pair<_T1, _T2>& __x,
-                          const pair<_T1, _T2>& __y) {
-        return __x.first < __y.first ||
-               (!(__y.first < __x.first) && __x.second < __y.second);
+    inline bool operator<(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
+        return __x.first < __y.first || (!(__y.first < __x.first) && __x.second < __y.second);
     }
 
     /// Uses @c operator== to find the result.
     template <class _T1, class _T2>
-    inline bool operator!=(const pair<_T1, _T2>& __x,
-                           const pair<_T1, _T2>& __y) {
+    inline bool operator!=(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
         return !(__x == __y);
     }
 
     /// Uses @c operator< to find the result.
     template <class _T1, class _T2>
-    inline bool operator>(const pair<_T1, _T2>& __x,
-                          const pair<_T1, _T2>& __y) {
+    inline bool operator>(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
         return __y < __x;
     }
 
     /// Uses @c operator< to find the result.
     template <class _T1, class _T2>
-    inline bool operator<=(const pair<_T1, _T2>& __x,
-                           const pair<_T1, _T2>& __y) {
+    inline bool operator<=(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
         return !(__y < __x);
     }
 
     /// Uses @c operator< to find the result.
     template <class _T1, class _T2>
-    inline bool operator>=(const pair<_T1, _T2>& __x,
-                           const pair<_T1, _T2>& __y) {
+    inline bool operator>=(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y) {
         return !(__x < __y);
     }
 

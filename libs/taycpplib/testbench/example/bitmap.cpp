@@ -1,3 +1,14 @@
+/**
+ * @file bitmap.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::bitmap 的位设置、查询和遍历。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/bitmap.h>
 
 #include <cstdio>
@@ -13,17 +24,15 @@ int main() {
     static_cast<void>(enabled.reset(7));
 
     auto active = ready & enabled;
-    std::printf("ready=%zu active=%zu first=%zu\n",
-                ready.count(), active.count(), active.find_first_set());
+    std::printf("ready=%zu active=%zu first=%zu\n", ready.count(), active.count(),
+                active.find_first_set());
 
     auto dynamic = tay::bitmap<>::try_create(130);
     if (!dynamic) {
-        std::printf("dynamic bitmap allocation failed: %d\n",
-                    static_cast<int>(dynamic.error()));
+        std::printf("dynamic bitmap allocation failed: %d\n", static_cast<int>(dynamic.error()));
         return 1;
     }
     static_cast<void>(dynamic->set(129));
-    std::printf("dynamic bits=%zu last=%s\n", dynamic->size(),
-                (*dynamic)[129] ? "set" : "clear");
+    std::printf("dynamic bits=%zu last=%s\n", dynamic->size(), (*dynamic)[129] ? "set" : "clear");
     return 0;
 }

@@ -1,11 +1,11 @@
 /**
  * @file string.h
- * @author theflysong (song_of_the_fly@163.com) Yoyoooo
- * @brief string.h
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 为 freestanding C 环境提供与标准 <string.h> 对应的内存和字符串操作声明。
  * @version 0.1.0-dev.1
- * @date 2022-12-31
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2022 TayhuangOS Development Team
+ * @copyright Copyright (c) 2026
  * SPDX-License-Identifier: LGPL-2.1-only
  *
  */
@@ -83,7 +83,6 @@ char *strcpy(void *restrict dst, const char *restrict src);
  * @return char* 目标字符串
  */
 char *strcpy_s(void *restrict dst, size_t dstsz, const char *restrict src);
-
 
 /**
  * @brief 查找字符串中首次出现的字符

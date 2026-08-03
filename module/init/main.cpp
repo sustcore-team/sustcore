@@ -1,5 +1,4 @@
-class A
-{
+class A {
 public:
     int a;
     A() : a(0) {}

@@ -1,13 +1,17 @@
 /**
  * @file refc.cpp
- * @brief Demonstrate tay::refc and tay::refc_ptr lifetime tracking.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::refc 和 tay::refc_ptr 的生命周期跟踪。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
-#include <cstdio>
-
 #include <tay/refcount.h>
+
+#include <cstdio>
 
 namespace {
     struct resource : tay::refc<resource> {

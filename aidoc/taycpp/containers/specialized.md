@@ -1,6 +1,6 @@
-# 位图、FIFO 与 slot map
+# 位图、FIFO 与槽位映射
 
-## bitmap storage family
+## 位图存储族
 
 头文件：`<tay/bitmap.h>`。
 
@@ -16,7 +16,7 @@ storage 将 bit 数 `N` 编进类型。共享操作包括单 bit 的 `test/set/r
 `& | ^`。检查版单 bit 操作返回 `expected`；`operator[]` 不检查边界。
 `words()` 暴露底层 `uint64_t` 数组，调用者修改后应维持尾部无效 bit 为零。
 
-## FIFO storage family
+## FIFO 存储族
 
 头文件：`<tay/fifo.h>`。
 
@@ -35,7 +35,7 @@ byte_fifo<Allocator>
 copyable 元素，`writable_segments()`/`commit()` 和 `consume()` 可实现少
 复制 I/O。`byte_fifo` 在此基础上提供字节流 `try_write/try_read` 接口。
 
-## slot map
+## 槽位映射
 
 头文件：`<tay/slot_map.h>`。
 

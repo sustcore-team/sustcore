@@ -1,1 +1,1 @@
-cloc ./script/ ./libs/ ./kernel/ ./include/
+cloc ./script/ ./libs/ ./kernel/

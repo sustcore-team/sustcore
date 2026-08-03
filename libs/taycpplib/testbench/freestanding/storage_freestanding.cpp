@@ -1,3 +1,14 @@
+/**
+ * @file storage_freestanding.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 存储策略可在 freestanding 环境中编译和使用。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/algo/binary_search.h>
 #include <tay/algo/heap.h>
 #include <tay/array.h>

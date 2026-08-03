@@ -1,27 +1,24 @@
-# Build System Overview
+# 构建系统概览
 
-## Goal
+## 目标
 
-The current build system is a Make-driven pipeline with TOML-based
-configuration, generated cache fragments, explicit per-component Makefiles, and
-thin rule files for compilation and linking.
+当前构建系统是由 Make 驱动的管线，使用 TOML 配置、生成的缓存片段、组件专用 Makefile，以及用于编译和链接的轻量规则文件。
 
-The system is intentionally being rebuilt in layers instead of reviving the
-older monolithic `.vscode/sustcore` build frontend.
+系统有意按层重建，而不是恢复旧的单体 `.vscode/sustcore` 构建前端。
 
-## Main Layers
+## 主要层次
 
 ### `script/env`
 
-Defines the shared environment:
+定义共享环境：
 
-- workspace paths
-- cache path
-- shell helper variables
-- selected `arch` / `mode`
-- explicit `freestanding` / `host` build environment
+- 工作区路径；
+- 缓存路径；
+- shell 辅助变量；
+- 所选 `arch` / `mode`；
+- 显式的 `freestanding` / `host` 构建环境。
 
-Key files:
+关键文件：
 
 - `script/env/global.mk`
 - `script/env/buildpath.mk`
@@ -31,7 +28,7 @@ Key files:
 
 ### `script/toolchain`
 
-Defines compiler, linker, archiver, and QEMU-facing tool variables:
+定义编译器、链接器、归档器以及面向 QEMU 的工具变量：
 
 - `c.mk`
 - `cpp.mk`
@@ -39,12 +36,11 @@ Defines compiler, linker, archiver, and QEMU-facing tool variables:
 - `ar.mk`
 - `qemu.mk`
 
-The C/C++/link/archive fragments are shared by Host and freestanding builds;
-validated Host values come from `script/.cache/host.mk`.
+C/C++、链接和归档片段由 Host 与 freestanding 构建共享；验证后的 Host 值来自 `script/.cache/host.mk`。
 
 ### `script/rules`
 
-Defines thin build rules only:
+只定义轻量构建规则：
 
 - `asm.mk`
 - `c.mk`
@@ -52,85 +48,66 @@ Defines thin build rules only:
 - `ld.mk`
 - `ar.mk`
 
-These files consume resolved variables and do not decide target kind, source
-discovery, or architecture selection.
+这些文件只消费已经解析的变量，不决定目标类型、源文件发现方式或架构选择。
 
 ### `script/build`
 
-Defines the shared component layers:
+定义共享组件层：
 
-- `collector.mk` discovers sources declared by component `include.mk` files.
-- `component.mk` selects the build environment, loads the generated context
-  and dependencies, normalizes sources/objects, and installs compilation rules.
-- `static-library.mk` adds the archiver toolchain and archive rule on top of
-  `component.mk`.
+- `collector.mk` 发现组件 `include.mk` 声明的源文件。
+- `component.mk` 选择构建环境、加载生成的上下文和依赖、规范化源文件与对象路径，并安装编译规则。
+- `static-library.mk` 在 `component.mk` 之上增加归档工具链和静态库规则。
 
-`component.mk` deliberately stops at object generation. Kernel images, modules,
-Host programs, and static archives retain separate final-artifact layers.
+`component.mk` 有意止于对象文件生成。内核镜像、模块、Host 程序和静态库分别保留独立的最终产物层。
 
 ### `script/py`
 
-Contains generators and parsers:
+包含生成器和解析器：
 
-- config emitters
-- library registry scanner
-- dependency resolver
-- semver matcher
+- 配置输出器；
+- 库注册表扫描器；
+- 依赖解析器；
+- SemVer 匹配器。
 
-### target-local Makefiles
+### 目标局部 Makefile
 
-Examples:
+例如：
 
 - `kernel/Makefile`
 - `libs/sbi/Makefile`
 - `libs/mincstd/Makefile`
 - `third_party/libs/libfdt/Makefile`
 
-Static-library Makefiles now only identify their component root and include
-`script/build/static-library.mk`. Kernel, module, and Host-program layers include
-`component.mk` and add only their own link or packaging semantics.
+静态库 Makefile 现在只需标识组件根目录并包含 `script/build/static-library.mk`。内核、模块和 Host 程序层包含 `component.mk`，再加入各自的链接或打包语义。
 
-## High-Level Flow
+## 高层流程
 
-1. `make switch` stores `arch/mode`
-2. `make configure` generates cache fragments and all freestanding architecture
-   dependencies from TOML and project metadata
-3. top-level Make reads shared cache fragments
-4. `build-libs` builds visible static libraries for the current architecture
-5. `build-kernel` invokes `kernel/Makefile`
-6. `build-host-libs`, `host-test`, and `bench` use the validated native toolchain
-7. `update-host` captures native library and testbench compile commands
-8. `runonly` / `dbgonly` launch QEMU
+1. `make switch` 保存 `arch/mode`。
+2. `make configure` 根据 TOML 和项目元数据生成缓存片段，以及所有 freestanding 架构的依赖。
+3. 顶层 Make 读取共享缓存片段。
+4. `build-libs` 为当前架构构建可见的静态库。
+5. `build-kernel` 调用 `kernel/Makefile`。
+6. `build-host-libs`、`host-test` 和 `bench` 使用验证后的本机工具链。
+7. `update-host` 捕获本机库和 testbench 的编译命令。
+8. `runonly` / `dbgonly` 启动 QEMU。
 
-The host foundation is deliberately separate from this target flow.
-`make validate-host [host-arch=<arch>]` validates the configured native
-Clang toolchain and emits `script/.cache/host.mk`; it does not read or update
-the architecture selected by `make switch`.
+Host 基础设施有意与目标构建流程分离。`make validate-host [host-arch=<arch>]` 验证配置的本机 Clang 工具链并生成 `script/.cache/host.mk`；它不会读取或更新 `make switch` 选择的架构。
 
-`make update [arch=<arch>] [mode=<mode>]` rebuilds the selected compilation
-database through Bear. Command-line architecture and mode overrides select the
-database to update without changing the values persisted by `make switch`.
-`make update-host` generates the corresponding native database without running
-tests or benchmarks. `clangd-host` and `clangd-target` switch the stable
-`build/compile_commands.json` copy between those environments.
+`make update [arch=<arch>] [mode=<mode>]` 通过 Bear 重新生成所选变体的 compilation database。命令行中的架构和模式覆盖值只选择要更新的数据库，不会改变 `make switch` 持久化的值。`make update-host` 生成对应的本机数据库，但不运行测试或基准程序。`clangd-host` 和 `clangd-target` 用于在这些环境之间切换稳定副本 `build/compile_commands.json`。
 
-## Current Architecture
+## 当前架构
 
-The current known architectures are:
+当前已知架构为：
 
 - `riscv64`
 - `loongarch64`
 
-Library visibility can vary by architecture through `support-archs`.
-Changing `arch` or `mode` with `make switch` selects from the generated cache;
-it does not rerun dependency resolution.
+库可通过 `support-archs` 按架构控制可见性。使用 `make switch` 改变 `arch` 或 `mode` 只会从已经生成的缓存中选择，不会重新运行依赖解析。
 
-Host builds use three independent dimensions:
+Host 构建使用三个互相独立的维度：
 
-- `environment=host`
-- `arch` detected from the native compiler and checked against `uname`
-- `mode=debug|release`
+- `environment=host`；
+- 由本机编译器探测并与 `uname` 核对的 `arch`；
+- `mode=debug|release`。
 
-Their output root is `build/<mode>/host/<host-triple>/`. Sanitizer builds add a
-separate `sanitize/<profile>/` subtree. Host libraries, tests, header checks,
-and benchmarks keep independent archive, object, test, and benchmark outputs.
+其输出根目录为 `build/<mode>/host/<host-triple>/`。Sanitizer 构建会增加独立的 `sanitize/<profile>/` 子树。Host 库、测试、头文件检查和基准测试分别使用独立的静态库、对象、测试和基准输出目录。

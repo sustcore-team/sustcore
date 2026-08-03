@@ -1,11 +1,11 @@
 /**
  * @file itoa.c
  * @author theflysong (song_of_the_fly@163.com)
- * @brief integer to ascii conversion
+ * @brief 实现 Tay C 库的整数到 ASCII 字符串转换例程。
  * @version 0.1.0-dev.1
- * @date 2026-07-25
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  *
  */
 
@@ -32,8 +32,8 @@ static ALWAYS_INLINE void __set0(char *buf, size_t bufsz, size_t pos) {
     buf[pos] = '\0';
 }
 
-static char *__itoa_convert_s(unsigned long long val, bool negative, char *buf,
-                              size_t bufsz, int radix) {
+static char *__itoa_convert_s(unsigned long long val, bool negative, char *buf, size_t bufsz,
+                              int radix) {
     if (buf == NULL || bufsz == 0 || radix < 2 || radix > 36) {
         return buf;
     }
@@ -66,8 +66,7 @@ static char *__itoa_convert_s(unsigned long long val, bool negative, char *buf,
         val /= (unsigned int)radix;
     }
 
-    assert(fin_digit + 1 ==
-           pos);  // ensure we filled the correct number of digits
+    assert(fin_digit + 1 == pos);          // ensure we filled the correct number of digits
     __set0(buf, bufsz, pos + num_digits);  // set the tailing null terminator
     return buf;
 }

@@ -1,12 +1,23 @@
+/**
+ * @file sort.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 排序算法的有序性和边界行为。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/algo/sort.h>
 
 #include <cassert>
 #include <cstddef>
 
 namespace {
-    template <typename T, std::size_t Size>
+    template <typename T, size_t Size>
     constexpr bool equal(const T (&left)[Size], const T (&right)[Size]) {
-        for (std::size_t index = 0; index < Size; ++index) {
+        for (size_t index = 0; index < Size; ++index) {
             if (!(left[index] == right[index])) {
                 return false;
             }
@@ -38,8 +49,7 @@ namespace {
     };
 
     struct move_only_less {
-        constexpr bool operator()(const move_only& left,
-                                  const move_only& right) const {
+        constexpr bool operator()(const move_only& left, const move_only& right) const {
             return left.value < right.value;
         }
     };
@@ -53,8 +63,7 @@ namespace {
 }  // namespace
 
 static_assert(std::sortable<int*>);
-static_assert(
-    std::sortable<record*, std::ranges::less, decltype(&record::key)>);
+static_assert(std::sortable<record*, std::ranges::less, decltype(&record::key)>);
 static_assert(std::sortable<move_only*, move_only_less>);
 static_assert(!std::permutable<const int*>);
 static_assert(!std::sortable<const int*>);
@@ -66,8 +75,7 @@ int main() {
 
     int descending[] = {1, 4, 2, 5, 3};
     auto descending_end =
-        tay::sort(descending, descending + 5,
-                  [](int left, int right) { return left > right; });
+        tay::sort(descending, descending + 5, [](int left, int right) { return left > right; });
     const int expected_descending[] = {5, 4, 3, 2, 1};
     assert(descending_end == descending + 5);
     assert(equal(descending, expected_descending));
@@ -82,12 +90,11 @@ int main() {
     };
     assert(equal(records, expected_records));
 
-    move_only objects[] = {move_only(4), move_only(2), move_only(3),
-                           move_only(1)};
+    move_only objects[] = {move_only(4), move_only(2), move_only(3), move_only(1)};
     tay::sort(objects, [](const move_only& left, const move_only& right) {
         return left.value < right.value;
     });
-    for (std::size_t index = 0; index < 4; ++index) {
+    for (size_t index = 0; index < 4; ++index) {
         assert(objects[index].value == static_cast<int>(index + 1));
     }
 

@@ -1,9 +1,9 @@
 /**
  * @file owner.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief owner 指针标注, 参考 gsl::owner
+ * @brief 提供显式标注原始指针所有权的 owner 类型。
  * @version 0.1.0-dev.1
- * @date 2026-03-03
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -41,8 +41,7 @@ namespace tay {
     public:
         constexpr explicit owner(pointer p = nullptr) : ptr(p) {}
 
-        template <typename U, typename = std::enable_if_t<
-                                  std::is_convertible_v<U*, pointer>>>
+        template <typename U, typename = std::enable_if_t<std::is_convertible_v<U*, pointer>>>
         constexpr owner(owner<U*> other) : ptr(other.get()) {}
 
         ~owner() = default;

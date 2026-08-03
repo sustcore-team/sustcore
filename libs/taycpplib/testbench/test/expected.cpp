@@ -1,3 +1,14 @@
+/**
+ * @file expected.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 tay::expected 的值、错误和引用语义。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/expected.h>
 #include <tay/utility.h>
 
@@ -21,6 +32,22 @@ namespace {
             value       = other.value;
             other.value = -1;
             return *this;
+        }
+    };
+
+    struct immovable {
+        static inline int live = 0;
+        int value;
+
+        explicit immovable(int value) noexcept : value(value) {
+            ++live;
+        }
+        immovable(const immovable&)            = delete;
+        immovable& operator=(const immovable&) = delete;
+        immovable(immovable&&)                 = delete;
+        immovable& operator=(immovable&&)      = delete;
+        ~immovable() {
+            --live;
         }
     };
 
@@ -122,22 +149,16 @@ namespace {
     static_assert(std::is_constructible_v<ref_result, int&>);
     static_assert(!std::is_constructible_v<ref_result, int&&>);
     static_assert(!std::is_default_constructible_v<ref_result>);
-    static_assert(std::is_same_v<
-                  decltype(std::declval<const ref_result&>().value()), int&>);
+    static_assert(std::is_same_v<decltype(std::declval<const ref_result&>().value()), int&>);
     static_assert(
-        std::is_same_v<
-            decltype(std::declval<tay::expected<const int&, error_code>&>()
-                         .value()),
-            const int&>);
+        std::is_same_v<decltype(std::declval<tay::expected<const int&, error_code>&>().value()),
+                       const int&>);
     static_assert(!std::is_convertible_v<decltype(tay::Ok(42)), ref_result>);
-    static_assert(std::is_convertible_v<decltype(tay::Ok()),
-                                        tay::expected<void, error_code>>);
+    static_assert(std::is_convertible_v<decltype(tay::Ok()), tay::expected<void, error_code>>);
     static_assert(!std::is_convertible_v<decltype(tay::Ok()), owned_result>);
-    static_assert(std::is_same_v<decltype(std::declval<owned_result&>()
-                                              .transform(identity_ref)),
+    static_assert(std::is_same_v<decltype(std::declval<owned_result&>().transform(identity_ref)),
                                  tay::expected<int&, error_code>>);
-    static_assert(std::is_same_v<decltype(std::declval<owned_result&>()
-                                              .transform(identity_rref)),
+    static_assert(std::is_same_v<decltype(std::declval<owned_result&>().transform(identity_rref)),
                                  tay::expected<int, error_code>>);
 
     void test_basic_states() {
@@ -175,8 +196,7 @@ namespace {
         array_ref.value()[1]                           = 7;
         assert(array[1] == 7);
 
-        tay::expected<int (&)(int), error_code> function_ref =
-            tay::Ok(increment);
+        tay::expected<int (&)(int), error_code> function_ref = tay::Ok(increment);
         assert(function_ref.value()(4) == 5);
     }
 
@@ -198,6 +218,38 @@ namespace {
         assert(!result && result.error().value == 8);
         result = move_only{11};
         assert(result && result->value == 11);
+    }
+
+    void test_in_place_immovable() {
+        {
+            tay::expected<immovable, error_code> value(tay::in_place, 42);
+            assert(value && value->value == 42);
+            assert(immovable::live == 1);
+        }
+        assert(immovable::live == 0);
+
+        {
+            tay::expected<immovable, error_code> initialized(
+                tay::try_in_place,
+                [](immovable& value) noexcept -> tay::expected<void, error_code> {
+                    value.value += 1;
+                    return {};
+                },
+                8);
+            assert(initialized && initialized->value == 9);
+        }
+        assert(immovable::live == 0);
+
+        {
+            tay::expected<immovable, error_code> failed(
+                tay::try_in_place,
+                [](immovable&) noexcept -> tay::expected<void, error_code> {
+                    return tay::Err(error_code::failure);
+                },
+                7);
+            assert(!failed && failed.error() == error_code::failure);
+            assert(immovable::live == 0);
+        }
     }
 
     void test_reference_rebinding() {
@@ -242,36 +294,30 @@ namespace {
         member_reference.value() = 15;
         assert(boxed->value == 15);
 
-        auto chained = reference.and_then([](int& item) {
-            return tay::expected<long, error_code>(tay::Ok(long(item + 1)));
-        });
+        auto chained = reference.and_then(
+            [](int& item) { return tay::expected<long, error_code>(tay::Ok(long(item + 1))); });
         assert(chained && chained.value() == 13);
 
         ref_result failed = tay::Err(error_code::failure);
-        auto recovered    = failed.or_else([&](error_code) {
-            return tay::expected<int&, long>(tay::Ok(value));
-        });
-        static_assert(
-            std::is_same_v<decltype(recovered), tay::expected<int&, long>>);
+        auto recovered =
+            failed.or_else([&](error_code) { return tay::expected<int&, long>(tay::Ok(value)); });
+        static_assert(std::is_same_v<decltype(recovered), tay::expected<int&, long>>);
         assert(std::addressof(recovered.value()) == std::addressof(value));
 
-        auto changed_error =
-            failed.transform_error([](error_code) { return 99L; });
-        static_assert(
-            std::is_same_v<decltype(changed_error), tay::expected<int&, long>>);
+        auto changed_error = failed.transform_error([](error_code) { return 99L; });
+        static_assert(std::is_same_v<decltype(changed_error), tay::expected<int&, long>>);
         assert(!changed_error && changed_error.error() == 99L);
 
-        auto kept_reference =
-            reference.transform_error([](error_code) { return 0L; });
+        auto kept_reference = reference.transform_error([](error_code) { return 0L; });
         assert(std::addressof(kept_reference.value()) == std::addressof(value));
 
         tay::expected<void, error_code> done = tay::Ok();
-        auto void_chain = done.transform([] { return 21; });
+        auto void_chain                      = done.transform([] { return 21; });
         assert(void_chain && void_chain.value() == 21);
 
         const owned_result constant = tay::Ok(4);
-        auto const_rvalue           = std::move(constant).transform(
-            [](const int&& item) { return item + 2; });
+        auto const_rvalue =
+            std::move(constant).transform([](const int&& item) { return item + 2; });
         assert(const_rvalue.value() == 6);
     }
 
@@ -286,9 +332,7 @@ namespace {
         tay::expected<int, error_code> failed = tay::Err(error_code::missing);
         auto error_result                     = failed.visit(tay::overloaded{
             [](int) { return 1; },
-            [](error_code error) {
-                return error == error_code::missing ? 2 : 3;
-            },
+            [](error_code error) { return error == error_code::missing ? 2 : 3; },
         });
         assert(error_result == 2);
 
@@ -308,7 +352,7 @@ namespace {
 
         int referenced_value                       = 9;
         tay::expected<int&, error_code> referenced = tay::Ok(referenced_value);
-        auto reference_result = referenced.match(tay::overloaded{
+        auto reference_result                      = referenced.match(tay::overloaded{
             [](int& item) { return item; },
             [](error_code) { return -1; },
         });
@@ -316,10 +360,8 @@ namespace {
     }
 
     void test_exception_state_restoration() {
-        tay::expected<throwing_value, error_code> target =
-            tay::Err(error_code::missing);
-        tay::expected<throwing_value, error_code> source =
-            tay::Ok(throwing_value{31});
+        tay::expected<throwing_value, error_code> target = tay::Err(error_code::missing);
+        tay::expected<throwing_value, error_code> source = tay::Ok(throwing_value{31});
 
         throwing_value::throw_copy = true;
         try {
@@ -333,9 +375,8 @@ namespace {
         assert(source && source->value == 31);
 
         tay::expected<int, throwing_error> value_target = tay::Ok(37);
-        tay::expected<int, throwing_error> error_source =
-            tay::Err(throwing_error{38});
-        throwing_error::throw_copy = true;
+        tay::expected<int, throwing_error> error_source = tay::Err(throwing_error{38});
+        throwing_error::throw_copy                      = true;
         try {
             value_target = error_source;
             assert(false);
@@ -346,11 +387,9 @@ namespace {
         assert(value_target && value_target.value() == 37);
         assert(!error_source && error_source.error().value == 38);
 
-        tay::expected<throwing_swap_value, error_code> value =
-            tay::Ok(throwing_swap_value{41});
-        tay::expected<throwing_swap_value, error_code> error =
-            tay::Err(error_code::failure);
-        throwing_swap_value::throw_move = true;
+        tay::expected<throwing_swap_value, error_code> value = tay::Ok(throwing_swap_value{41});
+        tay::expected<throwing_swap_value, error_code> error = tay::Err(error_code::failure);
+        throwing_swap_value::throw_move                      = true;
         try {
             value.swap(error);
             assert(false);
@@ -366,6 +405,7 @@ namespace {
 int main() {
     test_basic_states();
     test_lifetimes_and_move_only();
+    test_in_place_immovable();
     test_reference_rebinding();
     test_monadic_operations();
     test_match_and_visit();

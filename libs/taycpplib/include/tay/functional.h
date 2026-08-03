@@ -1,6 +1,12 @@
 /**
  * @file functional.h
- * @brief Non-owning and fixed-storage callable wrappers.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供非拥有和固定存储的可调用对象包装器。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -19,8 +25,8 @@ namespace tay {
 
     template <class R, class... Args>
     class function_ref<R(Args...)> {
-        using callback_type = R (*)(void*, Args&&...);
-        void* object_ = nullptr;
+        using callback_type     = R (*)(void*, Args&&...);
+        void* object_           = nullptr;
         callback_type callback_ = nullptr;
         R (*function_)(Args...) = nullptr;
 
@@ -28,24 +34,19 @@ namespace tay {
         function_ref() = delete;
 
         template <class F>
-            requires(!std::same_as<std::remove_cvref_t<F>, function_ref> &&
-                     std::is_object_v<F> &&
+            requires(!std::same_as<std::remove_cvref_t<F>, function_ref> && std::is_object_v<F> &&
                      std::is_invocable_r_v<R, F&, Args...>)
         constexpr function_ref(F& callable) noexcept
-            : object_(const_cast<void*>(static_cast<const void*>(
-                  std::addressof(callable)))),
+            : object_(const_cast<void*>(static_cast<const void*>(std::addressof(callable)))),
               callback_([](void* object, Args&&... args) -> R {
                   if constexpr (std::is_void_v<R>) {
-                      std::invoke(*static_cast<F*>(object),
-                                  std::forward<Args>(args)...);
+                      std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                   } else {
-                      return std::invoke(*static_cast<F*>(object),
-                                         std::forward<Args>(args)...);
+                      return std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                   }
               }) {}
 
-        constexpr function_ref(R (&function)(Args...)) noexcept
-            : function_(&function) {}
+        constexpr function_ref(R (&function)(Args...)) noexcept : function_(&function) {}
 
         [[nodiscard]] constexpr R operator()(Args... args) const {
             if constexpr (std::is_void_v<R>) {
@@ -54,42 +55,36 @@ namespace tay {
                 else
                     callback_(object_, std::forward<Args>(args)...);
             } else {
-                return function_ != nullptr
-                           ? function_(std::forward<Args>(args)...)
-                           : callback_(object_, std::forward<Args>(args)...);
+                return function_ != nullptr ? function_(std::forward<Args>(args)...)
+                                            : callback_(object_, std::forward<Args>(args)...);
             }
         }
     };
 
     template <class R, class... Args>
     class function_ref<R(Args...) noexcept> {
-        using callback_type = R (*)(void*, Args&&...) noexcept;
-        void* object_ = nullptr;
-        callback_type callback_ = nullptr;
+        using callback_type              = R (*)(void*, Args&&...) noexcept;
+        void* object_                    = nullptr;
+        callback_type callback_          = nullptr;
         R (*function_)(Args...) noexcept = nullptr;
 
     public:
         function_ref() = delete;
 
         template <class F>
-            requires(!std::same_as<std::remove_cvref_t<F>, function_ref> &&
-                     std::is_object_v<F> &&
+            requires(!std::same_as<std::remove_cvref_t<F>, function_ref> && std::is_object_v<F> &&
                      std::is_nothrow_invocable_r_v<R, F&, Args...>)
         constexpr function_ref(F& callable) noexcept
-            : object_(const_cast<void*>(static_cast<const void*>(
-                  std::addressof(callable)))),
+            : object_(const_cast<void*>(static_cast<const void*>(std::addressof(callable)))),
               callback_([](void* object, Args&&... args) noexcept -> R {
                   if constexpr (std::is_void_v<R>) {
-                      std::invoke(*static_cast<F*>(object),
-                                  std::forward<Args>(args)...);
+                      std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                   } else {
-                      return std::invoke(*static_cast<F*>(object),
-                                         std::forward<Args>(args)...);
+                      return std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                   }
               }) {}
 
-        constexpr function_ref(R (&function)(Args...) noexcept) noexcept
-            : function_(&function) {}
+        constexpr function_ref(R (&function)(Args...) noexcept) noexcept : function_(&function) {}
 
         [[nodiscard]] constexpr R operator()(Args... args) const noexcept {
             if constexpr (std::is_void_v<R>) {
@@ -98,22 +93,20 @@ namespace tay {
                 else
                     callback_(object_, std::forward<Args>(args)...);
             } else {
-                return function_ != nullptr
-                           ? function_(std::forward<Args>(args)...)
-                           : callback_(object_, std::forward<Args>(args)...);
+                return function_ != nullptr ? function_(std::forward<Args>(args)...)
+                                            : callback_(object_, std::forward<Args>(args)...);
             }
         }
     };
 
-    template <class Signature, std::size_t N>
+    template <class Signature, size_t N>
     class inplace_function;
 
     namespace detail {
         template <class R, bool Noexcept, class... Args>
         struct inplace_function_vtable {
-            using invoke_type = std::conditional_t<
-                Noexcept, R (*)(void*, Args&&...) noexcept,
-                R (*)(void*, Args&&...)>;
+            using invoke_type = std::conditional_t<Noexcept, R (*)(void*, Args&&...) noexcept,
+                                                   R (*)(void*, Args&&...)>;
             invoke_type invoke;
             void (*copy)(const void*, void*) noexcept;
             void (*move)(void*, void*) noexcept;
@@ -121,10 +114,9 @@ namespace tay {
         };
     }  // namespace detail
 
-    template <class R, class... Args, std::size_t N>
+    template <class R, class... Args, size_t N>
     class inplace_function<R(Args...), N> {
-        using vtable_type =
-            detail::inplace_function_vtable<R, false, Args...>;
+        using vtable_type = detail::inplace_function_vtable<R, false, Args...>;
         alignas(std::max_align_t) unsigned char storage_[N == 0 ? 1 : N];
         const vtable_type* vtable_ = nullptr;
 
@@ -132,21 +124,18 @@ namespace tay {
         static constexpr vtable_type table_for{
             [](void* object, Args&&... args) -> R {
                 if constexpr (std::is_void_v<R>) {
-                    std::invoke(*static_cast<F*>(object),
-                                std::forward<Args>(args)...);
+                    std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                 } else {
-                    return std::invoke(*static_cast<F*>(object),
-                                       std::forward<Args>(args)...);
+                    return std::invoke(*static_cast<F*>(object), std::forward<Args>(args)...);
                 }
             },
             [](const void* source, void* target) noexcept {
-                static_cast<void>(std::construct_at(
-                    static_cast<F*>(target), *static_cast<const F*>(source)));
+                static_cast<void>(
+                    std::construct_at(static_cast<F*>(target), *static_cast<const F*>(source)));
             },
             [](void* source, void* target) noexcept {
-                static_cast<void>(std::construct_at(
-                    static_cast<F*>(target),
-                    std::move(*static_cast<F*>(source))));
+                static_cast<void>(std::construct_at(static_cast<F*>(target),
+                                                    std::move(*static_cast<F*>(source))));
                 std::destroy_at(static_cast<F*>(source));
             },
             [](void* object) noexcept { std::destroy_at(static_cast<F*>(object)); }};
@@ -165,9 +154,8 @@ namespace tay {
                      alignof(std::decay_t<F>) <= alignof(std::max_align_t))
         constexpr inplace_function(F&& callable) noexcept {
             using callable_type = std::decay_t<F>;
-            static_cast<void>(std::construct_at(
-                reinterpret_cast<callable_type*>(storage_),
-                std::forward<F>(callable)));
+            static_cast<void>(std::construct_at(reinterpret_cast<callable_type*>(storage_),
+                                                std::forward<F>(callable)));
             vtable_ = &table_for<callable_type>;
         }
 
@@ -180,12 +168,11 @@ namespace tay {
         constexpr inplace_function(inplace_function&& other) noexcept {
             if (other.vtable_ != nullptr) {
                 other.vtable_->move(other.storage_, storage_);
-                vtable_ = other.vtable_;
+                vtable_       = other.vtable_;
                 other.vtable_ = nullptr;
             }
         }
-        constexpr inplace_function& operator=(
-            const inplace_function& other) noexcept {
+        constexpr inplace_function& operator=(const inplace_function& other) noexcept {
             if (this != &other) {
                 reset();
                 if (other.vtable_ != nullptr) {
@@ -195,19 +182,20 @@ namespace tay {
             }
             return *this;
         }
-        constexpr inplace_function& operator=(
-            inplace_function&& other) noexcept {
+        constexpr inplace_function& operator=(inplace_function&& other) noexcept {
             if (this != &other) {
                 reset();
                 if (other.vtable_ != nullptr) {
                     other.vtable_->move(other.storage_, storage_);
-                    vtable_ = other.vtable_;
+                    vtable_       = other.vtable_;
                     other.vtable_ = nullptr;
                 }
             }
             return *this;
         }
-        constexpr ~inplace_function() noexcept { reset(); }
+        constexpr ~inplace_function() noexcept {
+            reset();
+        }
 
         constexpr void reset() noexcept {
             if (vtable_ != nullptr) {
@@ -223,8 +211,7 @@ namespace tay {
                 tay::panic("empty inplace_function invocation");
             }
             if constexpr (std::is_void_v<R>) {
-                vtable_->invoke(const_cast<unsigned char*>(storage_),
-                                std::forward<Args>(args)...);
+                vtable_->invoke(const_cast<unsigned char*>(storage_), std::forward<Args>(args)...);
             } else {
                 return vtable_->invoke(const_cast<unsigned char*>(storage_),
                                        std::forward<Args>(args)...);
@@ -232,7 +219,7 @@ namespace tay {
         }
     };
 
-    template <class R, class... Args, std::size_t N>
+    template <class R, class... Args, size_t N>
     class inplace_function<R(Args...) noexcept, N> {
         using inner_type = inplace_function<R(Args...), N>;
         inner_type inner_;
@@ -241,14 +228,14 @@ namespace tay {
         constexpr inplace_function() noexcept = default;
         constexpr inplace_function(std::nullptr_t) noexcept {}
         template <class F>
-            requires std::is_nothrow_invocable_r_v<R, std::decay_t<F>&,
-                                                   Args...>
-        constexpr inplace_function(F&& callable) noexcept
-            : inner_(std::forward<F>(callable)) {}
+            requires std::is_nothrow_invocable_r_v<R, std::decay_t<F>&, Args...>
+        constexpr inplace_function(F&& callable) noexcept : inner_(std::forward<F>(callable)) {}
         [[nodiscard]] constexpr explicit operator bool() const noexcept {
             return static_cast<bool>(inner_);
         }
-        constexpr void reset() noexcept { inner_.reset(); }
+        constexpr void reset() noexcept {
+            inner_.reset();
+        }
         constexpr R operator()(Args... args) const noexcept {
             if constexpr (std::is_void_v<R>) {
                 inner_(std::forward<Args>(args)...);

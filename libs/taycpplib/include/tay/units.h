@@ -1,9 +1,9 @@
 /**
  * @file units.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 单位
+ * @brief 定义 Tay C++ 库使用的单位类型和换算工具。
  * @version 0.1.0-dev.1
- * @date 2026-02-08
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -11,50 +11,50 @@
 
 #pragma once
 
-#include <cstdint>
+#include <tay/bits.h>
 
 namespace units {
-    // 实际上, 这个结构体只是一个uint64_t
+    // 实际上, 这个结构体只是一个u64_t
     struct frequency {
     protected:
-        uint64_t milihertz;
-        explicit constexpr frequency(uint64_t mili_hz) : milihertz(mili_hz) {}
+        u64_t milihertz;
+        explicit constexpr frequency(u64_t mili_hz) : milihertz(mili_hz) {}
 
     public:
         explicit constexpr frequency() : milihertz(0) {}
-        explicit constexpr operator uint64_t() const {
+        explicit constexpr operator u64_t() const {
             return to_hz();
         }
 
-        constexpr uint64_t to_milihz() const {
+        constexpr u64_t to_milihz() const {
             return milihertz;
         }
-        constexpr uint64_t to_hz() const {
+        constexpr u64_t to_hz() const {
             return milihertz / 1'000;
         }
-        constexpr uint64_t to_khz() const {
+        constexpr u64_t to_khz() const {
             return to_hz() / 1'000;
         }
-        constexpr uint64_t to_mhz() const {
+        constexpr u64_t to_mhz() const {
             return to_khz() / 1'000;
         }
-        constexpr uint64_t to_ghz() const {
+        constexpr u64_t to_ghz() const {
             return to_mhz() / 1'000;
         }
 
-        static constexpr frequency from_milihz(uint64_t h) {
+        static constexpr frequency from_milihz(u64_t h) {
             return frequency(h);
         }
-        static constexpr frequency from_hz(uint64_t h) {
+        static constexpr frequency from_hz(u64_t h) {
             return from_milihz(h * 1'000);
         }
-        static constexpr frequency from_khz(uint64_t kh) {
+        static constexpr frequency from_khz(u64_t kh) {
             return from_hz(kh * 1'000);
         }
-        static constexpr frequency from_mhz(uint64_t mh) {
+        static constexpr frequency from_mhz(u64_t mh) {
             return from_khz(mh * 1'000);
         }
-        static constexpr frequency from_ghz(uint64_t gh) {
+        static constexpr frequency from_ghz(u64_t gh) {
             return from_mhz(gh * 1'000);
         }
 
@@ -66,40 +66,39 @@ namespace units {
             return frequency(milihertz - other.milihertz);
         }
 
-        constexpr frequency operator*(uint64_t multiplier) const {
+        constexpr frequency operator*(u64_t multiplier) const {
             return frequency(milihertz * multiplier);
         }
 
-        constexpr frequency operator/(uint64_t divisor) const {
+        constexpr frequency operator/(u64_t divisor) const {
             return frequency(milihertz / divisor);
         }
 
-        constexpr uint64_t operator/(const frequency &other) const {
+        constexpr u64_t operator/(const frequency &other) const {
             return milihertz / other.milihertz;
         }
     };
 
-    using tick = uint64_t;
+    using tick = u64_t;
 
-    constexpr uint64_t NANOSECONDS_PER_MILLIHERTZ = 1'000'000'000'000ULL;
+    constexpr u64_t NANOSECONDS_PER_MILLIHERTZ = 1'000'000'000'000ULL;
     struct formatted_time {
-        int64_t year;
-        int64_t month;
-        int64_t day;
-        int64_t hour;
-        int64_t minute;
-        int64_t second;
+        i64_t year;
+        i64_t month;
+        i64_t day;
+        i64_t hour;
+        i64_t minute;
+        i64_t second;
     };
 
-    struct time_ymd
-    {
-        int64_t year;
-        int64_t month;
-        int64_t day;
+    struct time_ymd {
+        i64_t year;
+        i64_t month;
+        i64_t day;
     };
 
     // 将纪元天数转换为年月日，算法源自 Howard Hinnant
-    constexpr time_ymd days_to_ymd(int64_t days_since_epoch) {
+    constexpr time_ymd days_to_ymd(i64_t days_since_epoch) {
         int year, month, day;
 
         // 算法常量，用于调整闰年周期
@@ -114,8 +113,7 @@ namespace units {
         int z = days_since_epoch + epoch_offset;
 
         // 2. 确定所在的400年周期 ("纪元")
-        int era =
-            (z >= 0 ? z : z - days_per_400_years + 1) / days_per_400_years;
+        int era = (z >= 0 ? z : z - days_per_400_years + 1) / days_per_400_years;
 
         // 3. 计算在当前400年周期内的天数 ("年份偏移")
         int doe = z - era * days_per_400_years;
@@ -141,57 +139,57 @@ namespace units {
         return time_ymd{.year = year, .month = month, .day = day};
     }
 
-    constexpr int64_t ymd_to_days(time_ymd ymd) {
-        int64_t year  = ymd.year;
-        int64_t month = ymd.month;
-        int64_t day   = ymd.day;
+    constexpr i64_t ymd_to_days(time_ymd ymd) {
+        i64_t year  = ymd.year;
+        i64_t month = ymd.month;
+        i64_t day   = ymd.day;
 
-        year -= month <= 2 ? 1 : 0;
-        const int64_t era = (year >= 0 ? year : year - 399) / 400;
-        const uint64_t yoe = static_cast<uint64_t>(year - era * 400);
-        const uint64_t moy = static_cast<uint64_t>(month + (month > 2 ? -3 : 9));
-        const uint64_t doy = (153 * moy + 2) / 5 + static_cast<uint64_t>(day - 1);
-        const uint64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-        return era * 146097 + static_cast<int64_t>(doe) - 719468;
+        year            -= month <= 2 ? 1 : 0;
+        const i64_t era  = (year >= 0 ? year : year - 399) / 400;
+        const u64_t yoe  = static_cast<u64_t>(year - era * 400);
+        const u64_t moy  = static_cast<u64_t>(month + (month > 2 ? -3 : 9));
+        const u64_t doy  = (153 * moy + 2) / 5 + static_cast<u64_t>(day - 1);
+        const u64_t doe  = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + static_cast<i64_t>(doe) - 719468;
     }
 
     struct time {
     protected:
-        int64_t nanoseconds;
-        explicit constexpr time(int64_t ns) : nanoseconds(ns) {}
+        i64_t nanoseconds;
+        explicit constexpr time(i64_t ns) : nanoseconds(ns) {}
 
     public:
         explicit constexpr time() : nanoseconds(0) {}
-        explicit constexpr operator int64_t() const {
+        explicit constexpr operator i64_t() const {
             return to_nanoseconds();
         }
 
         [[nodiscard]]
-        constexpr int64_t to_nanoseconds() const {
+        constexpr i64_t to_nanoseconds() const {
             return nanoseconds;
         }
         [[nodiscard]]
-        constexpr int64_t to_microseconds() const {
+        constexpr i64_t to_microseconds() const {
             return nanoseconds / 1'000;
         }
         [[nodiscard]]
-        constexpr int64_t to_milliseconds() const {
+        constexpr i64_t to_milliseconds() const {
             return nanoseconds / 1'000'000;
         }
         [[nodiscard]]
-        constexpr int64_t to_seconds() const {
+        constexpr i64_t to_seconds() const {
             return to_milliseconds() / 1'000;
         }
         [[nodiscard]]
-        constexpr int64_t to_minutes() const {
+        constexpr i64_t to_minutes() const {
             return to_seconds() / 60;
         }
         [[nodiscard]]
-        constexpr int64_t to_hours() const {
+        constexpr i64_t to_hours() const {
             return to_minutes() / 60;
         }
         [[nodiscard]]
-        constexpr int64_t to_days() const {
+        constexpr i64_t to_days() const {
             return to_hours() / 24;
         }
 
@@ -213,25 +211,25 @@ namespace units {
             };
         }
 
-        static constexpr time from_nanoseconds(int64_t ns) {
+        static constexpr time from_nanoseconds(i64_t ns) {
             return time(ns);
         }
-        static constexpr time from_microseconds(int64_t us) {
+        static constexpr time from_microseconds(i64_t us) {
             return from_nanoseconds(us * 1'000);
         }
-        static constexpr time from_milliseconds(int64_t ms) {
+        static constexpr time from_milliseconds(i64_t ms) {
             return from_microseconds(ms * 1'000);
         }
-        static constexpr time from_seconds(int64_t s) {
+        static constexpr time from_seconds(i64_t s) {
             return from_milliseconds(s * 1'000);
         }
-        static constexpr time from_minutes(int64_t m) {
+        static constexpr time from_minutes(i64_t m) {
             return from_seconds(m * 60);
         }
-        static constexpr time from_hours(int64_t h) {
+        static constexpr time from_hours(i64_t h) {
             return from_minutes(h * 60);
         }
-        static constexpr time from_days(int64_t d) {
+        static constexpr time from_days(i64_t d) {
             return from_hours(d * 24);
         }
         static constexpr time from_ymd(time_ymd ymd) {
@@ -239,12 +237,11 @@ namespace units {
         }
         static constexpr time from_formatted_time(formatted_time ft) {
             return from_ymd(time_ymd{
-                       .year = ft.year,
+                       .year  = ft.year,
                        .month = ft.month,
-                       .day = ft.day,
+                       .day   = ft.day,
                    }) +
-                   from_hours(ft.hour) + from_minutes(ft.minute) +
-                   from_seconds(ft.second);
+                   from_hours(ft.hour) + from_minutes(ft.minute) + from_seconds(ft.second);
         }
 
         constexpr time operator+(const time &other) const {
@@ -255,19 +252,19 @@ namespace units {
             return time(nanoseconds - other.nanoseconds);
         }
 
-        constexpr time operator*(int64_t multiplier) const {
+        constexpr time operator*(i64_t multiplier) const {
             return time(nanoseconds * multiplier);
         }
 
-        constexpr time operator/(int64_t divisor) const {
+        constexpr time operator/(i64_t divisor) const {
             return time(nanoseconds / divisor);
         }
 
-        constexpr int64_t operator/(const time &other) const {
+        constexpr i64_t operator/(const time &other) const {
             return nanoseconds / other.nanoseconds;
         }
 
-        constexpr int64_t operator*(const frequency &f) const {
+        constexpr i64_t operator*(const frequency &f) const {
             // time * frequency = (ns) * (mili Hz) = (ns) * (1000/s) = 10^(-12)
             // s
             return (nanoseconds * f.to_milihz()) / NANOSECONDS_PER_MILLIHERTZ;
@@ -275,19 +272,17 @@ namespace units {
     };  // namespace units
 
     // calculate the frequenct
-    constexpr frequency operator/(uint64_t count, const time &t) {
+    constexpr frequency operator/(u64_t count, const time &t) {
         // 1 / ns = 1 / (1e-9 s) = 1e9 Hz
         // count / (t ns) = (count / t) * 1e9 Hz = count * (1e9 / t) Hz
-        return frequency::from_milihz(
-            count * (NANOSECONDS_PER_MILLIHERTZ / t.to_nanoseconds()));
+        return frequency::from_milihz(count * (NANOSECONDS_PER_MILLIHERTZ / t.to_nanoseconds()));
     };
 
     // calculate the time
-    constexpr time operator/(uint64_t count, const frequency &f) {
+    constexpr time operator/(u64_t count, const frequency &f) {
         // 1 / Hz = 1 / (1/s) = s
         // count / (f Hz) = count * (1 / f) s = count * (1e9 / f) ns
-        return time::from_nanoseconds(
-            count * (NANOSECONDS_PER_MILLIHERTZ / f.to_milihz()));
+        return time::from_nanoseconds(count * (NANOSECONDS_PER_MILLIHERTZ / f.to_milihz()));
     };
 }  // namespace units
 

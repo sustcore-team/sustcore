@@ -1,3 +1,14 @@
+/**
+ * @file array.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::array 的内联、借用和动态存储用法。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/array.h>
 
 #include <cstdio>
@@ -18,13 +29,11 @@ int main() {
     }
     dynamic_values->fill(9);
 
-    std::printf("static: [%d, %d, %d, %d]\n",
-                inline_values[0], inline_values[1], inline_values[2],
+    std::printf("static: [%d, %d, %d, %d]\n", inline_values[0], inline_values[1], inline_values[2],
                 inline_values[3]);
-    std::printf("view changed source: [%d, %d, %d, %d]\n",
-                borrowed[0], borrowed[1], borrowed[2], borrowed[3]);
-    std::printf("dynamic size=%zu: [%d, %d, %d]\n",
-                dynamic_values->size(), (*dynamic_values)[0],
+    std::printf("view changed source: [%d, %d, %d, %d]\n", borrowed[0], borrowed[1], borrowed[2],
+                borrowed[3]);
+    std::printf("dynamic size=%zu: [%d, %d, %d]\n", dynamic_values->size(), (*dynamic_values)[0],
                 (*dynamic_values)[1], (*dynamic_values)[2]);
     return 0;
 }

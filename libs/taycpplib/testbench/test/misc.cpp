@@ -1,13 +1,23 @@
+/**
+ * @file misc.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay 通用工具算法和辅助类型。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <tay/algo/misc.h>
 
 #include <cassert>
 #include <cstddef>
 
 namespace {
-    template <typename T, std::size_t Size>
-    constexpr bool prefix_equal(const T (&values)[Size], const T* expected,
-                                std::size_t count) {
-        for (std::size_t index = 0; index < count; ++index) {
+    template <typename T, size_t Size>
+    constexpr bool prefix_equal(const T (&values)[Size], const T* expected, size_t count) {
+        for (size_t index = 0; index < count; ++index) {
             if (!(values[index] == expected[index])) {
                 return false;
             }
@@ -42,8 +52,7 @@ namespace {
         int values[]                = {1, 1, 2, 2, 2, 1};
         auto new_end                = tay::unique(values);
         const int expected_unique[] = {1, 2, 1};
-        if (new_end != values + 3 || !prefix_equal(values, expected_unique, 3))
-        {
+        if (new_end != values + 3 || !prefix_equal(values, expected_unique, 3)) {
             return false;
         }
 
@@ -60,16 +69,15 @@ int main() {
     int alias_values[] = {1, 1, 2, 2};
     assert(tay::unique(alias_values) == alias_values + 2);
 
-    record records[] = {{1, 10}, {1, 11}, {2, 20}, {2, 21}, {3, 30}};
-    auto records_end = tay::unique(records, {}, &record::key);
+    record records[]                = {{1, 10}, {1, 11}, {2, 20}, {2, 21}, {3, 30}};
+    auto records_end                = tay::unique(records, {}, &record::key);
     const record expected_records[] = {{1, 10}, {2, 20}, {3, 30}};
     assert(records_end == records + 3);
     assert(prefix_equal(records, expected_records, 3));
 
-    move_only values[] = {move_only(1), move_only(2), move_only(3),
-                          move_only(4)};
+    move_only values[] = {move_only(1), move_only(2), move_only(3), move_only(4)};
     assert(tay::reverse(values) == values + 4);
-    for (std::size_t index = 0; index < 4; ++index) {
+    for (size_t index = 0; index < 4; ++index) {
         assert(values[index].value == static_cast<int>(4 - index));
     }
 

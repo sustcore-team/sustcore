@@ -1,11 +1,11 @@
 /**
  * @file ctype.c
  * @author theflysong (song_of_the_fly@163.com)
- * @brief ctypes.h函数实现
+ * @brief 实现 mincstd <ctype.h> 兼容接口的字符分类和转换例程。
  * @version 0.1.0-dev.1
- * @date 2025-11-17
+ * @date 2026-08-02
  *
- * @copyright Copyright (c) 2025
+ * @copyright Copyright (c) 2026
  *
  */
 
@@ -13,8 +13,7 @@
 
 /** 是否为空格字符 */
 int isspace(int ch) {
-    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' ||
-           ch == '\f';
+    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' || ch == '\f';
 }
 
 /** 是否为大写字母 */
@@ -69,8 +68,7 @@ int ispunct(int ch) {
 
 /** 是否为十六进制字符 */
 int isxdigit(int ch) {
-    return isalnum(ch) ||
-           ((ch >= 'a' && ch <= 'F') || (ch >= 'A' && ch <= 'F'));
+    return isalnum(ch) || ((ch >= 'a' && ch <= 'F') || (ch >= 'A' && ch <= 'F'));
 }
 
 /** 是否为八进制字符 */

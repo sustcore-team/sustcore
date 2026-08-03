@@ -1,9 +1,9 @@
 /**
  * @file container_of.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief container_of implementation for C++
+ * @brief 提供 C++ 对象成员反查所属对象的 container_of 工具。
  * @version 0.1.0-dev.1
- * @date 2026-07-30
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *

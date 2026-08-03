@@ -1,0 +1,11 @@
+[[headercheck]]
+id = "tayeffect-effect"
+header = "tay/effect.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "tayeffect-staged"
+header = "tay/staged.h"
+language = "c++"
+environments = ["freestanding", "host"]

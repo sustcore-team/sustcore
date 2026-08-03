@@ -1,9 +1,9 @@
 /**
  * @file addr.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 内核虚拟地址
+ * @brief 定义 Sustcore 内核使用的物理、虚拟和通用地址类型。
  * @version 0.1.0-dev.1
- * @date 2026-01-21
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -11,14 +11,19 @@
 
 #pragma once
 
-#include <tay/bits.h>
-#include <tay/range.h>
 #include <sustcore/addrspace.h>
+#include <tay/bits.h>
+#include <tay/err.h>
+#include <tay/expected.h>
+#include <tay/format.h>
+#include <tay/range.h>
 
 #include <cassert>
 #include <compare>
 #include <concepts>
 #include <cstddef>
+
+#include "tay/utility.h"
 
 static constexpr bool is_pow2(size_t n) {
     return (n > 0) && ((n & (n - 1)) == 0);
@@ -34,19 +39,22 @@ constexpr addr_t page_align_down(addr_t addr_val) {
     return addr_val & ~0xFFF;
 }
 
-enum class AddrType {
-    KVA,    // 内核虚拟地址
-    KPA,    // 内核物理地址
-    PA,     // 物理地址
-    VADDR,  // 任意地址类型
+enum class AddrType : u8_t {
+    PA,   // 低半区物理地址
+    VA,   // 低半区虚拟地址
+    HVA,  // 高半区地址（包含 KVA 和 KPA）
+    KVA,  // 内核虚拟地址
+    KPA,  // 内核物理地址
 };
 
 using addrscope = tay::range<addr_t>;
 
-constexpr addrscope KVA_SCOPE   = {KVA_START, MAX_ADDR};
-constexpr addrscope KPA_SCOPE   = {KPA_START, KVA_START - 1};
-constexpr addrscope PA_SCOPE    = {NULL_ADDR, KPA_START - 1};
-constexpr addrscope VADDR_SCOPE = {NULL_ADDR, MAX_ADDR};
+// tay::range 使用半开区间；高半区的闭上界 MAX_ADDR 由 in_addr_scope() 精确处理。
+constexpr addrscope PA_SCOPE  = {NULL_ADDR, KPA_START};
+constexpr addrscope VA_SCOPE  = PA_SCOPE;
+constexpr addrscope HVA_SCOPE = {KPA_START, MAX_ADDR};
+constexpr addrscope KPA_SCOPE = {KPA_START, KVA_START};
+constexpr addrscope KVA_SCOPE = {KVA_START, MAX_ADDR};
 
 constexpr addr_t KVA2PA(addr_t ka) {
     return ka - KVA_START;
@@ -66,24 +74,56 @@ constexpr addr_t PA2KPA(addr_t pa) {
 
 constexpr addrscope get_scope(AddrType type) {
     switch (type) {
-        case AddrType::KVA:   return KVA_SCOPE;
-        case AddrType::KPA:   return KPA_SCOPE;
-        case AddrType::PA:    return PA_SCOPE;
-        case AddrType::VADDR: return VADDR_SCOPE;
-        default:              return {NULL_ADDR, NULL_ADDR};  // Invalid scope
+        case AddrType::PA:  return PA_SCOPE;
+        case AddrType::VA:  return VA_SCOPE;
+        case AddrType::HVA: return HVA_SCOPE;
+        case AddrType::KVA: return KVA_SCOPE;
+        case AddrType::KPA: return KPA_SCOPE;
     }
+    return {NULL_ADDR, NULL_ADDR};
+}
+
+/**
+ * @brief 判断地址是否属于 AddrType 的完整逻辑范围。
+ * @note 不能只调用 within(get_scope(...))：range 的 end 为排他边界，无法表达 HVA/KVA
+ *       包含 MAX_ADDR 的闭区间。
+ */
+constexpr bool in_addr_scope(AddrType type, addr_t address) noexcept {
+    switch (type) {
+        case AddrType::PA:
+        case AddrType::VA:  return address < KPA_START;
+        case AddrType::HVA: return address >= KPA_START;
+        case AddrType::KVA: return address >= KVA_START;
+        case AddrType::KPA: return address >= KPA_START && address < KVA_START;
+    }
+    return false;
 }
 
 template <AddrType Type>
 class Addr {
 private:
     addr_t _addr = 0;
+
 public:
     explicit constexpr Addr(addr_t addr) : _addr(addr) {
-        assert(within(get_scope(Type), addr));
+        assert(in_addr_scope(Type, addr));
     }
     constexpr Addr() = default;
     explicit inline Addr(void *addr) : Addr((addr_t)addr) {}
+
+    /** @brief 从原始整数地址构造；地址不属于 Type 的区域时返回 OUT_OF_RANGE。 */
+    [[nodiscard]] static constexpr tay::expected<Addr, tay::error_code> try_from(
+        addr_t addr) noexcept {
+        if (!in_addr_scope(Type, addr))
+            return tay::Err(tay::error_code::OUT_OF_RANGE);
+        return Addr(addr);
+    }
+
+    /** @brief 从指针构造；判定规则与整数地址版本一致。 */
+    [[nodiscard]] static inline tay::expected<Addr, tay::error_code> try_from(void *addr) noexcept {
+        return try_from(reinterpret_cast<addr_t>(addr));
+    }
+
     static const Addr null;
     inline void *addr() const noexcept {
         return (void *)this->_addr;
@@ -130,8 +170,7 @@ public:
     constexpr bool operator!=(const Addr &other) const noexcept {
         return this->_addr != other._addr;
     }
-    constexpr std::strong_ordering operator<=>(
-        const Addr &other) const noexcept {
+    constexpr std::strong_ordering operator<=>(const Addr &other) const noexcept {
         return this->_addr <=> other._addr;
     }
 
@@ -159,9 +198,10 @@ public:
 };
 
 using PhyAddr = Addr<AddrType::PA>;
+using VirAddr = Addr<AddrType::VA>;
+using HvaAddr = Addr<AddrType::HVA>;
 using KpaAddr = Addr<AddrType::KPA>;
 using KvaAddr = Addr<AddrType::KVA>;
-using VirAddr = Addr<AddrType::VADDR>;
 
 template <AddrType Type>
 constexpr Addr<Type> Addr<Type>::null = Addr();
@@ -213,7 +253,7 @@ inline static PhyAddr convert_pointer(T *ptr) {
     AddrType types[]       = {AddrType::PA, AddrType::KPA, AddrType::KVA};
     AddrType detected_type = AddrType::PA;  // Default to PA if no match
     for (AddrType type : types) {
-        if (within(get_scope(type), (addr_t)ptr)) {
+        if (in_addr_scope(type, (addr_t)ptr)) {
             detected_type = type;
             break;
         }
@@ -231,28 +271,76 @@ inline static PhyAddr convert_pointer(T *ptr) {
 }
 
 constexpr bool is_user_vaddr(VirAddr vaddr) {
-    return within(get_scope(AddrType::VADDR), vaddr.arith()) &&
-           !within(get_scope(AddrType::KVA), vaddr.arith()) &&
-           !within(get_scope(AddrType::KPA), vaddr.arith());
+    return in_addr_scope(AddrType::VA, vaddr.arith());
 }
 
 using VirArea = tay::range<VirAddr>;
 using PhyArea = tay::range<PhyAddr>;
 
 template <typename AddrT>
-inline static tay::range<AddrT> page_align_inward(tay::range<AddrT> area)
-{
-    return {
-        area.begin.page_align_up(),
-        area.end.page_align_down()
-    };
+inline static tay::range<AddrT> page_align_inward(tay::range<AddrT> area) {
+    return {area.begin.page_align_up(), area.end.page_align_down()};
 }
 
 template <typename AddrT>
-inline static tay::range<AddrT> page_align_outward(tay::range<AddrT> area)
-{
-    return {
-        area.begin.page_align_down(),
-        area.end.page_align_up()
-    };
+inline static tay::range<AddrT> page_align_outward(tay::range<AddrT> area) {
+    return {area.begin.page_align_down(), area.end.page_align_up()};
 }
+
+namespace tay {
+    template <AddrType Type>
+    struct formatter<Addr<Type>> {
+        constexpr format_parse_context::iterator parse(format_parse_context &context) noexcept {
+            return context.begin();
+        }
+
+        template <class FormatContext>
+        typename FormatContext::iterator format(const Addr<Type> &addr,
+                                                FormatContext &context) const {
+            context.write("Addr<");
+            if constexpr (Type == AddrType::PA) {
+                context.write("PA");
+            } else if constexpr (Type == AddrType::VA) {
+                context.write("VA");
+            } else if constexpr (Type == AddrType::HVA) {
+                context.write("HVA");
+            } else if constexpr (Type == AddrType::KVA) {
+                context.write("KVA");
+            } else if constexpr (Type == AddrType::KPA) {
+                context.write("KPA");
+            } else {
+                static_assert(tay::dependent_false_v<Addr<Type>>, "Unsupported AddrType");
+            }
+            context.format(">{:#016x}", addr.arith());
+            return context.out();
+        }
+    };
+
+    template <AddrType Type>
+    struct formatter<tay::range<Addr<Type>>> {
+        constexpr format_parse_context::iterator parse(format_parse_context &context) noexcept {
+            return context.begin();
+        }  // namespace tay
+
+        template <class FormatContext>
+        typename FormatContext::iterator format(const tay::range<Addr<Type>> &area,
+                                                FormatContext &context) const {
+            context.write("Range<");
+            if constexpr (Type == AddrType::PA) {
+                context.write("PA");
+            } else if constexpr (Type == AddrType::VA) {
+                context.write("VA");
+            } else if constexpr (Type == AddrType::HVA) {
+                context.write("HVA");
+            } else if constexpr (Type == AddrType::KVA) {
+                context.write("KVA");
+            } else if constexpr (Type == AddrType::KPA) {
+                context.write("KPA");
+            } else {
+                static_assert(tay::dependent_false_v<Addr<Type>>, "Unsupported AddrType");
+            }
+            context.format(">[{:#016x}, {:#016x})", area.begin.arith(), area.end.arith());
+            return context.out();
+        }
+    };
+}  // namespace tay

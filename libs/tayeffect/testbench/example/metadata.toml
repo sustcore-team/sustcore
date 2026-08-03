@@ -1,0 +1,20 @@
+[[hostprog]]
+id = "tayeffect-effect-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "tayeffect-effect-example"
+
+[[hostprog]]
+id = "tayeffect-staged-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "tayeffect-staged-example"
+
+[[hostprog]]
+id = "tayeffect-effect-staged-example"
+kind = "example"
+makefile = "Makefile"
+target = "build"
+output = "tayeffect-effect-staged-example"

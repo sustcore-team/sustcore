@@ -2,6 +2,7 @@
 id = "sustcore-headers"
 libname = ""
 version = "0.1.0-dev.1"
+testbench.headercheck = ["testbench/headercheck/metadata.toml"]
 
 include-c   = ["include"]
 include-cpp = ["include"]

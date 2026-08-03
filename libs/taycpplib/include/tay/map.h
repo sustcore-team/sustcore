@@ -1,6 +1,12 @@
 /**
  * @file map.h
- * @brief Exception-free unique-key chained hash maps.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供无异常的唯一键链式哈希映射。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -27,8 +33,7 @@ namespace tay {
         };
     }  // namespace detail
 
-    template <class Key, class T, class Hash = std::hash<Key>,
-              class KeyEqual = std::equal_to<Key>,
+    template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
               class Allocator = allocator<std::pair<const Key, T>>>
     class hash_map {
     public:
@@ -41,8 +46,7 @@ namespace tay {
 
     private:
         using table_type =
-            detail::hash_table<value_type, key_type,
-                               detail::map_key_of<key_type, mapped_type>,
+            detail::hash_table<value_type, key_type, detail::map_key_of<key_type, mapped_type>,
                                allocator_type, hasher, key_equal, false>;
         using allocator_traits_type = allocator_traits<allocator_type>;
         struct empty_tag {};
@@ -54,39 +58,31 @@ namespace tay {
 
         table_type table_;
 
-        constexpr hash_map(empty_tag, const hasher& hash,
-                           const key_equal& equal,
+        constexpr hash_map(empty_tag, const hasher& hash, const key_equal& equal,
                            const allocator_type& allocator) noexcept
             : table_(allocator, hash, equal) {}
 
-        [[noreturn]] static constexpr void panic_error(
-            error_code error) noexcept {
+        [[noreturn]] static constexpr void panic_error(error_code error) noexcept {
             switch (error) {
-                case error_code::OUT_OF_MEMORY:
-                    tay::panic("hash_map allocation failed");
-                case error_code::ALLOCATION_SIZE_OVERFLOW:
-                    tay::panic("hash_map size overflow");
-                case error_code::OUT_OF_RANGE:
-                    tay::panic("hash_map key not found");
-                case error_code::INVALID_ARGUMENT:
-                    tay::panic("hash_map invalid argument");
-                default: tay::panic("hash_map operation failed");
+                case error_code::OUT_OF_MEMORY:            tay::panic("hash_map allocation failed");
+                case error_code::ALLOCATION_SIZE_OVERFLOW: tay::panic("hash_map size overflow");
+                case error_code::OUT_OF_RANGE:             tay::panic("hash_map key not found");
+                case error_code::INVALID_ARGUMENT:         tay::panic("hash_map invalid argument");
+                default:                                   tay::panic("hash_map operation failed");
             }
         }
 
         template <class InputIt>
         static constexpr expected<hash_map, error_code> create_range(
-            InputIt first, InputIt last, typename table_type::size_type buckets,
-            const hasher& hash, const key_equal& equal,
-            const allocator_type& allocator) noexcept {
+            InputIt first, InputIt last, typename table_type::size_type buckets, const hasher& hash,
+            const key_equal& equal, const allocator_type& allocator) noexcept {
             auto result = try_create(buckets, hash, equal, allocator);
             if (!result) {
                 return result;
             }
             auto inserted = result->insert(first, last);
             if (!inserted) {
-                return expected<hash_map, error_code>(unexpect,
-                                                      inserted.error());
+                return expected<hash_map, error_code>(unexpect, inserted.error());
             }
             return result;
         }
@@ -114,29 +110,25 @@ namespace tay {
                      std::is_nothrow_default_constructible_v<key_equal>)
             : hash_map(1, hasher{}, key_equal{}, allocator) {}
 
-        constexpr hash_map(size_type bucket_count,
-                           const allocator_type& allocator) noexcept
+        constexpr hash_map(size_type bucket_count, const allocator_type& allocator) noexcept
             requires(std::is_nothrow_default_constructible_v<hasher> &&
                      std::is_nothrow_default_constructible_v<key_equal>)
             : hash_map(bucket_count, hasher{}, key_equal{}, allocator) {}
 
-        constexpr hash_map(size_type bucket_count, const hasher& hash,
-                           const key_equal& equal,
+        constexpr hash_map(size_type bucket_count, const hasher& hash, const key_equal& equal,
                            const allocator_type& allocator) noexcept
             : table_(allocator, hash, equal) {
-            auto initialized = table_.initialize(bucket_count);
+            auto initialized = table_.init(bucket_count);
             if (!initialized) {
                 panic_error(initialized.error());
             }
         }
 
         template <class InputIt>
-        constexpr hash_map(InputIt first, InputIt last, size_type bucket_count,
-                           const hasher& hash, const key_equal& equal,
-                           const allocator_type& allocator) noexcept
+        constexpr hash_map(InputIt first, InputIt last, size_type bucket_count, const hasher& hash,
+                           const key_equal& equal, const allocator_type& allocator) noexcept
             : table_(allocator, hash, equal) {
-            auto created =
-                create_range(first, last, bucket_count, hash, equal, allocator);
+            auto created = create_range(first, last, bucket_count, hash, equal, allocator);
             if (!created) {
                 panic_error(created.error());
             }
@@ -147,33 +139,26 @@ namespace tay {
         }
 
         template <class InputIt>
-        constexpr hash_map(InputIt first, InputIt last,
-                           size_type bucket_count = 1) noexcept
+        constexpr hash_map(InputIt first, InputIt last, size_type bucket_count = 1) noexcept
             requires(has_defaults)
-            : hash_map(first, last, bucket_count, hasher{}, key_equal{},
-                       allocator_type{}) {}
+            : hash_map(first, last, bucket_count, hasher{}, key_equal{}, allocator_type{}) {}
 
         constexpr hash_map(std::initializer_list<value_type> values,
                            size_type bucket_count = 1) noexcept
             requires(has_defaults)
             : hash_map(values.begin(), values.end(), bucket_count) {}
 
-        constexpr hash_map(std::initializer_list<value_type> values,
-                           size_type bucket_count, const hasher& hash,
-                           const key_equal& equal,
+        constexpr hash_map(std::initializer_list<value_type> values, size_type bucket_count,
+                           const hasher& hash, const key_equal& equal,
                            const allocator_type& allocator) noexcept
-            : hash_map(values.begin(), values.end(), bucket_count, hash, equal,
-                       allocator) {}
+            : hash_map(values.begin(), values.end(), bucket_count, hash, equal, allocator) {}
 
         constexpr hash_map(const hash_map& other) noexcept
             requires(std::is_nothrow_copy_constructible_v<value_type>)
-            : hash_map(
-                  other,
-                  allocator_traits_type::select_on_container_copy_construction(
-                      other.get_allocator())) {}
+            : hash_map(other, allocator_traits_type::select_on_container_copy_construction(
+                                  other.get_allocator())) {}
 
-        constexpr hash_map(const hash_map& other,
-                           const allocator_type& allocator) noexcept
+        constexpr hash_map(const hash_map& other, const allocator_type& allocator) noexcept
             requires(std::is_nothrow_copy_constructible_v<value_type>)
             : table_(allocator, other.hash_function(), other.key_eq()) {
             auto created = try_create(other, allocator);
@@ -186,11 +171,9 @@ namespace tay {
             }
         }
 
-        constexpr hash_map(hash_map&& other) noexcept
-            : table_(std::move(other.table_)) {}
+        constexpr hash_map(hash_map&& other) noexcept : table_(std::move(other.table_)) {}
 
-        constexpr hash_map(hash_map&& other,
-                           const allocator_type& allocator) noexcept
+        constexpr hash_map(hash_map&& other, const allocator_type& allocator) noexcept
             requires(std::is_nothrow_copy_constructible_v<value_type>)
             : table_(allocator, other.hash_function(), other.key_eq()) {
             if constexpr (allocator_traits_type::is_always_equal::value) {
@@ -232,33 +215,28 @@ namespace tay {
             return try_create(1, hasher{}, key_equal{}, allocator);
         }
 
-        static constexpr expected<hash_map, error_code> try_create(
-            size_type bucket_count) noexcept
+        static constexpr expected<hash_map, error_code> try_create(size_type bucket_count) noexcept
             requires(has_defaults)
         {
-            return try_create(bucket_count, hasher{}, key_equal{},
-                              allocator_type{});
+            return try_create(bucket_count, hasher{}, key_equal{}, allocator_type{});
         }
 
         static constexpr expected<hash_map, error_code> try_create(
             size_type bucket_count, const hasher& hash, const key_equal& equal,
             const allocator_type& allocator) noexcept {
             hash_map result(empty_tag{}, hash, equal, allocator);
-            auto initialized = result.table_.initialize(bucket_count);
+            auto initialized = result.table_.init(bucket_count);
             if (!initialized) {
-                return expected<hash_map, error_code>(unexpect,
-                                                      initialized.error());
+                return expected<hash_map, error_code>(unexpect, initialized.error());
             }
             return result;
         }
 
         template <class InputIt>
         static constexpr expected<hash_map, error_code> try_create(
-            InputIt first, InputIt last, size_type bucket_count,
-            const hasher& hash, const key_equal& equal,
-            const allocator_type& allocator) noexcept {
-            return create_range(first, last, bucket_count, hash, equal,
-                                allocator);
+            InputIt first, InputIt last, size_type bucket_count, const hasher& hash,
+            const key_equal& equal, const allocator_type& allocator) noexcept {
+            return create_range(first, last, bucket_count, hash, equal, allocator);
         }
 
         template <class InputIt>
@@ -266,17 +244,15 @@ namespace tay {
             InputIt first, InputIt last, size_type bucket_count = 1) noexcept
             requires(has_defaults)
         {
-            return create_range(first, last, bucket_count, hasher{},
-                                key_equal{}, allocator_type{});
+            return create_range(first, last, bucket_count, hasher{}, key_equal{}, allocator_type{});
         }
 
         static constexpr expected<hash_map, error_code> try_create(
-            std::initializer_list<value_type> values,
-            size_type bucket_count = 1) noexcept
+            std::initializer_list<value_type> values, size_type bucket_count = 1) noexcept
             requires(has_defaults)
         {
-            return create_range(values.begin(), values.end(), bucket_count,
-                                hasher{}, key_equal{}, allocator_type{});
+            return create_range(values.begin(), values.end(), bucket_count, hasher{}, key_equal{},
+                                allocator_type{});
         }
 
         static constexpr expected<hash_map, error_code> try_create(
@@ -284,20 +260,17 @@ namespace tay {
             requires(std::is_nothrow_copy_constructible_v<value_type>)
         {
             auto result =
-                try_create(other.bucket_count(), other.hash_function(),
-                           other.key_eq(), allocator);
+                try_create(other.bucket_count(), other.hash_function(), other.key_eq(), allocator);
             if (!result) {
                 return result;
             }
             auto percent = result->max_load_percent(other.max_load_percent());
             if (!percent) {
-                return expected<hash_map, error_code>(unexpect,
-                                                      percent.error());
+                return expected<hash_map, error_code>(unexpect, percent.error());
             }
             auto inserted = result->insert(other.begin(), other.end());
             if (!inserted) {
-                return expected<hash_map, error_code>(unexpect,
-                                                      inserted.error());
+                return expected<hash_map, error_code>(unexpect, inserted.error());
             }
             return result;
         }
@@ -309,8 +282,7 @@ namespace tay {
                 return *this;
             }
             const allocator_type target_allocator =
-                allocator_traits_type::propagate_on_container_copy_assignment::
-                        value
+                allocator_traits_type::propagate_on_container_copy_assignment::value
                     ? other.get_allocator()
                     : get_allocator();
             auto replacement = try_create(other, target_allocator);
@@ -338,13 +310,11 @@ namespace tay {
             return *this;
         }
 
-        constexpr hash_map& operator=(
-            std::initializer_list<value_type> values) noexcept
+        constexpr hash_map& operator=(std::initializer_list<value_type> values) noexcept
             requires(std::is_nothrow_copy_constructible_v<value_type>)
         {
-            auto replacement =
-                create_range(values.begin(), values.end(), 1, hash_function(),
-                             key_eq(), get_allocator());
+            auto replacement = create_range(values.begin(), values.end(), 1, hash_function(),
+                                            key_eq(), get_allocator());
             if (!replacement) {
                 panic_error(replacement.error());
             }
@@ -406,14 +376,13 @@ namespace tay {
         template <class P>
             requires(!std::is_same_v<std::remove_cvref_t<P>, value_type> &&
                      std::is_nothrow_constructible_v<value_type, P &&>)
-        constexpr expected<std::pair<iterator, bool>, error_code> insert(
-            P&& value) noexcept {
+        constexpr expected<std::pair<iterator, bool>, error_code> insert(P&& value) noexcept {
             value_type converted(std::forward<P>(value));
             return insert(std::move(converted));
         }
 
-        constexpr expected<iterator, error_code> insert(
-            const_iterator, const value_type& value) noexcept
+        constexpr expected<iterator, error_code> insert(const_iterator,
+                                                        const value_type& value) noexcept
             requires(std::is_nothrow_copy_constructible_v<value_type>)
         {
             auto result = insert(value);
@@ -423,8 +392,7 @@ namespace tay {
             return result->first;
         }
 
-        constexpr expected<iterator, error_code> insert(
-            const_iterator, value_type&& value) noexcept
+        constexpr expected<iterator, error_code> insert(const_iterator, value_type&& value) noexcept
             requires(std::is_nothrow_constructible_v<value_type, value_type &&>)
         {
             auto result = insert(std::move(value));
@@ -435,8 +403,7 @@ namespace tay {
         }
 
         template <class InputIt>
-        constexpr expected<void, error_code> insert(InputIt first,
-                                                    InputIt last) noexcept {
+        constexpr expected<void, error_code> insert(InputIt first, InputIt last) noexcept {
             for (; first != last; ++first) {
                 auto result = insert(*first);
                 if (!result) {
@@ -456,8 +423,7 @@ namespace tay {
         template <class... Args>
             requires(std::is_nothrow_constructible_v<value_type, Args && ...> &&
                      std::is_nothrow_constructible_v<value_type, value_type &&>)
-        constexpr expected<std::pair<iterator, bool>, error_code> emplace(
-            Args&&... args) noexcept {
+        constexpr expected<std::pair<iterator, bool>, error_code> emplace(Args&&... args) noexcept {
             value_type value(std::forward<Args>(args)...);
             return insert(std::move(value));
         }
@@ -465,8 +431,8 @@ namespace tay {
         template <class... Args>
             requires(std::is_nothrow_constructible_v<value_type, Args && ...> &&
                      std::is_nothrow_constructible_v<value_type, value_type &&>)
-        constexpr expected<iterator, error_code> emplace_hint(
-            const_iterator, Args&&... args) noexcept {
+        constexpr expected<iterator, error_code> emplace_hint(const_iterator,
+                                                              Args&&... args) noexcept {
             auto result = emplace(std::forward<Args>(args)...);
             if (!result) {
                 return expected<iterator, error_code>(unexpect, result.error());
@@ -475,9 +441,8 @@ namespace tay {
         }
 
         template <class... Args>
-            requires(
-                std::is_nothrow_constructible_v<mapped_type, Args && ...> &&
-                std::is_nothrow_copy_constructible_v<key_type>)
+            requires(std::is_nothrow_constructible_v<mapped_type, Args && ...> &&
+                     std::is_nothrow_copy_constructible_v<key_type>)
         constexpr expected<std::pair<iterator, bool>, error_code> try_emplace(
             const key_type& key, Args&&... args) noexcept {
             iterator existing = find(key);
@@ -489,9 +454,8 @@ namespace tay {
         }
 
         template <class... Args>
-            requires(
-                std::is_nothrow_constructible_v<mapped_type, Args && ...> &&
-                std::is_nothrow_move_constructible_v<key_type>)
+            requires(std::is_nothrow_constructible_v<mapped_type, Args && ...> &&
+                     std::is_nothrow_move_constructible_v<key_type>)
         constexpr expected<std::pair<iterator, bool>, error_code> try_emplace(
             key_type&& key, Args&&... args) noexcept {
             iterator existing = find(key);
@@ -499,13 +463,12 @@ namespace tay {
                 return std::pair<iterator, bool>{existing, false};
             }
             mapped_type mapped(std::forward<Args>(args)...);
-            return table_.emplace_unique(key, std::move(key),
-                                         std::move(mapped));
+            return table_.emplace_unique(key, std::move(key), std::move(mapped));
         }
 
         template <class... Args>
-        constexpr expected<iterator, error_code> try_emplace(
-            const_iterator, const key_type& key, Args&&... args) noexcept {
+        constexpr expected<iterator, error_code> try_emplace(const_iterator, const key_type& key,
+                                                             Args&&... args) noexcept {
             auto result = try_emplace(key, std::forward<Args>(args)...);
             if (!result) {
                 return expected<iterator, error_code>(unexpect, result.error());
@@ -517,8 +480,8 @@ namespace tay {
             requires(std::is_nothrow_assignable_v<mapped_type&, M &&> &&
                      std::is_nothrow_constructible_v<mapped_type, M &&> &&
                      std::is_nothrow_copy_constructible_v<key_type>)
-        constexpr expected<std::pair<iterator, bool>, error_code>
-        insert_or_assign(const key_type& key, M&& value) noexcept {
+        constexpr expected<std::pair<iterator, bool>, error_code> insert_or_assign(
+            const key_type& key, M&& value) noexcept {
             iterator found = find(key);
             if (found != end()) {
                 found->second = std::forward<M>(value);
@@ -531,8 +494,8 @@ namespace tay {
             requires(std::is_nothrow_assignable_v<mapped_type&, M &&> &&
                      std::is_nothrow_constructible_v<mapped_type, M &&> &&
                      std::is_nothrow_move_constructible_v<key_type>)
-        constexpr expected<std::pair<iterator, bool>, error_code>
-        insert_or_assign(key_type&& key, M&& value) noexcept {
+        constexpr expected<std::pair<iterator, bool>, error_code> insert_or_assign(
+            key_type&& key, M&& value) noexcept {
             iterator found = find(key);
             if (found != end()) {
                 found->second = std::forward<M>(value);
@@ -545,8 +508,7 @@ namespace tay {
             const key_type& key) noexcept {
             iterator found = find(key);
             if (found == end()) {
-                return expected<mapped_type&, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<mapped_type&, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return found->second;
         }
@@ -555,8 +517,7 @@ namespace tay {
             const key_type& key) const noexcept {
             const_iterator found = find(key);
             if (found == cend()) {
-                return expected<const mapped_type&, error_code>(
-                    unexpect, error_code::OUT_OF_RANGE);
+                return expected<const mapped_type&, error_code>(unexpect, error_code::OUT_OF_RANGE);
             }
             return found->second;
         }
@@ -567,8 +528,7 @@ namespace tay {
         constexpr iterator erase(const_iterator position) noexcept {
             return table_.erase(position);
         }
-        constexpr iterator erase(const_iterator first,
-                                 const_iterator last) noexcept {
+        constexpr iterator erase(const_iterator first, const_iterator last) noexcept {
             return table_.erase(first, last);
         }
         constexpr size_type erase(const key_type& key) noexcept {
@@ -577,24 +537,21 @@ namespace tay {
         [[nodiscard]] constexpr iterator find(const key_type& key) noexcept {
             return table_.find(key);
         }
-        [[nodiscard]] constexpr const_iterator find(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr const_iterator find(const key_type& key) const noexcept {
             return table_.find(key);
         }
-        [[nodiscard]] constexpr bool contains(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr bool contains(const key_type& key) const noexcept {
             return table_.contains(key);
         }
-        [[nodiscard]] constexpr size_type count(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr size_type count(const key_type& key) const noexcept {
             return table_.count(key);
         }
         [[nodiscard]] constexpr std::pair<iterator, iterator> equal_range(
             const key_type& key) noexcept {
             return table_.equal_range(key);
         }
-        [[nodiscard]] constexpr std::pair<const_iterator, const_iterator>
-        equal_range(const key_type& key) const noexcept {
+        [[nodiscard]] constexpr std::pair<const_iterator, const_iterator> equal_range(
+            const key_type& key) const noexcept {
             return table_.equal_range(key);
         }
         [[nodiscard]] constexpr size_type bucket_count() const noexcept {
@@ -603,19 +560,16 @@ namespace tay {
         [[nodiscard]] constexpr size_type max_bucket_count() const noexcept {
             return table_.max_bucket_count();
         }
-        [[nodiscard]] constexpr size_type bucket_size(
-            size_type index) const noexcept {
+        [[nodiscard]] constexpr size_type bucket_size(size_type index) const noexcept {
             return table_.bucket_size(index);
         }
-        [[nodiscard]] constexpr size_type bucket(
-            const key_type& key) const noexcept {
+        [[nodiscard]] constexpr size_type bucket(const key_type& key) const noexcept {
             return table_.bucket(key);
         }
         [[nodiscard]] constexpr size_type max_load_percent() const noexcept {
             return table_.max_load_percent();
         }
-        constexpr expected<void, error_code> max_load_percent(
-            size_type percent) noexcept {
+        constexpr expected<void, error_code> max_load_percent(size_type percent) noexcept {
             return table_.max_load_percent(percent);
         }
         constexpr expected<void, error_code> rehash(size_type count) noexcept {

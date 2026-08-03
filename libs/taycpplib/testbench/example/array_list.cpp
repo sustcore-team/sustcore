@@ -1,8 +1,12 @@
 /**
- * @file list.cpp
- * @brief Demonstrate contiguous storage with tay::array_list.
+ * @file array_list.cpp
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::array_list 的连续存储和元素操作。
  * @version 0.1.0-dev.1
- * @date 2026-07-29
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #include <tay/array_list.h>
@@ -27,8 +31,7 @@ namespace {
         for (number_list::size_type index = 0; index < values.size(); ++index) {
             std::printf("%s%d", index == 0 ? "" : ", ", values[index]);
         }
-        std::printf("] size=%zu capacity=%zu\n", values.size(),
-                    values.capacity());
+        std::printf("] size=%zu capacity=%zu\n", values.size(), values.capacity());
     }
 }  // namespace
 
@@ -37,16 +40,13 @@ int main() {
     print("created:", values);
 
     auto inserted = values.insert(values.begin() + 2, 30);
-    if (!succeeded(inserted, "insert") ||
-        !succeeded(values.push_back(50), "push_back"))
-    {
+    if (!succeeded(inserted, "insert") || !succeeded(values.push_back(50), "push_back")) {
         return 1;
     }
     print("expanded:", values);
 
     const int extra[] = {60, 70};
-    if (!succeeded(values.insert(values.end(), extra, extra + 2),
-                   "range insert") ||
+    if (!succeeded(values.insert(values.end(), extra, extra + 2), "range insert") ||
         !succeeded(values.erase(values.begin(), values.begin() + 2), "erase"))
     {
         return 1;
@@ -60,8 +60,7 @@ int main() {
 
     auto outside = values.at(values.size());
     if (!outside) {
-        std::printf("at(size) returned error code %u\n",
-                    static_cast<unsigned>(outside.error()));
+        std::printf("at(size) returned error code %u\n", static_cast<unsigned>(outside.error()));
     }
     return 0;
 }

@@ -1,12 +1,12 @@
 /**
  * @file cuchar
  * @author theflysong (song_of_the_fly@163.com)
- * @brief cuchar
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <cuchar> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-03-01
- * 
+ * @date 2026-08-02
+ *
  * @copyright Copyright (c) 2026
- * 
+ *
  */
 
 #pragma once
@@ -34,4 +34,4 @@ namespace std {
     struct hash<char16_t> : public __trival_hash<char16_t> {};
     template <>
     struct hash<char32_t> : public __trival_hash<char32_t> {};
-}
+}  // namespace std

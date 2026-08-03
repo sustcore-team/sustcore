@@ -1,9 +1,9 @@
 /**
  * @file source_location
  * @author theflysong (song_of_the_fly@163.com)
- * @brief source_location
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <source_location> 对应的受限兼容接口。
  * @version 0.1.0-dev.1
- * @date 2026-05-19
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
@@ -21,8 +21,7 @@ namespace std {
         const char* D_file_name;
         const char* D_function_name;
 
-        constexpr source_location(uint_least32_t line, uint_least32_t column,
-                                  const char* file_name,
+        constexpr source_location(uint_least32_t line, uint_least32_t column, const char* file_name,
                                   const char* function_name) noexcept
             : D_line(line),
               D_column(column),
@@ -31,16 +30,12 @@ namespace std {
 
     public:
         constexpr source_location() noexcept
-            : D_line(0),
-              D_column(0),
-              D_file_name(""),
-              D_function_name("") {}
+            : D_line(0), D_column(0), D_file_name(""), D_function_name("") {}
 
         [[nodiscard]]
         static constexpr source_location current(
-            uint_least32_t line = __builtin_LINE(),
-            uint_least32_t column = 0,
-            const char* file_name = __builtin_FILE(),
+            uint_least32_t line = __builtin_LINE(), uint_least32_t column = 0,
+            const char* file_name     = __builtin_FILE(),
             const char* function_name = __builtin_FUNCTION()) noexcept {
             return source_location(line, column, file_name, function_name);
         }

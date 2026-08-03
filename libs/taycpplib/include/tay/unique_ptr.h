@@ -1,17 +1,21 @@
 /**
  * @file unique_ptr.h
- * @brief Exclusive-ownership smart pointers for objects and arrays.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 提供对象和数组的独占所有权智能指针。
  * @version 0.1.0-dev.1
- * @date 2026-07-31
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
 
+#include <tay/owner.h>
+
 #include <cstddef>
 #include <type_traits>
 #include <utility>
-
-#include <tay/owner.h>
 
 namespace tay {
     template <typename T>
@@ -22,10 +26,8 @@ namespace tay {
      */
     template <typename T>
     class unique_ptr {
-        static_assert(!std::is_array_v<T>,
-                      "use tay::unique_ptr<T[]> for arrays");
-        static_assert(!std::is_void_v<T>,
-                      "tay::unique_ptr<void> is not supported");
+        static_assert(!std::is_array_v<T>, "use tay::unique_ptr<T[]> for arrays");
+        static_assert(!std::is_void_v<T>, "tay::unique_ptr<void> is not supported");
 
         template <typename U>
         friend class unique_ptr;
@@ -49,14 +51,11 @@ namespace tay {
         unique_ptr(const unique_ptr&)            = delete;
         unique_ptr& operator=(const unique_ptr&) = delete;
 
-        constexpr unique_ptr(unique_ptr&& other) noexcept
-            : ptr_(other.release()) {}
+        constexpr unique_ptr(unique_ptr&& other) noexcept : ptr_(other.release()) {}
 
         template <typename U>
-            requires(!std::is_array_v<U> &&
-                     std::is_convertible_v<U*, pointer>)
-        constexpr unique_ptr(unique_ptr<U>&& other) noexcept
-            : ptr_(other.release()) {}
+            requires(!std::is_array_v<U> && std::is_convertible_v<U*, pointer>)
+        constexpr unique_ptr(unique_ptr<U>&& other) noexcept : ptr_(other.release()) {}
 
         constexpr ~unique_ptr() {
             delete ptr_;
@@ -70,8 +69,7 @@ namespace tay {
         }
 
         template <typename U>
-            requires(!std::is_array_v<U> &&
-                     std::is_convertible_v<U*, pointer>)
+            requires(!std::is_array_v<U> && std::is_convertible_v<U*, pointer>)
         constexpr unique_ptr& operator=(unique_ptr<U>&& other) noexcept {
             reset(other.release());
             return *this;
@@ -153,21 +151,18 @@ namespace tay {
 
         template <typename U>
             requires std::is_convertible_v<U (*)[], T (*)[]>
-        constexpr explicit unique_ptr(owner<U*>&& ptr) noexcept
-            : ptr_(ptr.get()) {
+        constexpr explicit unique_ptr(owner<U*>&& ptr) noexcept : ptr_(ptr.get()) {
             ptr = owner<U*>{nullptr};
         }
 
         unique_ptr(const unique_ptr&)            = delete;
         unique_ptr& operator=(const unique_ptr&) = delete;
 
-        constexpr unique_ptr(unique_ptr&& other) noexcept
-            : ptr_(other.release()) {}
+        constexpr unique_ptr(unique_ptr&& other) noexcept : ptr_(other.release()) {}
 
         template <typename U>
             requires std::is_convertible_v<U (*)[], T (*)[]>
-        constexpr unique_ptr(unique_ptr<U[]>&& other) noexcept
-            : ptr_(other.release()) {}
+        constexpr unique_ptr(unique_ptr<U[]>&& other) noexcept : ptr_(other.release()) {}
 
         constexpr ~unique_ptr() {
             delete[] ptr_;
@@ -203,7 +198,7 @@ namespace tay {
         }
 
         [[nodiscard]]
-        constexpr element_type& operator[](std::size_t index) const noexcept {
+        constexpr element_type& operator[](size_t index) const noexcept {
             return ptr_[index];
         }
 
@@ -255,7 +250,7 @@ namespace tay {
     template <typename T>
         requires(std::is_array_v<T> && std::extent_v<T> == 0)
     [[nodiscard]]
-    unique_ptr<T> make_unique(std::size_t count) {
+    unique_ptr<T> make_unique(size_t count) {
         using element_type = typename unique_ptr<T>::element_type;
         return unique_ptr<T>{new element_type[count]()};
     }

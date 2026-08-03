@@ -1,6 +1,12 @@
 /**
  * @file functional
- * @brief Minimal callable utilities.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 为 freestanding C++ 环境提供与 C++ 标准 <functional> 对应的受限兼容接口。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
 #pragma once
@@ -13,25 +19,21 @@
 namespace std {
     template <typename F, typename... Args>
         requires requires(F&& function, Args&&... args) {
-            detail::invoke_impl(std::forward<F>(function),
-                                std::forward<Args>(args)...);
+            detail::invoke_impl(std::forward<F>(function), std::forward<Args>(args)...);
         }
     constexpr decltype(auto) invoke(F&& function, Args&&... args) noexcept(
-        noexcept(detail::invoke_impl(std::forward<F>(function),
-                                     std::forward<Args>(args)...))) {
-        return detail::invoke_impl(std::forward<F>(function),
-                                   std::forward<Args>(args)...);
+        noexcept(detail::invoke_impl(std::forward<F>(function), std::forward<Args>(args)...))) {
+        return detail::invoke_impl(std::forward<F>(function), std::forward<Args>(args)...);
     }
 
     template <typename R, typename F, typename... Args>
         requires is_invocable_r_v<R, F, Args...>
-    constexpr R invoke_r(F&& function, Args&&... args) noexcept(
-        is_nothrow_invocable_r_v<R, F, Args...>) {
+    constexpr R invoke_r(F&& function,
+                         Args&&... args) noexcept(is_nothrow_invocable_r_v<R, F, Args...>) {
         if constexpr (is_void_v<R>) {
             std::invoke(std::forward<F>(function), std::forward<Args>(args)...);
         } else {
-            return std::invoke(std::forward<F>(function),
-                               std::forward<Args>(args)...);
+            return std::invoke(std::forward<F>(function), std::forward<Args>(args)...);
         }
     }
 
@@ -75,8 +77,7 @@ namespace std {
                 requires totally_ordered_with<T, U>
             [[nodiscard]]
             constexpr bool operator()(T&& left, U&& right) const
-                noexcept(noexcept(std::forward<T>(left) <
-                                  std::forward<U>(right))) {
+                noexcept(noexcept(std::forward<T>(left) < std::forward<U>(right))) {
                 if constexpr (is_pointer_v<remove_reference_t<T>> &&
                               is_pointer_v<remove_reference_t<U>>)
                 {
@@ -86,11 +87,9 @@ namespace std {
 
                     using address_type = __UINTPTR_TYPE__;
                     return reinterpret_cast<address_type>(
-                               static_cast<const volatile void*>(
-                                   std::forward<T>(left))) <
+                               static_cast<const volatile void*>(std::forward<T>(left))) <
                            reinterpret_cast<address_type>(
-                               static_cast<const volatile void*>(
-                                   std::forward<U>(right)));
+                               static_cast<const volatile void*>(std::forward<U>(right)));
                 } else {
                     return std::forward<T>(left) < std::forward<U>(right);
                 }

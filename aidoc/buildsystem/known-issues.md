@@ -1,41 +1,35 @@
-# Known Issues And Current Limits
+# 已知问题与当前限制
 
-## `build-libs` Second Expansion
+## `build-libs` 的二次展开
 
-`libraries.mk` contains the global registry, while `build-libs.mk` contains
-the generated library build targets. Both are project configuration fragments
-included explicitly by the top-level Makefile.
+`libraries.mk` 包含全局注册表，`build-libs.mk` 包含生成的库构建目标。二者都是由顶层 Makefile 显式包含的项目配置片段。
 
-The `build-libs` target uses second expansion to select the right per-arch
-build target set. This area should be watched carefully whenever the include
-chain changes.
+`build-libs` 目标使用二次展开选择正确的架构专用构建目标集合。每当 include 链发生变化时，都应重点检查这一部分。
 
-## Library Model Limits
+## 库模型限制
 
-Current limits:
+当前限制：
 
-- `id` must remain globally unique
-- multiple versions under the same `id` are not supported
-- a single library-local `dependencies.toml` is shared by all `[[libmeta]]` entries in the same directory
+- `id` 必须在全局范围内保持唯一；
+- 不支持同一 `id` 下的多个版本；
+- 同一目录内的所有 `[[libmeta]]` 条目共享一个库局部 `dependencies.toml`。
 
-## Kernel Runtime Limits
+## 内核运行时限制
 
-The kernel build graph has been rebuilt, but runtime/link completeness is still
-in progress.
+内核构建图已经重建，但运行时和链接完整性仍在完善。
 
-Current weak spots include:
+当前薄弱部分包括：
 
-- C++ runtime integration
-- basecpp integration
-- final full-kernel source coverage
+- C++ 运行时集成；
+- basecpp 集成；
+- 最终的完整内核源文件覆盖。
 
-## Header Tree Refactor
+## 头文件树重构
 
-The project is currently reorganizing C and C++ standard header ownership
-between:
+项目当前正在以下目录之间重新组织 C/C++ 标准头文件的归属：
 
 - `include/std`
 - `third_party/include/std`
 - `libs/mincstd`
 
-Any work touching headers should assume this area is still evolving.
+任何涉及头文件的工作都应假定该部分仍在演进。

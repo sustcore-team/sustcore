@@ -1,13 +1,17 @@
 /**
  * @file owner.cpp
- * @brief Demonstrate explicit raw-pointer ownership with tay::owner.
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 演示 tay::owner 的原始指针所有权标注。
  * @version 0.1.0-dev.1
- * @date 2026-07-28
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
  */
 
-#include <cstdio>
-
 #include <tay/owner.h>
+
+#include <cstdio>
 
 namespace {
     struct record {

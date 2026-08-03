@@ -1,3 +1,14 @@
+/**
+ * @file itoa_test.c
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief 验证 Tay C 库整数到字符串转换的结果和边界条件。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-02
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -5,12 +16,13 @@
 
 static int failures;
 
-#define CHECK(condition) do { \
-    if (!(condition)) { \
-        fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition); \
-        ++failures; \
-    } \
-} while (0)
+#define CHECK(condition)                                                                  \
+    do {                                                                                  \
+        if (!(condition)) {                                                               \
+            fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition); \
+            ++failures;                                                                   \
+        }                                                                                 \
+    } while (0)
 
 static void check_result(char *result, char *buffer, const char *expected) {
     CHECK(result == buffer);
@@ -27,10 +39,8 @@ int main(void) {
     check_result(ltoa_s(LONG_MIN, buffer, sizeof(buffer), 10), buffer,
                  sizeof(long) == 8 ? "-9223372036854775808" : "-2147483648");
     check_result(ultoa_s(35ul, buffer, sizeof(buffer), 36), buffer, "z");
-    check_result(lltoa_s(LLONG_MIN, buffer, sizeof(buffer), 10), buffer,
-                 "-9223372036854775808");
-    check_result(ulltoa_s(ULLONG_MAX, buffer, sizeof(buffer), 16), buffer,
-                 "ffffffffffffffff");
+    check_result(lltoa_s(LLONG_MIN, buffer, sizeof(buffer), 10), buffer, "-9223372036854775808");
+    check_result(ulltoa_s(ULLONG_MAX, buffer, sizeof(buffer), 16), buffer, "ffffffffffffffff");
 
     memset(buffer, 'x', sizeof(buffer));
     CHECK(itoa_s(12345, buffer, 4, 10) == buffer);

@@ -1,15 +1,17 @@
 /**
  * @file algobase.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 基础算法
+ * @brief 提供 Tay C++ 库的基础算法实现集。
  * @version 0.1.0-dev.1
- * @date 2026-04-06
+ * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
  *
  */
 
 #pragma once
+
+#include <cstddef>
 
 namespace tay {
     /**
@@ -62,5 +64,20 @@ namespace tay {
     template <typename T>
     constexpr T clamp(const T& value, const T& low, const T& high) {
         return max(low, min(value, high));
+    }
+
+    /**
+     * @brief 确认 value 是否形如 2^n 的形式
+     *
+     * 2^n 一定形如 100...000, 因此 2^n - 1 一定形如 011...111, 因此 2^n & (2^n - 1) == 0
+     * 而当 v != 0 且 v ^ (v - 1) == 0 时, 若 v = 2^n + k (0 < k < 2^n), 则 v - 1 = 2^n + (k - 1)
+     * 则 (v & (v - 1)) = (2^n + k) & (2^n + (k - 1)) > 2^n 因此 v ^ (v - 1) == 0 时, v 必然为 2^n
+     *
+     * @param value v
+     * @return true   v == 2^n
+     * @return false  v != 2^n
+     */
+    constexpr bool is_power_of_two(size_t value) noexcept {
+        return value != 0 && (value & (value - 1)) == 0;
     }
 }  // namespace tay
