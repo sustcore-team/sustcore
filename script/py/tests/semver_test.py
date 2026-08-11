@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from semver import filter_matches, matches, parse_version
+from dependencies.semver import filter_matches, matches, parse_version
 
 
 class ParseVersionTests(unittest.TestCase):

@@ -11,7 +11,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import configure
+from commands import configure
 
 
 class ConfigureComponentContextTests(unittest.TestCase):
@@ -26,7 +26,25 @@ class ConfigureComponentContextTests(unittest.TestCase):
             try:
                 configure.generate("default")
                 self.assertTrue((cache_root / "ctx" / "lib-mini-cstd.mk").is_file())
-                self.assertTrue((cache_root / "ctx" / "module-init.mk").is_file())
+                self.assertTrue(
+                    (cache_root / "ctx" / "module-usrboot-image.mk").is_file()
+                )
+                self.assertTrue(
+                    (cache_root / "ctx" / "host-tool-mk-usrboot.mk").is_file()
+                )
+                host_tools_fragment = (cache_root / "host-tools.mk").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn(
+                    "host-tool-ids-all := mk-usrboot",
+                    host_tools_fragment,
+                )
+                self.assertIn(
+                    "host-tool-build-targets := build-hosttool-mk-usrboot",
+                    host_tools_fragment,
+                )
+                initrd_fragment = (cache_root / "initrd.mk").read_text(encoding="utf-8")
+                self.assertIn("initrd-module-ids := usrboot-image", initrd_fragment)
                 self.assertFalse((cache_root / "build-header-lib-mini-cstd.mk").exists())
                 self.assertFalse((cache_root / "deps-kernel.mk").exists())
 
@@ -61,6 +79,7 @@ class ConfigureComponentContextTests(unittest.TestCase):
                     encoding="utf-8"
                 )
                 self.assertIn("kernel-dep-ids-y +=", kernel_deps)
+                self.assertIn("usrboot", kernel_deps)
                 self.assertIn(
                     "kernel-dep-ids-$(is-riscv64) += sbi", kernel_deps
                 )

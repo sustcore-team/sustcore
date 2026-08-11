@@ -1,0 +1,6 @@
+[[progmeta]]
+id = "usrboot-image"
+makefile = "Makefile"
+target = "build"
+output = "module/usrboot"
+libc   = ""

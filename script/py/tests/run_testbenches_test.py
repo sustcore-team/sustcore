@@ -10,8 +10,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from libregistry import HostProgramMeta
-import run_testbenches
+from commands import run_testbenches
+from metadata.models import HostProgramMeta
 
 
 ROOT = Path(__file__).resolve().parents[3]

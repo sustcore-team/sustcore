@@ -57,7 +57,18 @@ target ?= $(kernel-path)
 
 `collect.mk` 只调用共享收集器。每个 `include.mk` 通过 `src-y` 和 `src-n` 声明所在目录的源文件；内核根目录直接拥有源文件时也遵循这一规则。`include.mk` 不得登记子目录路径，子目录必须用自己的 `include.mk` 声明源码。同一实现类别可以写在同一条 `src-y +=` 中，不同类别使用新的 `src-y +=` 行，但赋值行之间不留空行。
 
-内核 Makefile 通过 `component-config-mks` 和 `component-extra-objects` 提供架构变体文件与 initrd 附加对象，并在通用对象编译完成后只增加链接器和 objcopy 层。
+内核 Makefile 通过 `component-config-mks` 提供架构变体文件，并在通用对象编译完成后只增加链接器层。`build-kernel` 只依赖当前架构可见的库，不依赖 initrd。
+
+内核依赖公共的 `usrboot` 纯头文件库，以使用与 Host 转换器一致的 `usrboot_header` 和 `usrboot_segment` 文件格式定义。该依赖只导出头文件，不增加静态归档。
+
+Initrd 的输入由 `initrd/initrd.toml` 声明。`make configure` 通过
+`script/py/generators/initrd.py` 生成 `script/.cache/initrd.mk`，其中包含模块实际产物、普通文件和
+staging 路径的 Make 依赖及复制 recipe。`initrd.cpio` 由生成的 recipe 使用 GNU cpio
+的 `newc` 格式创建；Python 不再在构建阶段直接组装归档。归档先写入临时文件，再原子替换
+最终输出，因此未改变输入时不会重复生成。该归档是独立构建产物，不再通过 objcopy 转换为
+目标文件，也不再链接到内核镜像的 `.attach.initrd` 段。
+
+Usrboot 程序使用 owner ID `usrboot-image`，但最终输出路径仍为 `module/usrboot`。模块子构建先通过通用链接规则生成 `usrboot.elf`，再按需构建稳定路径下的 Host `mk-usrboot`，将 ELF 转换为最终 `usrboot`。当前 initrd 配置仍以 `/modules/usrboot` 收集该最终产物。
 
 当前活动源文件模型：
 

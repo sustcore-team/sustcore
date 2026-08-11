@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import build_libs
+from generators import build_libs
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,7 +30,10 @@ class BuildLibrariesFragmentTests(unittest.TestCase):
         self.assertNotIn("build-libs:", registry)
 
         self.assertIn(".PHONY:", build_targets)
-        self.assertIn("build-libs: $$(build-lib-targets)", build_targets)
+        self.assertIn(
+            "build-libs: build-hosttool $$(build-lib-targets)", build_targets
+        )
+        self.assertIn("build-lib-mini-cstd: build-hosttool", build_targets)
         self.assertIn(
             "build-lib-targets-$(is-freestanding-riscv64) +=", build_targets
         )

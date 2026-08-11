@@ -9,8 +9,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import resolve_deps
-from libregistry import scan_dependency_owners, scan_libraries
+from dependencies import resolver as resolve_deps
+from metadata.registry import scan_dependency_owners, scan_libraries
 
 
 ROOT = Path(__file__).resolve().parents[3]

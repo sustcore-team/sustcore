@@ -10,7 +10,11 @@ Host 命令负责验证本机 Clang 工具链、解析环境专用依赖，并�
 make configure config=custom
 make validate-host
 make validate-host host-arch=x86_64
+make build-hosttool
 make build-host-libs
+make build-host-tools
+make build-host-tool tool=hello-world
+make run-host-tool tool=hello-world
 make host-test [lib=tayclib] [sanitize=address,undefined]
 make example [lib=taycpplib]
 make host-example [lib=taycpplib]
@@ -50,9 +54,11 @@ build/<mode>/host/<host-triple>/obj/
 build/<mode>/host/<host-triple>/test/
 build/<mode>/host/<host-triple>/bench/
 build/<mode>/host/<host-triple>/example/
+build/<mode>/host/<host-triple>/host-tool/
+build/<mode>/host-tool/
 ```
 
-Freestanding 构建路径仍为 `build/<mode>/<arch>/`。共享 C++ 规则会在编译命令末尾强制加入且仅加入一个环境宏：`TAY_ENV_HOST=1` 或 `TAY_ENV_FREESTANDING=1`。
+Host triple 下的目录保存实际构建产物；构建工具还会通过临时文件和重命名原子发布到不包含 triple 的稳定目录，供 freestanding 子构建调用。Freestanding 构建路径仍为 `build/<mode>/<arch>/`。共享 C++ 规则会在编译命令末尾强制加入且仅加入一个环境宏：`TAY_ENV_HOST=1` 或 `TAY_ENV_FREESTANDING=1`。
 
 静态片段 `script/toolchain/c.mk`、`cpp.mk`、`ar.mk` 和 `ld.mk` 由两个环境共享。`toolchain/environment.mk` 把 `is-host`/`is-freestanding` 解析为 `y`/`n`；每个工具链片段通过这些计算变量名写入两个候选值，并只消费最终的 `y-toolchain-*` 值。验证后的 Host 值仍来自生成的 `script/.cache/host.mk`。
 
@@ -60,8 +66,11 @@ Sanitizer 构建使用 `build/<mode>/host/<host-triple>/sanitize/<profile>/`，�
 
 ## 命令语义
 
+- `build-hosttool` 依赖所有生成的 `build-hosttool-<id>`，是 freestanding 库、模块、initrd 和内核构建的统一前置阶段。Host 工具链、依赖与 Host 库在本轮构建中只准备一次。
 - `build-host-libs` 构建所有声明了静态库的 Host 变体。
 - `build-host-lib lib=<id>` 构建所选 Host 静态库；如果该 Host 变体是纯头文件库，则运行 Host 头文件检查。
+- `build-host-tools` 是 `build-hosttool` 的兼容别名，构建 `host-tool/` 下注册的全部本机构建工具。
+- `build-host-tool tool=<id>` 只构建指定工具；`run-host-tool tool=<id>` 构建后直接运行该工具。
 - `host-test` 构建并运行全部匹配的功能测试，包括 abort/stderr 断言。单个测试失败后仍会继续，为每个所选程序报告 `PASS`、`FAIL` 或 `SKIP`；只要有任一程序失败，汇总结果即失败。
 - `example` 构建全部匹配的演示程序，但不运行。
 - `host-example` 按顺序运行全部匹配的演示，包括声明的 abort/stderr 预期。
@@ -69,10 +78,33 @@ Sanitizer 构建使用 `build/<mode>/host/<host-triple>/sanitize/<profile>/`，�
 - `host-bench` 默认使用 release，并通过同一汇总运行器依次执行全部匹配的性能基准测试。
 - `host-header-check` 独立编译每个适用的公开头文件。
 - `freestanding-check` 执行已注册的目标编译/链接检查，不运行跨架构输出。
-- `update-host` 通过 Bear 捕获 Host 库以及全部测试、基准和示例翻译单元，但不运行可执行文件。
+- `update-host` 通过 Bear 捕获 Host 库、构建工具以及全部测试、基准和示例翻译单元，但不运行可执行文件。
 - `clangd-host` 和 `clangd-target` 选择稳定的 clangd 数据库，不改变持久化的目标构建选择。
 
 每条 Host 命令都会先验证工具链，再根据已验证的本机架构解析 `deps/host-<owner>.mk`，随后进入递归 Host 子 Make。这些步骤都不会更新 `.switch.mk`。
+
+## Host 构建工具
+
+独立构建工具位于 `host-tool/<name>/`，并通过 `metadata.toml` 注册：
+
+```toml
+[[hosttool]]
+id = "hello-world"
+makefile = "Makefile"
+target = "build"
+output = "hello-world"
+```
+
+工具目录可以提供可选的 `dependencies.toml`，其中只能解析支持 Host 环境的库。生成器会为每个工具写入 `host-tools.mk`、`ctx/host-tool-<id>.mk` 和按需生成的 `deps/host-<id>.mk`。工具 Makefile 可设置 `sources-c` 或 `sources-cpp`，再包含 `script/host/tool.mk` 复用组件编译和 Host 链接规则。
+
+`host-tool/hello-world` 是最小管线验证程序，运行后输出 `hello world`。`host-tool/mk-usrboot` 同时依赖 Host 可见的 `usrboot` 和 `elf` 纯头文件库，并使用同一元数据和构建接口注册。其调用格式为：
+
+```text
+mk-usrboot <input> -o <output>
+mk-usrboot -o <output> <input>
+```
+
+工具只接受一个 ELF64 little-endian 可执行文件，并要求恰好包含 RX、RW、RO 三类 `PT_LOAD` 段。转换结果先写入输出目录中的唯一临时文件，完整写入并同步后再原子替换最终路径。
 
 ## Testbench 布局
 

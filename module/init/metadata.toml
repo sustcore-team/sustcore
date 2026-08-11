@@ -1,6 +1,0 @@
-[[progmeta]]
-id = "init"
-makefile = "Makefile"
-target = "build"
-output = "module/init.mod"
-c-library = "kmod"

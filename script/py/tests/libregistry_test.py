@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import libregistry
+from metadata import registry as libregistry
 
 
 ROOT = Path(__file__).resolve().parents[3]

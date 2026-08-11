@@ -31,7 +31,9 @@
 - `libraries.mk`
 - `build-libs.mk`
 - `programs.mk`
+- `host-tools.mk`
 - `testbench.mk`
+- `initrd.mk`
 - `deps/<id>.mk`
 
 它们描述：
@@ -39,6 +41,8 @@
 - 全局库注册；
 - 生成的 `build-libs` 目标；
 - 模块 Makefile 和构建目标索引；
+- 本机构建工具的 Makefile、目标、输出路径和调度规则；
+- initrd 输入、模块产物依赖和 CPIO 组装 recipe；
 - 解析后的目标依赖集合；
 - Host 测试、基准测试和头文件检查的分派信息。
 
@@ -47,6 +51,7 @@
 - `ctx/lib-<id>.mk`
 - `ctx/module-<id>.mk`
 - `ctx/hostprog-<id>.mk`
+- `ctx/host-tool-<id>.mk`
 - `ctx/kernel.mk`
 
 每个上下文设置 `owner-id` 和 `owner-root`，并用 `?=` 提供 `obj-root` 和 `target` 默认值。构建索引通过 `ctx=` 把匹配的上下文传给组件子 Make，使这些通用变量只在单个组件中生效。
@@ -79,7 +84,9 @@ Host 验证还会生成 `host.mk`。该片段不通过 `config.mk` 包含；只�
 - 构建系统配置片段；
 - 库注册表片段；
 - 模块构建索引；
+- Host 工具注册表和构建上下文；
 - 组件构建上下文；
+- initrd 构建片段；
 - owner 依赖片段。
 
 一次配置会解析所有已知 freestanding 架构。因此，改变持久化的架构或模式不会重新生成依赖片段。旧式 `arch=` 和 `mode=` 参数仍会被接受，但只会给出警告，不会影响配置输出或 `.switch.mk`。
@@ -143,7 +150,7 @@ is-host-<native-arch>
 
 构建入口会诊断缺失或不完整的配置，并要求在 `cleandist` 后重新执行 `make configure`。
 
-`make update-host [mode=<mode>] [sanitize=<set>]` 会验证本机工具链、解析 Host 依赖，并通过 Bear 捕获全部 Host 库、测试和基准测试翻译单元，但不运行 testbench 可执行文件。输出为：
+`make update-host [mode=<mode>] [sanitize=<set>]` 会验证本机工具链、解析 Host 依赖，并通过 Bear 捕获全部 Host 库、构建工具和 testbench 翻译单元，但不运行这些可执行文件。输出为：
 
 ```text
 build/<mode>/host/<host-triple>/compile_commands.json

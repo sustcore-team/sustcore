@@ -9,10 +9,12 @@ endif
 -include $(path-cache)/libraries.mk
 -include $(path-cache)/build-libs.mk
 -include $(path-cache)/programs.mk
+-include $(path-cache)/host-tools.mk
 -include $(path-cache)/testbench.mk
+-include $(path-cache)/initrd.mk
 -include $(path-cache)/.configure.mk
 
-required-config-fragments := config.mk libraries.mk build-libs.mk programs.mk testbench.mk
+required-config-fragments := config.mk libraries.mk build-libs.mk programs.mk host-tools.mk testbench.mk initrd.mk
 missing-config-fragments = $(filter-out $(notdir $(wildcard $(addprefix $(path-cache)/,$(required-config-fragments)))),$(required-config-fragments))
 
 .PHONY: require-configured
@@ -26,7 +28,9 @@ require-freestanding-selection:
 	$(if $(filter $(mode),debug release),,$(error no supported build mode selected; run 'make switch arch=<arch> mode=<mode>'))
 
 build-libs build-modules build-initrd build-kernel runonly dbgonly update: require-configured require-freestanding-selection
-validate-host build-host-libs build-host-lib host-test example host-example bench host-bench: require-configured
+build-hosttool $(host-tool-build-targets): require-configured
+validate-host build-host-libs build-host-lib build-host-tools build-host-tool run-host-tool: require-configured
+host-test example host-example bench host-bench: require-configured
 host-header-check: require-configured
 freestanding-header-check freestanding-check check-lib build-lib-matrix: require-configured require-freestanding-selection
 
@@ -45,7 +49,7 @@ init: init-build-system
 	$(q)$(echo) "Initialization done!"
 
 .PHONY: build-kernel
-build-kernel: build-initrd
+build-kernel: build-hosttool build-libs
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile \
 		global-env=$(global-env) \
 		arch=$(arch) \

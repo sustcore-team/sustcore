@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import compile_commands
+from commands import compile_commands
 
 
 class CompileCommandsTests(unittest.TestCase):

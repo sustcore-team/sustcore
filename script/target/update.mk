@@ -45,7 +45,7 @@ update:
 		"mode=$(cached-mode)"
 	$(q)$(echo) "Updated compilation database: $(compile-commands-file)"
 
-_host-compdb: _build-host-libs $(addprefix host-program-,$(testbench-program-ids))
+_host-compdb: _build-host-libs $(addprefix host-tool-,$(host-tool-ids)) $(addprefix host-program-,$(testbench-program-ids))
 	$(q)$(echo) "All host compilation database inputs built"
 
 _update-host-compile-commands:
@@ -69,6 +69,8 @@ update-host:
 	$(q)$(MAKE) --no-print-directory validate-host
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 \
 		allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) _prepare-host-deps
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 \
+		allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) _prepare-host-tool-deps
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 \
 		allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) \
 		_update-host-compile-commands

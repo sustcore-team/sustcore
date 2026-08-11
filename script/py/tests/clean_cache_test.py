@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import clean_cache
+from commands import clean_cache
 
 
 class CleanCacheTests(unittest.TestCase):

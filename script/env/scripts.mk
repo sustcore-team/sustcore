@@ -3,7 +3,6 @@ s-switch := $(path-sp)/switch.py
 s-configure := $(path-sp)/configure.py
 s-clean-build := $(path-sp)/clean_build.py
 s-clean-cache := $(path-sp)/clean_cache.py
-s-initrd := $(path-sp)/initrd.py
 s-compile-commands := $(path-sp)/compile_commands.py
 s-host := $(path-sp)/host.py
 s-resolve-deps := $(path-sp)/resolve_deps.py

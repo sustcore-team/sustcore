@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import build_testbench
+from generators import build_testbench
 
 
 ROOT = Path(__file__).resolve().parents[3]

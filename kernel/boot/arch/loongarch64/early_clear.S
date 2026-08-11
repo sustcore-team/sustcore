@@ -9,7 +9,7 @@
  *
  */
 
-.section .init.text.early_clear, "ax", @progbits
+.section .init.text, "ax", @progbits
 .p2align 4
 .global __early_clear
 .type __early_clear, @function

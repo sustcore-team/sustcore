@@ -1,0 +1,17 @@
+# mk-usrboot Host 构建依赖。
+
+[[dependencies]]
+lib = "usrboot"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[dependencies]]
+lib = "elf"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[dependencies]]
+lib = "taycpplib"
+version = ">=0.1.0-dev.0 <0.1.0"
+
+[[dependencies]]
+lib = "tayclib"
+version = ">=0.1.0-dev.0 <0.1.0"

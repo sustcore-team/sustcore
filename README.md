@@ -63,7 +63,7 @@ make configure config=default
 make build-kernel
 ```
 
-`arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`configure` 会一次生成所有 freestanding 架构的依赖缓存；之后只需用 `make switch` 改变持久选择，不需要重新配置。`build-kernel` 会先构建当前架构可见的库和 initrd，再调用 `kernel/Makefile` 链接内核；只构建库时可使用 `make build-libs`。
+`arch` 可选 `riscv64` 或 `loongarch64`，`mode` 可选 `debug` 或 `release`。`configure` 会一次生成所有 freestanding 架构的依赖缓存；之后只需用 `make switch` 改变持久选择，不需要重新配置。`build-kernel` 会先构建当前架构可见的库，再调用 `kernel/Makefile` 链接内核；initrd 是由 `make build-initrd` 单独生成的独立产物。
 
 为 clangd 更新当前配置的编译数据库：
 
@@ -88,6 +88,26 @@ make clangd-target
 ```
 
 Host 数据库位于 `build/<mode>/host/<host-triple>/compile_commands.json`；sanitizer profile 会使用对应的隔离子目录。`clangd-host` 与 `clangd-target` 只原子替换稳定入口，不修改 `make switch` 保存的架构和模式。
+
+独立的本机构建工具位于 `host-tool/`，可整体构建、单独构建或直接运行：
+
+```sh
+make build-hosttool
+make build-host-tools
+make build-host-tool tool=hello-world
+make run-host-tool tool=hello-world
+```
+
+`build-hosttool` 是目标构建的统一 Host 工具前置阶段，聚合依赖全部
+`build-hosttool-<id>`。库、模块、initrd 和内核的 `build-*` 入口会自动先完成该阶段；
+`build-host-tools` 保留为兼容入口。
+
+`host-tool/hello-world` 用于验证该管线，运行后输出 `hello world`。工具的 Host triple 隔离产物位于 `build/<mode>/host/<host-triple>/host-tool/`，同时原子发布到 `build/<mode>/host-tool/`，供 freestanding 子构建使用。`mk-usrboot` 已通过该接口注册，可执行：
+
+```sh
+make build-host-tool tool=mk-usrboot
+build/debug/host-tool/mk-usrboot module.elf -o module.usrboot
+```
 
 ## 测试、示例与性能测试
 

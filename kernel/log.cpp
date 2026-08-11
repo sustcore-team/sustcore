@@ -11,10 +11,9 @@
 
 #include <arch/early_console.h>
 #include <log.h>
+#include <synchronized.h>
 
 #include <cstddef>
-
-#include "synchronized.h"
 
 namespace kernel::log {
     namespace {

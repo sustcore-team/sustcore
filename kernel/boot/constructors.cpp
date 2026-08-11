@@ -70,7 +70,7 @@ namespace __init {
 
         kernel::log::debug("C++ 初始化器已执行, 调用了 {} 个有效初始化器", __valid_initializer_cnt);
         if (__constructor_probe.magic_number() != CONSTRUCTOR_MAGIC) {
-            kernel::log::panic("C++ 初始化器魔数已损坏");
+            kernel::log::panic("C++ constructor probe 魔数损坏");
         }
     }
 

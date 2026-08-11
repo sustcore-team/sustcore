@@ -50,6 +50,8 @@ C/C++、链接和归档片段由 Host 与 freestanding 构建共享；验证后�
 
 这些文件只消费已经解析的变量，不决定目标类型、源文件发现方式或架构选择。
 
+`ld.mk` 和 `ar.mk` 分别通过 `ld-target ?= $(target)` 与 `ar-target ?= $(target)` 选择工具实际写入的产物。默认值保持普通链接和归档行为；需要转换格式的组件可以把工具输出指向中间文件，再单独生成最终 `target`。Usrboot 使用该机制先链接 `usrboot.elf`，随后由 Host 工具 `mk-usrboot` 生成最终 `usrboot`。
+
 ### `script/build`
 
 定义共享组件层：
@@ -62,12 +64,17 @@ C/C++、链接和归档片段由 Host 与 freestanding 构建共享；验证后�
 
 ### `script/py`
 
-包含生成器和解析器：
+Python 实现按职责分组：
 
-- 配置输出器；
-- 库注册表扫描器；
-- 依赖解析器；
-- SemVer 匹配器。
+- `commands/`：Make 调用的命令实现和流程协调；
+- `config_emitters/`：把 `config/<name>/*.toml` 转换为 Make 配置；
+- `generators/`：生成库、程序、testbench、组件上下文和 initrd 规则；
+- `metadata/`：元数据记录类型、扫描和字段校验；
+- `dependencies/`：依赖解析和 SemVer 范围匹配；
+- `make_support/`：Make 值转义、公共文件头和多行赋值；
+- `common/`：命令行参数、构建维度、仓库路径和原子文件发布。
+
+Make 仍通过 `script/py/configure.py` 等稳定路径启动命令。这些顶层文件仅为兼容入口，实际实现位于上述 package 中；内部代码不得依赖顶层兼容入口互相导入。
 
 ### 目标局部 Makefile
 
@@ -85,11 +92,12 @@ C/C++、链接和归档片段由 Host 与 freestanding 构建共享；验证后�
 1. `make switch` 保存 `arch/mode`。
 2. `make configure` 根据 TOML 和项目元数据生成缓存片段，以及所有 freestanding 架构的依赖。
 3. 顶层 Make 读取共享缓存片段。
-4. `build-libs` 为当前架构构建可见的静态库。
-5. `build-kernel` 调用 `kernel/Makefile`。
-6. `build-host-libs`、`host-test` 和 `bench` 使用验证后的本机工具链。
-7. `update-host` 捕获本机库和 testbench 的编译命令。
-8. `runonly` / `dbgonly` 启动 QEMU。
+4. `build-hosttool` 验证 Host 工具链并构建全部目标侧构建工具。
+5. `build-libs` 为当前架构构建可见的静态库；所有目标侧 `build-*` 入口均依赖 `build-hosttool`。
+6. `build-kernel` 调用 `kernel/Makefile`。
+7. `build-host-libs`、`build-host-tools`、`host-test` 和 `bench` 使用验证后的本机工具链。
+8. `update-host` 捕获本机库、构建工具和 testbench 的编译命令。
+9. `runonly` / `dbgonly` 启动 QEMU。
 
 Host 基础设施有意与目标构建流程分离。`make validate-host [host-arch=<arch>]` 验证配置的本机 Clang 工具链并生成 `script/.cache/host.mk`；它不会读取或更新 `make switch` 选择的架构。
 

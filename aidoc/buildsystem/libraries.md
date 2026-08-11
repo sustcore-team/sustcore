@@ -88,8 +88,8 @@ version = "0.2.0-dev.3+git.abc1234"
 
 共享注册表由以下脚本构建：
 
-- `script/py/libregistry.py`
-- `script/py/build_libs.py`
+- `script/py/metadata/registry.py`
+- `script/py/generators/build_libs.py`
 
 生成输出：
 
@@ -138,6 +138,8 @@ version = "0.2.0-dev.3+git.abc1234"
 component-root := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(component-root)/../../script/build/static-library.mk
 ```
+
+通用归档规则使用 `ar-target ?= $(target)`，因此普通静态库仍直接生成上下文中的 `target`；需要在最终发布前增加后处理的组件可以覆盖 `ar-target`，让归档器只生成中间产物。链接规则对应使用 `ld-target ?= $(target)`。覆盖变量只改变归档器或链接器写入的文件，组件 Makefile仍需为最终 `target` 声明后处理规则。
 
 源文件选择只能出现在 `include.mk` 中。收集器读取根目录和所有嵌套的 `include.mk`，按语言分类其中的 `src-y` 与 `src-n` 条目，并相对于组件根目录为嵌套路径添加前缀。每个 `include.mk` 只能登记其所在目录的源码，不得通过相对路径收集子目录；子目录应提供独立的 `include.mk`。同类源码可以合并在一条赋值中，不同实现类别应另起一条 `src-y +=` 或 `src-n +=`，但赋值行之间不留空行。
 

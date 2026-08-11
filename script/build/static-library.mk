@@ -8,7 +8,7 @@ include $(path-s)/toolchain/ar.mk
 include $(path-s)/rules/ar.mk
 
 .PHONY: build-static static-library-vars
-build-static: $(target)
+build-static: $(ar-target)
 
 static-library-vars: component-vars
-	$(q)$(echo) "archive=$(target)"
+	$(q)$(echo) "archive=$(ar-target)"

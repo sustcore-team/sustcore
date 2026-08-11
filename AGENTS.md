@@ -13,6 +13,7 @@
 - 仓库可能包含其他人的未提交修改。只处理当前任务涉及的文件，不覆盖或回退无关改动。
 - 代码修改后应执行与风险相称的构建和测试。仅修改 Markdown 文档时可不构建，但仍需检查格式、链接和差异。
 - 运行 QEMU 或等待型调试命令时必须使用 `timeout`，避免进程长期占用终端。
+- 不要畏惧于大规模重构代码. 当示意你进行代码重构时, 不要担心修改了大量行数, 也不要过于保守, 保留太多旧的代码的结构与实现细节, 而是确保重构后的代码更加简洁, 风格统一, 易于理解.
 
 ## 代码风格与接口约定
 
@@ -53,8 +54,12 @@
   - 为当前架构构建可见的库。
 - `make build-kernel`
   - 通过 `kernel/Makefile` 构建内核。
+- `make build-hosttool`
+  - 聚合构建全部 `build-hosttool-<id>`，并作为 freestanding 库、模块、initrd 和内核 `build-*` 入口的公共前置阶段。
 - `make build-host-libs` / `make build-host-lib lib=<id>`
   - 构建经过验证的本机静态库，或执行纯头文件库检查。
+- `make build-host-tools` / `make build-host-tool tool=<id>` / `make run-host-tool tool=<id>`
+  - 构建全部或指定的本机构建工具，或构建后直接运行指定工具。
 - `make host-test [lib=<id>]` / `make host-bench [lib=<id>]`
   - 构建并运行已注册的本机测试或基准测试。
 - `make example [lib=<id>]` / `make host-example [lib=<id>]`
@@ -68,7 +73,7 @@
 - `make update [arch=<arch>] [mode=<mode>]`
   - 通过 Bear 更新目标 compilation database，不改变 `make switch` 持久化的选择。
 - `make update-host [mode=<mode>] [sanitize=<set>]`
-  - 验证本机工具链并捕获 Host 库及 testbench 的编译命令，不运行测试或基准程序。
+  - 验证本机工具链并捕获 Host 库、构建工具及 testbench 的编译命令，不运行程序。
 - `make clangd-host` / `make clangd-target`
   - 在已经生成的 Host 与 freestanding 数据库之间切换稳定的 clangd 副本。
 - `make runonly`
@@ -102,11 +107,12 @@
 - `libraries.mk`
 - `build-libs.mk`
 - `programs.mk`
+- `host-tools.mk`
 - `testbench.mk`
 - `deps/*.mk`
 - `ctx/*.mk`
 
-这些文件描述全局库注册表、生成的库构建目标、程序与测试索引、组件上下文以及解析后的依赖。
+这些文件描述全局库注册表、生成的库构建目标、Host 工具、程序与测试索引、组件上下文以及解析后的依赖。
 
 注册表中的 `library-ids-all` 只用于跨环境校验和矩阵枚举。活动库列表、架构专用 CRT/链接字段、构建目标、host 程序和头文件检查通过 `is-host`、`is-freestanding`、`is-<arch>` 及组合选择器写入相应的 `*-y` 桶后再消费。
 
@@ -201,6 +207,7 @@ lib = "sbi"
 - Host 架构来自编译器 triple 和 `uname`，绝不取自 `make switch` 缓存的目标架构。
 - 验证后的 Host 输出位于 `build/<mode>/host/<host-triple>/`。
 - Host 依赖在工具链验证后，从公共段、环境段和本机架构段解析。
+- `host-tool/<name>/metadata.toml` 注册本机构建工具，输出位于 Host triple 下的 `host-tool/` 目录。
 - Sanitizer 配置使用 host triple 下相互隔离的子目录。
 - C++ 编译根据工具链环境只会收到 `TAY_ENV_HOST=1` 或 `TAY_ENV_FREESTANDING=1` 之一。
 
@@ -210,7 +217,7 @@ lib = "sbi"
 - 当前内核树相较历史仓库仍不完整。
 - C/C++ 运行时拆分仍在演进。
 - 同一库 `id` 下的多版本尚不受支持。
-- host 库、测试、示例、头文件检查、基准测试、sanitizer 和库矩阵应通过各自专用目标操作。
+- host 库、构建工具、测试、示例、头文件检查、基准测试、sanitizer 和库矩阵应通过各自专用目标操作。
 
 ## 文档索引
 

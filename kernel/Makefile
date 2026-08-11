@@ -10,27 +10,13 @@ include $(global-env)
 component-config-mks = \
 	$(owner-root)/variant.$(arch).mk \
 	$(owner-root)/enable.mk
-component-extra-objects = $(path-initrd-obj)
 include $(path-s)/build/component.mk
 
 link-script ?= $(boot-link-script)
 archives += $(component-dep-archives)
 
 include $(path-s)/toolchain/ld.mk
-
-riscv64-objcopy-output := elf64-littleriscv
-riscv64-objcopy-arch := riscv
-loongarch64-objcopy-output := elf64-loongarch
-loongarch64-objcopy-arch := loongarch
-
-comp-objcopy ?= llvm-objcopy
-
 include $(path-s)/rules/ld.mk
-
-$(path-initrd-obj): $(path-initrd)
-	$(q)$(mkdir) $(@D)
-	$(q)$(comp-objcopy) -I binary -O $($(arch)-objcopy-output) \
-		-B $($(arch)-objcopy-arch) --rename-section .data=.attach.initrd $< $@
 
 .PHONY: build kernel-vars
 build: $(target)

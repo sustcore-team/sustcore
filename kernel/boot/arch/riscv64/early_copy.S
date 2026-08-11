@@ -9,7 +9,7 @@
  *
  */
 
-.section .init.text.early_copy, "ax", @progbits
+.section .init.text, "ax", @progbits
 .p2align 4
 .global __early_copy
 .type __early_copy, @function

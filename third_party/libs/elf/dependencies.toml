@@ -1,7 +1,7 @@
-[[dependencies]]
+[[freestanding.dependencies]]
 lib = "gcc-cheaders"
 version = ">=0.1.0-dev.0 <0.1.0"
 
-[[dependencies]]
+[[freestanding.dependencies]]
 lib = "mini-cstd"
 version = ">=0.1.0-dev.0 <0.1.0"

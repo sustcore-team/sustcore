@@ -148,11 +148,6 @@ SECTIONS
         *(.srodata .srodata.*)
 
         . = ALIGN(4K);
-        s_initrd = .;
-        *(.attach.initrd)
-        e_initrd = .;
-
-        . = ALIGN(4K);
         e_rodata = .;
     }
 

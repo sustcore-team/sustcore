@@ -1,0 +1,7 @@
+# mk-usrboot Host 工具注册信息。
+
+[[hosttool]]
+id = "mk-usrboot"
+makefile = "Makefile"
+target = "build"
+output = "mk-usrboot"
