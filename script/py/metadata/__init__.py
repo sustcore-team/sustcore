@@ -1,6 +1,7 @@
 """Parse and validate project metadata."""
 
 from metadata.models import (
+    AttachmentMeta,
     FreestandingCheckMeta,
     HeaderCheckMeta,
     HostProgramMeta,
@@ -12,6 +13,7 @@ from metadata.models import (
 
 __all__ = (
     "FreestandingCheckMeta",
+    "AttachmentMeta",
     "HeaderCheckMeta",
     "HostProgramMeta",
     "HostToolMeta",

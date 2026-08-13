@@ -31,7 +31,7 @@ namespace memory::detail {
     tay::expected<void, tay::error_code> map_kernel_layout(KernelSpace &space) noexcept {
         const auto map_segment = [&space](char *begin, char *end, PageFlags flags) {
             if (begin == end)
-                return tay::expected<void, tay::error_code>{};
+                return tay::Ok();
             return space.map(reinterpret_cast<addr_t>(begin), kernel_symbol_paddr(begin),
                              static_cast<size_t>(end - begin), flags);
         };

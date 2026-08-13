@@ -1,6 +1,11 @@
 /**
  * @file kernel_mm.h
+ * @author theflysong (song_of_the_fly@163.com)
  * @brief 数据驱动的全局内核虚拟内存布局管理器。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-12
+ *
+ * @copyright Copyright (c) 2026
  */
 
 #pragma once
@@ -9,6 +14,7 @@
 #include <memory/virtual/page_flags.h>
 #include <sustcore/addr.h>
 #include <synchronized.h>
+#include <tay/counter.h>
 #include <tay/expected.h>
 #include <tay/list.h>
 
@@ -130,7 +136,7 @@ namespace memory {
             constexpr LayoutState() noexcept = default;
             kernel_layout_list kernel_layouts{};
             hhdm_layout_list hhdm_layouts{};
-            u64_t next_id = 1;
+            tay::counter<u64_t> ids{1};
         };
 
         static constexpr size_t BOOTSTRAP_HHDM_NODE_COUNT     = MAX_BOOTINFO_REGIONS + 1;

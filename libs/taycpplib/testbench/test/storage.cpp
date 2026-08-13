@@ -6,7 +6,6 @@
  * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
- *
  */
 
 #include <tay/algo/binary_search.h>
@@ -31,11 +30,11 @@ namespace {
     struct list_node {
         int value;
         list_hook list;
-        tay::intrusive_tree_hook<list_node> tree;
+        tay::compact_intrusive_tree_hook<list_node> tree;
     };
     using locate_list = tay::locate_member<list_node, list_hook, &list_node::list>;
-    using locate_tree =
-        tay::locate_member<list_node, tay::intrusive_tree_hook<list_node>, &list_node::tree>;
+    using locate_tree = tay::locate_member<list_node, tay::compact_intrusive_tree_hook<list_node>,
+                                           &list_node::tree>;
 
     int double_value(int value) noexcept {
         return value * 2;

@@ -9,11 +9,11 @@
  *
  */
 
+#include <log.h>
+
 namespace std {
     [[noreturn]] void __stdlib_assert_fail(const char *file, int line, const char *function,
-                                           const char *condition)
-    {
-        // kernel::log::panic("断言失败: {}, 位置 {}:{} ({})", condition, file, line, function);
-        while (true);
+                                           const char *condition) {
+        logger::panic("断言失败: {}, 位置 {}:{} ({})", condition, file, line, function);
     }
 }  // namespace std

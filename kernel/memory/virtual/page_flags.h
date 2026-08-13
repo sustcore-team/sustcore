@@ -14,6 +14,13 @@
 #include <tay/bits.h>
 
 namespace memory {
+    enum class FaultAccess : u8_t {
+        NONE,
+        READ,
+        WRITE,
+        EXECUTE,
+    };
+
     enum class CacheMode : u8_t {
         NORMAL,
         DEVICE,
@@ -26,6 +33,8 @@ namespace memory {
         bool user       = false;
         bool global     = false;
         CacheMode cache = CacheMode::NORMAL;
+
+        [[nodiscard]] constexpr bool operator==(const PageFlags &) const noexcept = default;
     };
 
     struct PageMapping {

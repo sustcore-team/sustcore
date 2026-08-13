@@ -1,18 +1,21 @@
 /**
  * @file kinit.cpp
- * @brief kinit 与双 worker 的协作式 FIFO 调度验证
+ * @brief kinit 与多个 worker 的协作式 FIFO 调度验证
  */
 
 #include <init/kinit.h>
 #include <log.h>
+#include <obj/process.h>
+#include <obj/thread.h>
 #include <scheduler/scheduler.h>
-#include <task/thread.h>
 
 #include <cstddef>
+#include <utility>
 
 namespace init {
     namespace {
-        constexpr size_t PARTICIPANT_COUNT = 3;
+        constexpr size_t WORKER_COUNT      = 8;
+        constexpr size_t PARTICIPANT_COUNT = WORKER_COUNT + 1;
         constexpr size_t ITERATION_COUNT   = 10;
 
         struct TestState final {
@@ -51,31 +54,53 @@ namespace init {
 
     [[noreturn]] void run_kinit() noexcept {
         TestState state{};
-        WorkerArgument worker_arguments[2]{
-            WorkerArgument{&state, 1, "worker-1"},
-            WorkerArgument{&state, 2, "worker-2"},
+        constexpr const char *WORKER_NAMES[WORKER_COUNT] = {
+            "worker-1", "worker-2", "worker-3", "worker-4",
+            "worker-5", "worker-6", "worker-7", "worker-8",
         };
+        WorkerArgument worker_arguments[WORKER_COUNT]{};
+        cap::ObjectRef<task::Thread> workers[WORKER_COUNT]{};
 
-        auto kinit       = task::Thread::adopt_current();
+        auto initialized_process = task::initialize_kernel_process();
+        if (!initialized_process)
+            kernel::log::panic("无法初始化 kernel_process: {}",
+                               tay::to_string(initialized_process.error()));
+        auto kinit       = task::Thread::adopt_current(task::kernel_process());
         auto initialized = scheduler::instance().initialize(kinit);
         if (!initialized)
             kernel::log::panic("无法初始化 FIFO 调度器: {}", tay::to_string(initialized.error()));
 
-        auto worker1 = task::Thread::create_kernel(worker_entry, &worker_arguments[0]);
-        auto worker2 = task::Thread::create_kernel(worker_entry, &worker_arguments[1]);
-        if (!worker1 || !worker2)
-            kernel::log::panic("无法创建 FIFO worker: worker-1={}, worker-2={}",
-                               worker1 ? "OK" : tay::to_string(worker1.error()),
-                               worker2 ? "OK" : tay::to_string(worker2.error()));
+        auto usrboot = start_usrboot();
+        if (!usrboot)
+            kernel::log::panic("usrboot 启动失败: {}", tay::to_string(usrboot.error()));
 
-        auto resumed1 = scheduler::instance().resume(**worker1);
-        auto resumed2 = scheduler::instance().resume(**worker2);
-        if (!resumed1 || !resumed2)
-            kernel::log::panic("无法发布 FIFO worker");
+        for (size_t index = 0; index < WORKER_COUNT; ++index) {
+            worker_arguments[index] = WorkerArgument{&state, index + 1, WORKER_NAMES[index]};
+            auto worker = task::Thread::create_kernel(task::kernel_process(), worker_entry,
+                                                      &worker_arguments[index]);
+            if (!worker)
+                kernel::log::panic("无法创建 FIFO worker {}: {}", index + 1,
+                                   tay::to_string(worker.error()));
+            workers[index] = std::move(*worker);
+            if (auto resumed = scheduler::instance().resume(*workers[index]); !resumed)
+                kernel::log::panic("无法发布 FIFO worker {}: {}", index + 1,
+                                   tay::to_string(resumed.error()));
+        }
 
         run_participant(state, 0, "kinit");
 
-        while (!(*worker1)->exited() || !(*worker2)->exited()) scheduler::yield();
+        for (;;) {
+            bool all_exited = true;
+            for (const auto &worker : workers) {
+                if (!worker->exited()) {
+                    all_exited = false;
+                    break;
+                }
+            }
+            if (all_exited)
+                break;
+            scheduler::yield();
+        }
 
         for (size_t participant = 0; participant < PARTICIPANT_COUNT; ++participant) {
             if (state.completed[participant] != ITERATION_COUNT)
@@ -85,9 +110,8 @@ namespace init {
         if (state.expected_participant != 0)
             kernel::log::panic("FIFO 调度测试结束状态错误");
 
-        worker1->reset();
-        worker2->reset();
-        kernel::log::info("FIFO 调度测试通过: kinit 与两个 worker 各运行 {} 次", ITERATION_COUNT);
+        for (auto &worker : workers) worker.reset();
+        kernel::log::info("FIFO 调度测试通过: kinit 与八个 worker 各运行 {} 次", ITERATION_COUNT);
         kernel::log::halt();
     }
 }  // namespace init

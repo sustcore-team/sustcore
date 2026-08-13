@@ -26,6 +26,7 @@ include $(path-s)/env/$(y-component-buildpath).mk
 
 include $(ctx)
 include $(path-cache)/libraries.mk
+-include $(path-cache)/attachments.mk
 
 component-root ?= $(owner-root)
 component-dependency-owner ?= $(owner-id)
@@ -68,7 +69,8 @@ objects-asm := $(addprefix $(obj-root)/,$(sources-asm:.S=.o))
 objects-c := $(addprefix $(obj-root)/,$(sources-c:.c=.o))
 objects-cpp := $(addprefix $(obj-root)/,$(sources-cpp:.cpp=.o))
 component-extra-objects ?=
-objects := $(objects-asm) $(objects-c) $(objects-cpp) $(component-extra-objects)
+component-attachment-objects := $($(owner-id)-attachment-objects)
+objects := $(objects-asm) $(objects-c) $(objects-cpp) $(component-extra-objects) $(component-attachment-objects)
 deps := $(filter %.d,$(objects:.o=.d))
 
 component-languages := \

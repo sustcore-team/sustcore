@@ -7,5 +7,5 @@ src="README.md"
 dst="readme.md"
 
 [[initrd.module]]
-mod="usrboot-image"
+mod="usrboot"
 dst="/modules/usrboot"

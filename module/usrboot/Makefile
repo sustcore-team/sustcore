@@ -4,6 +4,7 @@ component-repo-root := $(abspath $(component-root)/../..)
 include $(component-repo-root)/script/build/component.mk
 
 include $(path-s)/toolchain/ld.mk
+include $(path-s)/rules/attachment.mk
 link-script := $(owner-root)/arch/$(arch)/usrboot.ld
 include $(path-s)/rules/program-ld.mk
 ld-target := $(target).elf

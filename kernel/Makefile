@@ -16,6 +16,7 @@ link-script ?= $(boot-link-script)
 archives += $(component-dep-archives)
 
 include $(path-s)/toolchain/ld.mk
+include $(path-s)/rules/attachment.mk
 include $(path-s)/rules/ld.mk
 
 .PHONY: build kernel-vars

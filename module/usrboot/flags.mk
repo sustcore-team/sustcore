@@ -12,5 +12,6 @@ flags-asm += -fno-pic -fno-asynchronous-unwind-tables
 endif
 
 macros-c +=
-macros-cpp +=
+macros-cpp += $(if $(filter riscv64,$(arch)),-D__ARCH_RISCV64__)
+macros-cpp += $(if $(filter loongarch64,$(arch)),-D__ARCH_LOONGARCH64__)
 macros-asm +=

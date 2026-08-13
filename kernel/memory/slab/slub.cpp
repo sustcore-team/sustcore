@@ -10,7 +10,7 @@
  */
 
 #include <log.h>
-#include <memory/physical/page_database.h>
+#include <memory/physical/gfp.h>
 #include <memory/slab/slub.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
@@ -39,18 +39,6 @@ namespace memory::detail {
 
         [[nodiscard]] constexpr addr_t align_down_address(addr_t value, size_t alignment) noexcept {
             return value & ~(alignment - 1);
-        }
-
-        [[nodiscard]] bool claim_heap_pages(const PageAllocation &allocation) noexcept {
-            return page_database().claim(
-                PhyArea(allocation.base, allocation.base + allocation.pages * PAGE_SIZE),
-                PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER);
-        }
-
-        void release_heap_pages(const PageAllocation &allocation) noexcept {
-            page_database().release(
-                PhyArea(allocation.base, allocation.base + allocation.pages * PAGE_SIZE),
-                PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER);
         }
 
         void debug_fill(void *ptr, size_t sz, u8_t value) noexcept {
@@ -159,34 +147,29 @@ namespace memory::detail {
     tay::expected<void *, tay::error_code> allocate_large(size_t sz, size_t alignment,
                                                           SlubCore *owner) noexcept {
         if (sz == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0) {
-            return tay::expected<void *, tay::error_code>(tay::unexpect,
-                                                          tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
         const bool overaligned = alignment >= SLUB_CHUNK_SZ;
         const size_t prefix_sz = overaligned ? sizeof(OveralignedPrefix) : 0;
         if (sz > static_cast<size_t>(-1) - alignment - sizeof(AllocationHeader) - prefix_sz) {
-            return tay::expected<void *, tay::error_code>(
-                tay::unexpect, tay::error_code::ALLOCATION_SIZE_OVERFLOW);
+            return tay::Err(tay::error_code::ALLOCATION_SIZE_OVERFLOW);
         }
 
         const size_t bytes = sizeof(AllocationHeader) + prefix_sz + sz + alignment - 1;
         const size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
-        auto allocation    = buddy()->try_get_free_pages(pages, CHUNK_PAGES);
+        auto allocation    = gfp(pages, CHUNK_PAGES, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER);
         if (!allocation) {
-            return tay::expected<void *, tay::error_code>(tay::unexpect, allocation.error());
-        }
-        if (!claim_heap_pages(*allocation)) {
-            buddy()->put_pages(*allocation);
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(allocation.error());
         }
 
-        auto *header = reinterpret_cast<AllocationHeader *>(PA2KPA(allocation->base.arith()));
+        auto *header = reinterpret_cast<AllocationHeader *>(PA2KPA(allocation->base().arith()));
+        const auto extent = allocation->detach();
         // 分配得到的是原始页，在页首显式构造用于释放和容量查询的元数据对象。
         new (header) AllocationHeader{
             .magic   = ALLOCATION_MAGIC,
             .kind    = AllocationKind::LARGE,
             .owner   = owner,
-            .extent  = *allocation,
+            .extent  = extent,
             .slot_sz = sz,
         };
         const auto object_address =
@@ -198,7 +181,7 @@ namespace memory::detail {
                 reinterpret_cast<OveralignedPrefix *>(object_address - sizeof(OveralignedPrefix));
             new (prefix) OveralignedPrefix{OVERALIGNED_MAGIC, header};
         }
-        const auto extent_end = reinterpret_cast<addr_t>(header) + allocation->pages * PAGE_SIZE;
+        const auto extent_end = reinterpret_cast<addr_t>(header) + extent.pages * PAGE_SIZE;
         header->capacity      = extent_end - object_address;
         debug_fill(object, sz, 0xA5);
         return object;
@@ -211,23 +194,19 @@ namespace memory::detail {
         const auto allocation = header.extent;
         debug_fill(ptr, header.capacity, 0xDD);
         header.magic = 0;
-        release_heap_pages(allocation);
-        buddy()->put_pages(allocation);
+        OwnedPages::resume(allocation, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER).release();
     }
 
     SlubChunk *SlubCore::create_chunk() noexcept {
-        auto allocation = buddy()->try_get_free_pages(CHUNK_PAGES, CHUNK_PAGES);
+        auto allocation = gfp(CHUNK_PAGES, CHUNK_PAGES, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER);
         if (!allocation)
             return nullptr;
-        if (!claim_heap_pages(*allocation)) {
-            buddy()->put_pages(*allocation);
-            return nullptr;
-        }
 
-        auto *chunk = reinterpret_cast<SlubChunk *>(PA2KPA(allocation->base.arith()));
+        auto *chunk       = reinterpret_cast<SlubChunk *>(PA2KPA(allocation->base().arith()));
+        const auto extent = allocation->detach();
         new (chunk) SlubChunk{};
         chunk->allocation.owner    = this;
-        chunk->allocation.extent   = *allocation;
+        chunk->allocation.extent   = extent;
         chunk->allocation.slot_sz  = slot_sz_;
         chunk->allocation.capacity = slot_sz_;
 
@@ -527,8 +506,7 @@ namespace memory::detail {
             allocation = state->detach_excess_empty(chunk);
         }
         if (allocation) {
-            release_heap_pages(allocation);
-            buddy()->put_pages(allocation);
+            OwnedPages::resume(allocation, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER).release();
         }
     }
 
@@ -547,8 +525,7 @@ namespace memory::detail {
             }
             if (!allocation)
                 break;
-            release_heap_pages(allocation);
-            buddy()->put_pages(allocation);
+            OwnedPages::resume(allocation, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER).release();
         }
     }
 

@@ -9,7 +9,7 @@
  */
 
 #include <arch/csr.h>
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 #include <arch/loongarch64/pagedef.h>
 #include <arch/loongarch64/paging.h>
 #include <memory/virtual/kernel/kernel_space.h>

@@ -13,7 +13,6 @@
 .type _start, @function
 .extern __early_main
 _start:
-    la.local $sp, __usrboot_stack_top
     bl       __early_main
 
 .Lhalt:

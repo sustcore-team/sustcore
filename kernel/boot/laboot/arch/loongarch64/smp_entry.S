@@ -11,7 +11,7 @@
 
 /* 常驻 LABOOT AP 入口。兼容固件通过 MBUF1 传入 SecondaryStartupData
  * 的物理地址。 */
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 
 .section .text.smp_entry, "ax", @progbits
 .global laboot_secondary_trampoline

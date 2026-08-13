@@ -251,14 +251,12 @@ namespace memory {
 
     tay::expected<addr_t, tay::error_code> Buddy::allocate_block(size_t order) noexcept {
         if (order > MAX_ORDER) {
-            return tay::expected<addr_t, tay::error_code>(tay::unexpect,
-                                                          tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
         size_t found = order;
         while (found <= MAX_ORDER && free_[found] == nullptr) ++found;
         if (found > MAX_ORDER) {
-            return tay::expected<addr_t, tay::error_code>(tay::unexpect,
-                                                          tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(tay::error_code::OUT_OF_MEMORY);
         }
 
         auto *block           = free_[found];
@@ -298,7 +296,7 @@ namespace memory {
         ensure_descriptor_capacity();
         auto result = allocate_block(order);
         if (!result) {
-            return tay::expected<PageAllocation, tay::error_code>(tay::unexpect, result.error());
+            return tay::Err(result.error());
         }
         return PageAllocation{PhyAddr(*result), size_t{1} << order};
     }
@@ -306,20 +304,18 @@ namespace memory {
     tay::expected<PageAllocation, tay::error_code> Buddy::try_get_free_pages(
         size_t pages, size_t alignment_pages) noexcept {
         if (pages == 0 || alignment_pages == 0 || (alignment_pages & (alignment_pages - 1)) != 0) {
-            return tay::expected<PageAllocation, tay::error_code>(
-                tay::unexpect, tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
         const size_t allocation_order =
             ceil_order(pages > alignment_pages ? pages : alignment_pages);
         if (allocation_order > MAX_ORDER) {
-            return tay::expected<PageAllocation, tay::error_code>(tay::unexpect,
-                                                                  tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(tay::error_code::OUT_OF_MEMORY);
         }
 
         ensure_descriptor_capacity();
         auto result = allocate_block(allocation_order);
         if (!result) {
-            return tay::expected<PageAllocation, tay::error_code>(tay::unexpect, result.error());
+            return tay::Err(result.error());
         }
         const size_t allocated_pages = size_t{1} << allocation_order;
         if (allocated_pages > pages) {

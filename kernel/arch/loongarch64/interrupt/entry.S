@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 #include <arch/loongarch64/interrupt/offsets.h>
 
     .section .text.trap.early, "ax", @progbits
@@ -25,13 +25,28 @@ _loongarch_early_trap_entry:
     .align 12
     .global _loongarch_runtime_trap_entry
 _loongarch_runtime_trap_entry:
-    # 先在当前内核栈构造 TrapFrame；原 sp 由分配后的新 sp 反推保存。
+    # 用户 trap 通过 SAVE0 切换到 Thread 内核栈；内核 trap 保持当前栈。
+    csrwr $sp, CSR_SAVE0
+    bnez $sp, .Lloongarch_user_trap
+    csrwr $sp, CSR_SAVE0
+    b .Lloongarch_stack_ready
+.Lloongarch_user_trap:
+    addi.d $sp, $sp, -LA_TF_SIZE
+    st.d $r1, $sp, LA_TF_RA
+    st.d $r2, $sp, LA_TF_TP
+    st.d $r12, $sp, LA_TF_T0
+    csrrd $r12, CSR_SAVE0
+    st.d $r12, $sp, LA_TF_SP
+    csrwr $zero, CSR_SAVE0
+    b .Lloongarch_save_rest
+.Lloongarch_stack_ready:
     addi.d $sp, $sp, -LA_TF_SIZE
     st.d $r1, $sp, LA_TF_RA
     st.d $r2, $sp, LA_TF_TP
     st.d $r12, $sp, LA_TF_T0
     addi.d $r12, $sp, LA_TF_SIZE
     st.d $r12, $sp, LA_TF_SP
+.Lloongarch_save_rest:
     st.d $r4, $sp, LA_TF_A0
     st.d $r5, $sp, LA_TF_A1
     st.d $r6, $sp, LA_TF_A2
@@ -74,6 +89,11 @@ _loongarch_runtime_trap_entry:
     csrwr $r12, CSR_ERA
     ld.d $r12, $sp, LA_TF_PRMD
     csrwr $r12, CSR_PRMD
+    andi $r12, $r12, PRMD_PPLV_MASK
+    beqz $r12, .Lloongarch_save0_ready
+    addi.d $r12, $sp, LA_TF_SIZE
+    csrwr $r12, CSR_SAVE0
+.Lloongarch_save0_ready:
     ld.d $r1, $sp, LA_TF_RA
     ld.d $r2, $sp, LA_TF_TP
     ld.d $r4, $sp, LA_TF_A0

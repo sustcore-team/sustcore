@@ -1,7 +1,7 @@
 /**
- * @file csrnum.h
+ * @file valdef.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief LoongArch 控制状态寄存器编号与位域定义
+ * @brief LoongArch 常量定义
  * @version 0.1.0-dev.1
  * @date 2026-06-15
  *
@@ -144,11 +144,13 @@
 #define EUEN_SXE  (1UL << 1)
 #define EUEN_ASXE (1UL << 2)
 
-#define ESTAT_IS_SHIFT    0
-#define ESTAT_IS_MASK     0x1fffUL
-#define ESTAT_ECODE_SHIFT 16
-#define ESTAT_ECODE_MASK  0x3fUL
-#define ECFG_VS_MASK      (0x7UL << 16)
+#define ESTAT_IS_SHIFT       0
+#define ESTAT_IS_MASK        0x1fffUL
+#define ESTAT_ECODE_SHIFT    16
+#define ESTAT_ECODE_MASK     0x3fUL
+#define ESTAT_ESUBCODE_SHIFT 22
+#define ESTAT_ESUBCODE_MASK  0x1ffUL
+#define ECFG_VS_MASK         (0x7UL << 16)
 
 #define ECODE_INT  0
 #define ECODE_SYS  0xb

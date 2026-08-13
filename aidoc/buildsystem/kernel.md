@@ -37,7 +37,9 @@ $(MAKE) -f $(path-e)/kernel/Makefile \
 kernel-path ?= $(path-bin)/kernel/sustcore.bin
 ```
 
-`make configure` 为固定 owner `kernel` 生成 `ctx/kernel.mk`。内核子 Make 从该上下文取得根目录、对象目录和目标：
+`make configure` 从 `kernel/metadata.toml` 的 `[[kernelmeta]]` 生成 `ctx/kernel.mk`。Kernel metadata
+与模块的 `[[progmeta]]` 使用相同的 makefile、target、output 字段，但不允许 libc 字段。内核子
+Make 从该上下文取得根目录、对象目录和目标：
 
 ```make
 owner-id := kernel
@@ -59,7 +61,7 @@ target ?= $(kernel-path)
 
 内核 Makefile 通过 `component-config-mks` 提供架构变体文件，并在通用对象编译完成后只增加链接器层。`build-kernel` 只依赖当前架构可见的库，不依赖 initrd。
 
-内核依赖公共的 `usrboot` 纯头文件库，以使用与 Host 转换器一致的 `usrboot_header` 和 `usrboot_segment` 文件格式定义。该依赖只导出头文件，不增加静态归档。
+内核依赖公共的 `libusrboot` 纯头文件库，以使用与 Host 转换器一致的 `usrboot_header` 和 `usrboot_segment` 文件格式定义。该依赖只导出头文件，不增加静态归档。
 
 Initrd 的输入由 `initrd/initrd.toml` 声明。`make configure` 通过
 `script/py/generators/initrd.py` 生成 `script/.cache/initrd.mk`，其中包含模块实际产物、普通文件和
@@ -68,7 +70,7 @@ staging 路径的 Make 依赖及复制 recipe。`initrd.cpio` 由生成的 recip
 最终输出，因此未改变输入时不会重复生成。该归档是独立构建产物，不再通过 objcopy 转换为
 目标文件，也不再链接到内核镜像的 `.attach.initrd` 段。
 
-Usrboot 程序使用 owner ID `usrboot-image`，但最终输出路径仍为 `module/usrboot`。模块子构建先通过通用链接规则生成 `usrboot.elf`，再按需构建稳定路径下的 Host `mk-usrboot`，将 ELF 转换为最终 `usrboot`。当前 initrd 配置仍以 `/modules/usrboot` 收集该最终产物。
+Usrboot 程序使用 owner ID `usrboot`，最终输出路径为 `module/usrboot`。模块子构建先通过通用链接规则生成 `usrboot.elf`，再按需构建稳定路径下的 Host `mk-usrboot`，将 ELF 转换为最终 `usrboot`。当前 initrd 配置以 `/modules/usrboot` 收集该最终产物。共享格式头文件由 `libusrboot` 提供。
 
 当前活动源文件模型：
 
@@ -105,6 +107,20 @@ Usrboot 程序使用 owner ID `usrboot-image`，但最终输出路径仍为 `mod
 - `includes-c += ...`
 - `includes-cpp += ...`
 - `includes-asm += ...`
+
+Owner metadata 还可以声明二进制附件：
+
+```toml
+[attach]
+[[attach.module]]
+mod = "usrboot"
+segment = ".rodata.usrboot"
+```
+
+configure 会生成附件依赖片段，并将附件 object 注入 kernel 或 module 的 `objects` 列表。
+`script/rules/attachment.mk` 通过通用的 binary-to-ELF 规则生成 relocatable object，输入依赖
+模块最终产物，section 名由 metadata 显式指定。usrboot attachment 作为只读输入节被内核
+链接脚本收集到 `.rodata`，其镜像范围由 `s_usrboot` 与 `e_usrboot` 表征。
 
 ## 当前状态
 

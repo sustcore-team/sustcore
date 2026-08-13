@@ -24,10 +24,10 @@ class ConfigureComponentContextTests(unittest.TestCase):
             configure.CACHE_ROOT = cache_root
             configure.CONFIG_CACHE = cache_root / ".configure.mk"
             try:
-                configure.generate("default")
+                configure.generate("custom")
                 self.assertTrue((cache_root / "ctx" / "lib-mini-cstd.mk").is_file())
                 self.assertTrue(
-                    (cache_root / "ctx" / "module-usrboot-image.mk").is_file()
+                    (cache_root / "ctx" / "module-usrboot.mk").is_file()
                 )
                 self.assertTrue(
                     (cache_root / "ctx" / "host-tool-mk-usrboot.mk").is_file()
@@ -44,7 +44,11 @@ class ConfigureComponentContextTests(unittest.TestCase):
                     host_tools_fragment,
                 )
                 initrd_fragment = (cache_root / "initrd.mk").read_text(encoding="utf-8")
-                self.assertIn("initrd-module-ids := usrboot-image", initrd_fragment)
+                self.assertIn("initrd-module-ids := usrboot", initrd_fragment)
+                attachment_fragment = (cache_root / "attachments.mk").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("kernel-attachment-objects", attachment_fragment)
                 self.assertFalse((cache_root / "build-header-lib-mini-cstd.mk").exists())
                 self.assertFalse((cache_root / "deps-kernel.mk").exists())
 
@@ -91,19 +95,19 @@ class ConfigureComponentContextTests(unittest.TestCase):
     def test_arch_and_mode_arguments_are_accepted_but_ignored(self) -> None:
         self.assertEqual(
             configure.parse_arguments(
-                ["config=default", "arch=riscv64", "mode=release"]
+                ["config=custom", "arch=riscv64", "mode=release"]
             ),
-            ("default", ("arch", "mode")),
+            ("custom", ("arch", "mode")),
         )
 
         stderr = StringIO()
         with mock.patch.object(configure, "generate") as generate, redirect_stderr(stderr):
             result = configure.main(
-                ["config=default", "arch=loongarch64", "mode=debug"]
+                ["config=custom", "arch=loongarch64", "mode=debug"]
             )
 
         self.assertEqual(result, 0)
-        generate.assert_called_once_with("default")
+        generate.assert_called_once_with("custom")
         self.assertIn("warning: arch= is ignored", stderr.getvalue())
         self.assertIn("warning: mode= is ignored", stderr.getvalue())
 

@@ -252,7 +252,7 @@ namespace memory {
         [[nodiscard]] tay::expected<T *, tay::error_code> try_allocate() noexcept {
             auto result = storage_.try_allocate();
             if (!result) {
-                return tay::expected<T *, tay::error_code>(tay::unexpect, result.error());
+                return tay::Err(result.error());
             }
             return static_cast<T *>(*result);
         }

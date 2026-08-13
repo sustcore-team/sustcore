@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 #include <boot/laboot/arch/loongarch64/bootinfo.h>
 
     .section .laboot.text, "ax", @progbits

@@ -7,6 +7,7 @@
  *
  * @copyright Copyright (c) 2026
  */
+
 #pragma once
 
 #include <tay/algobase.h>
@@ -37,13 +38,51 @@ namespace cap {
         OPEN_FILE     = 16,
     };
 
-    /** @brief 当前基础对象测试使用的通用权限位。 */
+    /** @brief Capability 的通用生命周期与传递权限。 */
+    enum class BasicRights : u64_t {
+        NONE      = 0,
+        READ      = 1ull << 0,
+        WRITE     = 1ull << 1,
+        GRANT     = 1ull << 2,
+        MANAGE    = 1ull << 3,
+        COPY      = 1ull << 4,
+        MINT      = 1ull << 5,
+        MOVE      = 1ull << 6,
+        MOVE_ONCE = 1ull << 7,
+        REVOKE    = 1ull << 8,
+        INSPECT   = 1ull << 9,
+    };
+
+    [[nodiscard]] constexpr BasicRights operator|(BasicRights lhs, BasicRights rhs) noexcept {
+        return static_cast<BasicRights>(static_cast<u64_t>(lhs) | static_cast<u64_t>(rhs));
+    }
+
+    [[nodiscard]] constexpr BasicRights operator&(BasicRights lhs, BasicRights rhs) noexcept {
+        return static_cast<BasicRights>(static_cast<u64_t>(lhs) & static_cast<u64_t>(rhs));
+    }
+
+    constexpr BasicRights &operator|=(BasicRights &lhs, BasicRights rhs) noexcept {
+        lhs = lhs | rhs;
+        return lhs;
+    }
+
+    [[nodiscard]] constexpr u64_t rights_value(BasicRights rights) noexcept {
+        return static_cast<u64_t>(rights);
+    }
+
+    /** @brief 兼容旧代码的无作用域权限常量。 */
     enum Rights : u64_t {
-        RIGHT_NONE   = 0,
-        RIGHT_READ   = 1ull << 0,
-        RIGHT_WRITE  = 1ull << 1,
-        RIGHT_GRANT  = 1ull << 2,
-        RIGHT_MANAGE = 1ull << 3,
+        RIGHT_NONE      = rights_value(BasicRights::NONE),
+        RIGHT_COPY      = rights_value(BasicRights::COPY),
+        RIGHT_MINT      = rights_value(BasicRights::MINT),
+        RIGHT_MOVE      = rights_value(BasicRights::MOVE),
+        RIGHT_MOVE_ONCE = rights_value(BasicRights::MOVE_ONCE),
+        RIGHT_GRANT     = rights_value(BasicRights::GRANT),
+        RIGHT_REVOKE    = rights_value(BasicRights::REVOKE),
+        RIGHT_MANAGE    = rights_value(BasicRights::MANAGE),
+        RIGHT_INSPECT   = rights_value(BasicRights::INSPECT),
+        RIGHT_READ      = rights_value(BasicRights::READ),
+        RIGHT_WRITE     = rights_value(BasicRights::WRITE),
     };
 
     /** @name Capability 与 CNode 共享布局常量
@@ -79,6 +118,7 @@ namespace cap {
 
     /**
      * @brief 计算指定页数下除 metadata cell 外的 Capability 容量。
+     * @return 可用于 Capability 的 slot 数量。
      * @pre `page_count` 已通过 `is_supported_cnode_page_count()` 校验。
      */
     [[nodiscard]] constexpr size_t cnode_capacity_for_pages(size_t page_count) noexcept {
@@ -118,14 +158,15 @@ namespace cap {
     inline constexpr u8_t CAP_TOKEN_COOKIE_SHIFT =
         CAP_TOKEN_GENERATION_SHIFT + CAP_TOKEN_GENERATION_BITS;
 
-    [[nodiscard]] constexpr u64_t __make_mask(u8_t bits) noexcept {
+    /** @brief 生成 CapToken 单个位域使用的低位掩码。 */
+    [[nodiscard]] constexpr u64_t cap_token_mask(u8_t bits) noexcept {
         return (u64_t{1} << bits) - 1;
     }
 
-    inline constexpr u64_t CAP_TOKEN_SLOT_MASK       = __make_mask(CAP_TOKEN_SLOT_BITS);
-    inline constexpr u64_t CAP_TOKEN_CNODE_MASK      = __make_mask(CAP_TOKEN_CNODE_BITS);
-    inline constexpr u64_t CAP_TOKEN_GENERATION_MASK = __make_mask(CAP_TOKEN_GENERATION_BITS);
-    inline constexpr u64_t CAP_TOKEN_COOKIE_MASK     = __make_mask(CAP_TOKEN_COOKIE_BITS);
+    inline constexpr u64_t CAP_TOKEN_SLOT_MASK       = cap_token_mask(CAP_TOKEN_SLOT_BITS);
+    inline constexpr u64_t CAP_TOKEN_CNODE_MASK      = cap_token_mask(CAP_TOKEN_CNODE_BITS);
+    inline constexpr u64_t CAP_TOKEN_GENERATION_MASK = cap_token_mask(CAP_TOKEN_GENERATION_BITS);
+    inline constexpr u64_t CAP_TOKEN_COOKIE_MASK     = cap_token_mask(CAP_TOKEN_COOKIE_BITS);
     inline constexpr u32_t CAP_TOKEN_MAX_GENERATION = static_cast<u32_t>(CAP_TOKEN_GENERATION_MASK);
     /** @} */
 

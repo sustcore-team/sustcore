@@ -141,6 +141,12 @@ SECTIONS
     . = ALIGN(4K);
     s_rodata = .;
     .rodata : {
+        . = ALIGN(16);
+        s_usrboot = .;
+        KEEP(*(.rodata.usrboot))
+        KEEP(*(.rodata.usrboot.*))
+        e_usrboot = .;
+
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
 

@@ -15,6 +15,7 @@ from config_emitters import clang, kernel, path, qemu
 from dependencies import resolver as resolve_deps
 from generators import (
     build_ctx,
+    attachments,
     build_host_tools,
     build_libs,
     build_programs,
@@ -130,15 +131,20 @@ def generate(config_name: str) -> None:
     contents[initrd_name] = initrd.emit()
     generated.append(initrd_name)
 
+    attachments_name = "attachments.mk"
+    contents[attachments_name] = attachments.emit(ROOT)
+    generated.append(attachments_name)
+
     testbench_name = "testbench.mk"
     contents[testbench_name] = build_testbench.emit(ROOT)
     generated.append(testbench_name)
     component_ctx.update(build_testbench.emit_ctx(ROOT))
 
     kernel_ctx_name = build_ctx.kernel_name()
+    kernel_owner = next(owner for owner in scan_dependency_owners(ROOT) if owner.kind == "kernel")
     component_ctx[kernel_ctx_name] = build_ctx.emit(
-        "kernel",
-        str((ROOT / "kernel").resolve()),
+        kernel_owner.id,
+        kernel_owner.root,
         "$(path-obj)/kernel",
         "$(kernel-path)",
     )

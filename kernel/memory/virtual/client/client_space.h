@@ -21,7 +21,7 @@ namespace memory {
 
     class ClientSpace final {
     public:
-        [[nodiscard]] static tay::expected<ClientSpace, tay::error_code> create() noexcept;
+        [[nodiscard]] static tay::expected<ClientSpace *, tay::error_code> create() noexcept;
 
         ClientSpace(const ClientSpace &)            = delete;
         ClientSpace &operator=(const ClientSpace &) = delete;
@@ -51,14 +51,11 @@ namespace memory {
             u16_t asid             = 0;
         };
 
-    public:
-        // Resources 是私有类型；此构造函数仅供 expected 的原位存储调用。
         explicit ClientSpace(Resources resources) noexcept
             : page_table_(resources.root, PageTableKind::USER, resources.owner),
               owner_(resources.owner),
               asid_(resources.asid) {}
 
-    private:
         [[nodiscard]] tay::expected<void, tay::error_code> init() noexcept;
 
         kernel::synchronized<PageTable> page_table_;

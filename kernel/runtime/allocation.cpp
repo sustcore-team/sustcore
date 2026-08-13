@@ -22,13 +22,13 @@
     if (!memory::heap_ready()) {
         return nullptr;
     }
-    const auto result = memory::heap_allocator().try_allocate(sz, alignment);
+    const auto result = memory::alloc(sz, alignment);
     return result ? *result : nullptr;
 }
 
 void try_free(void *ptr) noexcept {
     if (ptr != nullptr) {
-        memory::heap_allocator().deallocate(ptr);
+        memory::dealloc(ptr);
     }
 }
 

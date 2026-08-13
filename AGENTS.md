@@ -47,6 +47,7 @@
   - 读取 `config/<name>/*.toml`。
   - 生成配置、注册表、组件上下文和所有 freestanding 架构的依赖片段。
   - 旧式 `arch=` 和 `mode=` 参数会被忽略并给出警告。
+  - 修改任何 `dependencies.toml`、`metadata.toml` 或其他参与依赖/组件注册的元数据后，必须重新运行 `make configure config=<name>`，不得继续使用旧的生成缓存。
 - `make validate-host [host-arch=<arch>]`
   - 验证本机 Clang、Clang++ 和 LLVM ar 工具链。
   - 生成 `script/.cache/host.mk`，且不会修改 `.switch.mk`。
@@ -81,7 +82,10 @@
 - `make dbgonly`
   - 不重建内核，以 `-s -S` 启动 QEMU。
 - `make clean` / `make cleandist`
-  - `clean` 删除当前配置的构建输出；`cleandist` 还删除生成缓存，但保留 `.switch.mk`。
+  - `clean` 删除当前配置的构建输出。
+  - 无论任何情况都不得执行 `make cleandist`；该目标会删除生成缓存。若确实需要执行，必须先由用户明确指定 `config=<name>`，并仅针对该配置操作。
+
+构建系统中成功分支不应使用裸 `:` 作为 Make recipe 占位符；这会在 `make run` 等命令中打印单独的 `:`。条件 recipe 的空分支应展开为空字符串，并通过 `$(q)` 保持静默。
 
 使用 `runonly`、`dbgonly` 或其他可能持续运行的目标时，应采用类似 `timeout 15s make runonly` 的形式。GDB 可通过 `target remote :1234` 连接调试桩。
 

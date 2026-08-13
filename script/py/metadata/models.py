@@ -81,6 +81,14 @@ class LibraryMeta:
 
 
 @dataclass(frozen=True)
+class AttachmentMeta:
+    owner: str
+    module_id: str
+    segment: str
+    metadata_path: str
+
+
+@dataclass(frozen=True)
 class OwnerMeta:
     id: str
     root: str
@@ -91,6 +99,7 @@ class OwnerMeta:
     target: str = ""
     c_library: str = ""
     ldscript: str = ""
+    attachments: tuple[AttachmentMeta, ...] = ()
 
 
 @dataclass(frozen=True)

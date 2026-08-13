@@ -1,1 +1,1 @@
-src-y += thread.cpp
+src-y += vma.cpp

@@ -1,36 +1,50 @@
 /**
  * @file client_space.cpp
+ * @author theflysong (song_of_the_fly@163.com)
  * @brief ClientSpace 三阶段工厂与 RISC-V 借用根项修复。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-12
+ *
+ * @copyright Copyright (c) 2026
  */
 
 #include <arch/paging_traits.h>
 #include <log.h>
 #include <memory/virtual/client/client_space.h>
+#include <tay/counter.h>
 
-#include <atomic>
+#include <limits>
+#include <new>
 #include <utility>
 
 namespace memory {
     namespace {
-        constinit std::atomic<PageTableOwnerId> next_owner{0x100};
-        constinit std::atomic<u16_t> next_asid{1};
+        constinit tay::counter<PageTableOwnerId> page_table_owners{0x100};
+        constinit tay::counter<u32_t> address_space_ids{1};
         ClientSpace *current_client = nullptr;
     }  // namespace
 
-    tay::expected<ClientSpace, tay::error_code> ClientSpace::create() noexcept {
-        const PageTableOwnerId owner = next_owner.fetch_add(1, std::memory_order_relaxed);
-        const u16_t asid             = next_asid.fetch_add(1, std::memory_order_relaxed);
-        if (owner == 0 || asid == 0 || asid > 0x03ff)
-            return tay::expected<ClientSpace, tay::error_code>(tay::unexpect,
-                                                               tay::error_code::OUT_OF_RANGE);
+    tay::expected<ClientSpace *, tay::error_code> ClientSpace::create() noexcept {
+        PageTableOwnerId owner = 0;
+        u32_t asid_value       = 0;
+        if (!page_table_owners.try_next(std::numeric_limits<PageTableOwnerId>::max() - 1, owner) ||
+            !address_space_ids.try_next(0x03ff, asid_value))
+            return tay::Err(tay::error_code::OUT_OF_RANGE);
         auto root = PageTable::create_root(owner);
         if (!root)
-            return tay::expected<ClientSpace, tay::error_code>(tay::unexpect, root.error());
-
-        Resources resources{.root = *root, .owner = owner, .asid = asid};
-        return tay::expected<ClientSpace, tay::error_code>(
-            tay::try_in_place, [](ClientSpace &candidate) noexcept { return candidate.init(); },
-            resources);
+            return tay::Err(root.error());
+        auto *space = new (std::nothrow) ClientSpace(
+            Resources{.root = *root, .owner = owner, .asid = static_cast<u16_t>(asid_value)});
+        if (space == nullptr) {
+            PageTable::destroy_root(*root, owner);
+            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+        }
+        if (auto initialized = space->init(); !initialized) {
+            auto error = initialized.error();
+            delete space;
+            return tay::Err(error);
+        }
+        return space;
     }
 
     tay::expected<void, tay::error_code> ClientSpace::init() noexcept {

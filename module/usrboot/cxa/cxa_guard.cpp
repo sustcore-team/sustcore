@@ -10,6 +10,7 @@
  */
 
 // Itanium C++ ABI: 函数局部 static 的 guard 协议。
+#include <log.h>
 #include <tay/bits.h>
 
 extern "C" {
@@ -33,8 +34,7 @@ int __cxa_guard_acquire(u64_t *guard) {
             continue;
         }
         if ((state & PENDING) != 0) {
-            // kernel::log::panic("局部静态对象初始化发生递归");
-            while (true);
+            logger::panic("局部静态对象初始化发生递归");
         }
     }
 }

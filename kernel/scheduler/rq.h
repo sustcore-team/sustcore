@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <task/thread.h>
+#include <obj/thread.h>
 #include <tay/list.h>
 
 namespace scheduler {
@@ -31,6 +31,13 @@ namespace scheduler {
             if (threads_.empty())
                 return nullptr;
             return threads_.pop_front();
+        }
+
+        [[nodiscard]] bool remove(task::Thread *thread) noexcept {
+            if (thread == nullptr || !threads_.linked(thread))
+                return false;
+            (void)threads_.remove(thread);
+            return true;
         }
 
         [[nodiscard]] bool empty() const noexcept {

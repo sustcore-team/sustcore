@@ -11,8 +11,10 @@
 
 #pragma once
 
+#include <tay/expected.h>
 #include <tay/owner.h>
 
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -258,4 +260,20 @@ namespace tay {
     template <typename T, typename... Args>
         requires(std::is_array_v<T> && std::extent_v<T> != 0)
     void make_unique(Args&&...) = delete;
+
+    template <typename T, typename E, typename... Args>
+    concept creatable = !std::is_array_v<T> && requires(Args&&... args) {
+        { T::create(std::forward<Args>(args)...) } -> std::same_as<expected<T *, E>>;
+    };
+
+    template <typename T, typename E, typename... Args>
+        requires creatable<T, E, Args...>
+    [[nodiscard]]
+    tay::expected<unique_ptr<T>, E> create_unique(Args&&... args) {
+        auto created = T::create(std::forward<Args>(args)...);
+        if (!created) {
+            return tay::Err(created.error());
+        }
+        return tay::Ok(unique_ptr<T>{*created});
+    }
 }  // namespace tay

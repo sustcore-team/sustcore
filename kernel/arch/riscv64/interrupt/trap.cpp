@@ -11,15 +11,37 @@
 
 #include <arch/csr.h>
 #include <arch/interrupt.h>
-#include <arch/paging_traits.h>
 #include <arch/riscv64/interrupt/frame.h>
 #include <log.h>
-#include <memory/virtual/client/client_space.h>
+#include <trap/dispatcher.h>
 
 extern "C" void _riscv_early_trap_entry();
 extern "C" void _riscv_runtime_trap_entry();
 
 namespace riscv64::hal {
+    namespace {
+        [[nodiscard]] const char *exception_name(xlen_t code) noexcept {
+            constexpr const char *NAMES[] = {
+                "指令地址未对齐", "指令访问错误",   "非法指令",       "断点",
+                "加载地址未对齐", "加载访问错误",   "存储地址未对齐", "存储访问错误",
+                "用户态环境调用", "监管态环境调用", "保留",           "保留",
+                "取指缺页",       "加载缺页",       "保留",           "存储缺页",
+                "保留",           "保留",           "软件检查异常",   "硬件错误",
+            };
+            return code < sizeof(NAMES) / sizeof(NAMES[0]) ? NAMES[code] : "未知异常";
+        }
+
+        [[nodiscard]] const char *interrupt_name(xlen_t code) noexcept {
+            switch (code) {
+                case 1:  return "监管态软件中断";
+                case 5:  return "监管态定时器中断";
+                case 9:  return "监管态外部中断";
+                default: return "未知中断";
+            }
+        }
+
+    }  // namespace
+
     interrupt_guard::interrupt_guard() noexcept
         // 保存旧中断位并原子清除，使嵌套 guard 只由最外层恢复中断状态。
         : previous_(csr::clear_bits<csr::CSR::SSTATUS>(1U << 1)) {}
@@ -65,7 +87,16 @@ namespace riscv64::hal {
             else
                 kind = TrapKind::EXTERNAL;
         }
-        return TrapInfo{kind, frame.scause, code, frame.stval, from_user(frame)};
+        memory::FaultAccess access = memory::FaultAccess::NONE;
+        if (kind == TrapKind::SYNCHRONOUS) {
+            if (code == 12)
+                access = memory::FaultAccess::EXECUTE;
+            else if (code == 13)
+                access = memory::FaultAccess::READ;
+            else if (code == 15)
+                access = memory::FaultAccess::WRITE;
+        }
+        return TrapInfo{kind, frame.scause, code, frame.stval, from_user(frame), access};
     }
 
     bool from_user(const TrapFrame &frame) noexcept {
@@ -80,33 +111,67 @@ namespace riscv64::hal {
         frame.sepc = static_cast<xlen_t>(value);
     }
 
+    bool is_user_syscall(const TrapInfo &info) noexcept {
+        return info.user && info.kind == TrapKind::SYNCHRONOUS && info.code == 8;
+    }
+
+    bool is_page_fault(const TrapInfo &info) noexcept {
+        return info.kind == TrapKind::SYNCHRONOUS &&
+               (info.code == 12 || info.code == 13 || info.code == 15);
+    }
+
+    xlen_t syscall_number(const TrapFrame &frame) noexcept {
+        return frame.a7;
+    }
+
+    xlen_t syscall_argument(const TrapFrame &frame, size_t index) noexcept {
+        switch (index) {
+            case 0:  return frame.a0;
+            case 1:  return frame.a1;
+            default: return 0;
+        }
+    }
+
+    void set_syscall_result(TrapFrame &frame, xlen_t value) noexcept {
+        frame.a0 = value;
+    }
+
+    void advance_syscall(TrapFrame &frame) noexcept {
+        set_program_counter(frame, program_counter(frame) + 4);
+    }
+
+    const char *trap_name(const TrapInfo &info) noexcept {
+        return info.kind == TrapKind::SYNCHRONOUS ? exception_name(info.code)
+                                                  : interrupt_name(info.code);
+    }
+
+    xlen_t trap_subcode(const TrapInfo &) noexcept {
+        return 0;
+    }
+
+    void initialize_user_frame(TrapFrame &frame, addr_t entry, addr_t stack_pointer,
+                               addr_t argument) noexcept {
+        frame         = TrapFrame{};
+        frame.sepc    = entry;
+        frame.sp      = stack_pointer;
+        frame.a0      = argument;
+        frame.sstatus = 1U << 5;
+    }
+
     void wait_for_interrupt() noexcept {
         asm volatile("wfi" ::: "memory");
     }
     extern "C" [[noreturn]] void arch_early_trap_handler(xlen_t cause, addr_t pc, addr_t bad) {
-        kernel::log::panic("早期 RISC-V 陷阱: 异常原因={}, PC={}, stval={}", cause, pc, bad);
+        constexpr xlen_t INTERRUPT_BIT = xlen_t{1} << 63;
+        const bool interrupt           = (cause & INTERRUPT_BIT) != 0;
+        const xlen_t code              = cause & ~INTERRUPT_BIT;
+        kernel::log::panic("早期 RISC-V {}: name={}, code={}, raw={:#x}, pc={:#x}, stval={:#x}",
+                           interrupt ? "中断" : "异常",
+                           interrupt ? interrupt_name(code) : exception_name(code), code, cause, pc,
+                           bad);
     }
 
     extern "C" void arch_runtime_trap_handler(TrapFrame *frame) {
-        const TrapInfo info   = decode_trap(*frame);
-        const bool page_fault = info.kind == TrapKind::SYNCHRONOUS &&
-                                (info.code == 12 || info.code == 13 || info.code == 15);
-        if (page_fault && !info.user && PageTableOps::canonical(info.bad_address)) {
-            auto address = HvaAddr::try_from(info.bad_address);
-            auto *client = memory::active_client_space();
-            if (address && client != nullptr && client->binding().role == memory::RootRole::CLIENT)
-            {
-                auto repaired = client->repair_missing_borrowed_kernel_slot(*address);
-                if (!repaired)
-                    kernel::log::panic("RISC-V 高半区根项所有权损坏: {}",
-                                       static_cast<int>(repaired.error()));
-                if (*repaired == memory::BorrowedSlotRepair::REPAIRED)
-                    return;
-                if (*repaired == memory::BorrowedSlotRepair::GLOBAL_SLOT_ABSENT)
-                    kernel::log::panic("RISC-V 内核高半区地址没有全局映射: {}", info.bad_address);
-            }
-        }
-        kernel::log::panic("未处理的 RISC-V 运行时陷阱: cause={}, pc={}, bad={}", info.raw_cause,
-                           program_counter(*frame), info.bad_address);
+        kernel::trap::dispatch(*frame);
     }
 }  // namespace riscv64::hal

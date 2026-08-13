@@ -195,4 +195,13 @@ namespace memory {
      * @warning 堆尚未发布时触发 panic。
      */
     MixedSlabsAllocator &heap_allocator() noexcept;
+
+    [[nodiscard]] inline tay::expected<void *, tay::error_code> alloc(
+        size_t sz, size_t alignment = alignof(std::max_align_t)) noexcept {
+        return heap_allocator().try_allocate(sz, alignment);
+    }
+
+    inline void dealloc(void *ptr) noexcept {
+        heap_allocator().deallocate(ptr);
+    }
 }  // namespace memory

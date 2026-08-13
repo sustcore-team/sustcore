@@ -5,8 +5,8 @@
 
 #pragma once
 
+#include <obj/thread.h>
 #include <scheduler/rq.h>
-#include <task/thread.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 
@@ -23,6 +23,7 @@ namespace scheduler {
         [[nodiscard]] tay::expected<void, tay::error_code> initialize(
             task::Thread &bootstrap) noexcept;
         [[nodiscard]] tay::expected<void, tay::error_code> resume(task::Thread &thread) noexcept;
+        [[nodiscard]] tay::expected<void, tay::error_code> suspend(task::Thread &thread) noexcept;
 
         void yield() noexcept;
         [[noreturn]] void exit_current() noexcept;
@@ -40,6 +41,7 @@ namespace scheduler {
         void switch_to(task::Thread &previous, task::Thread &next) noexcept;
 
         RunQueue rq_{};
+        cap::ObjectRef<task::Thread> deferred_exit_{};
         task::Thread *current_ = nullptr;
         bool ready_            = false;
     };

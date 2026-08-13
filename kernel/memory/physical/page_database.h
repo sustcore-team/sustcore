@@ -31,6 +31,7 @@ namespace memory {
         BOOT_DATA,
         PAGE_TABLE,
         KERNEL_HEAP,
+        USER,
     };
 
     /** @brief 物理页相对于高层所有者的生命周期状态。 */

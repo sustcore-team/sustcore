@@ -84,14 +84,14 @@ namespace mku {
             [[nodiscard]] static result<output_file> create(char *path) noexcept {
                 const int descriptor = mkstemp(path);
                 if (descriptor < 0) {
-                    return tay::unexpected<Error>(
+                    return tay::Err(
                         output_error("cannot create temporary output", errno));
                 }
                 FILE *stream = fdopen(descriptor, "wb");
                 if (stream == nullptr) {
                     const int error = errno;
                     ::close(descriptor);
-                    return tay::unexpected<Error>(
+                    return tay::Err(
                         output_error("cannot open temporary output", error));
                 }
                 return output_file(stream);
@@ -126,9 +126,9 @@ namespace mku {
         }
 
         void write_segment(std::byte *output, const GeneratorSegment &segment,
-                           std::uint64_t body_offset) noexcept {
+                           std::uint64_t file_offset) noexcept {
             write_le64(output + offsetof(usrboot_segment, vaddr), segment.virtual_address);
-            write_le64(output + offsetof(usrboot_segment, off), body_offset);
+            write_le64(output + offsetof(usrboot_segment, off), file_offset);
             write_le64(output + offsetof(usrboot_segment, filesz), segment.file_size);
             write_le64(output + offsetof(usrboot_segment, memsz), segment.memory_size);
         }
@@ -151,72 +151,72 @@ namespace mku {
         for (const auto &segment : configuration.segments) {
             if (is_rx(segment.permissions)) {
                 if (rx != nullptr) {
-                    return tay::unexpected<Error>(configuration_error("duplicate RX segment"));
+                    return tay::Err(configuration_error("duplicate RX segment"));
                 }
                 rx = &segment;
             } else if (is_rw(segment.permissions)) {
                 if (rw != nullptr) {
-                    return tay::unexpected<Error>(configuration_error("duplicate RW segment"));
+                    return tay::Err(configuration_error("duplicate RW segment"));
                 }
                 rw = &segment;
             } else if (is_ro(segment.permissions)) {
                 if (ro != nullptr) {
-                    return tay::unexpected<Error>(configuration_error("duplicate RO segment"));
+                    return tay::Err(configuration_error("duplicate RO segment"));
                 }
                 ro = &segment;
             } else {
-                return tay::unexpected<Error>(
+                return tay::Err(
                     configuration_error("unsupported segment permissions"));
             }
         }
         if (rx == nullptr || rw == nullptr || ro == nullptr) {
-            return tay::unexpected<Error>(
+            return tay::Err(
                 configuration_error("RX, RW, and RO segments are required"));
         }
         for (const auto *segment : {rx, rw, ro}) {
             if (segment->file_size > segment->memory_size) {
-                return tay::unexpected<Error>(configuration_error("segment filesz exceeds memsz"));
+                return tay::Err(configuration_error("segment filesz exceeds memsz"));
             }
             if (!range_fits(segment->file_offset, segment->file_size, input.size())) {
-                return tay::unexpected<Error>(
+                return tay::Err(
                     configuration_error("segment file range is outside input"));
             }
         }
 
-        const std::uint64_t rw_offset = rx->file_size;
-        std::uint64_t ro_offset;
+        const std::uint64_t rw_body_offset = rx->file_size;
+        std::uint64_t ro_body_offset;
         std::uint64_t body_size;
-        if (!add_u64(rw_offset, rw->file_size, ro_offset) ||
-            !add_u64(ro_offset, ro->file_size, body_size))
+        if (!add_u64(rw_body_offset, rw->file_size, ro_body_offset) ||
+            !add_u64(ro_body_offset, ro->file_size, body_size))
         {
-            return tay::unexpected<Error>(configuration_error("body size overflows"));
+            return tay::Err(configuration_error("body size overflows"));
         }
         if (output_path.empty()) {
-            return tay::unexpected<Error>(configuration_error("output path is empty"));
+            return tay::Err(configuration_error("output path is empty"));
         }
 
         auto output_name_result = tay::string<>::try_create(output_path.data(), output_path.size());
         if (!output_name_result) {
-            return tay::unexpected<Error>(
+            return tay::Err(
                 configuration_error("temporary output path allocation failed"));
         }
         auto output_name      = std::move(*output_name_result);
         auto temporary_result = tay::string<>::try_create(output_name);
         if (!temporary_result) {
-            return tay::unexpected<Error>(
+            return tay::Err(
                 configuration_error("temporary output path allocation failed"));
         }
         auto temporary_path = std::move(*temporary_result);
         auto suffix_result  = temporary_path.append(".tmp.XXXXXX");
         if (!suffix_result) {
-            return tay::unexpected<Error>(
+            return tay::Err(
                 configuration_error("temporary output path allocation failed"));
         }
 
         auto output_result = output_file::create(temporary_path.data());
         if (!output_result) {
             unlink(temporary_path.data());
-            return tay::unexpected<Error>(output_result.error());
+            return tay::Err(output_result.error());
         }
         auto output = std::move(*output_result);
 
@@ -224,9 +224,15 @@ namespace mku {
         write_le64(header.data() + offsetof(usrboot_header, magic), USRBOOT_MAGIC);
         write_le64(header.data() + offsetof(usrboot_header, body_size), body_size);
         write_le64(header.data() + offsetof(usrboot_header, entry), configuration.entry);
-        write_segment(header.data() + offsetof(usrboot_header, seg_rx), *rx, 0);
-        write_segment(header.data() + offsetof(usrboot_header, seg_rw), *rw, rw_offset);
-        write_segment(header.data() + offsetof(usrboot_header, seg_ro), *ro, ro_offset);
+        const auto rx_file_offset = static_cast<std::uint64_t>(sizeof(usrboot_header));
+        std::uint64_t rw_file_offset;
+        std::uint64_t ro_file_offset;
+        if (!add_u64(rx_file_offset, rw_body_offset, rw_file_offset) ||
+            !add_u64(rx_file_offset, ro_body_offset, ro_file_offset))
+            return tay::Err(configuration_error("file offset overflows"));
+        write_segment(header.data() + offsetof(usrboot_header, seg_rx), *rx, rx_file_offset);
+        write_segment(header.data() + offsetof(usrboot_header, seg_rw), *rw, rw_file_offset);
+        write_segment(header.data() + offsetof(usrboot_header, seg_ro), *ro, ro_file_offset);
 
         if (!output.write(header.data(), header.size()) ||
             !write_segment_body(output, input, *rx) || !write_segment_body(output, input, *rw) ||
@@ -235,17 +241,17 @@ namespace mku {
             const int error = errno;
             static_cast<void>(output.close());
             unlink(temporary_path.data());
-            return tay::unexpected<Error>(output_error("cannot write output", error));
+            return tay::Err(output_error("cannot write output", error));
         }
         if (!output.flush() || !output.close()) {
             const int error = errno;
             unlink(temporary_path.data());
-            return tay::unexpected<Error>(output_error("cannot flush output", error));
+            return tay::Err(output_error("cannot flush output", error));
         }
         if (rename(temporary_path.data(), output_name.data()) != 0) {
             const int error = errno;
             unlink(temporary_path.data());
-            return tay::unexpected<Error>(output_error("cannot publish output", error));
+            return tay::Err(output_error("cannot publish output", error));
         }
         return {};
     }

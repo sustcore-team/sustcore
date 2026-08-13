@@ -1,5 +1,5 @@
 [[libmeta]]
-id = "usrboot"
+id = "libusrboot"
 libname = ""
 version = "0.1.0-dev.1"
 support-environments = ["freestanding", "host"]

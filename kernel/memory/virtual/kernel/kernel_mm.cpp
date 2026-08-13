@@ -1,6 +1,11 @@
 /**
  * @file kernel_mm.cpp
+ * @author theflysong (song_of_the_fly@163.com)
  * @brief KernelMM 布局注册、映射事务及启动布局生成。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-12
+ *
+ * @copyright Copyright (c) 2026
  */
 
 #include <arch/paging_traits.h>
@@ -190,7 +195,7 @@ namespace memory {
                 }
             }
             if (!conflict) {
-                node->layout.id = state->next_id++;
+                node->layout.id = state->ids.next();
                 state->hhdm_layouts.push_front(node);
             }
         }
@@ -275,9 +280,9 @@ namespace memory {
                 }
             }
             if (!conflict && parent_node != nullptr) {
-                kernel_node->layout.id = state->next_id++;
+                kernel_node->layout.id = state->ids.next();
                 reserved_node->layout  = ReservedLayout{
-                     .id            = state->next_id++,
+                     .id            = state->ids.next(),
                      .parent        = parent_node->layout.id,
                      .physical_base = spec.physical_base,
                      .bytes         = spec.bytes,
@@ -352,7 +357,7 @@ namespace memory {
                 source.physical_base.arith() + source.bytes <=
                     parent_node->layout.physical_base.arith() + parent_node->layout.bytes)
             {
-                node->layout.id = state->next_id++;
+                node->layout.id = state->ids.next();
                 parent_node->reservations.push_front(node);
             } else {
                 parent_node = nullptr;

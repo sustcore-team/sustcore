@@ -17,11 +17,11 @@
 
 namespace riscv64::timer {
     u64_t init_timer(const firmware::fdt::Tree &tree) noexcept {
-        auto cpus      = tree.path("/cpus");
-        auto property  = cpus.property("timebase-frequency");
-        auto frequency = property ? property->cell(0)
-                                  : tay::expected<u32_t, tay::error_code>(
-                                        tay::unexpect, tay::error_code::OUT_OF_RANGE);
+        auto cpus                                       = tree.path("/cpus");
+        auto property                                   = cpus.property("timebase-frequency");
+        tay::expected<u32_t, tay::error_code> frequency = tay::Err(tay::error_code::OUT_OF_RANGE);
+        if (property)
+            frequency = property->cell(0);
         if (!frequency || *frequency == 0)
             kernel::log::panic("缺少 RISC-V timebase-frequency");
         (void)hal::csr::set_bits<hal::csr::CSR::SIE>(xlen_t{1} << 5);

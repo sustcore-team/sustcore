@@ -16,7 +16,6 @@ _start:
     .option push
     .option norelax
     la      gp, __global_pointer$
-    la      sp, __usrboot_stack_top
     .option pop
 
     call    __early_main

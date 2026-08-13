@@ -77,6 +77,12 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-counter"
+header = "tay/counter.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-reflection"
 header = "tay/reflection.h"
 language = "c++"

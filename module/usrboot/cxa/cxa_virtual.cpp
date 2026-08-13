@@ -11,12 +11,12 @@
 
 // Itanium C++ ABI: 未实现/已删除虚函数的终止入口。
 
+#include <log.h>
+
 extern "C" [[noreturn]] void __cxa_pure_virtual() {
-    // kernel::log::panic("调用了纯虚函数");
-    while (true);
+    logger::panic("调用了纯虚函数");
 }
 
 extern "C" [[noreturn]] void __cxa_deleted_virtual() {
-    // kernel::log::panic("调用了已删除的虚函数");
-    while (true);
+    logger::panic("调用了已删除的虚函数");
 }

@@ -129,7 +129,7 @@ show:
 
         self.assertEqual(
             resolve_deps._scope_values([taycpplib], "freestanding")["dep-archives"],
-            "",
+            "$(path-bin)/libs/libtaycpplib.a",
         )
         self.assertEqual(
             resolve_deps._scope_values([taycpplib], "host")["dep-archives"],

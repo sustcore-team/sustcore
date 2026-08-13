@@ -10,6 +10,7 @@
  */
 
 #include <init/symbols.h>
+#include <log.h>
 #include <tay/array.h>
 #include <tay/attribute.h>
 #include <tay/panic.h>
@@ -50,7 +51,7 @@ namespace __init {
 
     void run_initializers() noexcept {
         if (__initializer_called) {
-            // kernel::log::error("C++ 初始化器被执行多次, 已忽略");
+            logger::error("C++ 初始化器被执行多次, 已忽略");
             return;
         }
 
@@ -62,17 +63,15 @@ namespace __init {
         init_array.foreach (run_initializer);
         __initializer_called = true;
 
-        // kernel::log::debug("C++ 初始化器已执行, 调用了 {} 个有效初始化器",
-        // __valid_initializer_cnt);
+        logger::debug("C++ 初始化器已执行, 调用了 {} 个有效初始化器", __valid_initializer_cnt);
         if (__constructor_probe.magic_number() != CONSTRUCTOR_MAGIC) {
-            // kernel::log::panic("C++ constructor probe 魔数损坏");
-            while (true);
+            logger::panic("C++ constructor probe 魔数损坏");
         }
     }
 
     void clear_bss() noexcept {
         if (__bss_cleared) {
-            // kernel::log::error("BSS 被清零多次, 已忽略");
+            logger::error("BSS 被清零多次, 已忽略");
             return;
         }
         __early_clear(reinterpret_cast<void *>(s_bss), reinterpret_cast<void *>(e_bss));
@@ -82,8 +81,7 @@ namespace __init {
 }  // namespace __init
 
 [[noreturn]] void tay::panic(const char *message) noexcept {
-    // kernel::log::panic("{}", message);
-    while (true);
+    ::logger::panic("{}", message);
 }
 
 int main(int argc, char **argv);
@@ -93,6 +91,5 @@ extern "C" void __early_main() {
     __init::run_initializers();
 
     int ret = main(0, nullptr);
-    // kernel::log::error("usrboot main() 返回了 {}, 进入死循环", ret);
-    while (true);
+    logger::panic("usrboot main() 返回了 {}", ret);
 }

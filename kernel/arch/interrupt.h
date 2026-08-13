@@ -12,6 +12,7 @@
 #pragma once
 
 #include <arch/namespace.h>
+#include <memory/virtual/page_flags.h>
 #include <tay/bits.h>
 
 #include <cstddef>
@@ -53,6 +54,7 @@ namespace hal {
         xlen_t code;
         addr_t bad_address;
         bool user;
+        memory::FaultAccess access = memory::FaultAccess::NONE;
     };
 
     /** @brief 关闭当前 CPU 的可屏蔽中断。 */
@@ -81,6 +83,31 @@ namespace hal {
 
     /** @brief 修改 TrapFrame 的异常返回程序计数器。 */
     void set_program_counter(TrapFrame &frame, addr_t value) noexcept;
+
+    /** @brief 判断同步异常是否为用户态系统调用。 */
+    [[nodiscard]] bool is_user_syscall(const TrapInfo &info) noexcept;
+
+    /** @brief 判断同步异常是否为页故障。 */
+    [[nodiscard]] bool is_page_fault(const TrapInfo &info) noexcept;
+
+    /** @brief 读取系统调用号和前两个参数。 */
+    [[nodiscard]] xlen_t syscall_number(const TrapFrame &frame) noexcept;
+    [[nodiscard]] xlen_t syscall_argument(const TrapFrame &frame, size_t index) noexcept;
+
+    /** @brief 写入系统调用返回值并前移到下一条用户指令。 */
+    void set_syscall_result(TrapFrame &frame, xlen_t value) noexcept;
+    void advance_syscall(TrapFrame &frame) noexcept;
+
+    /** @brief 返回用于通用 fatal 诊断的架构异常名称和可选 subcode。 */
+    [[nodiscard]] const char *trap_name(const TrapInfo &info) noexcept;
+    [[nodiscard]] xlen_t trap_subcode(const TrapInfo &info) noexcept;
+
+    /** @brief 构造能够返回用户态的初始 TrapFrame。 */
+    void initialize_user_frame(TrapFrame &frame, addr_t entry, addr_t stack_pointer,
+                               addr_t argument) noexcept;
+
+    /** @brief 从内核栈恢复 TrapFrame 并首次返回用户态。 */
+    [[noreturn]] void enter_user(TrapFrame &frame, addr_t kernel_stack_top) noexcept;
 
     /** @brief 等待当前 CPU 的下一次可处理事件。 */
     void wait_for_interrupt() noexcept;

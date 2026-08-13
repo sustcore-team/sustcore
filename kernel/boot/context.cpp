@@ -13,7 +13,7 @@
 #include <boot/context.h>
 #include <libfdt.h>
 #include <log.h>
-#include <memory/physical/buddy.h>
+#include <memory/physical/gfp.h>
 #include <memory/physical/page_database.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
@@ -50,52 +50,37 @@ namespace boot {
         }
         const auto fdt_sz = static_cast<size_t>(fdt_totalsize(source_fdt));
 
-        auto info_allocation = memory::buddy()->try_get_free_pages(pages_for(source.info_sz));
+        auto info_allocation =
+            memory::gfp(pages_for(source.info_sz), memory::PageKind::BOOT_DATA, BOOTINFO_OWNER);
         if (!info_allocation) {
             kernel::log::panic("无法分配持久化 BootInfo");
         }
-        auto fdt_allocation = memory::buddy()->try_get_free_pages(pages_for(fdt_sz));
+        auto fdt_allocation =
+            memory::gfp(pages_for(fdt_sz), memory::PageKind::BOOT_DATA, FDT_OWNER);
         if (!fdt_allocation) {
-            // 两段持久副本必须同时成功，第二次分配失败时回滚第一段。
-            memory::buddy()->put_pages(*info_allocation);
             kernel::log::panic("无法分配持久化 FDT");
         }
 
-        const PhyArea info_area(info_allocation->base,
-                                info_allocation->base + info_allocation->pages * PAGE_SIZE);
-        const PhyArea fdt_area(fdt_allocation->base,
-                               fdt_allocation->base + fdt_allocation->pages * PAGE_SIZE);
-        if (!memory::page_database().claim(info_area, memory::PageKind::BOOT_DATA, BOOTINFO_OWNER))
-        {
-            memory::buddy()->put_pages(*fdt_allocation);
-            memory::buddy()->put_pages(*info_allocation);
-            kernel::log::panic("无法认领持久化 BootInfo 页");
-        }
-        if (!memory::page_database().claim(fdt_area, memory::PageKind::BOOT_DATA, FDT_OWNER)) {
-            memory::page_database().release(info_area, memory::PageKind::BOOT_DATA, BOOTINFO_OWNER);
-            memory::buddy()->put_pages(*fdt_allocation);
-            memory::buddy()->put_pages(*info_allocation);
-            kernel::log::panic("无法认领持久化 FDT 页");
-        }
-
-        auto *info = reinterpret_cast<BootInfoHeader *>(PA2KPA(info_allocation->base.arith()));
-        auto *fdt  = reinterpret_cast<void *>(PA2KPA(fdt_allocation->base.arith()));
+        auto *info = reinterpret_cast<BootInfoHeader *>(PA2KPA(info_allocation->base().arith()));
+        auto *fdt  = reinterpret_cast<void *>(PA2KPA(fdt_allocation->base().arith()));
         // 物理页经直映转换为对象存储，复制后 BootInfo 内的 FDT 槽改指向新副本。
         __early_copy(info, &source, source.info_sz);
         __early_copy(fdt, source_fdt, fdt_sz);
         if (fdt_check_full(fdt, fdt_sz) != 0) {
             kernel::log::panic("持久化 FDT 校验失败");
         }
-        *bootinfo_fdt_pa(info) = fdt_allocation->base;
+        *bootinfo_fdt_pa(info) = fdt_allocation->base();
 
         saved_context.info       = info;
         saved_context.fdt        = fdt;
-        saved_context.info_paddr = info_allocation->base;
-        saved_context.fdt_paddr  = fdt_allocation->base;
+        saved_context.info_paddr = info_allocation->base();
+        saved_context.fdt_paddr  = fdt_allocation->base();
         saved_context.info_sz    = source.info_sz;
         saved_context.fdt_sz     = fdt_sz;
-        saved_context.info_pages = info_allocation->pages;
-        saved_context.fdt_pages  = fdt_allocation->pages;
+        saved_context.info_pages = info_allocation->pages();
+        saved_context.fdt_pages  = fdt_allocation->pages();
+        (void)info_allocation->detach();
+        (void)fdt_allocation->detach();
     }
 
     size_t reclaim_boot_memory() noexcept {

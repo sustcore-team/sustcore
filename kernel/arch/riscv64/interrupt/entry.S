@@ -24,12 +24,26 @@ _riscv_early_trap_entry:
     .align 4
     .global _riscv_runtime_trap_entry
 _riscv_runtime_trap_entry:
-    # 先在当前内核栈构造 TrapFrame；原 sp 由分配后的新 sp 反推保存。
+    # 用户 trap 通过 sscratch 切换到 Thread 内核栈；内核 trap 保持当前栈。
+    csrrw sp, sscratch, sp
+    bnez sp, .Lriscv_user_trap
+    csrrw sp, sscratch, sp
+    j .Lriscv_stack_ready
+.Lriscv_user_trap:
+    addi sp, sp, -RV_TF_SIZE
+    sd ra, RV_TF_RA(sp)
+    sd t0, RV_TF_T0(sp)
+    csrr t0, sscratch
+    sd t0, RV_TF_SP(sp)
+    csrw sscratch, zero
+    j .Lriscv_save_rest
+.Lriscv_stack_ready:
     addi sp, sp, -RV_TF_SIZE
     sd ra, RV_TF_RA(sp)
     sd t0, RV_TF_T0(sp)
     addi t0, sp, RV_TF_SIZE
     sd t0, RV_TF_SP(sp)
+.Lriscv_save_rest:
     sd gp, RV_TF_GP(sp)
     sd tp, RV_TF_TP(sp)
     sd t1, RV_TF_T1(sp)
@@ -73,6 +87,12 @@ _riscv_runtime_trap_entry:
     csrw sepc, t0
     ld t0, RV_TF_SSTATUS(sp)
     csrw sstatus, t0
+    # 返回用户态时重新发布该 Thread 的内核栈顶；内核返回保持 sscratch 为零。
+    andi t0, t0, 0x100
+    bnez t0, .Lriscv_scratch_ready
+    addi t0, sp, RV_TF_SIZE
+    csrw sscratch, t0
+.Lriscv_scratch_ready:
     ld ra, RV_TF_RA(sp)
     ld gp, RV_TF_GP(sp)
     ld tp, RV_TF_TP(sp)

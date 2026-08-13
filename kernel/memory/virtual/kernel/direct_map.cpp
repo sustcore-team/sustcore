@@ -51,7 +51,7 @@ namespace memory::detail {
             addr_t cursor           = parent.begin.arith();
             const auto map_fragment = [&space](addr_t begin, addr_t end) {
                 if (begin >= end)
-                    return tay::expected<void, tay::error_code>{};
+                    return tay::Ok();
                 return space.map(
                     PA2KPA(begin), PhyAddr(begin), end - begin,
                     PageFlags{.readable = true, .writable = true, .executable = false});

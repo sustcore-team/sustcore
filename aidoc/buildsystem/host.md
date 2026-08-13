@@ -97,7 +97,7 @@ output = "hello-world"
 
 工具目录可以提供可选的 `dependencies.toml`，其中只能解析支持 Host 环境的库。生成器会为每个工具写入 `host-tools.mk`、`ctx/host-tool-<id>.mk` 和按需生成的 `deps/host-<id>.mk`。工具 Makefile 可设置 `sources-c` 或 `sources-cpp`，再包含 `script/host/tool.mk` 复用组件编译和 Host 链接规则。
 
-`host-tool/hello-world` 是最小管线验证程序，运行后输出 `hello world`。`host-tool/mk-usrboot` 同时依赖 Host 可见的 `usrboot` 和 `elf` 纯头文件库，并使用同一元数据和构建接口注册。其调用格式为：
+`host-tool/hello-world` 是最小管线验证程序，运行后输出 `hello world`。`host-tool/mk-usrboot` 同时依赖 Host 可见的 `libusrboot` 和 `elf` 纯头文件库，并使用同一元数据和构建接口注册。其调用格式为：
 
 ```text
 mk-usrboot <input> -o <output>

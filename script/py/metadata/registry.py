@@ -10,6 +10,7 @@ import tomllib
 from common.constants import ARCHITECTURES, ENVIRONMENTS
 from dependencies import semver
 from metadata.models import (
+    AttachmentMeta,
     FreestandingCheckMeta,
     HeaderCheckMeta,
     HostProgramMeta,
@@ -243,6 +244,46 @@ def normalize_output_path(raw_value: object, field: str) -> str:
     return raw_value
 
 
+def normalize_section(raw_value: object, field: str) -> str:
+    if not isinstance(raw_value, str) or not raw_value.startswith("."):
+        raise ValueError(f"{field} must be an ELF section name starting with '.'")
+    if any(character in raw_value for character in "\t\r\n #$%\\"):
+        raise ValueError(f"{field} contains characters unsupported by Make or ELF")
+    if ".." in raw_value or "/" in raw_value:
+        raise ValueError(f"{field} must be a simple ELF section name")
+    return raw_value
+
+
+def normalize_attachments(
+    metadata_path: Path, raw_value: object, owner_id: str
+) -> tuple[AttachmentMeta, ...]:
+    if raw_value is None:
+        return ()
+    if not isinstance(raw_value, dict):
+        raise ValueError(f"{metadata_path}: attach must be a table")
+    module_entries = raw_value.get("module", [])
+    if not isinstance(module_entries, list):
+        raise ValueError(f"{metadata_path}: attach.module must be an array of tables")
+
+    result: list[AttachmentMeta] = []
+    seen_modules: set[str] = set()
+    seen_segments: set[str] = set()
+    for index, entry in enumerate(module_entries):
+        field = f"{metadata_path}: attach.module[{index}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{field} must be a table")
+        module_id = validate_global_id(entry.get("mod"), f"{field}.mod")
+        if module_id in seen_modules:
+            raise ValueError(f"{metadata_path}: duplicate attachment module {module_id!r}")
+        segment = normalize_section(entry.get("segment"), f"{field}.segment")
+        if segment in seen_segments:
+            raise ValueError(f"{metadata_path}: duplicate attachment section {segment!r}")
+        seen_modules.add(module_id)
+        seen_segments.add(segment)
+        result.append(AttachmentMeta(owner_id, module_id, segment, str(metadata_path)))
+    return tuple(result)
+
+
 def normalize_arch_paths(
     metadata_path: Path,
     arch_data: object,
@@ -281,11 +322,36 @@ def parse_kernel_owner(root: Path) -> OwnerMeta:
     kernel_root = (root / "kernel").resolve()
     if not kernel_root.is_dir():
         raise ValueError(f"kernel directory does not exist: {kernel_root}")
+    metadata_path = kernel_root / "metadata.toml"
+    if not metadata_path.is_file():
+        raise ValueError(f"kernel metadata does not exist: {metadata_path}")
+    with metadata_path.open("rb") as metadata_file:
+        data = tomllib.load(metadata_file)
+    entries = data.get("kernelmeta")
+    if not isinstance(entries, list) or len(entries) != 1 or not isinstance(entries[0], dict):
+        raise ValueError(f"{metadata_path}: kernelmeta must contain exactly one table")
+    entry = entries[0]
+    owner_id = validate_global_id(entry.get("id"), f"{metadata_path}: id")
+    makefile = normalize_relative_path(entry.get("makefile"), f"{metadata_path}: makefile", required=True)
+    makefile_path = (metadata_path.parent / makefile).resolve()
+    if not makefile_path.is_file():
+        raise ValueError(f"{metadata_path}: makefile does not exist: {makefile}")
+    target = entry.get("target")
+    if not isinstance(target, str) or not target:
+        raise ValueError(f"{metadata_path}: target must be a non-empty string")
+    output = normalize_output_path(entry.get("output"), f"{metadata_path}: output")
+    unknown = set(entry) - {"id", "makefile", "target", "output"}
+    if unknown:
+        raise ValueError(f"{metadata_path}: kernelmeta contains unsupported fields: {', '.join(sorted(unknown))}")
     return OwnerMeta(
-        id="kernel",
+        id=owner_id,
         root=str(kernel_root),
-        metadata_path=str(kernel_root / "dependencies.toml"),
+        metadata_path=str(metadata_path),
         kind="kernel",
+        output=output,
+        makefile=str(makefile_path),
+        target=target,
+        attachments=normalize_attachments(metadata_path, data.get("attach"), owner_id),
     )
 
 
@@ -457,6 +523,7 @@ def scan_programs(root: Path) -> list[OwnerMeta]:
                     target=target,
                     c_library=c_library,
                     ldscript=normalize_relative_path(entry.get("ldscript"), f"{metadata_path}: ldscript"),
+                    attachments=normalize_attachments(metadata_path, data.get("attach"), program_id),
                 )
             )
 
@@ -552,6 +619,14 @@ def scan_dependency_owners(root: Path) -> list[OwnerMeta]:
             )
         seen_ids[program.id] = program.metadata_path
         owners.append(program)
+    module_ids = {owner.id for owner in owners if owner.kind == "program"}
+    for owner in owners:
+        for attachment in owner.attachments:
+            if attachment.module_id not in module_ids:
+                raise ValueError(
+                    f"{attachment.metadata_path}: attachment module "
+                    f"{attachment.module_id!r} is not a registered module"
+                )
     for tool in scan_host_tools(root):
         if tool.id in seen_ids:
             raise ValueError(

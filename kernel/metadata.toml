@@ -1,0 +1,10 @@
+[[kernelmeta]]
+id = "kernel"
+makefile = "Makefile"
+target = "build"
+output = "sustcore.bin"
+
+[attach]
+[[attach.module]]
+mod = "usrboot"
+segment = ".rodata.usrboot"

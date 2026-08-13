@@ -10,7 +10,7 @@
  */
 
 #include <arch/csr.h>
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 #include <boot/smp.h>
 #include <cpu/smp.h>
 #include <cpu/storage.h>

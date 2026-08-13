@@ -39,7 +39,7 @@ _prepare-host-tool-deps:
 	$(q)set -e; $(foreach owner,$(selected-host-tool-ids),$(s-resolve-deps) root=$(path-e) owner=$(owner) environment=host arch=$(host-arch) output=$(path-deps)/host-$(owner).mk;)
 
 _prepare-build-hosttool:
-	$(q)$(MAKE) --no-print-directory validate-host
+	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= allow-target-arch=1 validate-host
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) _prepare-host-deps
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) tool= _prepare-host-tool-deps
 	$(q)$(MAKE) --no-print-directory MAKEOVERRIDES= host-context=1 allow-target-arch=1 mode=$(mode) sanitize=$(sanitize) _build-host-libs
@@ -178,9 +178,9 @@ check-lib: _require-lib
 	$(if $(filter freestanding,$(library-$(lib)-support-environments-all)),,$(error library $(lib) does not support environment freestanding))
 	$(if $(filter $(arch),$(or $(library-$(lib)-support-archs),riscv64 loongarch64)),,$(error library $(lib) does not support architecture $(arch)))
 	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) build-lib-$(lib)
-	$(q)$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check,:)
+	$(q)$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-header-check,)
 	$(q)$(MAKE) --no-print-directory arch=$(arch) mode=$(mode) lib=$(lib) _freestanding-check
-	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) host-test,:)
+	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) host-test,)
 
 build-lib-matrix: _require-lib
 	$(q)set -e; for matrix_arch in $(or $(library-$(lib)-support-archs),riscv64 loongarch64); do \
@@ -188,4 +188,4 @@ build-lib-matrix: _require-lib
 		$(if $(filter y,$(library-$(lib)-is-header-only)),$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) lib=$(lib) _freestanding-header-check;,) \
 		$(MAKE) --no-print-directory arch=$$matrix_arch mode=$(mode) lib=$(lib) _freestanding-check; \
 	done
-	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) build-host-lib,:)
+	$(q)$(if $(filter host,$(library-$(lib)-support-environments-all)),$(MAKE) --no-print-directory allow-target-arch=1 lib=$(lib) mode=$(mode) build-host-lib,)

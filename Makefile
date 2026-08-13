@@ -12,20 +12,21 @@ endif
 -include $(path-cache)/host-tools.mk
 -include $(path-cache)/testbench.mk
 -include $(path-cache)/initrd.mk
+-include $(path-cache)/attachments.mk
 -include $(path-cache)/.configure.mk
 
-required-config-fragments := config.mk libraries.mk build-libs.mk programs.mk host-tools.mk testbench.mk initrd.mk
+required-config-fragments := config.mk libraries.mk build-libs.mk programs.mk host-tools.mk testbench.mk initrd.mk attachments.mk
 missing-config-fragments = $(filter-out $(notdir $(wildcard $(addprefix $(path-cache)/,$(required-config-fragments)))),$(required-config-fragments))
 
 .PHONY: require-configured
 require-configured:
-	$(if $(strip $(cached-config)),,$(error build system is not configured; run 'make configure config=<name>'))
-	$(if $(strip $(missing-config-fragments)),$(error configuration cache is incomplete ($(missing-config-fragments)); rerun 'make configure config=$(cached-config)'),:)
+	$(q)$(if $(strip $(cached-config)),,$(error build system is not configured; run 'make configure config=<name>'))
+	$(q)$(if $(strip $(missing-config-fragments)),$(error configuration cache is incomplete ($(missing-config-fragments)); rerun 'make configure config=$(cached-config)'),)
 
 .PHONY: require-freestanding-selection
 require-freestanding-selection:
-	$(if $(filter $(arch),riscv64 loongarch64),,$(error no supported freestanding architecture selected; run 'make switch arch=<arch> mode=<mode>'))
-	$(if $(filter $(mode),debug release),,$(error no supported build mode selected; run 'make switch arch=<arch> mode=<mode>'))
+	$(q)$(if $(filter $(arch),riscv64 loongarch64),,$(error no supported freestanding architecture selected; run 'make switch arch=<arch> mode=<mode>'))
+	$(q)$(if $(filter $(mode),debug release),,$(error no supported build mode selected; run 'make switch arch=<arch> mode=<mode>'))
 
 build-libs build-modules build-initrd build-kernel runonly dbgonly update: require-configured require-freestanding-selection
 build-hosttool $(host-tool-build-targets): require-configured
@@ -49,7 +50,7 @@ init: init-build-system
 	$(q)$(echo) "Initialization done!"
 
 .PHONY: build-kernel
-build-kernel: build-hosttool build-libs
+build-kernel: build-hosttool build-libs $(attachment-module-targets)
 	$(q)$(MAKE) -f $(path-e)/kernel/Makefile \
 		global-env=$(global-env) \
 		arch=$(arch) \

@@ -58,30 +58,30 @@ namespace mku {
         [[nodiscard]] result<byte_buffer> read_input(std::string_view path) noexcept {
             auto path_result = tay::string<>::try_create(path.data(), path.size());
             if (!path_result) {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "input path allocation failed"});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="input path allocation failed"});
             }
             FILE *stream = std::fopen(path_result->data(), "rb");
             if (stream == nullptr) {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "cannot open input", errno});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="cannot open input", .system_error=errno});
             }
             input_file input(stream);
             struct stat status;
             if (fstat(fileno(input.get()), &status) != 0) {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "cannot stat input", errno});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="cannot stat input", .system_error=errno});
             }
             if (status.st_size < 0 || static_cast<std::uintmax_t>(status.st_size) > SIZE_MAX) {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "input is too large"});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="input is too large"});
             }
 
             auto buffer_result = byte_buffer::try_create(static_cast<std::size_t>(status.st_size));
             if (!buffer_result) {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "input allocation failed"});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="input allocation failed"});
             }
             auto buffer = std::move(*buffer_result);
             if (buffer.size() != 0 &&
                 std::fread(buffer.data(), 1, buffer.size(), input.get()) != buffer.size())
             {
-                return tay::unexpected<Error>(Error{ErrorCode::IO, "cannot read input", errno});
+                return tay::Err(Error{.code=ErrorCode::IO, .message="cannot read input", .system_error=errno});
             }
             return buffer;
         }

@@ -18,9 +18,9 @@ class InitrdEmitterTests(unittest.TestCase):
     def test_emit_declares_module_outputs_and_cpio_recipe(self) -> None:
         fragment = initrd.emit(ROOT / "initrd" / "initrd.toml")
 
-        self.assertIn("initrd-module-ids := usrboot-image", fragment)
+        self.assertIn("initrd-module-ids := usrboot", fragment)
         self.assertIn(
-            "build-module-usrboot-image: build-hosttool | build-libs", fragment
+            "build-module-usrboot: build-hosttool | build-libs", fragment
         )
         self.assertIn(
             "build-modules: build-hosttool build-libs $(initrd-module-targets)",

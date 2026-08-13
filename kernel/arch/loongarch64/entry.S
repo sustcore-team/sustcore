@@ -9,7 +9,7 @@
  *
  */
 
-#include <arch/loongarch64/csrdef.h>
+#include <arch/loongarch64/valdef.h>
 
     .section .text.entry, "ax", @progbits
 

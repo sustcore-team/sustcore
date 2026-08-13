@@ -9,7 +9,7 @@
  */
 
 #include <log.h>
-#include <memory/physical/buddy.h>
+#include <memory/physical/gfp.h>
 #include <memory/physical/page_database.h>
 #include <memory/virtual/page_table_pool.h>
 #include <sustcore/addrspace.h>
@@ -35,24 +35,20 @@ namespace memory::paging {
 
     tay::expected<PhyAddr, tay::error_code> PageAllocator::allocate(
         PageTableOwnerId owner) noexcept {
-        auto allocation = buddy()->try_get_free_pages(1);
+        auto allocation = gfp(1, PageKind::PAGE_TABLE, owner);
         if (!allocation)
             return tay::Err(allocation.error());
-        const PhyArea area(allocation->base, allocation->base + PAGE_SIZE);
-        if (!page_database().claim(area, PageKind::PAGE_TABLE, owner)) {
-            buddy()->put_pages(*allocation);
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        }
-        memset(reinterpret_cast<void *>(PA2KPA(allocation->base.arith())), 0, PAGE_SIZE);
-        return allocation->base;
+        memset(reinterpret_cast<void *>(PA2KPA(allocation->base().arith())), 0, PAGE_SIZE);
+        const auto page = allocation->base();
+        (void)allocation->detach();
+        return page;
     }
 
     void PageAllocator::retire(PhyAddr page, PageTableOwnerId owner) noexcept {
         if (!page.nonnull() || !page.aligned<PAGE_SIZE>())
             return;
-        const PhyArea area(page, page + PAGE_SIZE);
-        page_database().release(area, PageKind::PAGE_TABLE, owner);
-        buddy()->put_pages(PageAllocation{page, 1});
+        OwnedPages::resume(PageAllocation{.base = page, .pages = 1}, PageKind::PAGE_TABLE, owner)
+            .release();
     }
 
     void RetirementSink::defer_table(PhyAddr page) noexcept {

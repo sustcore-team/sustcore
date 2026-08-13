@@ -77,7 +77,7 @@ namespace mku {
 
     result<GeneratorConfiguration> parse_elf(byte_view input) noexcept {
         if (input.size() < sizeof(Elf64_Ehdr)) {
-            return tay::unexpected<Error>(invalid_elf("input is smaller than an ELF64 header"));
+            return tay::Err(invalid_elf("input is smaller than an ELF64 header"));
         }
         const auto *data = input.data();
         Elf64_Ehdr elf_header;
@@ -88,27 +88,27 @@ namespace mku {
             elf_header.e_ident[EI_DATA] != ELFDATA2LSB ||
             elf_header.e_ident[EI_VERSION] != EV_CURRENT)
         {
-            return tay::unexpected<Error>(
+            return tay::Err(
                 invalid_elf("input is not a current little-endian ELF64 file"));
         }
 
         if (elf_header.e_type != ET_EXEC) {
-            return tay::unexpected<Error>(invalid_elf("ELF type must be ET_EXEC"));
+            return tay::Err(invalid_elf("ELF type must be ET_EXEC"));
         }
         if (elf_header.e_machine != EM_RISCV && elf_header.e_machine != EM_LOONGARCH) {
-            return tay::unexpected<Error>(invalid_elf("unsupported ELF machine"));
+            return tay::Err(invalid_elf("unsupported ELF machine"));
         }
         if (elf_header.e_version != EV_CURRENT || elf_header.e_ehsize != sizeof(Elf64_Ehdr) ||
             elf_header.e_phentsize != sizeof(Elf64_Phdr))
         {
-            return tay::unexpected<Error>(invalid_elf("unsupported ELF64 header layout"));
+            return tay::Err(invalid_elf("unsupported ELF64 header layout"));
         }
         if (elf_header.e_phnum == 0 || elf_header.e_phnum == PN_XNUM ||
             !range_fits(elf_header.e_phoff,
                         static_cast<std::uint64_t>(elf_header.e_phnum) * elf_header.e_phentsize,
                         input.size()))
         {
-            return tay::unexpected<Error>(invalid_elf("invalid program header table"));
+            return tay::Err(invalid_elf("invalid program header table"));
         }
 
         GeneratorConfiguration configuration;
@@ -124,10 +124,10 @@ namespace mku {
                 continue;
             }
             if (!is_supported_permissions(program_header.p_flags)) {
-                return tay::unexpected<Error>(invalid_elf("unsupported PT_LOAD permissions"));
+                return tay::Err(invalid_elf("unsupported PT_LOAD permissions"));
             }
             if (segment_count == configuration.segments.size()) {
-                return tay::unexpected<Error>(invalid_elf("too many PT_LOAD segments"));
+                return tay::Err(invalid_elf("too many PT_LOAD segments"));
             }
 
             auto &segment           = configuration.segments[segment_count++];
@@ -137,29 +137,29 @@ namespace mku {
             segment.file_size       = program_header.p_filesz;
             segment.memory_size     = program_header.p_memsz;
             if (segment.file_size > segment.memory_size) {
-                return tay::unexpected<Error>(invalid_elf("PT_LOAD filesz exceeds memsz"));
+                return tay::Err(invalid_elf("PT_LOAD filesz exceeds memsz"));
             }
             if (!range_fits(segment.file_offset, segment.file_size, input.size())) {
-                return tay::unexpected<Error>(invalid_elf("PT_LOAD file range is outside input"));
+                return tay::Err(invalid_elf("PT_LOAD file range is outside input"));
             }
             std::uint64_t virtual_end;
             if (!add_u64(segment.virtual_address, segment.memory_size, virtual_end)) {
-                return tay::unexpected<Error>(invalid_elf("PT_LOAD virtual range overflows"));
+                return tay::Err(invalid_elf("PT_LOAD virtual range overflows"));
             }
         }
 
         if (segment_count != configuration.segments.size()) {
-            return tay::unexpected<Error>(invalid_elf("ELF must contain three PT_LOAD segments"));
+            return tay::Err(invalid_elf("ELF must contain three PT_LOAD segments"));
         }
         for (std::size_t left = 0; left < configuration.segments.size(); ++left) {
             for (std::size_t right = left + 1; right < configuration.segments.size(); ++right) {
                 if (same_permissions(configuration.segments[left].permissions,
                                      configuration.segments[right].permissions))
                 {
-                    return tay::unexpected<Error>(invalid_elf("duplicate PT_LOAD permissions"));
+                    return tay::Err(invalid_elf("duplicate PT_LOAD permissions"));
                 }
                 if (ranges_overlap(configuration.segments[left], configuration.segments[right])) {
-                    return tay::unexpected<Error>(invalid_elf("PT_LOAD virtual ranges overlap"));
+                    return tay::Err(invalid_elf("PT_LOAD virtual ranges overlap"));
                 }
             }
         }
@@ -177,7 +177,7 @@ namespace mku {
             }
         }
         if (!entry_in_executable_segment) {
-            return tay::unexpected<Error>(invalid_elf("ELF entry is outside executable segment"));
+            return tay::Err(invalid_elf("ELF entry is outside executable segment"));
         }
         return configuration;
     }

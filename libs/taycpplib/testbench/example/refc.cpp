@@ -6,7 +6,6 @@
  * @date 2026-08-02
  *
  * @copyright Copyright (c) 2026
- *
  */
 
 #include <tay/refcount.h>
@@ -17,7 +16,7 @@ namespace {
     struct resource : tay::refc<resource> {
         bool released = false;
 
-        void on_death() {
+        void on_death() noexcept {
             released = true;
             std::puts("resource reached zero references");
         }
