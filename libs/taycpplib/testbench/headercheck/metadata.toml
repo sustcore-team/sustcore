@@ -29,6 +29,18 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-in-place"
+header = "tay/in_place.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-optional"
+header = "tay/optional.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-err"
 header = "tay/err.h"
 language = "c++"
@@ -192,6 +204,12 @@ language = "c++"
 environments = ["freestanding", "host"]
 
 [[headercheck]]
+id = "taycpplib-intrusive-pairing-heap"
+header = "tay/pairing_heap.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
 id = "taycpplib-binary-search"
 header = "tay/algo/binary_search.h"
 language = "c++"
@@ -248,5 +266,11 @@ environments = ["freestanding", "host"]
 [[headercheck]]
 id = "taycpplib-lock"
 header = "tay/lock.h"
+language = "c++"
+environments = ["freestanding", "host"]
+
+[[headercheck]]
+id = "taycpplib-rcu"
+header = "tay/rcu.h"
 language = "c++"
 environments = ["freestanding", "host"]

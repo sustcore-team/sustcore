@@ -10,6 +10,7 @@
  */
 
 #include <arch/early_console.h>
+#include <arch/riscv64/namespace.h>
 #include <sbi/sbi.h>
 #include <tay/bits.h>
 

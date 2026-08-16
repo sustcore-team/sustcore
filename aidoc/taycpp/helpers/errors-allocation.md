@@ -21,6 +21,11 @@ result.match(tay::overloaded{
 });
 ```
 
+`TAY_TRY(expr)` 对表达式求值一次，成功时提取 value，失败时从当前函数传播 error；
+`TAY_TRYV(expr)` 只检查并传播错误；`TAY_ERR(result)` 将现有 error 包装为
+`tay::unexpected`。这些宏使用 Clang/GNU statement expression 扩展，调用函数的错误类型
+必须可从被传播的 error 构造。
+
 对 `expected<void, E>`，成功分支 visitor 不接收参数。访问错误分支的 value
 或成功分支的 error 会调用 `tay::panic("bad expected access")`。
 

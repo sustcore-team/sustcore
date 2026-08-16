@@ -13,7 +13,7 @@
 #include <arch/paging_traits.h>
 #include <memory/virtual/page_flags.h>
 #include <memory/virtual/page_table_pool.h>
-#include <tay/err.h>
+#include <memory/virtual/paging_error.h>
 #include <tay/expected.h>
 
 #include <cstddef>
@@ -46,7 +46,7 @@ namespace memory::paging {
         Walker &operator=(const Walker &) = delete;
 
         /** @brief 查找地址所在的叶项；只读且绝不分配。 */
-        [[nodiscard]] tay::expected<Mapping, tay::error_code> query(addr_t address) const noexcept;
+        [[nodiscard]] tay::expected<Mapping, PagingError> query(addr_t address) const noexcept;
 
         /**
          * @brief 在未映射的 base-page 位置安装叶项。
@@ -54,12 +54,12 @@ namespace memory::paging {
          * 只在必要时建立中间页表。任何失败都会撤销本次新建立的父链，并将相应表页交给
          * retirement sink；调用者在 TLB 失效之后再归还它们。
          */
-        [[nodiscard]] tay::expected<void, tay::error_code> try_map_base(
+        [[nodiscard]] tay::expected<void, PagingError> try_map_base(
             addr_t address, PhyAddr physical, const PageFlags &flags,
             RetirementSink &retirements) noexcept;
 
         /** @brief 修改既有 base-page 叶项的属性，返回修改前的映射。 */
-        [[nodiscard]] tay::expected<Mapping, tay::error_code> protect_base(
+        [[nodiscard]] tay::expected<Mapping, PagingError> protect_base(
             addr_t address, const PageFlags &flags) noexcept;
 
         /**
@@ -67,7 +67,7 @@ namespace memory::paging {
          *
          * 随后会摘下变空的中间表，并把它们交给 retirement sink；此函数不直接 retire。
          */
-        [[nodiscard]] tay::expected<Mapping, tay::error_code> unmap_base(
+        [[nodiscard]] tay::expected<Mapping, PagingError> unmap_base(
             addr_t address, RetirementSink &retirements) noexcept;
 
         /**
@@ -75,7 +75,7 @@ namespace memory::paging {
          *
          * 当前公开 PageTable::map() 不使用此接口；它保留给将来的 COW/换页路径。
          */
-        [[nodiscard]] tay::expected<Mapping, tay::error_code> replace_base(
+        [[nodiscard]] tay::expected<Mapping, PagingError> replace_base(
             addr_t address, PhyAddr physical, const PageFlags &flags) noexcept;
 
     private:
@@ -86,7 +86,7 @@ namespace memory::paging {
         [[nodiscard]] static Mapping mapping_for(EntryType entry, addr_t address,
                                                  size_t level) noexcept;
         [[nodiscard]] static bool table_empty(PhyAddr physical) noexcept;
-        [[nodiscard]] tay::expected<EntryType, tay::error_code> base_leaf(
+        [[nodiscard]] tay::expected<EntryType, PagingError> base_leaf(
             addr_t address) const noexcept;
         [[nodiscard]] EntryType *leaf_entry(addr_t address) const noexcept;
 

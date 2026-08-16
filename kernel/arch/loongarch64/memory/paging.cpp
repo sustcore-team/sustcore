@@ -9,9 +9,10 @@
  */
 
 #include <arch/csr.h>
-#include <arch/loongarch64/valdef.h>
+#include <arch/loongarch64/namespace.h>
 #include <arch/loongarch64/pagedef.h>
 #include <arch/loongarch64/paging.h>
+#include <arch/loongarch64/valdef.h>
 #include <memory/virtual/kernel/kernel_space.h>
 #include <sustcore/addrspace.h>
 
@@ -104,7 +105,7 @@ namespace loongarch64::hal {
         csr::write<csr::CSR::PWCTL1>(static_cast<xlen_t>(PWCTL1_4LEVEL));
         csr::write<csr::CSR::STLBPGSIZE>(static_cast<xlen_t>(STLBPGSIZE_4K));
         csr::write<csr::CSR::ASID>(static_cast<xlen_t>(binding.asid) & 0x03ffu);
-        csr::write<csr::CSR::PGDL>(binding.client_root.arith());
+        csr::write<csr::CSR::PGDL>(binding.private_root.arith());
         csr::write<csr::CSR::PGDH>(memory::kernel_space().root().arith());
         flush_tlb();
         asm volatile("ibar 0\ndbar 0" ::: "memory");

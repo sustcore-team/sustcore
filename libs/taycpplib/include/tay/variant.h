@@ -39,13 +39,22 @@ namespace tay {
         template <size_t Index, typename First, typename... Rest>
         struct variant_type<Index, First, Rest...> : variant_type<Index - 1, Rest...> {};
 
+        template <typename Visitor, typename Variant>
+        using variant_visit_result_t =
+            std::invoke_result_t<Visitor &&,
+                                 decltype(std::declval<Variant>()
+                                              .template get<typename std::remove_cvref_t<
+                                                  Variant>::template type_at<0>>())>;
+
         template <typename Visitor, typename Variant, size_t Index = 0>
-        constexpr decltype(auto) variant_visit(Visitor &&visitor, Variant &&value) {
+        constexpr auto variant_visit(Visitor &&visitor,
+                                     Variant &&value) -> variant_visit_result_t<Visitor, Variant> {
             using variant_type_t = std::remove_cvref_t<Variant>;
             if constexpr (Index < variant_type_t::size) {
                 if (value.tag() == Index) {
                     using value_type = typename variant_type_t::template type_at<Index>;
-                    return std::invoke(std::forward<Visitor>(visitor), value.template get<value_type>());
+                    return std::invoke(std::forward<Visitor>(visitor),
+                                       value.template get<value_type>());
                 }
                 return variant_visit<Visitor, Variant, Index + 1>(std::forward<Visitor>(visitor),
                                                                   std::forward<Variant>(value));
@@ -87,8 +96,9 @@ namespace tay {
         void copy_from(const variant &other) {
             if constexpr (Index < size) {
                 if (other.tag_ == Index) {
-                    std::construct_at(reinterpret_cast<type_at<Index> *>(storage_),
-                                      other.template get<type_at<Index>>());
+                    static_cast<void>(
+                        std::construct_at(reinterpret_cast<type_at<Index> *>(storage_),
+                                          other.template get<type_at<Index>>()));
                     tag_ = Index;
                 } else {
                     copy_from<Index + 1>(other);
@@ -100,8 +110,9 @@ namespace tay {
         void move_from(variant &&other) noexcept {
             if constexpr (Index < size) {
                 if (other.tag_ == Index) {
-                    std::construct_at(reinterpret_cast<type_at<Index> *>(storage_),
-                                      std::move(other.template get<type_at<Index>>()));
+                    static_cast<void>(
+                        std::construct_at(reinterpret_cast<type_at<Index> *>(storage_),
+                                          std::move(other.template get<type_at<Index>>())));
                     tag_ = Index;
                 } else {
                     move_from<Index + 1>(std::move(other));
@@ -110,7 +121,7 @@ namespace tay {
         }
 
     public:
-        static constexpr size_t size = sizeof...(Types);
+        static constexpr size_t size        = sizeof...(Types);
         static constexpr size_t invalid_tag = static_cast<size_t>(-1);
 
         template <size_t Index>
@@ -120,8 +131,9 @@ namespace tay {
 
         template <typename T>
             requires((std::same_as<std::remove_cvref_t<T>, Types> || ...))
-        constexpr variant(T &&value) noexcept(std::is_nothrow_constructible_v<std::remove_cvref_t<T>, T &&>) {
-            using value_type = std::remove_cvref_t<T>;
+        constexpr variant(T &&value) noexcept(
+            std::is_nothrow_constructible_v<std::remove_cvref_t<T>, T &&>) {
+            using value_type       = std::remove_cvref_t<T>;
             constexpr size_t index = detail::variant_index<value_type, Types...>::value;
             static_cast<void>(std::construct_at(reinterpret_cast<value_type *>(storage_),
                                                 std::forward<T>(value)));
@@ -190,7 +202,8 @@ namespace tay {
 
         template <typename Visitor>
         constexpr decltype(auto) visit(Visitor &&visitor) const {
-            return detail::variant_visit<Visitor, const variant &>(std::forward<Visitor>(visitor), *this);
+            return detail::variant_visit<Visitor, const variant &>(std::forward<Visitor>(visitor),
+                                                                   *this);
         }
     };
 

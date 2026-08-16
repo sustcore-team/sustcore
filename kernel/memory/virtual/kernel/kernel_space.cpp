@@ -14,27 +14,25 @@ namespace memory {
     constinit KernelSpace KernelSpace::instance_{};
     constinit std::atomic<bool> KernelSpace::ready_{false};
 
-    tay::expected<void, tay::error_code> KernelSpace::initialize(const BootInfoHeader &) noexcept {
+    tay::expected<void, PagingError> KernelSpace::initialize(const BootInfoHeader &) noexcept {
         if (ready_.load(std::memory_order_acquire))
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(PagingError::InvalidState(PagingError::Operation::ADOPT_ROOT));
 
-        auto root = PageTable::create_root(KERNEL_PAGE_TABLE_OWNER);
-        if (!root)
-            return tay::Err(root.error());
-        auto guard = PageTable::create_root(KERNEL_PAGE_TABLE_OWNER);
+        const PhyAddr root = TAY_TRY(PageTable::create_root(KERNEL_PAGE_TABLE_OWNER));
+        auto guard         = PageTable::create_root(KERNEL_PAGE_TABLE_OWNER);
         if (!guard) {
-            PageTable::destroy_root(*root, KERNEL_PAGE_TABLE_OWNER);
-            return tay::Err(guard.error());
+            PageTable::destroy_root(root, KERNEL_PAGE_TABLE_OWNER);
+            return TAY_ERR(guard);
         }
 
         {
             auto state = instance_.page_table_.lock();
             auto adopted =
-                state->table.adopt_root(*root, PageTableKind::KERNEL, KERNEL_PAGE_TABLE_OWNER);
+                state->table.adopt_root(root, PageTableKind::KERNEL, KERNEL_PAGE_TABLE_OWNER);
             if (!adopted) {
                 PageTable::destroy_root(*guard, KERNEL_PAGE_TABLE_OWNER);
-                PageTable::destroy_root(*root, KERNEL_PAGE_TABLE_OWNER);
-                return tay::Err(adopted.error());
+                PageTable::destroy_root(root, KERNEL_PAGE_TABLE_OWNER);
+                return TAY_ERR(adopted);
             }
             instance_.guard_root_ = *guard;
         }
@@ -42,9 +40,8 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> KernelSpace::map_high(HvaAddr address, PhyAddr physical,
-                                                               size_t bytes,
-                                                               PageFlags flags) noexcept {
+    tay::expected<void, PagingError> KernelSpace::map_high(HvaAddr address, PhyAddr physical,
+                                                           size_t bytes, PageFlags flags) noexcept {
         flags.user   = false;
         flags.global = true;
         auto state   = page_table_.lock();
@@ -52,14 +49,14 @@ namespace memory {
                                 paging::WalkDomain::KERNEL_OWNED);
     }
 
-    tay::expected<void, tay::error_code> KernelSpace::unmap_high(HvaAddr address,
-                                                                 size_t bytes) noexcept {
+    tay::expected<void, PagingError> KernelSpace::unmap_high(HvaAddr address,
+                                                             size_t bytes) noexcept {
         auto state = page_table_.lock();
         return state->table.unmap(address.arith(), bytes, paging::WalkDomain::KERNEL_OWNED);
     }
 
-    tay::expected<void, tay::error_code> KernelSpace::protect_high(HvaAddr address, size_t bytes,
-                                                                   PageFlags flags) noexcept {
+    tay::expected<void, PagingError> KernelSpace::protect_high(HvaAddr address, size_t bytes,
+                                                               PageFlags flags) noexcept {
         flags.user   = false;
         flags.global = true;
         auto state   = page_table_.lock();
@@ -67,9 +64,45 @@ namespace memory {
                                     paging::WalkDomain::KERNEL_OWNED);
     }
 
-    tay::expected<PageMapping, tay::error_code> KernelSpace::query(HvaAddr address) const noexcept {
+    tay::expected<PageMapping, PagingError> KernelSpace::query(HvaAddr address) const noexcept {
         auto state = page_table_.lock();
         return state->table.query(address.arith(), paging::WalkDomain::KERNEL_OWNED);
+    }
+
+    tay::expected<KvaAddr, PagingError> KernelSpace::map_device(PhyAddr physical, size_t bytes,
+                                                                PageFlags flags) noexcept {
+        if (bytes == 0 || !physical.aligned<PAGE_SIZE>() || (bytes & (PAGE_SIZE - 1)) != 0)
+            return tay::Err(
+                PagingError::UnalignedRange(PagingError::Operation::MAP, physical.arith(), bytes));
+        if (bytes > addr_t(-1) - physical.arith())
+            return tay::Err(
+                PagingError::RangeOverflow(PagingError::Operation::MAP, physical.arith(), bytes));
+        if (physical.arith() > MAX_ADDR - KVA_START)
+            return tay::Err(
+                PagingError::InvalidPhysicalAddress(PagingError::Operation::MAP, physical));
+        if (!kernel_space_ready())
+            return tay::Err(PagingError::InvalidState(PagingError::Operation::MAP));
+        const auto virtual_address = HvaAddr(PA2KVA(physical.arith()));
+        flags.user                 = false;
+        flags.global               = true;
+        TAY_TRYV(map_high(virtual_address, physical, bytes, flags));
+        return KvaAddr(virtual_address.arith());
+    }
+
+    tay::expected<void, PagingError> KernelSpace::unmap_device(PhyAddr physical,
+                                                               size_t bytes) noexcept {
+        if (bytes == 0 || !physical.aligned<PAGE_SIZE>() || (bytes & (PAGE_SIZE - 1)) != 0)
+            return tay::Err(PagingError::UnalignedRange(PagingError::Operation::UNMAP,
+                                                        physical.arith(), bytes));
+        if (bytes > addr_t(-1) - physical.arith())
+            return tay::Err(
+                PagingError::RangeOverflow(PagingError::Operation::UNMAP, physical.arith(), bytes));
+        if (physical.arith() > MAX_ADDR - KVA_START)
+            return tay::Err(
+                PagingError::InvalidPhysicalAddress(PagingError::Operation::UNMAP, physical));
+        if (!kernel_space_ready())
+            return tay::Err(PagingError::InvalidState(PagingError::Operation::UNMAP));
+        return unmap_high(HvaAddr(PA2KVA(physical.arith())), bytes);
     }
 
     PhyAddr KernelSpace::root() const noexcept {
@@ -78,14 +111,14 @@ namespace memory {
     }
 
     RootBinding KernelSpace::binding() const noexcept {
-        return RootBinding{.client_root = guard_root_, .asid = 0, .role = RootRole::KERNEL};
+        return RootBinding{.private_root = guard_root_, .asid = 0, .role = RootRole::KERNEL};
     }
 
     void KernelSpace::activate() noexcept {
         hal::PageTableOps::activate_binding(binding());
     }
 
-    tay::expected<RootSlotSnapshot, tay::error_code> KernelSpace::published_slot(
+    tay::expected<RootSlotSnapshot, PagingError> KernelSpace::published_slot(
         HvaAddr address) const noexcept {
         const size_t index =
             hal::PageTableOps::index_at(address.arith(), hal::PageTableOps::TOP_LEVEL);
@@ -99,12 +132,13 @@ namespace memory {
             if (descriptor == nullptr || descriptor->state != PageState::CLAIMED ||
                 descriptor->kind != PageKind::PAGE_TABLE ||
                 descriptor->owner_id != KERNEL_PAGE_TABLE_OWNER)
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+                return tay::Err(PagingError::UnexpectedEntry(
+                    address.arith(), static_cast<u8_t>(hal::PageTableOps::TOP_LEVEL)));
         }
         return RootSlotSnapshot{.index = index, .entry = entry, .published = true};
     }
 
-    tay::expected<void, tay::error_code> KernelSpace::copy_published_high_slots_to(
+    tay::expected<void, PagingError> KernelSpace::copy_published_high_slots_to(
         PageTable &client) const noexcept {
         PageTable::EntryType entries[hal::PageTableOps::ENTRIES_PER_TABLE / 2]{};
         {
@@ -119,7 +153,7 @@ namespace memory {
                 continue;
             if (!client.install_root_entry_if_empty(
                     offset + hal::PageTableOps::ENTRIES_PER_TABLE / 2, entry))
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+                return tay::Err(PagingError::MappingAlreadyPresent(0));
         }
         return {};
     }

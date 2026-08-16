@@ -10,9 +10,12 @@
  */
 
 #include <tay/algo/sort.h>
+#include <tay/utility.h>
 
 #include <cassert>
 #include <cstddef>
+#include <functional>
+#include <type_traits>
 
 namespace {
     template <typename T, size_t Size>
@@ -54,6 +57,13 @@ namespace {
         }
     };
 
+    using record_key_less = tay::projected_compare<std::ranges::less, int record::*>;
+
+    static_assert(
+        std::is_same_v<decltype(tay::projected_compare(std::ranges::less{}, &record::key)),
+                       record_key_less>);
+    static_assert(noexcept(record_key_less(std::ranges::less{}, &record::key)(record{}, record{})));
+
     constexpr bool constexpr_sort_works() {
         int values[]   = {5, 1, 4, 1, 3, 2};
         int expected[] = {1, 1, 2, 3, 4, 5};
@@ -81,6 +91,7 @@ int main() {
     assert(equal(descending, expected_descending));
 
     record records[] = {{3, 30}, {1, 10}, {2, 20}, {1, 11}};
+    assert(record_key_less(std::ranges::less{}, &record::key)(records[1], records[0]));
     tay::sort(records, {}, &record::key);
     const record expected_records[] = {
         {1, 10},

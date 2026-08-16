@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <memory/memory_segment_error.h>
 #include <memory/physical/gfp.h>
 #include <obj/kernel_object.h>
 #include <sustcore/addr.h>
@@ -26,8 +27,8 @@ namespace memory {
     public:
         static constexpr cap::ObjectType TYPE = cap::ObjectType::MEMORY;
 
-        [[nodiscard]] static tay::expected<cap::ObjectRef<MemorySegment>, tay::error_code> create(
-            size_t bytes) noexcept;
+        [[nodiscard]] static tay::expected<cap::ObjectRef<MemorySegment>, MemorySegmentError>
+        create(size_t bytes) noexcept;
 
         MemorySegment(const MemorySegment &)            = delete;
         MemorySegment &operator=(const MemorySegment &) = delete;
@@ -43,11 +44,13 @@ namespace memory {
             return pages_.size() * PAGE_SIZE;
         }
 
-        [[nodiscard]] tay::expected<PhyAddr, tay::error_code> ensure_page(size_t offset) noexcept;
-        [[nodiscard]] tay::expected<PhyAddr, tay::error_code> lookup_page(
+        [[nodiscard]] tay::expected<PhyAddr, MemorySegmentError> ensure_page(
+            size_t offset) noexcept;
+        [[nodiscard]] tay::expected<PhyAddr, MemorySegmentError> lookup_page(
             size_t offset) const noexcept;
-        [[nodiscard]] tay::expected<size_t, tay::error_code> write(size_t offset, const void *data,
-                                                                   size_t buflen) noexcept;
+        [[nodiscard]] tay::expected<size_t, MemorySegmentError> write(size_t offset,
+                                                                      const void *data,
+                                                                      size_t buflen) noexcept;
 
     private:
         explicit MemorySegment(size_t bytes, tay::hash_map<size_t, OwnedPages> &&pages) noexcept

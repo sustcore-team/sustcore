@@ -158,11 +158,13 @@ kernel::locked_ref
 1. 跨子系统复用、语义接近基础库设施的同步、guard 和所有权工具，例如
    `interrupt_guard`、`synchronized`、`lock_guard` 和 `locked_ref`；
 2. 直接为 `taycpplib` 容器实例提供局部短名、不增加独立行为或领域语义的实现别名，例如
-   `area_vector`、`chunk_list`、`HeapSlubList`、`kernel_layout_list`、
+   `area_vector`、`chunk_list`、`kernel_layout_list`、
    `reserved_layout_list`、`hhdm_layout_list` 和 `exclusion_list`。
 
 第二类名称只是底层容器类型的局部缩写；一旦封装开始维护自己的状态、不变量或操作，就应
 提升为使用 `UpperCamelCase` 的正常类型，而不能继续以容器别名规则命名。
+`HeapSlubList` 是具有 `find`、`find_exact` 和 `for_each` 行为的 `detail::SlubList` 配置，
+不属于直接容器别名，保持 `UpperCamelCase`。
 
 上述规则不按名称后缀机械套用。下列类型继续使用 `UpperCamelCase`：
 

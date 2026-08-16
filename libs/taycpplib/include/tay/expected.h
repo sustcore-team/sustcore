@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <tay/in_place.h>
 #include <tay/panic.h>
 
 #include <concepts>
@@ -26,12 +27,6 @@ namespace tay {
     };
 
     inline constexpr unexpect_t unexpect{};
-
-    struct in_place_t {
-        explicit constexpr in_place_t() = default;
-    };
-
-    inline constexpr in_place_t in_place{};
 
     struct try_in_place_t {
         explicit constexpr try_in_place_t() = default;
@@ -1591,4 +1586,70 @@ namespace tay {
     {
         left.swap(right);
     }
+
+    namespace detail {
+        template <typename T>
+        class try_value_holder {
+        public:
+            constexpr explicit try_value_holder(T&& value) noexcept(
+                std::is_nothrow_move_constructible_v<T>)
+                : value_(std::move(value)) {}
+
+            [[nodiscard]] constexpr T&& get() && noexcept {
+                return std::move(value_);
+            }
+
+        private:
+            T value_;
+        };
+
+        template <typename T>
+        class try_value_holder<T&> {
+        public:
+            constexpr explicit try_value_holder(T& value) noexcept
+                : value_(std::addressof(value)) {}
+
+            [[nodiscard]] constexpr T& get() && noexcept {
+                return *value_;
+            }
+
+        private:
+            T* value_;
+        };
+
+        template <typename T>
+        try_value_holder(T&&) -> try_value_holder<T>;
+    }  // namespace detail
 }  // namespace tay
+
+/**
+ * @brief 将 `expected` 的错误分支包装为 `tay::unexpected`。
+ *
+ * `result` 必须是可取错误的 `expected` 对象；错误会从结果中移动出来。
+ */
+#define TAY_ERR(result) tay::Err(std::move((result)).error())
+
+/**
+ * @brief 求值 `expr`，失败时从当前函数传播错误，成功时忽略其中的值。
+ *
+ * `expr` 只求值一次。该宏使用 Clang/GNU statement expression 扩展。
+ */
+#define TAY_TRYV(expr)             \
+    __extension__({                \
+        auto __res = (expr);       \
+        if (!__res)                \
+            return TAY_ERR(__res); \
+    })
+
+/**
+ * @brief 求值 `expr`，失败时从当前函数传播错误，成功时提取其中的值。
+ *
+ * `expr` 只求值一次。值会从临时结果中移动出来；引用型 `expected` 仍返回原引用。
+ */
+#define TAY_TRY(expr)                                            \
+    (__extension__({                                             \
+        auto __res = (expr);                                     \
+        if (!__res)                                              \
+            return TAY_ERR(__res);                               \
+        tay::detail::try_value_holder(std::move(__res).value()); \
+    })).get()

@@ -17,7 +17,7 @@ namespace cap {
 
     KernelObject::KernelObject(ObjectType type, const ObjectOps *ops) noexcept {
         header_.type = type;
-        header_.id   = ObjectId{object_ids.next()};
+        header_.id   = ObjectId{.value = object_ids.next()};
         header_.ops  = ops;
     }
 

@@ -18,17 +18,17 @@
 namespace kernel::log {
     namespace {
         constinit synchronized<Logger> logger;
-    }
 
-    int __writes(const char *data, size_t sz) noexcept {
-        for (size_t i = 0; i < sz; ++i) {
-            putc(data[i]);
+        int write_bytes(const char *data, size_t sz) noexcept {
+            for (size_t i = 0; i < sz; ++i) {
+                putc(data[i]);
+            }
+            return static_cast<int>(sz);
         }
-        return static_cast<int>(sz);
-    }
+    }  // namespace
 
     int Output::operator()(const char *data, size_t sz) const noexcept {
-        return __writes(data, sz);
+        return write_bytes(data, sz);
     }
 
     locked_ref<Logger> global() noexcept {

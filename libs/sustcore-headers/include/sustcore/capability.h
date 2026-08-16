@@ -36,6 +36,7 @@ namespace cap {
         BLOCK_DEVICE  = 14,
         VNODE         = 15,
         OPEN_FILE     = 16,
+        MMIO          = 17,
     };
 
     /** @brief Capability 的通用生命周期与传递权限。 */

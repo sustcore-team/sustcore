@@ -92,44 +92,49 @@ namespace memory {
             delete node;
     }
 
-    tay::expected<void, tay::error_code> KernelMM::initialize(const BootInfoHeader &) noexcept {
-        if (instance_.initialization_attempted_ || !heap_ready() || !kernel_space_ready())
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+    tay::expected<void, KernelLayoutError> KernelMM::initialize(const BootInfoHeader &) noexcept {
+        if (instance_.initialization_attempted_)
+            return tay::Err(KernelLayoutError::InitializationAlreadyAttempted());
+        if (!heap_ready())
+            return tay::Err(
+                KernelLayoutError::DependencyNotReady(KernelLayoutError::Dependency::HEAP));
+        if (!kernel_space_ready())
+            return tay::Err(
+                KernelLayoutError::DependencyNotReady(KernelLayoutError::Dependency::KERNEL_SPACE));
         instance_.initialization_attempted_ = true;
 
         for (size_t index = 0; index < page_database().region_count(); ++index) {
             const auto &area = page_database().region(index).parent;
             auto kva         = KpaAddr::try_from(PA2KPA(area.begin.arith()));
             if (!kva)
-                return tay::Err(kva.error());
-            auto loaded = instance_.load_hhdm_layout_impl(HHDMLayout{
+                return tay::Err(KernelLayoutError::InvalidHhdmLayout(HHDMLayout{
+                    .physical_base = area.begin,
+                    .bytes         = area.size(),
+                }));
+            TAY_TRYV(instance_.load_hhdm_layout_impl(HHDMLayout{
                 .virtual_base  = *kva,
                 .physical_base = area.begin,
                 .bytes         = area.size(),
                 .flags         = PageFlags{.readable = true, .writable = true, .executable = false},
-            });
-            if (!loaded)
-                return tay::Err(loaded.error());
+            }));
         }
 
 #if defined(__loongarch__)
         constexpr addr_t SERIAL_PAGE = 0x1fe00000;
-        auto serial                  = instance_.load_hhdm_layout_impl(HHDMLayout{
-                             .virtual_base  = KpaAddr(PA2KPA(SERIAL_PAGE)),
-                             .physical_base = PhyAddr(SERIAL_PAGE),
-                             .bytes         = PAGE_SIZE,
-                             .flags         = PageFlags{.readable   = true,
-                                                        .writable   = true,
-                                                        .executable = false,
-                                                        .cache      = CacheMode::DEVICE},
-        });
-        if (!serial)
-            return tay::Err(serial.error());
+        TAY_TRYV(instance_.load_hhdm_layout_impl(HHDMLayout{
+            .virtual_base  = KpaAddr(PA2KPA(SERIAL_PAGE)),
+            .physical_base = PhyAddr(SERIAL_PAGE),
+            .bytes         = PAGE_SIZE,
+            .flags         = PageFlags{.readable   = true,
+                                       .writable   = true,
+                                       .executable = false,
+                                       .cache      = CacheMode::DEVICE},
+        }));
 #endif
 
         const auto load_segment =
             [](char *begin, char *end,
-               PageFlags flags) -> tay::expected<KernelLayoutId, tay::error_code> {
+               PageFlags flags) -> tay::expected<KernelLayoutId, KernelLayoutError> {
             if (begin == end)
                 return KernelLayoutId{0};
             return instance_.load_kernel_layout_impl(KernelLayoutSpec{
@@ -145,45 +150,58 @@ namespace memory {
             char *end;
             PageFlags flags;
         } segments[] = {
-            {detail::s_text, detail::e_text, {.readable = true, .executable = true}},
-            {detail::s_rodata, detail::e_rodata, {.readable = true}},
-            {detail::s_data, detail::e_data, {.readable = true, .writable = true}},
-            {detail::__bsp_stack_bottom,
-             detail::__bsp_stack_top,
-             {.readable = true, .writable = true}},
-            {detail::s_bss, detail::e_bss, {.readable = true, .writable = true}},
-            {detail::s_init_text, detail::e_init_text, {.readable = true, .executable = true}},
-            {detail::s_init_rodata, detail::e_init_rodata, {.readable = true}},
-            {detail::s_init_data, detail::e_init_data, {.readable = true, .writable = true}},
-            {detail::s_init_bss, detail::e_init_bss, {.readable = true, .writable = true}},
+            {.begin = detail::s_text,
+             .end   = detail::e_text,
+             .flags = {.readable = true, .executable = true}},
+            {.begin = detail::s_rodata, .end = detail::e_rodata, .flags = {.readable = true}},
+            {.begin = detail::s_data,
+             .end   = detail::e_data,
+             .flags = {.readable = true, .writable = true}},
+            {.begin = detail::__bsp_stack_bottom,
+             .end   = detail::__bsp_stack_top,
+             .flags = {.readable = true, .writable = true}},
+            {.begin = detail::s_bss,
+             .end   = detail::e_bss,
+             .flags = {.readable = true, .writable = true}},
+            {.begin = detail::s_init_text,
+             .end   = detail::e_init_text,
+             .flags = {.readable = true, .executable = true}},
+            {.begin = detail::s_init_rodata,
+             .end   = detail::e_init_rodata,
+             .flags = {.readable = true}},
+            {.begin = detail::s_init_data,
+             .end   = detail::e_init_data,
+             .flags = {.readable = true, .writable = true}},
+            {.begin = detail::s_init_bss,
+             .end   = detail::e_init_bss,
+             .flags = {.readable = true, .writable = true}},
         };
         static_assert(sizeof(segments) / sizeof(segments[0]) <= BOOTSTRAP_KERNEL_NODE_COUNT);
         static_assert(sizeof(segments) / sizeof(segments[0]) <= BOOTSTRAP_RESERVED_NODE_COUNT);
-        for (const auto &segment : segments) {
-            auto loaded = load_segment(segment.begin, segment.end, segment.flags);
-            if (!loaded)
-                return tay::Err(loaded.error());
-        }
+        for (const auto &segment : segments)
+            TAY_TRYV(load_segment(segment.begin, segment.end, segment.flags));
 
         instance_.initializing_ = false;
         ready_.store(true, std::memory_order_release);
         return {};
     }
 
-    tay::expected<HHDMLayoutId, tay::error_code> KernelMM::load_hhdm_layout_impl(
+    tay::expected<HHDMLayoutId, KernelLayoutError> KernelMM::load_hhdm_layout_impl(
         const HHDMLayout &source) noexcept {
         if (!valid_range(source.virtual_base.arith(), source.bytes) ||
             !source.physical_base.aligned<PAGE_SIZE>() ||
             source.bytes > addr_t(-1) - source.physical_base.arith() ||
             source.virtual_base.arith() != PA2KPA(source.physical_base.arith()) ||
             (source.flags.writable && source.flags.executable))
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(KernelLayoutError::InvalidHhdmLayout(source));
 
         auto *node = allocate_hhdm_node();
         if (node == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(KernelLayoutError::NodeAllocationFailed(
+                KernelLayoutError::LayoutKind::HHDM, initializing_));
         node->layout  = source;
         bool conflict = false;
+        PhyArea conflicting_area{};
         {
             auto state = layouts_.lock();
             for (auto *existing : state->hhdm_layouts) {
@@ -191,6 +209,9 @@ namespace memory {
                              existing->layout.physical_base.arith(), existing->layout.bytes))
                 {
                     conflict = true;
+                    conflicting_area =
+                        PhyArea(existing->layout.physical_base,
+                                existing->layout.physical_base + existing->layout.bytes);
                     break;
                 }
             }
@@ -201,7 +222,9 @@ namespace memory {
         }
         if (conflict) {
             release_node(node);
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(KernelLayoutError::HhdmConflict(
+                PhyArea(source.physical_base, source.physical_base + source.bytes),
+                conflicting_area));
         }
 
         auto mapped = kernel_space().map_high(HvaAddr(source.virtual_base.arith()),
@@ -212,7 +235,7 @@ namespace memory {
                 static_cast<void>(state->hhdm_layouts.remove(node));
             }
             release_node(node);
-            return tay::Err(mapped.error());
+            return tay::Err(KernelLayoutError::PagingFailed(std::move(mapped.error())));
         }
         {
             auto state      = layouts_.lock();
@@ -221,7 +244,7 @@ namespace memory {
         return node->layout.id;
     }
 
-    tay::expected<HHDMLayoutId, tay::error_code> KernelMM::load_hhdm_layout(
+    tay::expected<HHDMLayoutId, KernelLayoutError> KernelMM::load_hhdm_layout(
         const HHDMLayout &layout) noexcept {
         return load_hhdm_layout_impl(layout);
     }
@@ -238,26 +261,31 @@ namespace memory {
         return false;
     }
 
-    tay::expected<KernelLayoutId, tay::error_code> KernelMM::load_kernel_layout_impl(
+    tay::expected<KernelLayoutId, KernelLayoutError> KernelMM::load_kernel_layout_impl(
         const KernelLayoutSpec &spec) noexcept {
         if (!valid_range(spec.virtual_base.arith(), spec.bytes) ||
             !spec.physical_base.aligned<PAGE_SIZE>() ||
             spec.bytes > addr_t(-1) - spec.physical_base.arith() ||
-            !hhdm_covers(spec.physical_base, spec.bytes) ||
             (spec.flags.writable && spec.flags.executable))
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(KernelLayoutError::InvalidKernelLayout(spec));
+        if (!hhdm_covers(spec.physical_base, spec.bytes))
+            return tay::Err(KernelLayoutError::HhdmCoverageMissing(spec.physical_base, spec.bytes));
 
         auto *kernel_node   = allocate_kernel_node();
         auto *reserved_node = allocate_reserved_node();
         if (kernel_node == nullptr || reserved_node == nullptr) {
             release_node(kernel_node);
             release_node(reserved_node);
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(KernelLayoutError::NodeAllocationFailed(
+                kernel_node == nullptr ? KernelLayoutError::LayoutKind::KERNEL
+                                       : KernelLayoutError::LayoutKind::RESERVED,
+                initializing_));
         }
         kernel_node->layout.spec = spec;
 
         HHDMLayoutNode *parent_node = nullptr;
         bool conflict               = false;
+        KvaArea conflicting_area{};
         {
             auto state = layouts_.lock();
             for (auto *existing : state->kernel_layouts) {
@@ -266,6 +294,9 @@ namespace memory {
                              existing->layout.spec.bytes))
                 {
                     conflict = true;
+                    conflicting_area =
+                        KvaArea(existing->layout.spec.virtual_base,
+                                existing->layout.spec.virtual_base + existing->layout.spec.bytes);
                     break;
                 }
             }
@@ -297,20 +328,27 @@ namespace memory {
         if (conflict || parent_node == nullptr) {
             release_node(kernel_node);
             release_node(reserved_node);
-            return tay::Err(conflict ? tay::error_code::INVALID_ARGUMENT
-                                     : tay::error_code::OUT_OF_RANGE);
+            if (conflict)
+                return tay::Err(KernelLayoutError::LayoutConflict(
+                    KvaArea(spec.virtual_base, spec.virtual_base + spec.bytes), conflicting_area));
+            return tay::Err(KernelLayoutError::HhdmCoverageMissing(spec.physical_base, spec.bytes));
         }
 
-        auto mapped = kernel_space().map_high(HvaAddr(spec.virtual_base.arith()),
-                                              spec.physical_base, spec.bytes, spec.flags);
+        auto mapped                = kernel_space().map_high(HvaAddr(spec.virtual_base.arith()),
+                                                             spec.physical_base, spec.bytes, spec.flags);
+        const bool mapping_created = mapped.has_value();
         if (mapped) {
             mapped = kernel_space().protect_high(
                 HvaAddr(PA2KPA(spec.physical_base.arith())), spec.bytes,
                 PageFlags{.readable = true, .writable = false, .executable = false});
         }
         if (!mapped) {
-            static_cast<void>(
-                kernel_space().unmap_high(HvaAddr(spec.virtual_base.arith()), spec.bytes));
+            if (mapping_created) {
+                auto rolled_back =
+                    kernel_space().unmap_high(HvaAddr(spec.virtual_base.arith()), spec.bytes);
+                if (!rolled_back)
+                    kernel::log::panic("KernelLayout 映射事务回滚失败");
+            }
             {
                 auto state = layouts_.lock();
                 static_cast<void>(state->kernel_layouts.remove(kernel_node));
@@ -318,7 +356,7 @@ namespace memory {
             }
             release_node(kernel_node);
             release_node(reserved_node);
-            return tay::Err(mapped.error());
+            return tay::Err(KernelLayoutError::PagingFailed(std::move(mapped.error())));
         }
         {
             auto state               = layouts_.lock();
@@ -328,19 +366,20 @@ namespace memory {
         return kernel_node->layout.id;
     }
 
-    tay::expected<KernelLayoutId, tay::error_code> KernelMM::load_kernel_layout(
+    tay::expected<KernelLayoutId, KernelLayoutError> KernelMM::load_kernel_layout(
         const KernelLayoutSpec &spec) noexcept {
         return load_kernel_layout_impl(spec);
     }
 
-    tay::expected<ReservedLayoutId, tay::error_code> KernelMM::reserve_hhdm(
+    tay::expected<ReservedLayoutId, KernelLayoutError> KernelMM::reserve_hhdm(
         HHDMLayoutId parent, const ReservedLayout &source) noexcept {
         if (!valid_range(source.physical_base.arith(), source.bytes) ||
             source.bytes > addr_t(-1) - source.physical_base.arith())
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(KernelLayoutError::InvalidReservedLayout(source));
         auto *node = allocate_reserved_node();
         if (node == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(KernelLayoutError::NodeAllocationFailed(
+                KernelLayoutError::LayoutKind::RESERVED, initializing_));
         node->layout                = source;
         node->layout.parent         = parent;
         HHDMLayoutNode *parent_node = nullptr;
@@ -359,13 +398,16 @@ namespace memory {
             {
                 node->layout.id = state->ids.next();
                 parent_node->reservations.push_front(node);
-            } else {
-                parent_node = nullptr;
             }
         }
         if (parent_node == nullptr) {
             release_node(node);
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
+            return tay::Err(KernelLayoutError::HhdmLayoutNotFound(parent));
+        }
+        if (node->layout.id == 0) {
+            release_node(node);
+            return tay::Err(
+                KernelLayoutError::HhdmCoverageMissing(source.physical_base, source.bytes));
         }
         auto protected_range = kernel_space().protect_high(
             HvaAddr(PA2KPA(source.physical_base.arith())), source.bytes,
@@ -376,7 +418,7 @@ namespace memory {
                 static_cast<void>(parent_node->reservations.remove(node));
             }
             release_node(node);
-            return tay::Err(protected_range.error());
+            return tay::Err(KernelLayoutError::PagingFailed(std::move(protected_range.error())));
         }
         {
             auto state      = layouts_.lock();
@@ -385,9 +427,8 @@ namespace memory {
         return node->layout.id;
     }
 
-    tay::expected<void, tay::error_code> KernelMM::refresh_hhdm_permissions(HHDMLayoutId parent,
-                                                                            PhyAddr begin,
-                                                                            size_t bytes) noexcept {
+    tay::expected<void, KernelLayoutError> KernelMM::refresh_hhdm_permissions(
+        HHDMLayoutId parent, PhyAddr begin, size_t bytes) noexcept {
         for (size_t offset = 0; offset < bytes; offset += PAGE_SIZE) {
             bool reserved = false;
             PageFlags flags{};
@@ -415,18 +456,18 @@ namespace memory {
                 }
             }
             if (!found_parent)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
+                return tay::Err(KernelLayoutError::HhdmLayoutNotFound(parent));
             flags.writable   = flags.writable && !reserved;
             flags.executable = false;
             auto result      = kernel_space().protect_high(HvaAddr(PA2KPA(begin.arith() + offset)),
                                                            PAGE_SIZE, flags);
             if (!result)
-                return result;
+                return tay::Err(KernelLayoutError::PagingFailed(std::move(result.error())));
         }
         return {};
     }
 
-    tay::expected<void, tay::error_code> KernelMM::release_reserved_hhdm(
+    tay::expected<void, KernelLayoutError> KernelMM::release_reserved_hhdm(
         ReservedLayoutId id) noexcept {
         HHDMLayoutNode *parent_node = nullptr;
         ReservedLayoutNode *target  = nullptr;
@@ -444,9 +485,10 @@ namespace memory {
                     break;
             }
             if (target == nullptr)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
+                return tay::Err(KernelLayoutError::ReservedLayoutNotFound(id));
             if (target->layout.reason == ReservedLayout::Reason::KERNEL_LAYOUT)
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+                return tay::Err(
+                    KernelLayoutError::ReservationOwnedByKernel(id, target->layout.kernel_owner));
             target->committed = false;
         }
         auto result = refresh_hhdm_permissions(target->layout.parent, target->layout.physical_base,
@@ -454,7 +496,7 @@ namespace memory {
         if (!result) {
             auto state        = layouts_.lock();
             target->committed = true;
-            return result;
+            return TAY_ERR(result);
         }
         {
             auto state = layouts_.lock();
@@ -464,7 +506,7 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> KernelMM::unload_kernel_layout(
+    tay::expected<void, KernelLayoutError> KernelMM::unload_kernel_layout(
         KernelLayoutId id) noexcept {
         KernelLayoutNode *kernel_node     = nullptr;
         HHDMLayoutNode *parent_node       = nullptr;
@@ -488,8 +530,10 @@ namespace memory {
                 if (reserved_node != nullptr)
                     break;
             }
-            if (kernel_node == nullptr || parent_node == nullptr || reserved_node == nullptr)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
+            if (kernel_node == nullptr)
+                return tay::Err(KernelLayoutError::KernelLayoutNotFound(id));
+            if (parent_node == nullptr || reserved_node == nullptr)
+                return tay::Err(KernelLayoutError::OwnershipMismatch(id));
             kernel_node->committed   = false;
             reserved_node->committed = false;
         }
@@ -500,7 +544,7 @@ namespace memory {
             auto state               = layouts_.lock();
             kernel_node->committed   = true;
             reserved_node->committed = true;
-            return unmapped;
+            return tay::Err(KernelLayoutError::PagingFailed(std::move(unmapped.error())));
         }
         auto refreshed = refresh_hhdm_permissions(reserved_node->layout.parent,
                                                   reserved_node->layout.physical_base,
@@ -518,7 +562,7 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> KernelMM::unload_hhdm_layout(HHDMLayoutId id) noexcept {
+    tay::expected<void, KernelLayoutError> KernelMM::unload_hhdm_layout(HHDMLayoutId id) noexcept {
         HHDMLayoutNode *target = nullptr;
         {
             auto state = layouts_.lock();
@@ -529,9 +573,9 @@ namespace memory {
                 }
             }
             if (target == nullptr)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
+                return tay::Err(KernelLayoutError::HhdmLayoutNotFound(id));
             if (!target->reservations.empty())
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+                return tay::Err(KernelLayoutError::ReservationsPresent(id));
             target->committed = false;
         }
         auto result = kernel_space().unmap_high(HvaAddr(target->layout.virtual_base.arith()),
@@ -539,7 +583,7 @@ namespace memory {
         if (!result) {
             auto state        = layouts_.lock();
             target->committed = true;
-            return result;
+            return tay::Err(KernelLayoutError::PagingFailed(std::move(result.error())));
         }
         {
             auto state = layouts_.lock();
@@ -549,8 +593,13 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> KernelMM::unload_kernel_layouts_in(KvaAddr begin,
-                                                                            size_t bytes) noexcept {
+    tay::expected<void, KernelLayoutError> KernelMM::unload_kernel_layouts_in(
+        KvaAddr begin, size_t bytes) noexcept {
+        if (!valid_range(begin.arith(), bytes))
+            return tay::Err(KernelLayoutError::InvalidKernelLayout(KernelLayoutSpec{
+                .virtual_base = begin,
+                .bytes        = bytes,
+            }));
         while (true) {
             KernelLayoutId found = 0;
             {
@@ -569,9 +618,7 @@ namespace memory {
             }
             if (found == 0)
                 return {};
-            auto result = unload_kernel_layout(found);
-            if (!result)
-                return result;
+            TAY_TRYV(unload_kernel_layout(found));
         }
     }
 

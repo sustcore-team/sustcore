@@ -24,10 +24,10 @@ int __cxa_guard_acquire(u64_t *guard) {
             return 0;
         }
         if (state == 0) {
-            u64_t tmp = 0;
-            // M0 只有 BSP；PENDING 被再次观察到时按递归初始化处理。
-            if (__atomic_compare_exchange_n(guard, &tmp, PENDING, false, __ATOMIC_ACQUIRE,
-                                            __ATOMIC_RELAXED))
+            u64_t expected_state = 0;
+            // 当前仅 BSP 执行；再次观察到 PENDING 视为递归初始化。
+            if (__atomic_compare_exchange_n(guard, &expected_state, PENDING, false,
+                                            __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
             {
                 return 1;
             }

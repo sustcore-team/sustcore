@@ -15,18 +15,18 @@
 
 #include <cstddef>
 
-#define _LABOOT_STRING(x) _LABOOT_RODATA constexpr const char x[]
+#define LABOOT_BOOT_STRING(x) LABOOT_BOOT_RODATA constexpr const char x[]
 
 namespace laboot::pre {
-    _LABOOT_DATA volatile u8_t *SERIAL_BASE = reinterpret_cast<volatile u8_t *>(0x1fe001e0ULL);
+    LABOOT_BOOT_DATA volatile u8_t *SERIAL_BASE = reinterpret_cast<volatile u8_t *>(0x1fe001e0ULL);
 
-    _LABOOT_TEXT void serial_putc(char ch) {
+    LABOOT_BOOT_TEXT void serial_putc(char ch) {
         while ((SERIAL_BASE[5] & 0x20) == 0) {
         }
         SERIAL_BASE[0] = static_cast<u8_t>(ch);
     }
 
-    _LABOOT_TEXT void serial_puts(const char *str) {
+    LABOOT_BOOT_TEXT void serial_puts(const char *str) {
         for (const char *p = str; *p != '\0'; ++p) {
             serial_putc(*p);
         }
@@ -34,19 +34,19 @@ namespace laboot::pre {
 }  // namespace laboot::pre
 
 namespace laboot::msg::pre {
-    _LABOOT_STRING(LABOOT_BOOT_MSG)  = "LABOOT引导程序启动!\n";
-    _LABOOT_STRING(LABOOT_PANIC_MSG) = "LABOOT引导程序发生错误, 无法继续执行!\n";
-    _LABOOT_STRING(LABOOT_INVALID_KERNEL_SIZE_MSG) = "错误: LABOOT 内核大小超过 32MB 限制\n";
-    _LABOOT_STRING(LABOOT_INVALID_PAGING_SIZE_MSG) = "错误: LABOOT 分页保留区小于 128KB 限制\n";
-    _LABOOT_STRING(LABOOT_MISALIGNED_PAGING_MSG) = "错误: LABOOT 分页保留区未对齐到 4KB\n";
-    _LABOOT_STRING(LABOOT_BOUNDARY_MISALIGNED_MSG) = "错误: LABOOT 2MB 映射边界未对齐\n";
-    _LABOOT_STRING(LABOOT_1G_MISALIGNED_MSG)       = "错误: LABOOT 1GB 映射边界未对齐\n";
-    _LABOOT_STRING(LA_PAGE_ALLOC_OVERFLOW_MSG)     = "错误: LABOOT 分页保留区耗尽\n";
-    _LABOOT_STRING(LABOOT_CHECK_PASS_MSG)          = "LABOOT检查通过!\n";
-    _LABOOT_STRING(LABOOT_PAGING_READY_MSG)        = "LABOOT页表设置完成!\n";
-    _LABOOT_STRING(LABOOT_INVALID_DTB_MAGIC_MSG)   = "错误: DTB魔数不正确\n";
-    _LABOOT_STRING(LABOOT_INVALID_DTB_SIZE_MSG)    = "错误: DTB大小超过限制\n";
-    _LABOOT_STRING(LABOOT_MISALIGNED_KPA_MSG)      = "错误: KPA区域映射失效!\n";
+    LABOOT_BOOT_STRING(LABOOT_BOOT_MSG)  = "LABOOT引导程序启动!\n";
+    LABOOT_BOOT_STRING(LABOOT_PANIC_MSG) = "LABOOT引导程序发生错误, 无法继续执行!\n";
+    LABOOT_BOOT_STRING(LABOOT_INVALID_KERNEL_SIZE_MSG) = "错误: LABOOT 内核大小超过 32MB 限制\n";
+    LABOOT_BOOT_STRING(LABOOT_INVALID_PAGING_SIZE_MSG) = "错误: LABOOT 分页保留区小于 128KB 限制\n";
+    LABOOT_BOOT_STRING(LABOOT_MISALIGNED_PAGING_MSG) = "错误: LABOOT 分页保留区未对齐到 4KB\n";
+    LABOOT_BOOT_STRING(LABOOT_BOUNDARY_MISALIGNED_MSG) = "错误: LABOOT 2MB 映射边界未对齐\n";
+    LABOOT_BOOT_STRING(LABOOT_1G_MISALIGNED_MSG)     = "错误: LABOOT 1GB 映射边界未对齐\n";
+    LABOOT_BOOT_STRING(LA_PAGE_ALLOC_OVERFLOW_MSG)   = "错误: LABOOT 分页保留区耗尽\n";
+    LABOOT_BOOT_STRING(LABOOT_CHECK_PASS_MSG)        = "LABOOT检查通过!\n";
+    LABOOT_BOOT_STRING(LABOOT_PAGING_READY_MSG)      = "LABOOT页表设置完成!\n";
+    LABOOT_BOOT_STRING(LABOOT_INVALID_DTB_MAGIC_MSG) = "错误: DTB魔数不正确\n";
+    LABOOT_BOOT_STRING(LABOOT_INVALID_DTB_SIZE_MSG)  = "错误: DTB大小超过限制\n";
+    LABOOT_BOOT_STRING(LABOOT_MISALIGNED_KPA_MSG)    = "错误: KPA区域映射失效!\n";
 }  // namespace laboot::msg::pre
 
 namespace laboot {
@@ -56,20 +56,20 @@ namespace laboot {
     extern "C" [[noreturn]]
     void _laboot_post_start(addr_t boot_info_ptr, addr_t reclaimable_cursor);
 
-    extern "C" _LABOOT_BSS addr_t __laboot_bsp_phys_id       = 0;
-    extern "C" _LABOOT_BSS addr_t __laboot_cmdline_phys      = 0;
-    extern "C" _LABOOT_BSS addr_t __laboot_system_table_phys = 0;
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_bsp_phys_id       = 0;
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_cmdline_phys      = 0;
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_system_table_phys = 0;
 
-    _LABOOT_BSS addr_t reclaimable_cursor = 0;
-    _LABOOT_BSS addr_t reclaimable_limit  = 0;
-    _LABOOT_BSS LabootPagingSetup setup{};
-    _LABOOT_BSS LabootInfo boot_info{};
+    LABOOT_BOOT_BSS addr_t reclaimable_cursor = 0;
+    LABOOT_BOOT_BSS addr_t reclaimable_limit  = 0;
+    LABOOT_BOOT_BSS LabootPagingSetup setup{};
+    LABOOT_BOOT_BSS LabootInfo boot_info{};
 
     constexpr addr_t PA_START         = 0x00000000;
     constexpr addr_t PA_LIMIT         = 0x40000000;
     constexpr addr_t KERNEL_PHY_BASE  = 0x00300000;
     constexpr addr_t KERNEL_VIRT_BASE = 0xffffffff80300000ULL;
-    extern "C" _LABOOT_TEXT [[noreturn]] void _laboot_panic() {
+    extern "C" LABOOT_BOOT_TEXT [[noreturn]] void _laboot_panic() {
         serial_puts(LABOOT_PANIC_MSG);
         while (true) {
         }
@@ -81,14 +81,14 @@ namespace laboot {
         _laboot_panic(); \
     } while (0)
 
-    _LABOOT_TEXT void page_zero(addr_t pa) {
+    LABOOT_BOOT_TEXT void page_zero(addr_t pa) {
         auto *page = reinterpret_cast<byte *>(pa);
         for (size_t i = 0; i < PAGE_SIZE; ++i) {
             page[i] = 0;
         }
     }
 
-    _LABOOT_TEXT addr_t page_alloc() {
+    LABOOT_BOOT_TEXT addr_t page_alloc() {
         addr_t current = reclaimable_cursor;
         if ((current & (PAGE_TABLE_ALIGNMENT - 1)) != 0) {
             LABOOT_PANIC(LABOOT_MISALIGNED_PAGING_MSG);
@@ -101,12 +101,12 @@ namespace laboot {
         return current;
     }
 
-    _LABOOT_TEXT PteType *page_table(addr_t pa) {
+    LABOOT_BOOT_TEXT PteType *page_table(addr_t pa) {
         // 开启分页前物理地址可直接访问，因此可将页帧地址解释为页表数组。
         return reinterpret_cast<PteType *>(pa);
     }
 
-    _LABOOT_TEXT PteType *ensure_next_level(PteType *table, size_t index) {
+    LABOOT_BOOT_TEXT PteType *ensure_next_level(PteType *table, size_t index) {
         PteType &entry = table[index];
         if ((entry & PPN_MASK) == 0) {
             addr_t next_level = page_alloc();
@@ -115,8 +115,8 @@ namespace laboot {
         return page_table(entry & PPN_MASK);
     }
 
-    _LABOOT_TEXT PteType *ensure_path(addr_t root, const size_t vpn[PAGE_LEVELS],
-                                      size_t stop_level) {
+    LABOOT_BOOT_TEXT PteType *ensure_path(addr_t root, const size_t vpn[PAGE_LEVELS],
+                                          size_t stop_level) {
         auto *table = page_table(root);
         for (size_t level = PAGE_LEVELS - 1; level > stop_level; --level) {
             table = ensure_next_level(table, vpn[level]);
@@ -124,7 +124,7 @@ namespace laboot {
         return table;
     }
 
-    _LABOOT_TEXT void mapping_in_2m(addr_t root, addr_t va, addr_t pa) {
+    LABOOT_BOOT_TEXT void mapping_in_2m(addr_t root, addr_t va, addr_t pa) {
         if ((va & PAGING_ALIGNMENT_MASK) != 0 || (pa & PAGING_ALIGNMENT_MASK) != 0) {
             LABOOT_PANIC(LABOOT_BOUNDARY_MISALIGNED_MSG);
         }
@@ -136,7 +136,7 @@ namespace laboot {
         table[vpn[1]] = LA_MAKE_PTE(pa);
     }
 
-    _LABOOT_TEXT void map_range_in_2m(addr_t root, addr_t va_s, addr_t va_e, addr_t pa_s) {
+    LABOOT_BOOT_TEXT void map_range_in_2m(addr_t root, addr_t va_s, addr_t va_e, addr_t pa_s) {
         addr_t va = va_s;
         addr_t pa = pa_s;
         while (va < va_e) {
@@ -146,7 +146,7 @@ namespace laboot {
         }
     }
 
-    _LABOOT_TEXT void map_kpa_range_in_2m(addr_t root, addr_t pa_s, addr_t pa_e) {
+    LABOOT_BOOT_TEXT void map_kpa_range_in_2m(addr_t root, addr_t pa_s, addr_t pa_e) {
         if (pa_e <= pa_s) {
             return;
         }
@@ -159,7 +159,7 @@ namespace laboot {
         }
     }
 
-    _LABOOT_TEXT void map_identity_and_kpa(addr_t root, addr_t pa_s, addr_t pa_e) {
+    LABOOT_BOOT_TEXT void map_identity_and_kpa(addr_t root, addr_t pa_s, addr_t pa_e) {
         if ((pa_s & PAGING_ALIGNMENT_MASK) != 0 || (pa_e & PAGING_ALIGNMENT_MASK) != 0) {
             LABOOT_PANIC(LABOOT_MISALIGNED_KPA_MSG);
         }
@@ -168,8 +168,8 @@ namespace laboot {
         map_kpa_range_in_2m(root, pa_s, pa_e);
     }
 
-    _LABOOT_TEXT void init_boot_info(addr_t root_page_table, addr_t kernel_start,
-                                     addr_t kernel_end) {
+    LABOOT_BOOT_TEXT void init_boot_info(addr_t root_page_table, addr_t kernel_start,
+                                         addr_t kernel_end) {
         boot_info.bsp_phys_id          = __laboot_bsp_phys_id;
         boot_info.dtb_phys             = 0;
         boot_info.dtb_virt             = 0;
@@ -187,7 +187,7 @@ namespace laboot {
         (void)kernel_start;
     }
 
-    _LABOOT_TEXT void setup_switch_context(addr_t root) {
+    LABOOT_BOOT_TEXT void setup_switch_context(addr_t root) {
         // C++ 只组装切换上下文，汇编入口按固定布局写 CSR 并跨越地址空间切换。
         setup.root_page_table    = root;
         setup.pwctl0             = PWCTL0_4LEVEL;
@@ -207,7 +207,7 @@ namespace laboot {
         setup.reserved           = 0;
     }
 
-    extern "C" _LABOOT_TEXT LabootPagingSetup *_laboot_setup() {
+    extern "C" LABOOT_BOOT_TEXT LabootPagingSetup *_laboot_setup() {
         serial_puts(LABOOT_BOOT_MSG);
 
         char *paging_start = &s_laboot_reclaimable;

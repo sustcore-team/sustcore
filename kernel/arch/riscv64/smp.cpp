@@ -10,6 +10,7 @@
  */
 
 #include <arch/csr.h>
+#include <arch/riscv64/namespace.h>
 #include <arch/smp.h>
 #include <sbi/sbi.h>
 

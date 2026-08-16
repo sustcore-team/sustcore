@@ -275,11 +275,12 @@ namespace cap {
         /**
          * @brief 从 free list 预留 slot。
          * @param requested_slot 零表示选择 free-list 首项，否则请求指定 slot。
-         * @return 预留的 slot，或 `INVALID_SLOT`/`NO_SLOTS`。
+         * @param cnode_index 当前节点在所属 CSpace 中的稳定目录 index。
+         * @return 预留的 slot，或携带 slot/CNode index 的错误。
          * @pre 调用方持有 `lock_`。
          */
         [[nodiscard]] tay::expected<u16_t, CapError> reserve_slot_locked(
-            u16_t requested_slot = 0) noexcept;
+            u16_t requested_slot = 0, u8_t cnode_index = 0) noexcept;
 
         /**
          * @brief 在预留 slot 中发布 Capability 并建立对象引用和 CDT 链接。

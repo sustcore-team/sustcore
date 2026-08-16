@@ -38,6 +38,13 @@ sources = ["expected_invalid_rvalue_reference.cpp"]
 expect = "failure"
 
 [[freestanding-check]]
+id = "taycpplib-optional"
+kind = "compile"
+language = "c++"
+sources = ["optional_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
 id = "taycpplib-sort"
 kind = "compile"
 language = "c++"
@@ -70,6 +77,13 @@ id = "taycpplib-containers"
 kind = "compile"
 language = "c++"
 sources = ["containers_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-pairing-heap"
+kind = "link"
+language = "c++"
+sources = ["pairing_heap_freestanding.cpp", "panic_provider.cpp"]
 expect = "success"
 
 [[freestanding-check]]
@@ -148,6 +162,13 @@ id = "taycpplib-lock"
 kind = "compile"
 language = "c++"
 sources = ["lock_freestanding.cpp"]
+expect = "success"
+
+[[freestanding-check]]
+id = "taycpplib-rcu"
+kind = "compile"
+language = "c++"
+sources = ["rcu_freestanding.cpp"]
 expect = "success"
 
 [[freestanding-check]]

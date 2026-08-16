@@ -17,7 +17,7 @@
 #include <cstddef>
 
 namespace __cxa {
-    constexpr size_t __DESTRUCTOR_CAPS = 256;
+    constexpr size_t DESTRUCTOR_CAPACITY = 256;
     struct DestructorRecord {
         void (*function)(void *) = nullptr;
         void *argument           = nullptr;
@@ -25,12 +25,12 @@ namespace __cxa {
         bool active              = false;
     };
 
-    constinit DestructorRecord __destructors[__DESTRUCTOR_CAPS];
-    constinit tay::ticket_spinlock __destructor_lock;
+    constinit DestructorRecord destructors[DESTRUCTOR_CAPACITY];
+    constinit tay::ticket_spinlock destructor_lock;
 
-    int __cxa_atexit(void (*function)(void *), void *argument, void *dso) {
-        tay::lock_guard guard(__destructor_lock);
-        for (auto &record : __destructors) {
+    int register_destructor(void (*function)(void *), void *argument, void *dso) {
+        tay::lock_guard guard(destructor_lock);
+        for (auto &record : destructors) {
             if (!record.active) {
                 record = DestructorRecord{
                     .function = function, .argument = argument, .dso = dso, .active = true};
@@ -40,15 +40,15 @@ namespace __cxa {
         return -1;
     }
 
-    int __cxa_finalize(void *dso) {
+    int finalize_destructors(void *dso) {
         while (true) {
             void (*function)(void *) = nullptr;
             void *argument           = nullptr;
             {
-                tay::lock_guard guard(__destructor_lock);
+                tay::lock_guard guard(destructor_lock);
                 // 在锁内先将记录标为失效，再在锁外逆序调用，允许析构函数再次登记或 finalize。
-                for (size_t idx = __DESTRUCTOR_CAPS; idx > 0; --idx) {
-                    auto &record = __destructors[idx - 1];
+                for (size_t idx = DESTRUCTOR_CAPACITY; idx > 0; --idx) {
+                    auto &record = destructors[idx - 1];
                     if (record.active && (dso == nullptr || record.dso == dso)) {
                         record.active = false;
                         function      = record.function;
@@ -67,10 +67,10 @@ namespace __cxa {
 
 extern "C" {
 int __cxa_atexit(void (*function)(void *), void *argument, void *dso) {
-    return __cxa::__cxa_atexit(function, argument, dso);
+    return __cxa::register_destructor(function, argument, dso);
 }
 
 void __cxa_finalize(void *dso) {
-    __cxa::__cxa_finalize(dso);
+    __cxa::finalize_destructors(dso);
 }
 }  // extern "C"

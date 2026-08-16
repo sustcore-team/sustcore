@@ -18,113 +18,115 @@
 #include <cstddef>
 #include <new>
 
-[[nodiscard]] void *try_heap_allocate(size_t sz, size_t alignment) noexcept {
-    if (!memory::heap_ready()) {
-        return nullptr;
+namespace kernel::runtime::detail {
+    [[nodiscard]] void *try_heap_allocate(size_t sz, size_t alignment) noexcept {
+        if (!memory::heap_ready()) {
+            return nullptr;
+        }
+        const auto result = memory::alloc(sz, alignment);
+        return result ? *result : nullptr;
     }
-    const auto result = memory::alloc(sz, alignment);
-    return result ? *result : nullptr;
-}
 
-void try_free(void *ptr) noexcept {
-    if (ptr != nullptr) {
-        memory::dealloc(ptr);
+    void try_free(void *ptr) noexcept {
+        if (ptr != nullptr) {
+            memory::dealloc(ptr);
+        }
     }
-}
 
-[[nodiscard]] void *required_heap_allocate(size_t sz, size_t alignment) {
-    void *const ptr = try_heap_allocate(sz, alignment);
-    if (ptr == nullptr) {
-        kernel::log::panic("内核堆已耗尽");
+    [[nodiscard]] void *required_heap_allocate(size_t sz, size_t alignment) {
+        void *const ptr = try_heap_allocate(sz, alignment);
+        if (ptr == nullptr) {
+            kernel::log::panic("内核堆已耗尽");
+        }
+        return ptr;
     }
-    return ptr;
-}
+}  // namespace kernel::runtime::detail
 
 void *operator new(size_t sz) {
-    return required_heap_allocate(sz, alignof(std::max_align_t));
+    return kernel::runtime::detail::required_heap_allocate(sz, alignof(std::max_align_t));
 }
 
 void *operator new[](size_t sz) {
-    return required_heap_allocate(sz, alignof(std::max_align_t));
+    return kernel::runtime::detail::required_heap_allocate(sz, alignof(std::max_align_t));
 }
 
 void *operator new(size_t sz, std::align_val_t alignment) {
-    return required_heap_allocate(sz, static_cast<size_t>(alignment));
+    return kernel::runtime::detail::required_heap_allocate(sz, static_cast<size_t>(alignment));
 }
 
 void *operator new[](size_t sz, std::align_val_t alignment) {
-    return required_heap_allocate(sz, static_cast<size_t>(alignment));
+    return kernel::runtime::detail::required_heap_allocate(sz, static_cast<size_t>(alignment));
 }
 
 void *operator new(size_t sz, const std::nothrow_t &) noexcept {
-    return try_heap_allocate(sz, alignof(std::max_align_t));
+    return kernel::runtime::detail::try_heap_allocate(sz, alignof(std::max_align_t));
 }
 
 void *operator new[](size_t sz, const std::nothrow_t &) noexcept {
-    return try_heap_allocate(sz, alignof(std::max_align_t));
+    return kernel::runtime::detail::try_heap_allocate(sz, alignof(std::max_align_t));
 }
 
 void *operator new(size_t sz, std::align_val_t alignment, const std::nothrow_t &) noexcept {
-    return try_heap_allocate(sz, static_cast<size_t>(alignment));
+    return kernel::runtime::detail::try_heap_allocate(sz, static_cast<size_t>(alignment));
 }
 
 void *operator new[](size_t sz, std::align_val_t alignment, const std::nothrow_t &) noexcept {
-    return try_heap_allocate(sz, static_cast<size_t>(alignment));
+    return kernel::runtime::detail::try_heap_allocate(sz, static_cast<size_t>(alignment));
 }
 
 void operator delete(void *ptr) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete(void *ptr, size_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr, size_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete(void *ptr, std::align_val_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr, std::align_val_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete(void *ptr, size_t, std::align_val_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr, size_t, std::align_val_t) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete(void *ptr, const std::nothrow_t &) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr, const std::nothrow_t &) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete(void *ptr, std::align_val_t, const std::nothrow_t &) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 void operator delete[](void *ptr, std::align_val_t, const std::nothrow_t &) noexcept {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 
 namespace tay {
     void *__alloc(size_t sz, size_t alignment) noexcept {
-        return try_heap_allocate(sz, alignment);
+        return kernel::runtime::detail::try_heap_allocate(sz, alignment);
     }
 
     void __free(void *ptr, size_t, size_t) noexcept {
-        try_free(ptr);
+        kernel::runtime::detail::try_free(ptr);
     }
 }  // namespace tay
 
 extern "C" void *malloc(size_t sz) {
-    return try_heap_allocate(sz, alignof(std::max_align_t));
+    return kernel::runtime::detail::try_heap_allocate(sz, alignof(std::max_align_t));
 }
 
 extern "C" void free(void *ptr) {
-    try_free(ptr);
+    kernel::runtime::detail::try_free(ptr);
 }
 
 extern "C" void *calloc(size_t cnt, size_t sz) {

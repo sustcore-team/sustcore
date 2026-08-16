@@ -5,10 +5,11 @@
 
 #pragma once
 
+#include <init/usrboot_error.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 
 namespace init {
-    [[nodiscard]] tay::expected<void, tay::error_code> start_usrboot() noexcept;
+    [[nodiscard]] tay::expected<void, UsrbootError> start_usrboot() noexcept;
     [[noreturn]] void run_kinit() noexcept;
 }  // namespace init

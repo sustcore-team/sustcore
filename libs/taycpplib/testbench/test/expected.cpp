@@ -146,6 +146,48 @@ namespace {
     using ref_result   = tay::expected<int&, error_code>;
     using owned_result = tay::expected<int, error_code>;
 
+    owned_result make_macro_value(bool failure, int& evaluations) {
+        ++evaluations;
+        if (failure)
+            return tay::Err(error_code::failure);
+        return tay::Ok(41);
+    }
+
+    tay::expected<void, error_code> make_macro_void(bool failure, int& evaluations) {
+        ++evaluations;
+        if (failure)
+            return tay::Err(error_code::missing);
+        return tay::Ok();
+    }
+
+    owned_result use_try(bool failure, int& evaluations) {
+        int value = TAY_TRY(make_macro_value(failure, evaluations));
+        return tay::Ok(value + 1);
+    }
+
+    owned_result use_tryv(bool failure, int& evaluations) {
+        TAY_TRYV(make_macro_void(failure, evaluations));
+        return tay::Ok(42);
+    }
+
+    ref_result use_try_reference(ref_result result) {
+        int& value = TAY_TRY(result);
+        return tay::Ok(value);
+    }
+
+    using move_result = tay::expected<move_only, move_only>;
+
+    move_result make_macro_move(bool failure) {
+        if (failure)
+            return tay::Err(move_only{43});
+        return tay::Ok(move_only{42});
+    }
+
+    move_result use_try_move(bool failure) {
+        move_only value = TAY_TRY(make_macro_move(failure));
+        return tay::Ok(std::move(value));
+    }
+
     static_assert(std::is_constructible_v<ref_result, int&>);
     static_assert(!std::is_constructible_v<ref_result, int&&>);
     static_assert(!std::is_default_constructible_v<ref_result>);
@@ -359,6 +401,35 @@ namespace {
         assert(reference_result == 9);
     }
 
+    void test_try_macros() {
+        int evaluations = 0;
+        auto value      = use_try(false, evaluations);
+        assert(value && value.value() == 42 && evaluations == 1);
+
+        evaluations      = 0;
+        auto value_error = use_try(true, evaluations);
+        assert(!value_error && value_error.error() == error_code::failure && evaluations == 1);
+
+        evaluations = 0;
+        auto done   = use_tryv(false, evaluations);
+        assert(done && done.value() == 42 && evaluations == 1);
+
+        evaluations     = 0;
+        auto void_error = use_tryv(true, evaluations);
+        assert(!void_error && void_error.error() == error_code::missing && evaluations == 1);
+
+        int referenced    = 7;
+        ref_result source = tay::Ok(referenced);
+        auto reference    = use_try_reference(source);
+        reference.value() = 9;
+        assert(referenced == 9);
+
+        auto moved = use_try_move(false);
+        assert(moved && moved->value == 42);
+        auto moved_error = use_try_move(true);
+        assert(!moved_error && moved_error.error().value == 43);
+    }
+
     void test_exception_state_restoration() {
         tay::expected<throwing_value, error_code> target = tay::Err(error_code::missing);
         tay::expected<throwing_value, error_code> source = tay::Ok(throwing_value{31});
@@ -409,6 +480,7 @@ int main() {
     test_reference_rebinding();
     test_monadic_operations();
     test_match_and_visit();
+    test_try_macros();
     test_exception_state_restoration();
     return 0;
 }

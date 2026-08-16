@@ -11,8 +11,9 @@
 
 #include <arch/csr.h>
 #include <arch/interrupt.h>
-#include <arch/loongarch64/valdef.h>
 #include <arch/loongarch64/interrupt/frame.h>
+#include <arch/loongarch64/namespace.h>
+#include <arch/loongarch64/valdef.h>
 #include <log.h>
 #include <sustcore/addrspace.h>
 #include <trap/dispatcher.h>
@@ -141,7 +142,12 @@ namespace loongarch64::hal {
             else if (code == ECODE_PIF)
                 access = memory::FaultAccess::EXECUTE;
         }
-        return TrapInfo{kind, frame.estat, code, frame.badv, from_user(frame), access};
+        return TrapInfo{.kind        = kind,
+                        .raw_cause   = frame.estat,
+                        .code        = code,
+                        .bad_address = frame.badv,
+                        .user        = from_user(frame),
+                        .access      = access};
     }
 
     bool from_user(const TrapFrame &frame) noexcept {

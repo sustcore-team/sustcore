@@ -57,17 +57,12 @@ namespace memory::detail {
                     PageFlags{.readable = true, .writable = true, .executable = false});
             };
             for (const auto &excluded : exclusions) {
-                if (cursor < excluded.begin.arith()) {
-                    auto result = map_fragment(cursor, excluded.begin.arith());
-                    if (!result)
-                        return result;
-                }
+                if (cursor < excluded.begin.arith())
+                    TAY_TRYV(map_fragment(cursor, excluded.begin.arith()));
                 if (cursor < excluded.end.arith())
                     cursor = excluded.end.arith();
             }
-            auto result = map_fragment(cursor, parent.end.arith());
-            if (!result)
-                return result;
+            TAY_TRYV(map_fragment(cursor, parent.end.arith()));
         }
         return {};
     }

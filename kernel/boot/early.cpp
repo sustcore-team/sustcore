@@ -177,7 +177,7 @@ extern "C" [[noreturn]] BOOT_INIT_TEXT void __bsp_early_main(
     memory::init_kernel_space(*boot::context().info);
     auto kernel_mm = memory::KernelMM::initialize(*boot::context().info);
     if (!kernel_mm)
-        kernel::log::panic("无法初始化 KernelMM: {}", static_cast<int>(kernel_mm.error()));
+        kernel::log::panic("无法初始化 KernelMM: {}", kernel_mm.error());
     for (size_t index = 0; index < memory::page_database().region_count(); ++index) {
         const auto &area = memory::page_database().region(index).parent;
         if (!memory::kernel_mm().hhdm_covers(area.begin, area.size()))

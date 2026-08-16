@@ -1,7 +1,7 @@
 /**
  * @file thread.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief Capability Thread 调度实体、配置状态与栈所有权。
+ * @brief Capability Thread 调度实体、内核栈、配置状态与 timed wait 所有权。
  * @version 0.1.0-dev.1
  * @date 2026-08-12
  *
@@ -12,18 +12,24 @@
 
 #include <arch/context.h>
 #include <arch/frame.h>
+#include <async/worklet.h>
 #include <obj/kernel_object.h>
 #include <obj/objfwd.h>
+#include <scheduler/entity.h>
+#include <task/state.h>
+#include <task/thread_error.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 #include <tay/list.h>
+#include <tay/spinlock.h>
+#include <tay/units.h>
+#include <timer/timer_node.h>
 
 #include <cstddef>
 
 namespace scheduler {
-    class RunQueue;
-    class Scheduler;
-    struct RQHookLocator;
+    class SchedulerCore;
+    struct ThreadSchedAdapter;
 }  // namespace scheduler
 
 namespace task {
@@ -31,24 +37,11 @@ namespace task {
 
     inline constexpr size_t KERNEL_STACK_SIZE = 64 * 1024;
 
-    enum class ThreadState : u8_t {
-        CREATED,
-        SUSPENDED,
-        READY,
-        RUNNING,
-        EXITED,
-    };
-
-    enum class ThreadMode : u8_t {
-        KERNEL,
-        USER,
-    };
-
     using ThreadEntry = void (*)(void *) noexcept;
 
     class KernelStack final {
     public:
-        [[nodiscard]] static tay::expected<KernelStack, tay::error_code> create(
+        [[nodiscard]] static tay::expected<KernelStack, ThreadError> create(
             size_t bytes = KERNEL_STACK_SIZE) noexcept;
 
         constexpr KernelStack() noexcept            = default;
@@ -74,9 +67,9 @@ namespace task {
         static constexpr cap::ObjectType TYPE = cap::ObjectType::THREAD;
 
         [[nodiscard]] static Thread adopt_current(Process &process) noexcept;
-        [[nodiscard]] static tay::expected<cap::ObjectRef<Thread>, tay::error_code> create_kernel(
+        [[nodiscard]] static tay::expected<cap::ObjectRef<Thread>, ThreadError> create_kernel(
             Process &process, ThreadEntry entry, void *argument = nullptr) noexcept;
-        [[nodiscard]] static tay::expected<cap::ObjectRef<Thread>, tay::error_code> create_user(
+        [[nodiscard]] static tay::expected<cap::ObjectRef<Thread>, ThreadError> create_user(
             Process &process) noexcept;
 
         Thread(const Thread &)            = delete;
@@ -85,8 +78,18 @@ namespace task {
         Thread &operator=(Thread &&)      = delete;
         ~Thread() noexcept;
 
-        [[nodiscard]] tay::expected<void, tay::error_code> configure_user(
-            addr_t entry, addr_t stack_pointer, addr_t argument = 0) noexcept;
+        [[nodiscard]] tay::expected<void, ThreadError> configure_user(addr_t entry,
+                                                                      addr_t stack_pointer,
+                                                                      addr_t argument = 0) noexcept;
+
+        /** @brief 让 current Thread 等待到绝对 deadline；第一版每个 Thread 只允许一个。 */
+        [[nodiscard]] tay::expected<TimedWaitResult, ThreadError> wait_until(
+            units::time deadline) noexcept;
+        /** @brief 由显式事件竞争当前 generation 的完成权；winner 唤醒 waiter。 */
+        [[nodiscard]] bool wake_timed_wait(u64_t generation) noexcept;
+        [[nodiscard]] bool cancel_timed_wait(u64_t generation) noexcept;
+        [[nodiscard]] u64_t timed_wait_generation() noexcept;
+        [[nodiscard]] bool timed_wait_idle() noexcept;
 
         [[nodiscard]] ThreadState state() const noexcept {
             return state_;
@@ -103,22 +106,40 @@ namespace task {
         [[nodiscard]] ThreadMode mode() const noexcept {
             return mode_;
         }
+        [[nodiscard]] scheduler::SchedulerStorage &scheduler_storage() noexcept {
+            return scheduler_storage_;
+        }
+        [[nodiscard]] const scheduler::SchedulerStorage &scheduler_storage() const noexcept {
+            return scheduler_storage_;
+        }
 
     private:
-        friend class scheduler::RunQueue;
-        friend class scheduler::Scheduler;
-        friend struct scheduler::RQHookLocator;
-        friend struct ProcessThreadHookLocator;
+        friend class Process;
+        friend class scheduler::SchedulerCore;
+        friend struct scheduler::ThreadSchedAdapter;
+        class TimedWaitWorklet final : public kernel::async::Worklet {
+        public:
+            constexpr TimedWaitWorklet() noexcept = default;
+
+            /** @brief 在 timer reservation 的 release 发布前配置本次 typed completion。 */
+            void setup(Thread &thread, u64_t generation) noexcept;
+
+        private:
+            void run() noexcept override;
+
+            Thread *thread_   = nullptr;
+            u64_t generation_ = 0;
+        };
 
         struct adopt_current_tag final {};
         Thread(Process &process, adopt_current_tag) noexcept;
         Thread(Process &process, KernelStack &&stack, ThreadMode mode, ThreadEntry entry,
                void *argument) noexcept;
-
-        using rq_hook      = tay::intrusive_list_hook<Thread *, Thread *>;
-        using process_hook = tay::intrusive_list_hook<Thread *, Thread *>;
+        [[nodiscard]] bool finish_timed_wait(u64_t generation, TimedWaitResult result) noexcept;
 
         cap::ObjectRef<Process> process_{};
+        using process_hook = tay::intrusive_list_hook<Thread *, Thread *>;
+        process_hook process_hook_{};
         cap::ObjectRef<Thread> scheduler_ref_{};
         KernelStack stack_{};
         hal::Context context_{};
@@ -129,7 +150,17 @@ namespace task {
         ThreadMode mode_         = ThreadMode::KERNEL;
         bool configured_         = false;
         bool scheduler_attached_ = false;
-        rq_hook rq_hook_{};
-        process_hook process_hook_{};
+        bool wake_pending_       = false;
+        bool block_token_active_ = false;
+        u64_t block_sequence_    = 0;
+        tay::spinlock timed_wait_lock_{};
+        kernel::timer::PrecisionTimerNode timed_wait_timer_{};
+        TimedWaitWorklet timed_wait_worklet_{};
+        u64_t timed_wait_generation_       = 0;
+        u64_t timed_wait_pin_generation_   = 0;
+        TimedWaitState timed_wait_state_   = TimedWaitState::IDLE;
+        TimedWaitResult timed_wait_result_ = TimedWaitResult::NONE;
+        bool timed_wait_pin_active_        = false;
+        scheduler::SchedulerStorage scheduler_storage_{};
     };
 }  // namespace task

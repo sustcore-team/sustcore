@@ -18,16 +18,20 @@
 extern "C" char sbi_secondary_trampoline[];
 
 namespace riscv64::boot::smp {
+    namespace {
+        // 此对象在启动运行时可达，必须保持常量初始化。
+        constinit std::atomic<int> secondary_start_support{-1};
+    }  // namespace
+
     bool supports_secondary_start() noexcept {
-        static std::atomic<int> cached{-1};
-        // release/acquire 发布首次 SBI 探测结果，避免多个 CPU 重复执行固件调用。
-        const int value = cached.load(std::memory_order_acquire);
+        // release/acquire 发布已缓存的 SBI 探测结果；并发首次调用仍可能重复探测。
+        const int value = secondary_start_support.load(std::memory_order_acquire);
         if (value >= 0)
             return value != 0;
 
         const auto probe     = sbi_probe_extension(SBI_EID_HSM);
         const bool available = probe.error == SBI_SUCCESS && probe.value != 0;
-        cached.store(available ? 1 : 0, std::memory_order_release);
+        secondary_start_support.store(available ? 1 : 0, std::memory_order_release);
         return available;
     }
 

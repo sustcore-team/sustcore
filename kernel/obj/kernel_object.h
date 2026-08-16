@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cap/error.h>
 #include <sustcore/capability.h>
 #include <tay/counter.h>
 #include <tay/err.h>
@@ -32,20 +33,6 @@ namespace cap {
             T::TYPE
         } -> std::convertible_to<ObjectType>;
     };
-    /** @brief Capability 操作可以向调用方报告的可恢复错误。 */
-    enum class CapError : u8_t {
-        INVALID_TOKEN,
-        MISSING_CNODE,
-        INVALID_SLOT,
-        STALE_TOKEN,
-        TYPE_MISMATCH,
-        INSUFFICIENT_RIGHTS,
-        NO_SLOTS,
-        INVALID_OPERATION,
-        OUT_OF_MEMORY,
-        BUSY,
-    };
-
     /** @brief 内核对象从可解析到最终回收的单向生命周期状态。 */
     enum class ObjectState : u8_t {
         ALIVE,
@@ -156,8 +143,9 @@ namespace cap {
     template <typename Derived>
     struct ObjectOpsHolder final {
         static_assert(std::is_base_of_v<KernelObject, Derived>);
-        inline static const ObjectOps OPS{
-            [](KernelObject &object) noexcept { delete static_cast<Derived *>(&object); }};
+        inline static const ObjectOps OPS{.destroy = [](KernelObject &object) noexcept {
+            delete static_cast<Derived *>(&object);
+        }};
     };
 
     /**

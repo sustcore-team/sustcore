@@ -21,24 +21,22 @@ namespace memory {
 
     class ClientSpace final {
     public:
-        [[nodiscard]] static tay::expected<ClientSpace *, tay::error_code> create() noexcept;
+        [[nodiscard]] static tay::expected<ClientSpace *, PagingError> create() noexcept;
 
         ClientSpace(const ClientSpace &)            = delete;
         ClientSpace &operator=(const ClientSpace &) = delete;
         ClientSpace(ClientSpace &&)                 = delete;
         ClientSpace &operator=(ClientSpace &&)      = delete;
 
-        [[nodiscard]] tay::expected<void, tay::error_code> map(VirAddr address, PhyAddr physical,
-                                                               size_t bytes,
+        [[nodiscard]] tay::expected<void, PagingError> map(VirAddr address, PhyAddr physical,
+                                                           size_t bytes, PageFlags flags) noexcept;
+        [[nodiscard]] tay::expected<void, PagingError> unmap(VirAddr address,
+                                                             size_t bytes) noexcept;
+        [[nodiscard]] tay::expected<void, PagingError> protect(VirAddr address, size_t bytes,
                                                                PageFlags flags) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> unmap(VirAddr address,
-                                                                 size_t bytes) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> protect(VirAddr address, size_t bytes,
-                                                                   PageFlags flags) noexcept;
-        [[nodiscard]] tay::expected<PageMapping, tay::error_code> query(
-            VirAddr address) const noexcept;
+        [[nodiscard]] tay::expected<PageMapping, PagingError> query(VirAddr address) const noexcept;
 
-        [[nodiscard]] tay::expected<BorrowedSlotRepair, tay::error_code>
+        [[nodiscard]] tay::expected<BorrowedSlotRepair, PagingError>
         repair_missing_borrowed_kernel_slot(HvaAddr address) noexcept;
 
         [[nodiscard]] RootBinding binding() const noexcept;
@@ -56,7 +54,7 @@ namespace memory {
               owner_(resources.owner),
               asid_(resources.asid) {}
 
-        [[nodiscard]] tay::expected<void, tay::error_code> init() noexcept;
+        [[nodiscard]] tay::expected<void, PagingError> init() noexcept;
 
         kernel::synchronized<PageTable> page_table_;
         PageTableOwnerId owner_ = 0;

@@ -13,7 +13,7 @@ taycpplib 的容器面向无异常内核代码。动态变体使用 allocator，
 | 扁平关联容器 | `basic_flat_map/set`、`flat_map/set` | 有序连续存储，二分查找 |
 | 位图与队列 | `basic_bitmap`、`bitmap`、`static_bitmap`、`basic_fifo`、`fifo`、`static_fifo`、`byte_fifo` | 存储策略共享核心 |
 | 稳定句柄 | `slot_map`、`static_slot_map` | 代际句柄，稠密迭代 |
-| 侵入式容器 | `intrusive_list`、`intrusive_tree` | 节点嵌入对象，不拥有对象 |
+| 侵入式容器 | `intrusive_list`、`intrusive_tree`、`intrusive_pairing_heap` | 节点嵌入对象，不拥有对象 |
 
 ## 通用错误约定
 

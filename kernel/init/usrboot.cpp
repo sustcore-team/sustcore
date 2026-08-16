@@ -8,6 +8,7 @@
  * @copyright Copyright (c) 2026
  */
 
+#include <init/usrboot_error.h>
 #include <log.h>
 #include <memory/virtual/page_flags.h>
 #include <obj/address_space.h>
@@ -32,106 +33,84 @@ namespace init {
             return false;
         }
 
-        [[nodiscard]] tay::expected<void, tay::error_code> validate_segment(
-            const usrboot_segment &segment, size_t image_size) noexcept {
+        [[nodiscard]] tay::expected<void, UsrbootError> validate_segment(
+            UsrbootError::Segment kind, const usrboot_segment &segment,
+            size_t image_size) noexcept {
             u64_t end = 0;
-            if (segment.memsz == 0 || segment.filesz > segment.memsz) {
-                kernel::log::error("usrboot 段大小无效: memsz={}, filesz={}", segment.memsz,
-                                   segment.filesz);
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
-            }
+            if (segment.memsz == 0 || segment.filesz > segment.memsz)
+                return tay::Err(
+                    UsrbootError::InvalidSegmentSize(kind, segment.memsz, segment.filesz));
 
-            if (add_overflow(segment.vaddr, segment.memsz, end)) {
-                kernel::log::error("usrboot 段地址溢出: vaddr={}, memsz={}", segment.vaddr,
-                                   segment.memsz);
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
-            }
+            if (add_overflow(segment.vaddr, segment.memsz, end))
+                return tay::Err(
+                    UsrbootError::SegmentAddressOverflow(kind, segment.vaddr, segment.memsz));
 
-            if (segment.vaddr >= KPA_START || end > KPA_START) {
-                kernel::log::error("usrboot 段地址越界: vaddr={}, end={}", segment.vaddr, end);
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
-            }
+            if (segment.vaddr >= KPA_START || end > KPA_START)
+                return tay::Err(UsrbootError::SegmentOutsideUserRange(kind, segment.vaddr, end));
 
             if (segment.off < sizeof(usrboot_header) || segment.off > image_size ||
                 segment.filesz > image_size - segment.off)
-            {
-                kernel::log::error("usrboot 段文件偏移无效: off={}, filesz={}, image_size={}",
-                                   segment.off, segment.filesz, image_size);
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
-            }
+                return tay::Err(UsrbootError::SegmentFileRangeInvalid(kind, segment.off,
+                                                                      segment.filesz, image_size));
 
             static_assert(is_pow2(PAGE_SIZE), "PAGE_SIZE 必须为 2 的幂");
 
-            if ((segment.vaddr & (PAGE_SIZE - 1)) != 0) {
-                kernel::log::error("usrboot 段地址未对齐: vaddr={}, PAGE_SIZE={}", segment.vaddr,
-                                   PAGE_SIZE);
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
-            }
+            if ((segment.vaddr & (PAGE_SIZE - 1)) != 0)
+                return tay::Err(UsrbootError::SegmentUnaligned(kind, segment.vaddr));
 
             return {};
         }
 
     }  // namespace
 
-    tay::expected<void, tay::error_code> start_usrboot() noexcept {
+    tay::expected<void, UsrbootError> start_usrboot() noexcept {
         const auto *begin = s_usrboot;
         const auto *end   = e_usrboot;
         const size_t size = static_cast<size_t>(end - begin);
-        if (size < sizeof(usrboot_header)) {
-            kernel::log::error("usrboot 镜像过小: {} 字节", size);
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        }
+        if (size < sizeof(usrboot_header))
+            return tay::Err(UsrbootError::ImageTooSmall(size, sizeof(usrboot_header)));
 
         usrboot_header header{};
         __builtin_memcpy(&header, begin, sizeof(header));
-        if (header.magic != USRBOOT_MAGIC) {
-            kernel::log::error("usrboot 镜像魔数错误");
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        }
-        if (header.body_size != size - sizeof(header) || header.entry == 0) {
-            kernel::log::error("usrboot 镜像格式无效");
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        }
+        if (header.magic != USRBOOT_MAGIC)
+            return tay::Err(UsrbootError::InvalidMagic(header.magic));
+        if (header.body_size != size - sizeof(header) || header.entry == 0)
+            return tay::Err(UsrbootError::InvalidHeader(size, header.body_size, header.entry));
         kernel::log::info("usrboot header: size={}, rx_off={}, rw_off={}, ro_off={}", size,
                           header.seg_rx.off, header.seg_rw.off, header.seg_ro.off);
-        auto result = validate_segment(header.seg_rx, size);
-        if (!result) {
-            kernel::log::error("usrboot RX 段校验失败: {}", tay::to_string(result.error()));
-            return tay::Err(result.error());
-        }
-        result = validate_segment(header.seg_rw, size);
-        if (!result) {
-            kernel::log::error("usrboot RW 段校验失败: {}", tay::to_string(result.error()));
-            return tay::Err(result.error());
-        }
-        result = validate_segment(header.seg_ro, size);
-        if (!result) {
-            kernel::log::error("usrboot RO 段校验失败: {}", tay::to_string(result.error()));
-            return tay::Err(result.error());
-        }
+        TAY_TRYV(validate_segment(UsrbootError::Segment::RX, header.seg_rx, size));
+        TAY_TRYV(validate_segment(UsrbootError::Segment::RW, header.seg_rw, size));
+        TAY_TRYV(validate_segment(UsrbootError::Segment::RO, header.seg_ro, size));
 
         auto address_space = task::AddressSpace::create();
-        auto process       = task::Process::create();
-        auto cspace        = cap::CSpace::create();
-        if (!address_space || !process || !cspace) {
-            kernel::log::error("usrboot 对象创建失败: as={}, process={}, cspace={}",
-                               address_space ? 1 : 0, process ? 1 : 0, cspace ? 1 : 0);
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
-        }
-        if (auto result = (*process)->set_address_space(**address_space); !result) {
-            kernel::log::error("绑定 AddressSpace 失败");
-            return tay::Err(result.error());
-        }
-        if (auto result = (*process)->set_cspace(**cspace); !result) {
-            kernel::log::error("绑定 CSpace 失败");
-            return tay::Err(result.error());
-        }
+        if (!address_space)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::ADDRESS_SPACE,
+                                                               address_space.error().code()));
+        auto process = task::Process::create();
+        if (!process)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::PROCESS,
+                                                               process.error().code()));
+        auto cspace = cap::CSpace::create();
+        if (!cspace)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::CSPACE,
+                                                               cspace.error().code()));
+        if (auto configured = (*process)->set_address_space(**address_space); !configured)
+            return tay::Err(UsrbootError::ProcessConfigurationFailed(configured.error().code()));
+        if (auto configured = (*process)->set_cspace(**cspace); !configured)
+            return tay::Err(UsrbootError::ProcessConfigurationFailed(configured.error().code()));
 
         auto rx = memory::MemorySegment::create(header.seg_rx.memsz);
         auto rw = memory::MemorySegment::create(header.seg_rw.memsz);
         auto ro = memory::MemorySegment::create(header.seg_ro.memsz);
-        if (!rx || !rw || !ro)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+        if (!rx)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                               rx.error().code()));
+        if (!rw)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                               rw.error().code()));
+        if (!ro)
+            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                               ro.error().code()));
         const auto segment_rights = static_cast<u64_t>(cap::RIGHT_READ | cap::RIGHT_WRITE);
         const auto rx_bytes       = page_align_up(header.seg_rx.memsz);
         const auto rw_bytes       = page_align_up(header.seg_rw.memsz);
@@ -151,43 +130,55 @@ namespace init {
                                     VirArea{VirAddr(header.seg_ro.vaddr),
                                             VirAddr(header.seg_ro.vaddr + ro_bytes)},
                                     0, memory::PageFlags{.readable = true});
-        if (!rx_vma || !rw_vma || !ro_vma)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        if (!rx_vma)
+            return tay::Err(
+                UsrbootError::VmaCreationFailed(UsrbootError::Segment::RX, rx_vma.error().code()));
+        if (!rw_vma)
+            return tay::Err(
+                UsrbootError::VmaCreationFailed(UsrbootError::Segment::RW, rw_vma.error().code()));
+        if (!ro_vma)
+            return tay::Err(
+                UsrbootError::VmaCreationFailed(UsrbootError::Segment::RO, ro_vma.error().code()));
         if (auto written = (*rx)->write(0, begin + header.seg_rx.off, header.seg_rx.filesz);
             !written)
-            return tay::Err(written.error());
+            return tay::Err(UsrbootError::SegmentWriteFailed(UsrbootError::Segment::RX, 0,
+                                                             written.error().code()));
         if (auto written = (*rw)->write(0, begin + header.seg_rw.off, header.seg_rw.filesz);
             !written)
-            return tay::Err(written.error());
+            return tay::Err(UsrbootError::SegmentWriteFailed(UsrbootError::Segment::RW, 0,
+                                                             written.error().code()));
         if (auto written = (*ro)->write(0, begin + header.seg_ro.off, header.seg_ro.filesz);
             !written)
-            return tay::Err(written.error());
+            return tay::Err(UsrbootError::SegmentWriteFailed(UsrbootError::Segment::RO, 0,
+                                                             written.error().code()));
 
         constexpr addr_t STACK_TOP   = 0x0000000000800000ULL;
         constexpr size_t STACK_BYTES = 64 * 1024;
         auto stack                   = memory::MemorySegment::create(STACK_BYTES);
         if (!stack)
-            return tay::Err(stack.error());
+            return tay::Err(UsrbootError::InitialStackFailed(stack.error().code()));
         auto stack_vma =
             (*address_space)
                 ->add_vma(cap::CapabilityRef<memory::MemorySegment>(*stack, segment_rights),
                           VirArea{VirAddr(STACK_TOP - STACK_BYTES), VirAddr(STACK_TOP)}, 0,
                           memory::PageFlags{.readable = true, .writable = true});
         if (!stack_vma)
-            return tay::Err(stack_vma.error());
+            return tay::Err(UsrbootError::VmaCreationFailed(UsrbootError::Segment::STACK,
+                                                            stack_vma.error().code()));
         // 首次进入用户态前物化栈顶页，使初始 SP 可立即使用。
         if (auto page = (*stack)->ensure_page(STACK_BYTES - PAGE_SIZE); !page)
-            return tay::Err(page.error());
+            return tay::Err(UsrbootError::InitialStackFailed(page.error().code()));
 
         auto thread = task::Thread::create_user(**process);
         if (!thread)
-            return tay::Err(thread.error());
+            return tay::Err(UsrbootError::ThreadCreationFailed(thread.error().code()));
         if (auto result = (*thread)->configure_user(header.entry, STACK_TOP - 16); !result)
-            return tay::Err(result.error());
+            return tay::Err(UsrbootError::UserContextConfigurationFailed(result.error().code()));
         if (auto result = (*process)->submit(); !result)
-            return tay::Err(result.error());
-        if (auto result = scheduler::instance().resume(**thread); !result)
-            return tay::Err(result.error());
+            return tay::Err(UsrbootError::ProcessSubmissionFailed(result.error().code()));
+        if (auto result = scheduler::instance().attach(**thread); !result) {
+            return tay::Err(UsrbootError::ThreadAttachFailed(result.error().code()));
+        }
         kernel::log::info("usrboot 已装载并提交首个用户 Thread");
         return {};
     }

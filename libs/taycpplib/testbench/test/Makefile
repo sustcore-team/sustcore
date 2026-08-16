@@ -14,6 +14,10 @@ else ifeq ($(program-id),taycpplib-expected-test)
 sources-cpp := expected.cpp
 else ifeq ($(program-id),taycpplib-expected-panic-test)
 sources-cpp := expected_panic.cpp
+else ifeq ($(program-id),taycpplib-optional-test)
+sources-cpp := optional.cpp
+else ifeq ($(program-id),taycpplib-optional-panic-test)
+sources-cpp := optional_panic.cpp
 else ifeq ($(program-id),taycpplib-string-view-test)
 sources-cpp := string_view.cpp
 else ifeq ($(program-id),taycpplib-sort-test)
@@ -32,6 +36,10 @@ else ifeq ($(program-id),taycpplib-string-panic-test)
 sources-cpp := string_panic.cpp
 else ifeq ($(program-id),taycpplib-list-test)
 sources-cpp := list.cpp
+else ifeq ($(program-id),taycpplib-pairing-heap-test)
+sources-cpp := pairing_heap.cpp
+else ifeq ($(program-id),taycpplib-pairing-heap-duplicate-panic-test)
+sources-cpp := pairing_heap_panic.cpp
 else ifeq ($(program-id),taycpplib-map-test)
 sources-cpp := map.cpp
 else ifeq ($(program-id),taycpplib-set-test)
@@ -50,6 +58,8 @@ else ifeq ($(program-id),taycpplib-raii-test)
 sources-cpp := raii.cpp
 else ifeq ($(program-id),taycpplib-lock-test)
 sources-cpp := lock.cpp
+else ifeq ($(program-id),taycpplib-rcu-test)
+sources-cpp := rcu.cpp
 else ifeq ($(program-id),taycpplib-unique-lock-no-mutex-panic-test)
 sources-cpp := unique_lock_panic.cpp
 macros-cpp += -DTAY_TEST_UNIQUE_LOCK_NO_MUTEX=1

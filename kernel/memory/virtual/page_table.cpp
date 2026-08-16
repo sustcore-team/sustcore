@@ -28,11 +28,16 @@ namespace memory {
         }
     }  // namespace
 
-    tay::expected<PhyAddr, tay::error_code> PageTable::create_root(
-        PageTableOwnerId owner) noexcept {
+    tay::expected<PhyAddr, PagingError> PageTable::create_root(PageTableOwnerId owner) noexcept {
         if (owner == 0)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        return paging::PageAllocator::allocate(owner);
+            return tay::Err(PagingError::InvalidOwner(owner));
+        return paging::PageAllocator::allocate(owner).transform_error(
+            [](tay::error_code error) noexcept -> PagingError {
+                return PagingError::PageTableAllocationFailed(
+                    static_cast<u8_t>(hal::PageTableOps::TOP_LEVEL),
+                    kernel::from_tay_error(error).value_or(
+                        kernel::KernelError::TayError::INTERNAL));
+            });
     }
 
     void PageTable::destroy_root(PhyAddr root, PageTableOwnerId owner) noexcept {
@@ -44,13 +49,13 @@ namespace memory {
             kernel::log::panic("无效的显式 PageTable 根节点");
     }
 
-    tay::expected<void, tay::error_code> PageTable::adopt_root(PhyAddr root, PageTableKind kind,
-                                                               PageTableOwnerId owner) noexcept {
+    tay::expected<void, PagingError> PageTable::adopt_root(PhyAddr root, PageTableKind kind,
+                                                           PageTableOwnerId owner) noexcept {
         const auto *descriptor = page_database().lookup(root);
         if (root_.nonnull() || !root.nonnull() || !root.aligned<PAGE_SIZE>() || owner == 0 ||
             descriptor == nullptr || descriptor->state != PageState::CLAIMED ||
             descriptor->kind != PageKind::PAGE_TABLE || descriptor->owner_id != owner)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+            return tay::Err(PagingError::InvalidRoot(root));
         root_  = root;
         kind_  = kind;
         owner_ = owner;
@@ -75,14 +80,17 @@ namespace memory {
         retirements.retire_all();
     }
 
-    tay::expected<size_t, tay::error_code> PageTable::checked_range(addr_t vaddr,
-                                                                    size_t bytes) noexcept {
-        if (bytes == 0 || (vaddr & (PAGE_SIZE - 1)) != 0 || (bytes & (PAGE_SIZE - 1)) != 0 ||
-            bytes > addr_t(-1) - vaddr)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+    tay::expected<size_t, PagingError> PageTable::checked_range(
+        addr_t vaddr, size_t bytes, PagingError::Operation operation) noexcept {
+        if (bytes == 0 || (vaddr & (PAGE_SIZE - 1)) != 0 || (bytes & (PAGE_SIZE - 1)) != 0)
+            return tay::Err(PagingError::UnalignedRange(operation, vaddr, bytes));
+        if (bytes > addr_t(-1) - vaddr)
+            return tay::Err(PagingError::RangeOverflow(operation, vaddr, bytes));
         const addr_t last = vaddr + bytes - 1;
-        if (!hal::PageTableOps::canonical(vaddr) || !hal::PageTableOps::canonical(last))
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
+        if (!hal::PageTableOps::canonical(vaddr))
+            return tay::Err(PagingError::NonCanonicalAddress(operation, vaddr));
+        if (!hal::PageTableOps::canonical(last))
+            return tay::Err(PagingError::NonCanonicalAddress(operation, last));
         return bytes / PAGE_SIZE;
     }
 
@@ -90,17 +98,24 @@ namespace memory {
         return !(flags.writable && flags.executable) && !(flags.writable && !flags.readable);
     }
 
-    tay::expected<void, tay::error_code> PageTable::map(addr_t vaddr, PhyAddr physical,
-                                                        size_t bytes, PageFlags flags,
-                                                        paging::WalkDomain domain) noexcept {
-        auto pages = checked_range(vaddr, bytes);
-        if (!pages || !physical.aligned<PAGE_SIZE>() || bytes > addr_t(-1) - physical.arith() ||
-            !valid_flags(flags) || (pages && !domain_accepts(vaddr, bytes, domain)))
-            return tay::Err(pages ? tay::error_code::INVALID_ARGUMENT : pages.error());
+    tay::expected<void, PagingError> PageTable::map(addr_t vaddr, PhyAddr physical, size_t bytes,
+                                                    PageFlags flags,
+                                                    paging::WalkDomain domain) noexcept {
+        const size_t pages = TAY_TRY(checked_range(vaddr, bytes, PagingError::Operation::MAP));
+        if (!physical.aligned<PAGE_SIZE>())
+            return tay::Err(
+                PagingError::InvalidPhysicalAddress(PagingError::Operation::MAP, physical));
+        if (bytes > addr_t(-1) - physical.arith())
+            return tay::Err(
+                PagingError::RangeOverflow(PagingError::Operation::MAP, physical.arith(), bytes));
+        if (!valid_flags(flags))
+            return tay::Err(PagingError::InvalidFlags(flags));
+        if (!domain_accepts(vaddr, bytes, domain))
+            return tay::Err(PagingError::OutsideAddressDomain(PagingError::Operation::MAP, vaddr));
         paging::RetirementSink retirements(owner_);
         paging::Walker walker(root_, owner_, domain);
         size_t mapped = 0;
-        for (; mapped < *pages; ++mapped) {
+        for (; mapped < pages; ++mapped) {
             auto result = walker.try_map_base(vaddr + mapped * PAGE_SIZE,
                                               physical + mapped * PAGE_SIZE, flags, retirements);
             if (!result) {
@@ -116,7 +131,7 @@ namespace memory {
                 }
                 hal::PageTableOps::flush_tlb();
                 retirements.retire_all();
-                return tay::Err(result.error());
+                return TAY_ERR(result);
             }
             if (auto *descriptor = page_database().lookup(physical + mapped * PAGE_SIZE);
                 descriptor != nullptr)
@@ -127,23 +142,21 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> PageTable::unmap(addr_t vaddr, size_t bytes,
-                                                          paging::WalkDomain domain) noexcept {
-        auto pages = checked_range(vaddr, bytes);
-        if (!pages)
-            return tay::Err(pages.error());
+    tay::expected<void, PagingError> PageTable::unmap(addr_t vaddr, size_t bytes,
+                                                      paging::WalkDomain domain) noexcept {
+        const size_t pages = TAY_TRY(checked_range(vaddr, bytes, PagingError::Operation::UNMAP));
         if (!domain_accepts(vaddr, bytes, domain))
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
+            return tay::Err(
+                PagingError::OutsideAddressDomain(PagingError::Operation::UNMAP, vaddr));
         paging::RetirementSink retirements(owner_);
         paging::Walker walker(root_, owner_, domain);
-        for (size_t page = 0; page < *pages; ++page) {
-            auto mapping = walker.query(vaddr + page * PAGE_SIZE);
-            if (!mapping)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
-            if (mapping->level != 0)
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        for (size_t page = 0; page < pages; ++page) {
+            const auto mapping = TAY_TRY(walker.query(vaddr + page * PAGE_SIZE));
+            if (mapping.level != 0)
+                return tay::Err(PagingError::UnsupportedLeafLevel(
+                    vaddr + page * PAGE_SIZE, static_cast<u8_t>(mapping.level)));
         }
-        for (size_t page = 0; page < *pages; ++page) {
+        for (size_t page = 0; page < pages; ++page) {
             auto mapping = walker.unmap_base(vaddr + page * PAGE_SIZE, retirements);
             if (!mapping)
                 kernel::log::panic("预检成功后 PageTable 取消映射结果发生变化");
@@ -159,21 +172,22 @@ namespace memory {
         return {};
     }
 
-    tay::expected<void, tay::error_code> PageTable::protect(addr_t vaddr, size_t bytes,
-                                                            PageFlags flags,
-                                                            paging::WalkDomain domain) noexcept {
-        auto pages = checked_range(vaddr, bytes);
-        if (!pages || !valid_flags(flags) || (pages && !domain_accepts(vaddr, bytes, domain)))
-            return tay::Err(pages ? tay::error_code::INVALID_ARGUMENT : pages.error());
+    tay::expected<void, PagingError> PageTable::protect(addr_t vaddr, size_t bytes, PageFlags flags,
+                                                        paging::WalkDomain domain) noexcept {
+        const size_t pages = TAY_TRY(checked_range(vaddr, bytes, PagingError::Operation::PROTECT));
+        if (!valid_flags(flags))
+            return tay::Err(PagingError::InvalidFlags(flags));
+        if (!domain_accepts(vaddr, bytes, domain))
+            return tay::Err(
+                PagingError::OutsideAddressDomain(PagingError::Operation::PROTECT, vaddr));
         paging::Walker walker(root_, owner_, domain);
-        for (size_t page = 0; page < *pages; ++page) {
-            auto mapping = walker.query(vaddr + page * PAGE_SIZE);
-            if (!mapping)
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
-            if (mapping->level != 0)
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        for (size_t page = 0; page < pages; ++page) {
+            const auto mapping = TAY_TRY(walker.query(vaddr + page * PAGE_SIZE));
+            if (mapping.level != 0)
+                return tay::Err(PagingError::UnsupportedLeafLevel(
+                    vaddr + page * PAGE_SIZE, static_cast<u8_t>(mapping.level)));
         }
-        for (size_t page = 0; page < *pages; ++page) {
+        for (size_t page = 0; page < pages; ++page) {
             auto result = walker.protect_base(vaddr + page * PAGE_SIZE, flags);
             if (!result)
                 kernel::log::panic("预检成功后 PageTable 保护结果发生变化");
@@ -182,16 +196,14 @@ namespace memory {
         return {};
     }
 
-    tay::expected<PageMapping, tay::error_code> PageTable::query(
+    tay::expected<PageMapping, PagingError> PageTable::query(
         addr_t vaddr, paging::WalkDomain domain) const noexcept {
         if (!hal::PageTableOps::canonical(vaddr))
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
+            return tay::Err(PagingError::NonCanonicalAddress(PagingError::Operation::QUERY, vaddr));
         if (!domain_accepts(vaddr, 1, domain))
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
-        auto mapping = paging::Walker(root_, owner_, domain).query(vaddr);
-        if (!mapping)
-            return tay::Err(mapping.error());
-        return mapping->mapping;
+            return tay::Err(
+                PagingError::OutsideAddressDomain(PagingError::Operation::QUERY, vaddr));
+        return TAY_TRY(paging::Walker(root_, owner_, domain).query(vaddr)).mapping;
     }
 
     PageTable::EntryType PageTable::root_entry(size_t index) const noexcept {

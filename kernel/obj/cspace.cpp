@@ -8,6 +8,7 @@
  * @copyright Copyright (c) 2026
  */
 
+#include <log.h>
 #include <obj/cspace.h>
 #include <synchronized.h>
 
@@ -23,7 +24,7 @@ namespace cap {
         [[nodiscard]] tay::expected<u16_t, CapError> allocate_cookie() noexcept {
             u32_t value = 0;
             if (!cspace_cookies.try_next(static_cast<u32_t>(CAP_TOKEN_COOKIE_MASK), value))
-                return tay::Err(CapError::INVALID_OPERATION);
+                return tay::Err(CapError::OperationRejected(CapError::Operation::COOKIE_EXHAUSTED));
             return static_cast<u16_t>(value);
         }
 
@@ -33,23 +34,21 @@ namespace cap {
     }  // namespace
 
     tay::expected<CSpace *, CapError> CSpace::create() noexcept {
-        auto cookie = allocate_cookie();
-        if (!cookie)
-            return tay::Err(cookie.error());
-        auto *space = new (std::nothrow) CSpace(*cookie);
+        const u16_t cookie = TAY_TRY(allocate_cookie());
+        auto *space        = new (std::nothrow) CSpace(cookie);
         if (space == nullptr)
-            return tay::Err(CapError::OUT_OF_MEMORY);
+            return tay::Err(CapError::OutOfMemory());
 
         auto root = CNode::create_pages(CNODE_DEFAULT_PAGE_COUNT, CNodeKind::ROOT);
         if (!root) {
             delete space;
-            return tay::Err(root.error());
+            return TAY_ERR(root);
         }
         auto attached = space->attach(**root);
         if (!attached) {
             delete *root;
             delete space;
-            return tay::Err(attached.error());
+            return TAY_ERR(attached);
         }
         return space;
     }
@@ -75,8 +74,10 @@ namespace cap {
 
     tay::expected<u8_t, CapError> CSpace::attach(CNode &node) noexcept {
         kernel::lock_guard<tay::spinlock> guard(mutation_lock_);
-        if (node.metadata().owner != nullptr || node.state() == CNodeState::DESTROYING)
-            return tay::Err(CapError::INVALID_OPERATION);
+        if (node.metadata().owner != nullptr)
+            return tay::Err(CapError::OperationRejected(CapError::Operation::NODE_OWNED));
+        if (node.state() == CNodeState::DESTROYING)
+            return tay::Err(CapError::OperationRejected(CapError::Operation::NODE_DESTROYING));
 
         for (u16_t index = 0; index < MAX_CNODES; ++index) {
             auto *expected = static_cast<CNode *>(nullptr);
@@ -88,19 +89,19 @@ namespace cap {
             node.metadata().owner = this;
             return static_cast<u8_t>(index);
         }
-        return tay::Err(CapError::NO_SLOTS);
+        return tay::Err(CapError::OperationRejected(CapError::Operation::CNODE_DIRECTORY_FULL));
     }
 
     tay::expected<CNode *, CapError> CSpace::detach(u8_t index) noexcept {
         kernel::lock_guard<tay::spinlock> guard(mutation_lock_);
         if (index == ROOT_CNODE_INDEX)
-            return tay::Err(CapError::INVALID_OPERATION);
+            return tay::Err(CapError::OperationRejected(CapError::Operation::ROOT_DETACH));
         auto *node = node_at(index);
         if (node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+            return tay::Err(CapError::MissingCNode({}, index));
         kernel::lock_guard<tay::spinlock> node_guard(node->lock_);
         if (node->used_count() != 0 || node->state() != CNodeState::MUTABLE)
-            return tay::Err(CapError::BUSY);
+            return tay::Err(CapError::Busy(index));
         nodes_[index].store(nullptr, std::memory_order_release);
         node->metadata().owner = nullptr;
         return node;
@@ -109,7 +110,7 @@ namespace cap {
     tay::expected<u32_t, CapError> CSpace::next_generation_locked(u8_t cnode_index) noexcept {
         u32_t generation = 0;
         if (!generation_counters_[cnode_index].try_next(CAP_TOKEN_MAX_GENERATION, generation))
-            return tay::Err(CapError::INVALID_OPERATION);
+            return tay::Err(CapError::OperationRejected(CapError::Operation::GENERATION_EXHAUSTED));
         return generation;
     }
 
@@ -119,45 +120,42 @@ namespace cap {
         kernel::lock_guard<tay::spinlock> guard(mutation_lock_);
         auto *node = node_at(cnode_index);
         if (node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+            return tay::Err(CapError::MissingCNode({}, cnode_index));
         if (object.state() != ObjectState::ALIVE)
-            return tay::Err(CapError::INVALID_OPERATION);
+            return tay::Err(CapError::OperationRejected(CapError::Operation::OBJECT_RETIRING));
 
         kernel::lock_guard<tay::spinlock> node_guard(node->lock_);
-        auto generation = next_generation_locked(cnode_index);
-        if (!generation)
-            return tay::Err(generation.error());
-        auto slot = node->reserve_slot_locked(requested_slot);
-        if (!slot)
-            return tay::Err(slot.error());
-        node->publish_locked(*slot, object, rights, badge, *generation, nullptr);
-        return encode_token(cookie_, *generation, cnode_index, *slot);
+        const u32_t generation = TAY_TRY(next_generation_locked(cnode_index));
+        const u16_t slot       = TAY_TRY(node->reserve_slot_locked(requested_slot, cnode_index));
+        node->publish_locked(slot, object, rights, badge, generation, nullptr);
+        return encode_token(cookie_, generation, cnode_index, slot);
     }
 
     tay::expected<CapPin, CapError> CSpace::resolve(CapToken token, ObjectType expected_type,
                                                     u64_t required_rights) noexcept {
         const auto fields = decode_token(token);
         if (!fields.valid || fields.cspace_cookie != cookie_)
-            return tay::Err(CapError::INVALID_TOKEN);
+            return tay::Err(CapError::InvalidToken(token));
         auto *node = node_at(fields.cnode_index);
         if (node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+            return tay::Err(CapError::MissingCNode(token, fields.cnode_index));
 
         kernel::lock_guard<tay::spinlock> guard(node->lock_);
         if (!node->occupied(fields.slot_index))
-            return tay::Err(CapError::INVALID_SLOT);
+            return tay::Err(CapError::InvalidSlot(token, fields.slot_index));
         auto &capability = node->cells_[fields.slot_index].capability;
         if (capability.generation() != fields.generation)
-            return tay::Err(CapError::STALE_TOKEN);
+            return tay::Err(CapError::StaleToken(token, capability.generation()));
         if (expected_type != ObjectType::NONE && capability.type() != expected_type)
-            return tay::Err(CapError::TYPE_MISMATCH);
+            return tay::Err(CapError::TypeMismatch(token, expected_type, capability.type()));
         if (!rights_contain(capability.rights, required_rights))
-            return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+            return tay::Err(
+                CapError::InsufficientRights(token, required_rights, capability.rights));
         if (!capability.object || capability.object->object_type() != capability.type())
-            return tay::Err(CapError::INVALID_OPERATION);
+            kernel::log::panic("Capability object/type 关系损坏");
         auto pin = tay::pin_guard<KernelObject>::try_pin(*capability.object);
         if (!pin)
-            return tay::Err(CapError::INVALID_OPERATION);
+            return tay::Err(CapError::OperationRejected(CapError::Operation::PIN_FAILED));
         return CapPin(std::move(pin), capability.rights, capability.badge);
     }
 
@@ -166,13 +164,15 @@ namespace cap {
                                                    u16_t requested_slot) noexcept {
         const auto fields = decode_token(source);
         if (!fields.valid || fields.cspace_cookie != cookie_)
-            return tay::Err(CapError::INVALID_TOKEN);
+            return tay::Err(CapError::InvalidToken(source));
 
         kernel::lock_guard<tay::spinlock> cspace_guard(mutation_lock_);
         auto *source_node = node_at(fields.cnode_index);
         auto *target_node = node_at(destination_cnode);
-        if (source_node == nullptr || target_node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+        if (source_node == nullptr)
+            return tay::Err(CapError::MissingCNode(source, fields.cnode_index));
+        if (target_node == nullptr)
+            return tay::Err(CapError::MissingCNode({}, destination_cnode));
 
         tay::unique_lock first_lock(source_node->lock_, tay::defer_lock);
         tay::unique_lock second_lock(target_node->lock_, tay::defer_lock);
@@ -184,25 +184,22 @@ namespace cap {
             second_lock.lock();
 
         if (!source_node->occupied(fields.slot_index))
-            return tay::Err(CapError::INVALID_SLOT);
+            return tay::Err(CapError::InvalidSlot(source, fields.slot_index));
         auto &source_cap = source_node->cells_[fields.slot_index].capability;
         if (source_cap.generation() != fields.generation)
-            return tay::Err(CapError::STALE_TOKEN);
+            return tay::Err(CapError::StaleToken(source, source_cap.generation()));
         if ((source_cap.rights & RIGHT_COPY) == 0)
-            return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+            return tay::Err(CapError::InsufficientRights(source, RIGHT_COPY, source_cap.rights));
         const auto rights = requested_rights == 0 ? source_cap.rights : requested_rights;
         if (!rights_contain(source_cap.rights, rights))
-            return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+            return tay::Err(CapError::InsufficientRights(source, rights, source_cap.rights));
 
-        auto generation = next_generation_locked(destination_cnode);
-        if (!generation)
-            return tay::Err(generation.error());
-        auto slot = target_node->reserve_slot_locked(requested_slot);
-        if (!slot)
-            return tay::Err(slot.error());
-        target_node->publish_locked(*slot, *source_cap.object, rights, source_cap.badge,
-                                    *generation, &source_cap);
-        return encode_token(cookie_, *generation, destination_cnode, *slot);
+        const u32_t generation = TAY_TRY(next_generation_locked(destination_cnode));
+        const u16_t slot =
+            TAY_TRY(target_node->reserve_slot_locked(requested_slot, destination_cnode));
+        target_node->publish_locked(slot, *source_cap.object, rights, source_cap.badge, generation,
+                                    &source_cap);
+        return encode_token(cookie_, generation, destination_cnode, slot);
     }
 
     tay::expected<CapToken, CapError> CSpace::mint(CapToken source, u64_t requested_rights,
@@ -210,13 +207,15 @@ namespace cap {
                                                    u16_t requested_slot) noexcept {
         const auto fields = decode_token(source);
         if (!fields.valid || fields.cspace_cookie != cookie_)
-            return tay::Err(CapError::INVALID_TOKEN);
+            return tay::Err(CapError::InvalidToken(source));
 
         kernel::lock_guard<tay::spinlock> cspace_guard(mutation_lock_);
         auto *source_node = node_at(fields.cnode_index);
         auto *target_node = node_at(destination_cnode);
-        if (source_node == nullptr || target_node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+        if (source_node == nullptr)
+            return tay::Err(CapError::MissingCNode(source, fields.cnode_index));
+        if (target_node == nullptr)
+            return tay::Err(CapError::MissingCNode({}, destination_cnode));
 
         tay::unique_lock first_lock(source_node->lock_, tay::defer_lock);
         tay::unique_lock second_lock(target_node->lock_, tay::defer_lock);
@@ -227,41 +226,40 @@ namespace cap {
             second_lock.lock();
 
         if (!source_node->occupied(fields.slot_index))
-            return tay::Err(CapError::INVALID_SLOT);
+            return tay::Err(CapError::InvalidSlot(source, fields.slot_index));
         auto &source_cap = source_node->cells_[fields.slot_index].capability;
         if (source_cap.generation() != fields.generation)
-            return tay::Err(CapError::STALE_TOKEN);
+            return tay::Err(CapError::StaleToken(source, source_cap.generation()));
         if ((source_cap.rights & RIGHT_MINT) == 0)
-            return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+            return tay::Err(CapError::InsufficientRights(source, RIGHT_MINT, source_cap.rights));
         if (!rights_contain(source_cap.rights, requested_rights))
-            return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+            return tay::Err(
+                CapError::InsufficientRights(source, requested_rights, source_cap.rights));
 
-        auto generation = next_generation_locked(destination_cnode);
-        if (!generation)
-            return tay::Err(generation.error());
-        auto slot = target_node->reserve_slot_locked(requested_slot);
-        if (!slot)
-            return tay::Err(slot.error());
-        target_node->publish_locked(*slot, *source_cap.object, requested_rights, badge, *generation,
+        const u32_t generation = TAY_TRY(next_generation_locked(destination_cnode));
+        const u16_t slot =
+            TAY_TRY(target_node->reserve_slot_locked(requested_slot, destination_cnode));
+        target_node->publish_locked(slot, *source_cap.object, requested_rights, badge, generation,
                                     &source_cap);
-        return encode_token(cookie_, *generation, destination_cnode, *slot);
+        return encode_token(cookie_, generation, destination_cnode, slot);
     }
 
     tay::expected<void, CapError> CSpace::delete_cap(CapToken token) noexcept {
         const auto fields = decode_token(token);
         if (!fields.valid || fields.cspace_cookie != cookie_)
-            return tay::Err(CapError::INVALID_TOKEN);
+            return tay::Err(CapError::InvalidToken(token));
         kernel::lock_guard<tay::spinlock> cspace_guard(mutation_lock_);
         auto *node = node_at(fields.cnode_index);
         if (node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+            return tay::Err(CapError::MissingCNode(token, fields.cnode_index));
         ObjectRef<KernelObject> object{};
         {
             kernel::lock_guard<tay::spinlock> node_guard(node->lock_);
             if (!node->occupied(fields.slot_index))
-                return tay::Err(CapError::INVALID_SLOT);
-            if (node->cells_[fields.slot_index].capability.generation() != fields.generation)
-                return tay::Err(CapError::STALE_TOKEN);
+                return tay::Err(CapError::InvalidSlot(token, fields.slot_index));
+            const auto observed = node->cells_[fields.slot_index].capability.generation();
+            if (observed != fields.generation)
+                return tay::Err(CapError::StaleToken(token, observed));
             object = node->erase_locked(fields.slot_index, true);
         }
         return {};
@@ -288,22 +286,22 @@ namespace cap {
     tay::expected<void, CapError> CSpace::revoke(CapToken token) noexcept {
         const auto fields = decode_token(token);
         if (!fields.valid || fields.cspace_cookie != cookie_)
-            return tay::Err(CapError::INVALID_TOKEN);
+            return tay::Err(CapError::InvalidToken(token));
         kernel::lock_guard<tay::spinlock> cspace_guard(mutation_lock_);
         auto *source_node = node_at(fields.cnode_index);
         if (source_node == nullptr)
-            return tay::Err(CapError::MISSING_CNODE);
+            return tay::Err(CapError::MissingCNode(token, fields.cnode_index));
         CapabilityDerivTree tree;
         auto *source = static_cast<Capability *>(nullptr);
         {
             kernel::lock_guard<tay::spinlock> guard(source_node->lock_);
             if (!source_node->occupied(fields.slot_index))
-                return tay::Err(CapError::INVALID_SLOT);
+                return tay::Err(CapError::InvalidSlot(token, fields.slot_index));
             source = &source_node->cells_[fields.slot_index].capability;
             if (source->generation() != fields.generation)
-                return tay::Err(CapError::STALE_TOKEN);
+                return tay::Err(CapError::StaleToken(token, source->generation()));
             if ((source->rights & RIGHT_REVOKE) == 0)
-                return tay::Err(CapError::INSUFFICIENT_RIGHTS);
+                return tay::Err(CapError::InsufficientRights(token, RIGHT_REVOKE, source->rights));
         }
 
         // mutation_lock_ 固定整棵 CDT；每轮沿首子链找到叶节点，后序回收避免悬空父指针。
@@ -327,7 +325,7 @@ namespace cap {
             CNode *child_node = nullptr;
             u16_t child_slot  = 0;
             if (!locate_capability(child, child_node, child_slot))
-                return tay::Err(CapError::INVALID_OPERATION);
+                return tay::Err(CapError::OperationRejected(CapError::Operation::CDT_INCONSISTENT));
             ObjectRef<KernelObject> object{};
             {
                 kernel::lock_guard<tay::spinlock> guard(child_node->lock_);

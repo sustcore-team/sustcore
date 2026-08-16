@@ -12,6 +12,7 @@
 #include <arch/csr.h>
 #include <arch/interrupt.h>
 #include <arch/riscv64/interrupt/frame.h>
+#include <arch/riscv64/namespace.h>
 #include <log.h>
 #include <trap/dispatcher.h>
 
@@ -96,7 +97,12 @@ namespace riscv64::hal {
             else if (code == 15)
                 access = memory::FaultAccess::WRITE;
         }
-        return TrapInfo{kind, frame.scause, code, frame.stval, from_user(frame), access};
+        return TrapInfo{.kind        = kind,
+                        .raw_cause   = frame.scause,
+                        .code        = code,
+                        .bad_address = frame.stval,
+                        .user        = from_user(frame),
+                        .access      = access};
     }
 
     bool from_user(const TrapFrame &frame) noexcept {

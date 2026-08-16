@@ -59,6 +59,22 @@ expect = "abort"
 stderr-contains = "bad expected access"
 
 [[hostprog]]
+id = "taycpplib-optional-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-optional-test"
+
+[[hostprog]]
+id = "taycpplib-optional-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-optional-panic-test"
+expect = "abort"
+stderr-contains = "bad optional access"
+
+[[hostprog]]
 id = "taycpplib-string-view-test"
 kind = "test"
 makefile = "Makefile"
@@ -126,6 +142,22 @@ target = "build"
 output = "taycpplib-list-test"
 
 [[hostprog]]
+id = "taycpplib-pairing-heap-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-pairing-heap-test"
+
+[[hostprog]]
+id = "taycpplib-pairing-heap-duplicate-panic-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-pairing-heap-duplicate-panic-test"
+expect = "abort"
+stderr-contains = "intrusive_pairing_heap element is already linked"
+
+[[hostprog]]
 id = "taycpplib-map-test"
 kind = "test"
 makefile = "Makefile"
@@ -187,6 +219,13 @@ kind = "test"
 makefile = "Makefile"
 target = "build"
 output = "taycpplib-lock-test"
+
+[[hostprog]]
+id = "taycpplib-rcu-test"
+kind = "test"
+makefile = "Makefile"
+target = "build"
+output = "taycpplib-rcu-test"
 
 [[hostprog]]
 id = "taycpplib-unique-lock-no-mutex-panic-test"

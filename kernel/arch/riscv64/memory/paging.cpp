@@ -9,6 +9,7 @@
  */
 
 #include <arch/csr.h>
+#include <arch/riscv64/namespace.h>
 #include <arch/riscv64/paging.h>
 #include <memory/virtual/kernel/kernel_space.h>
 #include <sustcore/addrspace.h>
@@ -54,8 +55,9 @@ namespace riscv64::hal {
 
     tay::expected<PageTableOps::EntryType, tay::error_code> PageTableOps::make_leaf(
         PhyAddr physical, const memory::PageFlags &flags) noexcept {
-        if (!physical.aligned<PAGE_SIZE>() || flags.cache != memory::CacheMode::NORMAL ||
-            (flags.writable && !flags.readable))
+        // RISC-V 的设备/正常内存属性由 PMA/PMP 决定，页表 PTE 不编码 cache mode；
+        // 因此两种抽象属性都使用同一组访问位。
+        if (!physical.aligned<PAGE_SIZE>() || (flags.writable && !flags.readable))
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
         EntryType bits = PTE_VALID | PTE_ACCESSED;
         if (flags.readable)
@@ -96,7 +98,7 @@ namespace riscv64::hal {
         constexpr xlen_t SV39 = xlen_t{8} << 60;
         const PhyAddr root    = binding.role == memory::RootRole::KERNEL
                                     ? memory::kernel_space().root()
-                                    : binding.client_root;
+                                    : binding.private_root;
         csr::write<csr::CSR::SATP>(SV39 | (static_cast<xlen_t>(binding.asid) << 44) |
                                    (root.arith() >> 12));
         flush_tlb();

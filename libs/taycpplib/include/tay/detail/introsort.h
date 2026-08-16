@@ -22,34 +22,6 @@ namespace tay::detail {
         // the introsort works best when N = 32
         inline constexpr auto insertion_sort_threshold = 32;
 
-        struct compare_tag {};
-        struct projection_tag {};
-
-        template <typename Compare, typename Proj>
-        class projected_compare : private composition<compare_tag, Compare>,
-                                  private composition<projection_tag, Proj> {
-        public:
-            constexpr projected_compare(Compare compare, Proj projection)
-                : composition<compare_tag, Compare>(std::move(compare)),
-                  composition<projection_tag, Proj>(std::move(projection)) {}
-
-            template <typename Left, typename Right>
-            [[nodiscard]] constexpr bool operator()(Left&& left, Right&& right) {
-                auto& compare = get<compare_tag>(this);
-                auto& project = get<projection_tag>(this);
-                return std::invoke(compare, std::invoke(project, std::forward<Left>(left)),
-                                   std::invoke(project, std::forward<Right>(right)));
-            }
-
-            template <typename Left, typename Right>
-            [[nodiscard]] constexpr bool operator()(Left&& left, Right&& right) const {
-                const auto& compare = get<compare_tag>(this);
-                const auto& project = get<projection_tag>(this);
-                return std::invoke(compare, std::invoke(project, std::forward<Left>(left)),
-                                   std::invoke(project, std::forward<Right>(right)));
-            }
-        };
-
         template <typename RandomIt, typename Compare>
             requires std::random_access_iterator<RandomIt> && std::sortable<RandomIt, Compare>
         constexpr void insertion_sort(RandomIt first, RandomIt last, Compare& comp) {
@@ -208,7 +180,7 @@ namespace tay::detail {
     constexpr void introsort(RandomIt first, RandomIt last, Compare comp, Proj proj)
         requires std::random_access_iterator<RandomIt> && std::sortable<RandomIt, Compare, Proj>
     {
-        using comparator = __introsort::projected_compare<Compare, Proj>;
+        using comparator = projected_compare<Compare, Proj>;
         comparator combined(std::move(comp), std::move(proj));
         __introsort::introsort(first, last, std::move(combined));
     }

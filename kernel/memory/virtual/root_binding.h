@@ -15,7 +15,8 @@ namespace memory {
     };
 
     struct RootBinding final {
-        PhyAddr client_root{};
+        /** @brief 当前地址空间绑定的私有（低半区）页表根。 */
+        PhyAddr private_root{};
         u16_t asid    = 0;
         RootRole role = RootRole::KERNEL;
     };

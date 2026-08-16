@@ -5,6 +5,7 @@
 
 #include <arch/interrupt.h>
 #include <arch/paging_traits.h>
+#include <device/interrupt.h>
 #include <log.h>
 #include <memory/virtual/client/client_space.h>
 #include <obj/process.h>
@@ -78,8 +79,7 @@ namespace kernel::trap {
                 "用户缺页处理失败: name={}, access={}, pc={:#x}, bad={:#x}, code={}, "
                 "subcode={}, error={}",
                 hal::trap_name(info), access_name(info.access), hal::program_counter(frame),
-                info.bad_address, info.code, hal::trap_subcode(info),
-                tay::to_string(handled.error()));
+                info.bad_address, info.code, hal::trap_subcode(info), handled.error());
         }
 
         [[nodiscard]] bool repair_kernel_mapping(const hal::TrapInfo &info) noexcept {
@@ -94,7 +94,7 @@ namespace kernel::trap {
                 return false;
             auto repaired = client->repair_missing_borrowed_kernel_slot(*address);
             if (!repaired)
-                kernel::log::panic("高半区根项所有权损坏: {}", static_cast<int>(repaired.error()));
+                kernel::log::panic("高半区根项所有权损坏: {}", repaired.error());
             if (*repaired == memory::BorrowedSlotRepair::REPAIRED)
                 return true;
             if (*repaired == memory::BorrowedSlotRepair::GLOBAL_SLOT_ABSENT)
@@ -105,14 +105,22 @@ namespace kernel::trap {
 
     void dispatch(hal::TrapFrame &frame) noexcept {
         const auto info = hal::decode_trap(frame);
-        if (dispatch_syscall(frame, info) || dispatch_user_page_fault(frame, info) ||
-            repair_kernel_mapping(info))
-            return;
-        kernel::log::panic(
-            "未处理的 trap: name={}, kind={}, mode={}, code={}, subcode={}, raw={:#x}, "
-            "access={}, pc={:#x}, bad={:#x}",
-            hal::trap_name(info), kind_name(info.kind), info.user ? "user" : "kernel", info.code,
-            hal::trap_subcode(info), info.raw_cause, access_name(info.access),
-            hal::program_counter(frame), info.bad_address);
+        bool handled    = dispatch_syscall(frame, info) || dispatch_user_page_fault(frame, info) ||
+                       repair_kernel_mapping(info);
+        if (!handled && info.kind != hal::TrapKind::SYNCHRONOUS)
+            handled =
+                device::interrupt::dispatch(info) == device::interrupt::DispatchResult::HANDLED;
+
+        if (!handled)
+            kernel::log::panic(
+                "未处理的 trap: name={}, kind={}, mode={}, code={}, subcode={}, raw={:#x}, "
+                "access={}, pc={:#x}, bad={:#x}",
+                hal::trap_name(info), kind_name(info.kind), info.user ? "user" : "kernel",
+                info.code, hal::trap_subcode(info), info.raw_cause, access_name(info.access),
+                hal::program_counter(frame), info.bad_address);
+
+        // 所有可恢复 trap 都在状态确认完成后经过同一调度安全点；IRQ 与唤醒路径只发布
+        // RunQueueFlags::NEED_RESCHED，是否重新选择和切换完全由 SchedulerCore 决定。
+        scheduler::instance().schedule();
     }
 }  // namespace kernel::trap

@@ -1,7 +1,7 @@
 # 侵入式容器
 
-头文件：`<tay/intrusive.h>`、`<tay/list.h>`、`<tay/tree.h>` 与
-`<tay/container_of.h>`。
+头文件：`<tay/intrusive.h>`、`<tay/list.h>`、`<tay/tree.h>`、
+`<tay/pairing_heap.h>` 与 `<tay/container_of.h>`。
 
 侵入式容器把链接节点嵌入用户对象，不为元素分配内存，也不拥有元素生命期。
 它们适合调度队列、等待队列、缓存索引和内核对象注册表。
@@ -18,12 +18,35 @@ erase/unlink。插入/擦除不影响其他节点地址和迭代器。
 
 ## 侵入式树
 
-`intrusive_tree` 使用嵌入式树节点以及 KeyOf/Compare 策略组织二叉搜索树。
-它不分配节点，支持插入、查找、边界查询、迭代与擦除。比较策略可以有状态。
-对象 key 在链接期间必须保持排序意义不变。
+`intrusive_tree` 使用嵌入式 hook 表达非拥有式多叉层级关系。它不保存 root，
+支持头尾链接、指定 sibling 前链接、摘链、reparent、直接子节点遍历和深度优先
+前序/后序遍历。`intrusive_tree_hook` 缓存尾子节点并提供 O(1) 尾插；
+`compact_intrusive_tree_hook` 节省一个指针，但尾插需要 O(k) 扫描直接子节点。
 
-当前 intrusive tree 是非平衡搜索树：平均操作可接近 O(log n)，退化输入下
-可达到 O(n)。需要最坏情况保证时应在上层控制插入模式，或后续引入平衡树。
+节点析构前必须先摘链，并确保其直接子节点已经迁移或清空。移动已链接节点会让
+父子和兄弟指针失效。
+
+## 侵入式 pairing heap
+
+`intrusive_pairing_heap<T, Locate, Compare>` 是无分配的 min-priority queue。
+对象嵌入 `intrusive_pairing_heap_hook<T>`，`Locate` 负责定位 hook，`Compare`
+可保存状态并定义严格弱序。`intrusive_priority_queue` 是同一类型的别名。
+
+主要接口如下：
+
+- `empty()`、`size()` 与 `top()` 查询队列；空队列的 `top()` 返回空指针；
+- `push(node)` 以 O(1) 插入，重复链接或残留 hook 会 panic；
+- `pop_min()` 摊销 O(log n) 移除比较序最前的节点；空队列调用会 panic；
+- `remove(node)` 与 `remove(hook)` 摊销 O(log n) 删除已知节点；
+- `clear()` 以 O(n) 摘除全部节点，但不析构节点。
+
+heap 调整只改写 hook，不移动对象，因此对象地址保持稳定。节点从 `push()` 到
+`pop_min()`、`remove()` 或 `clear()` 期间必须保持原地址且不得析构；参与比较的
+key 也不得以破坏堆序的方式修改。heap 析构会调用 `clear()`，所以仍链接的节点
+必须至少存活到 heap 析构完成。摘除后 hook 会恢复为未链接状态，可再次插入。
+
+容器不提供内部同步；跨执行上下文共享时，调用方必须用覆盖全部 heap 与 hook
+修改的同一同步协议保护操作。
 
 ## 适用边界
 

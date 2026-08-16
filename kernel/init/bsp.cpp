@@ -1,7 +1,7 @@
 /**
  * @file bsp.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief 内存、全局堆与布局系统的 BSP bring-up。
+ * @brief 设备目录、IRQ、CPU 时钟、timer 与 init 内存回收的 BSP bring-up。
  * @version 0.1.0-dev.1
  * @date 2026-08-12
  *
@@ -9,90 +9,71 @@
  */
 
 #include <arch/interrupt.h>
+#include <arch/timer.h>
+#if defined(__ARCH_RISCV64__)
+#include <arch/riscv64/device/plic.h>
+#endif
+#include <device/catalog.h>
+#include <device/interrupt.h>
 #include <init/kinit.h>
 #include <init/milestones.h>
 #include <log.h>
-#include <memory/physical/buddy.h>
-#include <memory/physical/gfp.h>
-#include <memory/physical/page_database.h>
 #include <memory/reclaim.h>
-#include <memory/virtual/client/client_space.h>
-#include <memory/virtual/kernel/kernel_mm.h>
-#include <memory/virtual/kernel/kernel_space.h>
-#include <sustcore/addrspace.h>
-#include <tay/unique_ptr.h>
+#include <scheduler/scheduler.h>
+#include <timer/deadline.h>
+#include <timer/timer_engine.h>
 #ifdef CONFIG_KERNEL_SELFTEST
-#include <test/cap.h>
+#include <test/framework.h>
 #endif
 
-#include <new>
+#include <utility>
 
-namespace {
-#ifndef NDEBUG
-    void heap_smoke_test() noexcept {
-        auto *small = new (std::nothrow) u64_t{0x53555354434f5245ULL};
-        if (small == nullptr || *small != 0x53555354434f5245ULL)
-            kernel::log::panic("内核堆小对象测试失败");
-        delete small;
+namespace kernel::init::detail {
+    void handle_clock_interrupt(void *, const device::interrupt::Event &) noexcept {
+        auto &deadlines = kernel::timer::bsp_deadline_state();
+        auto interrupt  = deadlines.begin_interrupt(hal::CpuClock::instance().current_time());
 
-        auto *large = new (std::nothrow) std::byte[64 * 1024];
-        if (large == nullptr)
-            kernel::log::panic("内核堆大对象测试失败");
-        large[0]             = std::byte{0x5a};
-        large[64 * 1024 - 1] = std::byte{0xa5};
-        delete[] large;
-        kernel::log::info("内核堆分配 ABI 冒烟测试通过");
+        // engine 与 scheduler 都会向 DeadlineState 发布下一绝对值；这里不持有 coordinator 锁。
+        kernel::timer::bsp_timer_engine().progress(interrupt.now());
+        if (interrupt.preemption_due())
+            scheduler::instance().request_preemption();
+        deadlines.end_interrupt(std::move(interrupt));
     }
-
-    void layout_smoke_test() noexcept {
-        constexpr u64_t TEST_OWNER = 0x54455354;
-        auto allocation            = memory::gfp(1, memory::PageKind::RESERVED, TEST_OWNER);
-        if (!allocation)
-            kernel::log::panic("布局测试无法分配物理页");
-
-        auto client = tay::create_unique<memory::ClientSpace, tay::error_code>();
-        if (!client)
-            kernel::log::panic("ClientSpace 创建测试失败: {}", static_cast<int>(client.error()));
-
-        constexpr addr_t TEST_VADDR = KVA_START + 0x80000000ULL;
-        auto loaded = memory::kernel_mm().load_kernel_layout(memory::KernelLayoutSpec{
-            .virtual_base  = KvaAddr(TEST_VADDR),
-            .physical_base = allocation->base(),
-            .bytes         = PAGE_SIZE,
-            .flags = memory::PageFlags{.readable = true, .writable = true, .executable = false},
-        });
-        if (!loaded)
-            kernel::log::panic("KernelMM 布局加载测试失败: {}", static_cast<int>(loaded.error()));
-        auto mapping = memory::kernel_space().query(HvaAddr(TEST_VADDR));
-        if (!mapping || mapping->physical != allocation->base() || !mapping->flags.writable)
-            kernel::log::panic("KernelMM 布局查询测试失败");
-
-        (*client)->activate();
-        auto *probe = reinterpret_cast<volatile u64_t *>(TEST_VADDR);
-        *probe      = 0x4849474848414c46ULL;
-        if (*probe != 0x4849474848414c46ULL)
-            kernel::log::panic("ClientSpace 高半区绑定测试失败");
-        memory::activate_kernel_space();
-
-        auto unloaded = memory::kernel_mm().unload_kernel_layout(*loaded);
-        if (!unloaded || memory::kernel_space().query(HvaAddr(TEST_VADDR)))
-            kernel::log::panic("KernelMM 布局卸载测试失败");
-
-        allocation->release();
-        kernel::log::info("KernelMM 布局与 ClientSpace 根绑定冒烟测试通过");
-    }
-#endif
-}  // namespace
+}  // namespace kernel::init::detail
 
 extern "C" [[noreturn]] void bsp_main() {
     hal::install_runtime_exception_vectors();
 
-#ifndef NDEBUG
-    heap_smoke_test();
-    layout_smoke_test();
+    auto device_result = ::device::initialize();
+    if (!device_result)
+        kernel::log::panic("设备目录初始化失败: {}", device_result.error());
+    const auto &devices = ::device::catalog();
+    kernel::log::info("设备目录已发布: devices={}, cpus={}, controllers={}, timebase={}Hz",
+                      devices.device_count(), devices.cpu_count(), devices.controller_count(),
+                      devices.platform().timebase_frequency_hz);
+#if defined(__ARCH_RISCV64__)
+    auto plic_result = riscv64::device::interrupt::Plic::initialize_from_catalog();
+    if (!plic_result)
+        kernel::log::panic("PLIC IRQ domain 初始化失败: {}", tay::to_string(plic_result.error()));
 #endif
+    init::advance(init::Milestone::VIRTUAL_MEMORY_READY, init::Milestone::FIRMWARE_READY);
+    init::advance(init::Milestone::FIRMWARE_READY, init::Milestone::CPU_TOPOLOGY_READY);
+    init::advance(init::Milestone::CPU_TOPOLOGY_READY, init::Milestone::TRAPS_READY);
+    init::advance(init::Milestone::TRAPS_READY, init::Milestone::IRQ_READY);
+
+    auto &clock = hal::CpuClock::instance();
+    clock.initialize(devices.platform().timebase_frequency_hz);
+    kernel::timer::bsp_deadline_state().initialize(clock);
+    kernel::timer::bsp_timer_engine().initialize(kernel::timer::bsp_deadline_state());
+    auto timer_subscription = device::interrupt::subscribe(
+        device::interrupt::TIMER_LINE, kernel::init::detail::handle_clock_interrupt);
+    if (!timer_subscription)
+        kernel::log::panic("CPU timer 中断订阅失败: {}",
+                           tay::to_string(timer_subscription.error()));
+    init::advance(init::Milestone::IRQ_READY, init::Milestone::TIMER_READY);
+
 #ifdef CONFIG_KERNEL_SELFTEST
-    test::run_capability_selftest();
+    kernel::test::run_phase(kernel::test::Phase::POST_TIMER_INITIALIZATION);
 #endif
 
     const size_t init_reclaimed = memory::reclaim_init_memory();

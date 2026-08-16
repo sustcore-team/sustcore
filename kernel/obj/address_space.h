@@ -13,6 +13,7 @@
 #include <memory/virtual/client/client_space.h>
 #include <obj/kernel_object.h>
 #include <obj/memory_segment.h>
+#include <task/address_space_error.h>
 #include <task/vma.h>
 #include <tay/expected.h>
 #include <tay/list.h>
@@ -34,7 +35,7 @@ namespace task {
     public:
         static constexpr cap::ObjectType TYPE = cap::ObjectType::ADDRESS_SPACE;
 
-        [[nodiscard]] static tay::expected<cap::ObjectRef<AddressSpace>, tay::error_code>
+        [[nodiscard]] static tay::expected<cap::ObjectRef<AddressSpace>, AddressSpaceError>
         create() noexcept;
 
         AddressSpace(const AddressSpace &)            = delete;
@@ -43,17 +44,15 @@ namespace task {
         AddressSpace &operator=(AddressSpace &&)      = delete;
         ~AddressSpace() noexcept;
 
-        [[nodiscard]] tay::expected<VMA *, tay::error_code> add_vma(
+        [[nodiscard]] tay::expected<VMA *, AddressSpaceError> add_vma(
             const cap::CapabilityRef<memory::MemorySegment> &segment, VirArea area,
             size_t segment_offset, memory::PageFlags flags) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> remove_vma(VMA &vma) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> handle_page_fault(
+        [[nodiscard]] tay::expected<void, AddressSpaceError> remove_vma(VMA &vma) noexcept;
+        [[nodiscard]] tay::expected<void, AddressSpaceError> handle_page_fault(
             VirAddr address, memory::FaultAccess access) noexcept;
 
-        [[nodiscard]] tay::expected<memory::PageMapping, tay::error_code> query(
-            VirAddr address) const noexcept {
-            return space_->query(address);
-        }
+        [[nodiscard]] tay::expected<memory::PageMapping, AddressSpaceError> query(
+            VirAddr address) const noexcept;
 
         void activate() noexcept;
 

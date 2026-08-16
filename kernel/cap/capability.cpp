@@ -24,20 +24,20 @@ namespace cap {
     tay::expected<CNode *, CapError> CNode::create_pages(size_t page_count,
                                                          CNodeKind kind) noexcept {
         if (!is_supported_cnode_page_count(page_count))
-            return tay::Err(CapError::INVALID_OPERATION);
+            return tay::Err(CapError::OperationRejected(CapError::Operation::INVALID_CNODE_SIZE));
 
         const auto capacity = static_cast<u16_t>(cnode_capacity_for_pages(page_count));
         const auto bytes    = (static_cast<size_t>(capacity) + 1) * CNODE_CELL_SIZE;
         auto storage        = memory::alloc(bytes, CNODE_PAGE_SIZE);
         if (!storage)
-            return tay::Err(CapError::OUT_OF_MEMORY);
+            return tay::Err(CapError::OutOfMemory());
 
         auto *cells = static_cast<CNodeCell *>(*storage);
         auto *node  = new (std::nothrow)
             CNode(cells, capacity, static_cast<u8_t>(page_count), kind, node_ids.next());
         if (node == nullptr) {
             memory::dealloc(*storage);
-            return tay::Err(CapError::OUT_OF_MEMORY);
+            return tay::Err(CapError::OutOfMemory());
         }
         return node;
     }
@@ -45,14 +45,14 @@ namespace cap {
     tay::expected<CNode *, CapError> CNode::create_small() noexcept {
         auto storage = memory::alloc(SMALL_CNODE_SIZE, CNODE_CELL_ALIGNMENT);
         if (!storage)
-            return tay::Err(CapError::OUT_OF_MEMORY);
+            return tay::Err(CapError::OutOfMemory());
 
         auto *cells = static_cast<CNodeCell *>(*storage);
         auto *node  = new (std::nothrow) CNode(cells, static_cast<u16_t>(SMALL_CNODE_CAPACITY), 0,
                                                CNodeKind::SMALL, node_ids.next());
         if (node == nullptr) {
             memory::dealloc(*storage);
-            return tay::Err(CapError::OUT_OF_MEMORY);
+            return tay::Err(CapError::OutOfMemory());
         }
         return node;
     }
@@ -101,11 +101,12 @@ namespace cap {
         return static_cast<u16_t>((address - base) / CNODE_CELL_SIZE);
     }
 
-    tay::expected<u16_t, CapError> CNode::reserve_slot_locked(u16_t requested_slot) noexcept {
+    tay::expected<u16_t, CapError> CNode::reserve_slot_locked(u16_t requested_slot,
+                                                              u8_t cnode_index) noexcept {
         u16_t selected = 0;
         if (requested_slot != 0) {
             if (requested_slot > metadata().capacity || occupied(requested_slot))
-                return tay::Err(CapError::INVALID_SLOT);
+                return tay::Err(CapError::InvalidSlot({}, requested_slot));
             u16_t previous = 0;
             for (u16_t current = metadata().free_head; current != 0;
                  current       = cells_[current].free_slot.next_free())
@@ -123,11 +124,11 @@ namespace cap {
                 break;
             }
             if (selected == 0)
-                return tay::Err(CapError::INVALID_SLOT);
+                return tay::Err(CapError::InvalidSlot({}, requested_slot));
         } else {
             selected = metadata().free_head;
             if (selected == 0)
-                return tay::Err(CapError::NO_SLOTS);
+                return tay::Err(CapError::NoSlots(cnode_index));
             metadata().free_head = cells_[selected].free_slot.next_free();
         }
         ++metadata().used_count;

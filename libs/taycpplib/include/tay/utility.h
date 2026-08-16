@@ -12,6 +12,7 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -69,6 +70,65 @@ namespace tay {
     constexpr const T &get(const composition<Tag, T> *p) noexcept {
         return composition<Tag, T>::get(p);
     }
+
+    namespace detail {
+        struct projected_compare_compare_tag {};
+        struct projected_compare_projection_tag {};
+    }  // namespace detail
+
+    /**
+     * @brief 先投影左右操作数，再使用 Compare 比较投影结果。
+     *
+     * Compare 与 Projection 都作为对象保存，因此可以携带状态；空策略通过 composition
+     * 使用空基类优化。operator() 保留左右操作数的值类别，并按底层调用传播 noexcept。
+     */
+    template <typename Compare, typename Projection>
+    class projected_compare
+        : private composition<detail::projected_compare_compare_tag, Compare>,
+          private composition<detail::projected_compare_projection_tag, Projection> {
+    private:
+        using compare_base    = composition<detail::projected_compare_compare_tag, Compare>;
+        using projection_base = composition<detail::projected_compare_projection_tag, Projection>;
+
+        [[nodiscard]] constexpr Compare &compare() noexcept {
+            return get<detail::projected_compare_compare_tag>(this);
+        }
+
+        [[nodiscard]] constexpr const Compare &compare() const noexcept {
+            return get<detail::projected_compare_compare_tag>(this);
+        }
+
+        [[nodiscard]] constexpr Projection &projection() noexcept {
+            return get<detail::projected_compare_projection_tag>(this);
+        }
+
+        [[nodiscard]] constexpr const Projection &projection() const noexcept {
+            return get<detail::projected_compare_projection_tag>(this);
+        }
+
+    public:
+        constexpr projected_compare(Compare compare, Projection projection) noexcept(
+            std::is_nothrow_move_constructible_v<Compare> &&
+            std::is_nothrow_move_constructible_v<Projection>)
+            : compare_base(std::move(compare)), projection_base(std::move(projection)) {}
+
+        template <typename Left, typename Right>
+        [[nodiscard]] constexpr decltype(auto) operator()(Left &&left, Right &&right) noexcept(
+            noexcept(std::invoke(compare(), std::invoke(projection(), std::forward<Left>(left)),
+                                 std::invoke(projection(), std::forward<Right>(right))))) {
+            return std::invoke(compare(), std::invoke(projection(), std::forward<Left>(left)),
+                               std::invoke(projection(), std::forward<Right>(right)));
+        }
+
+        template <typename Left, typename Right>
+        [[nodiscard]] constexpr decltype(auto) operator()(Left &&left, Right &&right) const
+            noexcept(noexcept(std::invoke(compare(),
+                                          std::invoke(projection(), std::forward<Left>(left)),
+                                          std::invoke(projection(), std::forward<Right>(right))))) {
+            return std::invoke(compare(), std::invoke(projection(), std::forward<Left>(left)),
+                               std::invoke(projection(), std::forward<Right>(right)));
+        }
+    };
 
     template <typename... Ts>
     struct overloaded : Ts... {

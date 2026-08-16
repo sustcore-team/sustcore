@@ -53,16 +53,14 @@ namespace memory {
         if (kind == PageKind::GENERIC)
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
-        auto allocator  = buddy();
-        auto allocation = allocator->try_get_free_pages(pages, alignment_pages);
-        if (!allocation)
-            return tay::Err(allocation.error());
-        const PhyArea area(allocation->base, allocation->base + allocation->pages * PAGE_SIZE);
+        auto allocator        = buddy();
+        const auto allocation = TAY_TRY(allocator->try_get_free_pages(pages, alignment_pages));
+        const PhyArea area(allocation.base, allocation.base + allocation.pages * PAGE_SIZE);
         if (!page_database().claim(area, kind, owner_id)) {
-            allocator->put_pages(*allocation);
+            allocator->put_pages(allocation);
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
-        return OwnedPages(*allocation, kind, owner_id);
+        return OwnedPages(allocation, kind, owner_id);
     }
 
 }  // namespace memory

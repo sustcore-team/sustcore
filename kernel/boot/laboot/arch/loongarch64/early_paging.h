@@ -16,28 +16,28 @@
 #include <tay/attribute.h>
 #include <tay/bits.h>
 
-#define _LABOOT_RECLAIMABLE SECTION(".laboot_reclaimable")
+#define LABOOT_BOOT_RECLAIMABLE SECTION(".laboot_reclaimable")
 
 #define LABOOT_PTE_IS_VALID(x) (((x) & LA_PAGE_VALID) != 0)
 #define LABOOT_PTE_IS_LEAF(x)  (((x) & LA_PTE_FLAGS) != 0)
 #define LABOOT_PTE_TO_PA(x)    ((x) & LA_PPN_MASK)
 
-#define _LABOOT_TEXT        SECTION(".laboot.text")
-#define _LABOOT_RODATA      SECTION(".laboot.rodata")
-#define _LABOOT_DATA        SECTION(".laboot.data")
-#define _LABOOT_BSS         SECTION(".laboot.bss")
-#define _LABOOT_POST_TEXT   SECTION(".laboot_post.text")
-#define _LABOOT_POST_RODATA SECTION(".laboot_post.rodata")
-#define _LABOOT_POST_DATA   SECTION(".laboot_post.data")
-#define _LABOOT_POST_BSS    SECTION(".laboot_post.bss")
+#define LABOOT_BOOT_TEXT        SECTION(".laboot.text")
+#define LABOOT_BOOT_RODATA      SECTION(".laboot.rodata")
+#define LABOOT_BOOT_DATA        SECTION(".laboot.data")
+#define LABOOT_BOOT_BSS         SECTION(".laboot.bss")
+#define LABOOT_BOOT_POST_TEXT   SECTION(".laboot_post.text")
+#define LABOOT_BOOT_POST_RODATA SECTION(".laboot_post.rodata")
+#define LABOOT_BOOT_POST_DATA   SECTION(".laboot_post.data")
+#define LABOOT_BOOT_POST_BSS    SECTION(".laboot_post.bss")
 
 namespace laboot {
     extern "C" char s_laboot, s_laboot_kva, s_laboot_reclaimable, s_laboot_reclaimable_kva,
         e_laboot_reclaimable, e_laboot_reclaimable_kva, ekernel_phys, ekernel, s_init, e_init;
-    extern "C" _LABOOT_TEXT void _laboot_tlb_refill();
-    extern "C" _LABOOT_BSS addr_t __laboot_bsp_phys_id;
-    extern "C" _LABOOT_BSS addr_t __laboot_cmdline_phys;
-    extern "C" _LABOOT_BSS addr_t __laboot_system_table_phys;
+    extern "C" LABOOT_BOOT_TEXT void _laboot_tlb_refill();
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_bsp_phys_id;
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_cmdline_phys;
+    extern "C" LABOOT_BOOT_BSS addr_t __laboot_system_table_phys;
 
     constexpr size_t MINIMUM_PAGING_SIZE   = 128 * 1024;
     constexpr size_t MAXIMUM_KERNEL_SIZE   = 32 * 1024 * 1024;

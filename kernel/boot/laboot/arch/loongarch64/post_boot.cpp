@@ -14,31 +14,33 @@
 #include <boot/laboot/arch/loongarch64/early_paging.h>
 #include <tay/bits.h>
 
-#define _LABOOT_POST_STRING(x) _LABOOT_POST_RODATA constexpr const char x[]
+#define LABOOT_BOOT_POST_STRING(x) LABOOT_BOOT_POST_RODATA constexpr const char x[]
 
 namespace laboot::post {
-    _LABOOT_POST_DATA volatile u8_t *SERIAL_BASE = reinterpret_cast<volatile u8_t *>(0x1fe001e0ULL);
+    LABOOT_BOOT_POST_DATA volatile u8_t *SERIAL_BASE =
+        reinterpret_cast<volatile u8_t *>(0x1fe001e0ULL);
 
-    _LABOOT_POST_TEXT void serial_putc(char ch) noexcept {
+    LABOOT_BOOT_POST_TEXT void serial_putc(char ch) noexcept {
         while ((SERIAL_BASE[5] & 0x20) == 0) {
         }
         SERIAL_BASE[0] = static_cast<u8_t>(ch);
     }
 
-    _LABOOT_POST_TEXT void serial_puts(const char *str) noexcept {
+    LABOOT_BOOT_POST_TEXT void serial_puts(const char *str) noexcept {
         for (const char *ptr = str; *ptr != '\0'; ++ptr) serial_putc(*ptr);
     }
 }  // namespace laboot::post
 
 namespace laboot::msg::post {
-    _LABOOT_POST_STRING(POST_MSG)               = "LABOOT启动第二阶段!\n";
-    _LABOOT_POST_STRING(KERNEL_ENTRY_MSG)       = "LABOOT进入内核入口!\n";
-    _LABOOT_POST_STRING(BOOTINFO_OVERFLOW_MSG)  = "错误: BootInfo 区域数量超限\n";
-    _LABOOT_POST_STRING(BOOTINFO_ALLOC_MSG)     = "错误: LABOOT reclaimable 区域不足\n";
-    _LABOOT_POST_STRING(INVALID_DTB_MSG)        = "错误: FDT 无效\n";
-    _LABOOT_POST_STRING(BOOTINFO_TOO_LARGE_MSG) = "错误: BootInfo 超过 128KB 限制\n";
-    _LABOOT_POST_STRING(BOOTINFO_INVALID_REGION_MSG) = "错误: BootInfo 存在无效或未页对齐区域\n";
-    _LABOOT_POST_STRING(FDT_FOUND_MSG) = "LABOOT 成功校验并处理启动数据\n";
+    LABOOT_BOOT_POST_STRING(POST_MSG)               = "LABOOT启动第二阶段!\n";
+    LABOOT_BOOT_POST_STRING(KERNEL_ENTRY_MSG)       = "LABOOT进入内核入口!\n";
+    LABOOT_BOOT_POST_STRING(BOOTINFO_OVERFLOW_MSG)  = "错误: BootInfo 区域数量超限\n";
+    LABOOT_BOOT_POST_STRING(BOOTINFO_ALLOC_MSG)     = "错误: LABOOT reclaimable 区域不足\n";
+    LABOOT_BOOT_POST_STRING(INVALID_DTB_MSG)        = "错误: FDT 无效\n";
+    LABOOT_BOOT_POST_STRING(BOOTINFO_TOO_LARGE_MSG) = "错误: BootInfo 超过 128KB 限制\n";
+    LABOOT_BOOT_POST_STRING(BOOTINFO_INVALID_REGION_MSG) =
+        "错误: BootInfo 存在无效或未页对齐区域\n";
+    LABOOT_BOOT_POST_STRING(FDT_FOUND_MSG) = "LABOOT 成功校验并处理启动数据\n";
 }  // namespace laboot::msg::post
 
 namespace laboot {
@@ -84,13 +86,14 @@ namespace laboot {
         .data4 = {0x83, 0x0b, 0xd9, 0x15, 0x2c, 0x69, 0xaa, 0xe0},
     };
 
-    [[noreturn]] _LABOOT_POST_TEXT void post_panic(const char *msg) noexcept {
+    [[noreturn]] LABOOT_BOOT_POST_TEXT void post_panic(const char *msg) noexcept {
         serial_puts(msg);
         while (true) {
         }
     }
 
-    [[noreturn]] _LABOOT_POST_TEXT void bootinfo_panic(boot::BootInfoBuildError error) noexcept {
+    [[noreturn]] LABOOT_BOOT_POST_TEXT void bootinfo_panic(
+        boot::BootInfoBuildError error) noexcept {
         switch (error) {
             case boot::BootInfoBuildError::INVALID_DTB:      post_panic(INVALID_DTB_MSG);
             case boot::BootInfoBuildError::INVALID_REGION:   post_panic(BOOTINFO_INVALID_REGION_MSG);
@@ -103,20 +106,20 @@ namespace laboot {
 
     using BootInfoBuilderType = boot::BootInfoBuilder<MAX_BOOTINFO_REGIONS, bootinfo_panic>;
     // 三组区域暂存数组大于 LABOOT 启动栈，必须保存在 post-boot 私有数据段中。
-    static _LABOOT_POST_BSS BootInfoBuilderType bootinfo_builder;
+    static LABOOT_BOOT_POST_BSS BootInfoBuilderType bootinfo_builder;
 
-    [[nodiscard]] _LABOOT_POST_TEXT addr_t kva_to_pa(const char *ptr) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT addr_t kva_to_pa(const char *ptr) noexcept {
         return reinterpret_cast<addr_t>(ptr) - KVA_START;
     }
 
-    [[nodiscard]] _LABOOT_POST_TEXT void *pa_to_hhdm(addr_t paddr) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT void *pa_to_hhdm(addr_t paddr) noexcept {
         if (paddr == 0)
             return nullptr;
         return reinterpret_cast<void *>(paddr + KPA_START);
     }
 
-    [[nodiscard]] _LABOOT_POST_TEXT bool guid_equal(const EfiGuid &lhs,
-                                                    const EfiGuid &rhs) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT bool guid_equal(const EfiGuid &lhs,
+                                                        const EfiGuid &rhs) noexcept {
         if (lhs.data1 != rhs.data1 || lhs.data2 != rhs.data2 || lhs.data3 != rhs.data3)
             return false;
         for (size_t idx = 0; idx < sizeof(lhs.data4); ++idx)
@@ -125,8 +128,8 @@ namespace laboot {
         return true;
     }
 
-    [[nodiscard]] _LABOOT_POST_TEXT EfiConfigurationTable *config_tables(LabootInfo &boot_info,
-                                                                         size_t &cnt) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT EfiConfigurationTable *config_tables(LabootInfo &boot_info,
+                                                                             size_t &cnt) noexcept {
         cnt                = 0;
         auto *system_table = static_cast<EfiSystemTable *>(pa_to_hhdm(boot_info.system_table_phys));
         if (system_table == nullptr || system_table->configuration_table == nullptr ||
@@ -142,8 +145,8 @@ namespace laboot {
         return tables;
     }
 
-    [[nodiscard]] _LABOOT_POST_TEXT void *find_config_table(LabootInfo &boot_info,
-                                                            const EfiGuid &guid) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT void *find_config_table(LabootInfo &boot_info,
+                                                                const EfiGuid &guid) noexcept {
         size_t table_cnt = 0;
         auto *tables     = config_tables(boot_info, table_cnt);
         if (tables == nullptr)
@@ -154,7 +157,7 @@ namespace laboot {
         return nullptr;
     }
 
-    _LABOOT_POST_TEXT void find_dtb_from_system_table(LabootInfo &boot_info) noexcept {
+    LABOOT_BOOT_POST_TEXT void find_dtb_from_system_table(LabootInfo &boot_info) noexcept {
         if (boot_info.dtb_virt != 0)
             return;
         auto *dtb_table = find_config_table(boot_info, EFI_DTB_TABLE_GUID);
@@ -166,8 +169,8 @@ namespace laboot {
             post_panic(INVALID_DTB_MSG);
     }
 
-    [[nodiscard]] _LABOOT_POST_TEXT BootInfoHeader *build_bootinfo(LabootInfo *laboot_info,
-                                                                   addr_t cursor) noexcept {
+    [[nodiscard]] LABOOT_BOOT_POST_TEXT BootInfoHeader *build_bootinfo(LabootInfo *laboot_info,
+                                                                       addr_t cursor) noexcept {
         find_dtb_from_system_table(*laboot_info);
         bootinfo_builder.reset(reinterpret_cast<const void *>(laboot_info->dtb_virt), 2);
         bootinfo_builder.collect_fdt_regions();
@@ -196,8 +199,8 @@ namespace laboot {
                                       PAGE_TABLE_ALIGNMENT, PhyAddr(laboot_info->dtb_phys));
     }
 
-    extern "C" _LABOOT_POST_TEXT [[noreturn]] void _laboot_post_start(addr_t boot_ptr,
-                                                                      addr_t reclaimable_cursor) {
+    extern "C" LABOOT_BOOT_POST_TEXT [[noreturn]] void _laboot_post_start(
+        addr_t boot_ptr, addr_t reclaimable_cursor) {
         serial_puts(POST_MSG);
         auto *laboot_info = reinterpret_cast<LabootInfo *>(boot_ptr);
         auto *bootinfo    = build_bootinfo(laboot_info, reclaimable_cursor);

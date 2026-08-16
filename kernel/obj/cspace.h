@@ -148,10 +148,7 @@ namespace cap {
         template <CapabilityObject T>
         [[nodiscard]] tay::expected<CapObject<T>, CapError> resolve(
             CapToken token, u64_t required_rights = 0) noexcept {
-            auto result = resolve(token, T::TYPE, required_rights);
-            if (!result)
-                return tay::Err(result.error());
-            return CapObject<T>(std::move(*result));
+            return CapObject<T>(TAY_TRY(resolve(token, T::TYPE, required_rights)));
         }
 
         /**

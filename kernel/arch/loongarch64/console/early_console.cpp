@@ -10,6 +10,7 @@
  */
 
 #include <arch/early_console.h>
+#include <arch/loongarch64/namespace.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
 

@@ -23,15 +23,6 @@ namespace memory::detail {
     namespace {
         constexpr size_t CHUNK_PAGES      = SLUB_CHUNK_SZ / PAGE_SIZE;
         constexpr u64_t KERNEL_HEAP_OWNER = 0x48454150;
-#ifndef NDEBUG
-        constexpr size_t ALLOCATION_BITMAP_WORDS = SLUB_CHUNK_SZ / 16 / 64;
-#endif
-
-        enum class ChunkState : u8_t {
-            EMPTY,
-            PARTIAL,
-            FULL,
-        };
 
         [[nodiscard]] constexpr addr_t align_up_address(addr_t value, size_t alignment) noexcept {
             return (value + alignment - 1) & ~(alignment - 1);
@@ -52,28 +43,6 @@ namespace memory::detail {
 #endif
         }
     }  // namespace
-
-    struct SlubChunk {
-        AllocationHeader allocation{};
-        tay::intrusive_list_hook<SlubChunk *, SlubChunk *> list_hook{};
-        ChunkState state = ChunkState::EMPTY;
-        void *local_free = nullptr;
-        std::atomic<void *> remote_free{nullptr};
-        size_t allocated_cnt = 0;
-        size_t total_cnt     = 0;
-        addr_t first_object  = 0;
-#ifndef NDEBUG
-        std::atomic<u64_t> allocation_bits[ALLOCATION_BITMAP_WORDS]{};
-#endif
-    };
-
-    static_assert(offsetof(SlubChunk, allocation) == 0);
-    static_assert(sizeof(SlubChunk) < SLUB_CHUNK_SZ);
-
-    tay::intrusive_list_hook<SlubChunk *, SlubChunk *> &ChunkHookLocator::operator()(
-        SlubChunk &chunk) const noexcept {
-        return chunk.list_hook;
-    }
 
     namespace {
         [[nodiscard]] size_t object_index(const SlubChunk &chunk, const void *object) noexcept {
@@ -157,13 +126,11 @@ namespace memory::detail {
 
         const size_t bytes = sizeof(AllocationHeader) + prefix_sz + sz + alignment - 1;
         const size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
-        auto allocation    = gfp(pages, CHUNK_PAGES, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER);
-        if (!allocation) {
-            return tay::Err(allocation.error());
-        }
+        auto allocation =
+            TAY_TRY(gfp(pages, CHUNK_PAGES, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER));
 
-        auto *header = reinterpret_cast<AllocationHeader *>(PA2KPA(allocation->base().arith()));
-        const auto extent = allocation->detach();
+        auto *header      = reinterpret_cast<AllocationHeader *>(PA2KPA(allocation.base().arith()));
+        const auto extent = allocation.detach();
         // 分配得到的是原始页，在页首显式构造用于释放和容量查询的元数据对象。
         new (header) AllocationHeader{
             .magic   = ALLOCATION_MAGIC,
@@ -179,7 +146,7 @@ namespace memory::detail {
             // 在返回对象前保存反向指针，解决按 chunk 边界无法定位大块头部的问题。
             auto *prefix =
                 reinterpret_cast<OveralignedPrefix *>(object_address - sizeof(OveralignedPrefix));
-            new (prefix) OveralignedPrefix{OVERALIGNED_MAGIC, header};
+            new (prefix) OveralignedPrefix{.magic = OVERALIGNED_MAGIC, .header = header};
         }
         const auto extent_end = reinterpret_cast<addr_t>(header) + extent.pages * PAGE_SIZE;
         header->capacity      = extent_end - object_address;
@@ -344,10 +311,8 @@ namespace memory::detail {
 
     tay::expected<void *, tay::error_code> SlubCore::try_allocate() noexcept {
         if (uses_large_path()) {
-            auto result = allocate_large(slot_sz_, slot_align_, this);
-            if (!result)
-                return result;
-            const auto pages = header_for(*result)->extent.pages;
+            auto *result     = TAY_TRY(allocate_large(slot_sz_, slot_align_, this));
+            const auto pages = header_for(result)->extent.pages;
             state_.lock()->account_large_allocation(pages);
             return result;
         }

@@ -78,12 +78,10 @@ namespace kernel::syscall {
 
         auto *space = thread->process().address_space();
         for (addr_t page = page_align_down(start); page < end; page += PAGE_SIZE) {
-            auto address = VirAddr::try_from(page);
-            if (!address)
-                return tay::Err(address.error());
-            auto mapped = space->handle_page_fault(*address, memory::FaultAccess::READ);
+            const VirAddr address = TAY_TRY(VirAddr::try_from(page));
+            auto mapped           = space->handle_page_fault(address, memory::FaultAccess::READ);
             if (!mapped)
-                return tay::Err(mapped.error());
+                return tay::Err(kernel::to_tay_error(mapped.error().code()));
             if (page > UINT64_MAX - PAGE_SIZE)
                 break;
         }

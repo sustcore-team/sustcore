@@ -54,6 +54,28 @@ namespace {
     static_assert(std::is_same_v<
                   decltype(std::declval<tay::expected<box, error_code>&>().transform(&box::get)),
                   ref_result>);
+
+    owned_result macro_source(bool failure) {
+        if (failure)
+            return tay::Err(error_code::failed);
+        return tay::Ok(4);
+    }
+
+    tay::expected<void, error_code> macro_void_source(bool failure) {
+        if (failure)
+            return tay::Err(error_code::failed);
+        return tay::Ok();
+    }
+
+    owned_result macro_try(bool failure) {
+        int value = TAY_TRY(macro_source(failure));
+        return tay::Ok(value + 1);
+    }
+
+    owned_result macro_tryv(bool failure) {
+        TAY_TRYV(macro_void_source(failure));
+        return tay::Ok(5);
+    }
 }  // namespace
 
 extern "C" int tay_expected_freestanding_contract() {
@@ -66,6 +88,9 @@ extern "C" int tay_expected_freestanding_contract() {
         result.transform(as_reference)
             .and_then([](int& current) { return owned_result(tay::Ok(current + 1)); })
             .transform_error([](error_code) { return 1; });
-    return transformed ? transformed.value() + text.value()[0] - 't' + array_result.value()[1] - 2
+    auto macro_value = macro_try(false);
+    auto macro_void  = macro_tryv(false);
+    return transformed ? transformed.value() + text.value()[0] - 't' + array_result.value()[1] - 2 +
+                             macro_value.value() - 5 + macro_void.value() - 5
                        : transformed.error();
 }

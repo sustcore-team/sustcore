@@ -26,6 +26,22 @@ composition 用 tag 区分同一宿主中的多个策略，并对类类型使用
 非类类型作为普通成员保存。`tay::get<Tag>(this)` 取回策略。当前 hash set、
 logger 等用它保存状态化 Hash/KeyEqual/Output，同时让空策略不占额外空间。
 
+## `projected_compare<Compare, Projection>`
+
+头文件：`<tay/utility.h>`。
+
+`projected_compare` 保存 Compare 与 Projection 对象，调用时先分别投影左右操作数，
+再比较投影结果；两种策略都可以携带状态。成员指针可直接作为 Projection 类型，
+并在构造时传入具体成员：
+
+```cpp
+using deadline_less = tay::projected_compare<std::ranges::less, u64_t TimerNode::*>;
+deadline_less compare(std::ranges::less{}, &TimerNode::deadline);
+```
+
+Projection 也可以是普通函数对象；构造时应同时传入 Compare 与 Projection，避免
+默认构造的空成员指针成为无效投影。
+
 ## `overloaded<Ts...>`
 
 把多个 callable 的 `operator()` 合并为一个重载集，适合 `expected::match`：

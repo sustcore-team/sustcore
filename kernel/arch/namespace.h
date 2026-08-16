@@ -19,8 +19,12 @@
 #error unsupported architecture
 #endif
 
-namespace SUSTCORE_ARCH_NAMESPACE {}
-using namespace SUSTCORE_ARCH_NAMESPACE;
+namespace SUSTCORE_ARCH_NAMESPACE {
+    namespace hal {}
+}  // namespace SUSTCORE_ARCH_NAMESPACE
+
+// 架构无关代码只通过 hal 访问当前 ISA 的实现，不能导入整个架构命名空间。
+namespace hal = SUSTCORE_ARCH_NAMESPACE::hal;
 
 #define SUSTCORE_ARCH_NAMESPACE_BEGIN namespace SUSTCORE_ARCH_NAMESPACE {
 #define SUSTCORE_ARCH_NAMESPACE_END   }

@@ -11,8 +11,8 @@
 #pragma once
 
 #include <boot/boot.h>
-#include <memory/virtual/page_flags.h>
-#include <sustcore/addr.h>
+#include <memory/virtual/kernel/kernel_layout.h>
+#include <memory/virtual/kernel/kernel_layout_error.h>
 #include <synchronized.h>
 #include <tay/counter.h>
 #include <tay/expected.h>
@@ -21,50 +21,9 @@
 #include <atomic>
 
 namespace memory {
-    using KernelLayoutId   = u64_t;
-    using HHDMLayoutId     = u64_t;
-    using ReservedLayoutId = u64_t;
-
-    struct KernelLayoutSpec final {
-        KvaAddr virtual_base{};
-        PhyAddr physical_base{};
-        size_t bytes = 0;
-        PageFlags flags{};
-    };
-
-    struct KernelLayout final {
-        KernelLayoutId id = 0;
-        KernelLayoutSpec spec{};
-        ReservedLayoutId hhdm_reservation = 0;
-    };
-
-    struct HHDMLayout final {
-        HHDMLayoutId id = 0;
-        KpaAddr virtual_base{};
-        PhyAddr physical_base{};
-        size_t bytes = 0;
-        PageFlags flags{.readable = true, .writable = true, .executable = false};
-    };
-
-    struct ReservedLayout final {
-        enum class Reason : u8_t {
-            KERNEL_LAYOUT,
-            FIRMWARE,
-            DEVICE,
-            OTHER,
-        };
-
-        ReservedLayoutId id = 0;
-        HHDMLayoutId parent = 0;
-        PhyAddr physical_base{};
-        size_t bytes                = 0;
-        Reason reason               = Reason::OTHER;
-        KernelLayoutId kernel_owner = 0;
-    };
-
     class KernelMM final {
     public:
-        [[nodiscard]] static tay::expected<void, tay::error_code> initialize(
+        [[nodiscard]] static tay::expected<void, KernelLayoutError> initialize(
             const BootInfoHeader &bootinfo) noexcept;
 
         KernelMM(const KernelMM &)            = delete;
@@ -72,20 +31,20 @@ namespace memory {
         KernelMM(KernelMM &&)                 = delete;
         KernelMM &operator=(KernelMM &&)      = delete;
 
-        [[nodiscard]] tay::expected<KernelLayoutId, tay::error_code> load_kernel_layout(
+        [[nodiscard]] tay::expected<KernelLayoutId, KernelLayoutError> load_kernel_layout(
             const KernelLayoutSpec &spec) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> unload_kernel_layout(
+        [[nodiscard]] tay::expected<void, KernelLayoutError> unload_kernel_layout(
             KernelLayoutId id) noexcept;
-        [[nodiscard]] tay::expected<HHDMLayoutId, tay::error_code> load_hhdm_layout(
+        [[nodiscard]] tay::expected<HHDMLayoutId, KernelLayoutError> load_hhdm_layout(
             const HHDMLayout &layout) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> unload_hhdm_layout(
+        [[nodiscard]] tay::expected<void, KernelLayoutError> unload_hhdm_layout(
             HHDMLayoutId id) noexcept;
-        [[nodiscard]] tay::expected<ReservedLayoutId, tay::error_code> reserve_hhdm(
+        [[nodiscard]] tay::expected<ReservedLayoutId, KernelLayoutError> reserve_hhdm(
             HHDMLayoutId parent, const ReservedLayout &layout) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> release_reserved_hhdm(
+        [[nodiscard]] tay::expected<void, KernelLayoutError> release_reserved_hhdm(
             ReservedLayoutId id) noexcept;
 
-        [[nodiscard]] tay::expected<void, tay::error_code> unload_kernel_layouts_in(
+        [[nodiscard]] tay::expected<void, KernelLayoutError> unload_kernel_layouts_in(
             KvaAddr begin, size_t bytes) noexcept;
         [[nodiscard]] bool hhdm_covers(PhyAddr begin, size_t bytes) const noexcept;
 
@@ -150,11 +109,11 @@ namespace memory {
         void release_node(KernelLayoutNode *node) noexcept;
         void release_node(HHDMLayoutNode *node) noexcept;
         void release_node(ReservedLayoutNode *node) noexcept;
-        [[nodiscard]] tay::expected<HHDMLayoutId, tay::error_code> load_hhdm_layout_impl(
+        [[nodiscard]] tay::expected<HHDMLayoutId, KernelLayoutError> load_hhdm_layout_impl(
             const HHDMLayout &layout) noexcept;
-        [[nodiscard]] tay::expected<KernelLayoutId, tay::error_code> load_kernel_layout_impl(
+        [[nodiscard]] tay::expected<KernelLayoutId, KernelLayoutError> load_kernel_layout_impl(
             const KernelLayoutSpec &spec) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> refresh_hhdm_permissions(
+        [[nodiscard]] tay::expected<void, KernelLayoutError> refresh_hhdm_permissions(
             HHDMLayoutId parent, PhyAddr begin, size_t bytes) noexcept;
 
         kernel::synchronized<LayoutState> layouts_;

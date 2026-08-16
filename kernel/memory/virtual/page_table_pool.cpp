@@ -35,12 +35,10 @@ namespace memory::paging {
 
     tay::expected<PhyAddr, tay::error_code> PageAllocator::allocate(
         PageTableOwnerId owner) noexcept {
-        auto allocation = gfp(1, PageKind::PAGE_TABLE, owner);
-        if (!allocation)
-            return tay::Err(allocation.error());
-        memset(reinterpret_cast<void *>(PA2KPA(allocation->base().arith())), 0, PAGE_SIZE);
-        const auto page = allocation->base();
-        (void)allocation->detach();
+        auto allocation = TAY_TRY(gfp(1, PageKind::PAGE_TABLE, owner));
+        memset(reinterpret_cast<void *>(PA2KPA(allocation.base().arith())), 0, PAGE_SIZE);
+        const auto page = allocation.base();
+        (void)allocation.detach();
         return page;
     }
 

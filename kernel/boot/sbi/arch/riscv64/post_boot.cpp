@@ -17,31 +17,32 @@
 
 #include <cstring>
 
-#define _SBI_POST_STRING(x) _SBI_POST_RODATA constexpr const char x[]
+#define SBI_BOOT_POST_STRING(x) SBI_BOOT_POST_RODATA constexpr const char x[]
 
 namespace sbi {
     extern "C" [[noreturn]] void __bsp_start(size_t bsp_hwid, const BootInfoHeader *bootinfo);
 
-    _SBI_POST_STRING(SBI_POST_BOOT_MSG)          = "SBI引导程序第二部分启动!\n";
-    _SBI_POST_STRING(SBI_KERNEL_ENTRY_MSG)       = "SBI引导程序进入内核入口!\n";
-    _SBI_POST_STRING(SBI_BOOTINFO_OVERFLOW_MSG)  = "错误: BootInfo 区域数量超限\n";
-    _SBI_POST_STRING(SBI_BOOTINFO_ALLOC_MSG)     = "错误: SBI reclaimable 区域不足\n";
-    _SBI_POST_STRING(SBI_INVALID_DTB_MSG)        = "错误: FDT 无效\n";
-    _SBI_POST_STRING(SBI_BOOTINFO_TOO_LARGE_MSG) = "错误: BootInfo 超过 128KB 限制\n";
-    _SBI_POST_STRING(SBI_BOOTINFO_INVALID_REGION_MSG) = "错误: BootInfo 存在无效或未页对齐区域\n";
+    SBI_BOOT_POST_STRING(SBI_POST_BOOT_MSG)          = "SBI引导程序第二部分启动!\n";
+    SBI_BOOT_POST_STRING(SBI_KERNEL_ENTRY_MSG)       = "SBI引导程序进入内核入口!\n";
+    SBI_BOOT_POST_STRING(SBI_BOOTINFO_OVERFLOW_MSG)  = "错误: BootInfo 区域数量超限\n";
+    SBI_BOOT_POST_STRING(SBI_BOOTINFO_ALLOC_MSG)     = "错误: SBI reclaimable 区域不足\n";
+    SBI_BOOT_POST_STRING(SBI_INVALID_DTB_MSG)        = "错误: FDT 无效\n";
+    SBI_BOOT_POST_STRING(SBI_BOOTINFO_TOO_LARGE_MSG) = "错误: BootInfo 超过 128KB 限制\n";
+    SBI_BOOT_POST_STRING(SBI_BOOTINFO_INVALID_REGION_MSG) =
+        "错误: BootInfo 存在无效或未页对齐区域\n";
 
-    _SBI_POST_TEXT void sbi_writes(const char *str) noexcept {
+    SBI_BOOT_POST_TEXT void sbi_writes(const char *str) noexcept {
         const int len = strlen(str);
         for (int idx = 0; idx < len; ++idx) sbi_dbcn_console_write_byte(str[idx]);
     }
 
-    [[noreturn]] _SBI_POST_TEXT void post_panic(const char *msg) noexcept {
+    [[noreturn]] SBI_BOOT_POST_TEXT void post_panic(const char *msg) noexcept {
         sbi_writes(msg);
         while (true) {
         }
     }
 
-    [[noreturn]] _SBI_POST_TEXT void bootinfo_panic(boot::BootInfoBuildError error) noexcept {
+    [[noreturn]] SBI_BOOT_POST_TEXT void bootinfo_panic(boot::BootInfoBuildError error) noexcept {
         switch (error) {
             case boot::BootInfoBuildError::INVALID_DTB: post_panic(SBI_INVALID_DTB_MSG);
             case boot::BootInfoBuildError::INVALID_REGION:
@@ -55,14 +56,14 @@ namespace sbi {
 
     using BootInfoBuilderType = boot::BootInfoBuilder<MAX_BOOTINFO_REGIONS, bootinfo_panic>;
     // 三组区域暂存数组大于 SBI 启动栈，必须保存在 post-boot 私有数据段中。
-    static _SBI_POST_BSS BootInfoBuilderType bootinfo_builder;
+    static SBI_BOOT_POST_BSS BootInfoBuilderType bootinfo_builder;
 
-    [[nodiscard]] _SBI_POST_TEXT addr_t kva_to_pa(const char *ptr) noexcept {
+    [[nodiscard]] SBI_BOOT_POST_TEXT addr_t kva_to_pa(const char *ptr) noexcept {
         return reinterpret_cast<addr_t>(ptr) - KVA_START;
     }
 
-    [[nodiscard]] _SBI_POST_TEXT BootInfoHeader *build_bootinfo(addr_t dtb_ptr,
-                                                                addr_t cursor) noexcept {
+    [[nodiscard]] SBI_BOOT_POST_TEXT BootInfoHeader *build_bootinfo(addr_t dtb_ptr,
+                                                                    addr_t cursor) noexcept {
         bootinfo_builder.reset(reinterpret_cast<const void *>(dtb_ptr), 1);
         bootinfo_builder.collect_fdt_regions();
         const auto dtb_sz = bootinfo_builder.dtb_sz();
@@ -89,8 +90,8 @@ namespace sbi {
                                       PAGE_TABLE_ALIGNMENT, PhyAddr(dtb_ptr));
     }
 
-    extern "C" _SBI_POST_TEXT void _sbi_post_start(size_t hart_id, addr_t dtb_ptr,
-                                                   addr_t reclaimable_cursor) {
+    extern "C" SBI_BOOT_POST_TEXT void _sbi_post_start(size_t hart_id, addr_t dtb_ptr,
+                                                       addr_t reclaimable_cursor) {
         sbi_writes(SBI_POST_BOOT_MSG);
         auto *bootinfo    = build_bootinfo(dtb_ptr, reclaimable_cursor);
         bootinfo->hart_id = hart_id;

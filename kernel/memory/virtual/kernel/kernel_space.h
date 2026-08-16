@@ -28,7 +28,7 @@ namespace memory {
 
     class KernelSpace final {
     public:
-        [[nodiscard]] static tay::expected<void, tay::error_code> initialize(
+        [[nodiscard]] static tay::expected<void, PagingError> initialize(
             const BootInfoHeader &bootinfo) noexcept;
 
         KernelSpace(const KernelSpace &)            = delete;
@@ -36,8 +36,13 @@ namespace memory {
         KernelSpace(KernelSpace &&)                 = delete;
         KernelSpace &operator=(KernelSpace &&)      = delete;
 
-        [[nodiscard]] tay::expected<PageMapping, tay::error_code> query(
-            HvaAddr address) const noexcept;
+        [[nodiscard]] tay::expected<PageMapping, PagingError> query(HvaAddr address) const noexcept;
+        /** @brief 在内核高半区建立物理设备寄存器映射。 */
+        [[nodiscard]] tay::expected<KvaAddr, PagingError> map_device(PhyAddr physical, size_t bytes,
+                                                                     PageFlags flags) noexcept;
+        /** @brief 移除由 map_device() 建立的设备寄存器映射。 */
+        [[nodiscard]] tay::expected<void, PagingError> unmap_device(PhyAddr physical,
+                                                                    size_t bytes) noexcept;
         [[nodiscard]] PhyAddr root() const noexcept;
         [[nodiscard]] PhyAddr guard_root() const noexcept {
             return guard_root_;
@@ -45,9 +50,9 @@ namespace memory {
         [[nodiscard]] RootBinding binding() const noexcept;
         void activate() noexcept;
 
-        [[nodiscard]] tay::expected<RootSlotSnapshot, tay::error_code> published_slot(
+        [[nodiscard]] tay::expected<RootSlotSnapshot, PagingError> published_slot(
             HvaAddr address) const noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> copy_published_high_slots_to(
+        [[nodiscard]] tay::expected<void, PagingError> copy_published_high_slots_to(
             PageTable &client) const noexcept;
 
     private:
@@ -64,14 +69,13 @@ namespace memory {
 
         constexpr KernelSpace() noexcept = default;
 
-        [[nodiscard]] tay::expected<void, tay::error_code> map_high(HvaAddr address,
-                                                                    PhyAddr physical, size_t bytes,
+        [[nodiscard]] tay::expected<void, PagingError> map_high(HvaAddr address, PhyAddr physical,
+                                                                size_t bytes,
+                                                                PageFlags flags) noexcept;
+        [[nodiscard]] tay::expected<void, PagingError> unmap_high(HvaAddr address,
+                                                                  size_t bytes) noexcept;
+        [[nodiscard]] tay::expected<void, PagingError> protect_high(HvaAddr address, size_t bytes,
                                                                     PageFlags flags) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> unmap_high(HvaAddr address,
-                                                                      size_t bytes) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> protect_high(HvaAddr address,
-                                                                        size_t bytes,
-                                                                        PageFlags flags) noexcept;
 
         kernel::synchronized<PageTableState> page_table_;
         PhyAddr guard_root_{};

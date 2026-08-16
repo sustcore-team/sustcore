@@ -18,6 +18,7 @@
 #include <tay/expected.h>
 #include <tay/list.h>
 
+#include <atomic>
 #include <cstddef>
 #include <new>
 #include <type_traits>
@@ -66,12 +67,37 @@ namespace memory {
             AllocationHeader *header = nullptr;
         };
 
-        struct ChunkHookLocator {
-            tay::intrusive_list_hook<SlubChunk *, SlubChunk *> &operator()(
-                SlubChunk &chunk) const noexcept;
+        enum class ChunkState : u8_t {
+            EMPTY,
+            PARTIAL,
+            FULL,
         };
 
-        using chunk_list = tay::intrusive_list<SlubChunk, ChunkHookLocator>;
+#ifndef NDEBUG
+        constexpr size_t ALLOCATION_BITMAP_WORDS = SLUB_CHUNK_SZ / 16 / 64;
+#endif
+
+        struct SlubChunk {
+            AllocationHeader allocation{};
+            using chunklist_hook = tay::intrusive_list_hook<SlubChunk *, SlubChunk *>;
+            chunklist_hook list_hook{};
+            ChunkState state = ChunkState::EMPTY;
+            void *local_free = nullptr;
+            std::atomic<void *> remote_free{nullptr};
+            size_t allocated_cnt = 0;
+            size_t total_cnt     = 0;
+            addr_t first_object  = 0;
+#ifndef NDEBUG
+            std::atomic<u64_t> allocation_bits[ALLOCATION_BITMAP_WORDS]{};
+#endif
+        };
+
+        static_assert(offsetof(SlubChunk, allocation) == 0);
+        static_assert(sizeof(SlubChunk) < SLUB_CHUNK_SZ);
+
+        using chunk_list =
+            tay::intrusive_list<SlubChunk, tay::locate_member<SlubChunk, SlubChunk::chunklist_hook,
+                                                              &SlubChunk::list_hook>>;
 
         [[nodiscard]] AllocationHeader *header_for(void *ptr) noexcept;
         [[nodiscard]] tay::expected<void *, tay::error_code> allocate_large(
@@ -250,11 +276,7 @@ namespace memory {
 
         /** @brief 分配一块适合 T 的原始存储，不调用构造函数。 */
         [[nodiscard]] tay::expected<T *, tay::error_code> try_allocate() noexcept {
-            auto result = storage_.try_allocate();
-            if (!result) {
-                return tay::Err(result.error());
-            }
-            return static_cast<T *>(*result);
+            return static_cast<T *>(TAY_TRY(storage_.try_allocate()));
         }
 
         /** @brief 释放原始存储，不调用 T 的析构函数。 */
@@ -269,10 +291,8 @@ namespace memory {
         template <class... Args>
             requires std::is_nothrow_constructible_v<T, Args &&...>
         [[nodiscard]] tay::expected<T *, tay::error_code> try_create(Args &&...args) noexcept {
-            auto storage = try_allocate();
-            if (!storage)
-                return storage;
-            return new (*storage) T(std::forward<Args>(args)...);
+            auto *storage = TAY_TRY(try_allocate());
+            return new (storage) T(std::forward<Args>(args)...);
         }
 
         /**

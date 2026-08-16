@@ -13,15 +13,15 @@
 
 #include <sustcore/addr.h>
 
-#define _SBI_TEXT        SECTION(".sbi_boot.text")
-#define _SBI_RODATA      SECTION(".sbi_boot.rodata")
-#define _SBI_DATA        SECTION(".sbi_boot.data")
-#define _SBI_BSS         SECTION(".sbi_boot.bss")
-#define _SBI_POST_TEXT   SECTION(".sbi_post_boot.text")
-#define _SBI_POST_RODATA SECTION(".sbi_post_boot.rodata")
-#define _SBI_POST_DATA   SECTION(".sbi_post_boot.data")
-#define _SBI_POST_BSS    SECTION(".sbi_post_boot.bss")
-#define _SBI_RECLAIMABLE SECTION(".sbi_reclaimable")
+#define SBI_BOOT_TEXT        SECTION(".sbi_boot.text")
+#define SBI_BOOT_RODATA      SECTION(".sbi_boot.rodata")
+#define SBI_BOOT_DATA        SECTION(".sbi_boot.data")
+#define SBI_BOOT_BSS         SECTION(".sbi_boot.bss")
+#define SBI_BOOT_POST_TEXT   SECTION(".sbi_post_boot.text")
+#define SBI_BOOT_POST_RODATA SECTION(".sbi_post_boot.rodata")
+#define SBI_BOOT_POST_DATA   SECTION(".sbi_post_boot.data")
+#define SBI_BOOT_POST_BSS    SECTION(".sbi_post_boot.bss")
+#define SBI_BOOT_RECLAIMABLE SECTION(".sbi_reclaimable")
 
 namespace sbi {
     extern "C" char s_sbi, s_sbi_kva, s_sbi_reclaimable, s_sbi_reclaimable_kva, e_sbi_reclaimable,

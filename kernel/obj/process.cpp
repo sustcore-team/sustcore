@@ -11,7 +11,6 @@
 #include <log.h>
 #include <memory/virtual/client/client_space.h>
 #include <obj/process.h>
-#include <obj/thread.h>
 #include <tay/counter.h>
 
 #include <limits>
@@ -24,31 +23,20 @@ namespace task {
         cap::ObjectRef<Process> kernel_process_ref;
     }  // namespace
 
-    ProcessThreadHookLocator::Hook &ProcessThreadHookLocator::operator()(
-        Thread &thread) const noexcept {
-        return thread.process_hook_;
-    }
+    Process::Process(bool kernel) noexcept
+        : id_(kernel ? 0 : process_ids.next()), kernel_(kernel) {}
 
-    const ProcessThreadHookLocator::Hook &ProcessThreadHookLocator::operator()(
-        const Thread &thread) const noexcept {
-        return thread.process_hook_;
-    }
-
-    Process::Process(bool kernel) noexcept : kernel_(kernel) {
-        id_ = kernel ? 0 : process_ids.next();
-    }
-
-    tay::expected<cap::ObjectRef<Process>, tay::error_code> Process::create() noexcept {
+    tay::expected<cap::ObjectRef<Process>, ProcessError> Process::create() noexcept {
         auto *process = new (std::nothrow) Process(false);
         if (process == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(ProcessError::OutOfMemory());
         return cap::ObjectRef<Process>(*process);
     }
 
-    tay::expected<cap::ObjectRef<Process>, tay::error_code> Process::create_kernel() noexcept {
+    tay::expected<cap::ObjectRef<Process>, ProcessError> Process::create_kernel() noexcept {
         auto *process = new (std::nothrow) Process(true);
         if (process == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(ProcessError::OutOfMemory());
         process->state_ = ProcessState::SUBMITTED;
         return cap::ObjectRef<Process>(*process);
     }
@@ -59,22 +47,30 @@ namespace task {
         state_ = ProcessState::DEAD;
     }
 
-    tay::expected<void, tay::error_code> Process::set_address_space(
+    tay::expected<void, ProcessError> Process::set_address_space(
         AddressSpace &address_space) noexcept {
-        if (kernel_ || state_ != ProcessState::CREATED)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        if (kernel_)
+            return tay::Err(ProcessError::KernelProcessOperation());
+        if (state_ != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(state_));
+        if (address_space_)
+            return tay::Err(ProcessError::AddressSpaceAlreadySet());
         address_space_ = cap::ObjectRef<AddressSpace>(address_space);
         return {};
     }
 
-    tay::expected<void, tay::error_code> Process::set_cspace(cap::CSpace &cspace) noexcept {
-        if (kernel_ || state_ != ProcessState::CREATED)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+    tay::expected<void, ProcessError> Process::set_cspace(cap::CSpace &cspace) noexcept {
+        if (kernel_)
+            return tay::Err(ProcessError::KernelProcessOperation());
+        if (state_ != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(state_));
+        if (cspace_)
+            return tay::Err(ProcessError::CSpaceAlreadySet());
         cspace_ = cap::ObjectRef<cap::CSpace>(cspace);
         return {};
     }
 
-    tay::expected<void, tay::error_code> Process::submit() noexcept {
+    tay::expected<void, ProcessError> Process::submit() noexcept {
         return process_manager().submit(*this);
     }
 
@@ -101,10 +97,17 @@ namespace task {
         address_space_->activate();
     }
 
-    tay::expected<void, tay::error_code> ProcessManager::submit(Process &process) noexcept {
-        if (process.kernel_ || process.state_ != ProcessState::CREATED || !process.address_space_ ||
-            !process.cspace_ || processes_.linked(&process))
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+    tay::expected<void, ProcessError> ProcessManager::submit(Process &process) noexcept {
+        if (process.kernel_)
+            return tay::Err(ProcessError::KernelProcessOperation());
+        if (processes_.linked(&process) || process.state_ == ProcessState::SUBMITTED)
+            return tay::Err(ProcessError::AlreadySubmitted());
+        if (process.state_ != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(process.state_));
+        if (!process.address_space_)
+            return tay::Err(ProcessError::MissingAddressSpace());
+        if (!process.cspace_)
+            return tay::Err(ProcessError::MissingCSpace());
         process.manager_ref_ = cap::ObjectRef<Process>(process);
         processes_.push_back(&process);
         process.state_ = ProcessState::SUBMITTED;
@@ -115,13 +118,10 @@ namespace task {
         return manager;
     }
 
-    tay::expected<void, tay::error_code> initialize_kernel_process() noexcept {
+    tay::expected<void, ProcessError> initialize_kernel_process() noexcept {
         if (kernel_process_ref)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        auto process = Process::create_kernel();
-        if (!process)
-            return tay::Err(process.error());
-        kernel_process_ref = std::move(*process);
+            return tay::Err(ProcessError::AlreadySubmitted());
+        kernel_process_ref = TAY_TRY(Process::create_kernel());
         return {};
     }
 

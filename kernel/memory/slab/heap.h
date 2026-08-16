@@ -177,8 +177,7 @@ namespace memory {
         HeapSlubList slubs_{};
     };
 
-    using MixedSlabsAllocator = MixedSlabsAllocator;
-    using SlabShard           = MixedSlabsAllocator;
+    using SlabShard = MixedSlabsAllocator;
 
     /**
      * @brief 探测并发布常量初始化的永久全局内核堆。

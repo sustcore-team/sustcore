@@ -1,117 +1,130 @@
 /**
  * @file kinit.cpp
- * @brief kinit 与多个 worker 的协作式 FIFO 调度验证
+ * @author theflysong (song_of_the_fly@163.com)
+ * @brief kinit 永久内核线程、Scheduler、BSP WorkQueue 与周期 timer 启动编排。
+ * @version 0.1.0-dev.1
+ * @date 2026-08-17
+ *
+ * @copyright Copyright (c) 2026
  */
 
+#include <arch/interrupt.h>
+#include <arch/timer.h>
+#include <async/work_queue.h>
 #include <init/kinit.h>
 #include <log.h>
 #include <obj/process.h>
 #include <obj/thread.h>
 #include <scheduler/scheduler.h>
-
-#include <cstddef>
-#include <utility>
+#ifdef CONFIG_KERNEL_SELFTEST
+#include <test/framework.h>
+#endif
+#include <timer/deadline.h>
+#include <timer/timer_engine.h>
 
 namespace init {
     namespace {
-        constexpr size_t WORKER_COUNT      = 8;
-        constexpr size_t PARTICIPANT_COUNT = WORKER_COUNT + 1;
-        constexpr size_t ITERATION_COUNT   = 10;
+        /**
+         * @brief 永久宿主的周期 timer Worklet，每秒在普通 worker 上输出一次日志。
+         *
+         * run() 先 retire/reset 当前 timer node，再以当前时刻为基准重新 arm，避免工作
+         * 延迟时累积补发。对象具有与内核相同的生命期，成功重新 arm 后不销毁宿主。
+         */
+        class PeriodicTimerWorklet final : public kernel::async::Worklet {
+        public:
+            constexpr PeriodicTimerWorklet() noexcept = default;
 
-        struct TestState final {
-            size_t expected_participant = 0;
-            size_t completed[PARTICIPANT_COUNT]{};
-        };
-
-        struct WorkerArgument final {
-            TestState *state = nullptr;
-            size_t participant;
-            const char *name = nullptr;
-        };
-
-        void run_participant(TestState &state, size_t participant, const char *name) noexcept {
-            for (size_t iteration = 0; iteration < ITERATION_COUNT; ++iteration) {
-                if (state.expected_participant != participant ||
-                    state.completed[participant] != iteration)
-                {
-                    kernel::log::panic("FIFO 调度次序错误: 期望参与者={}, 实际参与者={}, 轮次={}",
-                                       state.expected_participant, participant, iteration + 1);
-                }
-                kernel::log::info("FIFO 调度测试: {} {}/{}", name, iteration + 1, ITERATION_COUNT);
-                ++state.completed[participant];
-                state.expected_participant = (participant + 1) % PARTICIPANT_COUNT;
-                scheduler::yield();
+            void start() noexcept {
+                auto &engine = kernel::timer::bsp_timer_engine();
+                if (pending() || engine.state(timer_) != kernel::timer::PrecisionTimerState::IDLE)
+                    kernel::log::panic("重复启动 periodic timer Worklet");
+                arm_next();
             }
-        }
 
-        void worker_entry(void *opaque) noexcept {
-            auto *argument = static_cast<WorkerArgument *>(opaque);
-            if (argument == nullptr || argument->state == nullptr || argument->name == nullptr)
-                kernel::log::panic("无效的 FIFO worker 参数");
-            run_participant(*argument->state, argument->participant, argument->name);
+        private:
+            void run() noexcept override {
+                auto &engine = kernel::timer::bsp_timer_engine();
+                engine.retire(timer_);
+                engine.reset(timer_);
+
+                kernel::log::info("timer worklet ran!");
+                arm_next();
+            }
+
+            void arm_next() noexcept {
+                const auto deadline = kernel::timer::saturated_deadline_after(
+                    hal::CpuClock::instance().current_time(), PERIOD);
+                if (auto armed = kernel::timer::bsp_timer_engine().arm(timer_, deadline, *this);
+                    !armed)
+                    kernel::log::panic("periodic timer Worklet 重新 arm 失败: {}", armed.error());
+            }
+
+            static constexpr auto PERIOD = 1_s;
+
+            kernel::timer::PrecisionTimerNode timer_{};
+        };
+
+        constinit PeriodicTimerWorklet periodic_timer_worklet;
+
+        void start_bsp_work_queue() noexcept {
+            auto &queue = kernel::async::bsp_work_queue();
+            if (auto started = queue.start(task::kernel_process()); !started)
+                kernel::log::panic("BSP WorkQueue worker 创建失败: {}", started.error());
+
+            // 永久 worker 初始无工作，应离开 ready queue；timer 后续只需 post 到该固定 queue。
+            auto *worker = queue.worker();
+            while (worker != nullptr && worker->state() != task::ThreadState::BLOCKED &&
+                   !worker->exited())
+                scheduler::yield();
+            if (worker == nullptr || worker->state() != task::ThreadState::BLOCKED ||
+                queue.pending_count() != 0 || !queue.accepting())
+                kernel::log::panic("BSP WorkQueue worker 启动后未 park");
+            if (queue.shutdown() || !queue.accepting() || queue.worker() != worker)
+                kernel::log::panic("永久 BSP WorkQueue 接受了 shutdown");
+            kernel::log::info("BSP WorkQueue worker 已启动并 park");
         }
     }  // namespace
 
     [[noreturn]] void run_kinit() noexcept {
-        TestState state{};
-        constexpr const char *WORKER_NAMES[WORKER_COUNT] = {
-            "worker-1", "worker-2", "worker-3", "worker-4",
-            "worker-5", "worker-6", "worker-7", "worker-8",
-        };
-        WorkerArgument worker_arguments[WORKER_COUNT]{};
-        cap::ObjectRef<task::Thread> workers[WORKER_COUNT]{};
-
         auto initialized_process = task::initialize_kernel_process();
         if (!initialized_process)
-            kernel::log::panic("无法初始化 kernel_process: {}",
-                               tay::to_string(initialized_process.error()));
+            kernel::log::panic("无法初始化 kernel_process: {}", initialized_process.error());
         auto kinit       = task::Thread::adopt_current(task::kernel_process());
         auto initialized = scheduler::instance().initialize(kinit);
         if (!initialized)
-            kernel::log::panic("无法初始化 FIFO 调度器: {}", tay::to_string(initialized.error()));
+            kernel::log::panic("无法初始化 Scheduler: {}", initialized.error());
+        if (auto installed = scheduler::instance().install_preemption_deadline_sink(
+                kernel::timer::bsp_deadline_state().preemption_sink());
+            !installed)
+            kernel::log::panic("无法安装 BSP scheduler deadline sink: {}", installed.error());
+
+#ifdef CONFIG_KERNEL_SELFTEST
+        kernel::test::run_phase(kernel::test::Phase::POST_SCHEDULER_INITIALIZATION,
+                                {.current_thread = &kinit});
+#endif
+
+        start_bsp_work_queue();
+
+#ifdef CONFIG_KERNEL_SELFTEST
+        kernel::test::run_phase(kernel::test::Phase::POST_WORK_QUEUE_INITIALIZATION,
+                                {.current_thread = &kinit});
+#endif
 
         auto usrboot = start_usrboot();
         if (!usrboot)
-            kernel::log::panic("usrboot 启动失败: {}", tay::to_string(usrboot.error()));
+            kernel::log::panic("usrboot 启动失败: {}", usrboot.error());
 
-        for (size_t index = 0; index < WORKER_COUNT; ++index) {
-            worker_arguments[index] = WorkerArgument{&state, index + 1, WORKER_NAMES[index]};
-            auto worker = task::Thread::create_kernel(task::kernel_process(), worker_entry,
-                                                      &worker_arguments[index]);
-            if (!worker)
-                kernel::log::panic("无法创建 FIFO worker {}: {}", index + 1,
-                                   tay::to_string(worker.error()));
-            workers[index] = std::move(*worker);
-            if (auto resumed = scheduler::instance().resume(*workers[index]); !resumed)
-                kernel::log::panic("无法发布 FIFO worker {}: {}", index + 1,
-                                   tay::to_string(resumed.error()));
-        }
+#ifdef CONFIG_KERNEL_SELFTEST
+        kernel::test::run_phase(kernel::test::Phase::PRE_IDLE, {.current_thread = &kinit});
+#endif
 
-        run_participant(state, 0, "kinit");
+        periodic_timer_worklet.start();
 
-        for (;;) {
-            bool all_exited = true;
-            for (const auto &worker : workers) {
-                if (!worker->exited()) {
-                    all_exited = false;
-                    break;
-                }
-            }
-            if (all_exited)
-                break;
-            scheduler::yield();
-        }
-
-        for (size_t participant = 0; participant < PARTICIPANT_COUNT; ++participant) {
-            if (state.completed[participant] != ITERATION_COUNT)
-                kernel::log::panic("FIFO 调度测试计数错误: participant={}, completed={}",
-                                   participant, state.completed[participant]);
-        }
-        if (state.expected_participant != 0)
-            kernel::log::panic("FIFO 调度测试结束状态错误");
-
-        for (auto &worker : workers) worker.reset();
-        kernel::log::info("FIFO 调度测试通过: kinit 与八个 worker 各运行 {} 次", ITERATION_COUNT);
-        kernel::log::halt();
+        // bootstrap Thread 在完成初始化职责后成为本 CPU 的 idle；它不进入 ready queue，
+        // 普通 Thread 唤醒或 timer tick 会在 trap-return 路径将它换出。
+        scheduler::instance().become_idle();
+        scheduler::yield();
+        hal::enable_interrupts();
+        for (;;) hal::wait_for_interrupt();
     }
 }  // namespace init

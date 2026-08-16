@@ -36,39 +36,24 @@ namespace memory::detail {
                              static_cast<size_t>(end - begin), flags);
         };
 
-        auto result = map_segment(
-            s_text, e_text, PageFlags{.readable = true, .writable = false, .executable = true});
-        if (!result)
-            return result;
-        result = map_segment(s_rodata, e_rodata,
-                             PageFlags{.readable = true, .writable = false, .executable = false});
-        if (!result)
-            return result;
-        result = map_segment(s_data, e_data,
-                             PageFlags{.readable = true, .writable = true, .executable = false});
-        if (!result)
-            return result;
-        result = map_segment(__bsp_stack_bottom, __bsp_stack_top,
-                             PageFlags{.readable = true, .writable = true, .executable = false});
-        if (!result)
-            return result;
-        result = map_segment(s_bss, e_bss,
-                             PageFlags{.readable = true, .writable = true, .executable = false});
-        if (!result)
-            return result;
-        result = map_segment(s_init_text, e_init_text,
-                             PageFlags{.readable = true, .writable = false, .executable = true});
-        if (!result)
-            return result;
-        result = map_segment(s_init_rodata, e_init_rodata,
-                             PageFlags{.readable = true, .writable = false, .executable = false});
-        if (!result)
-            return result;
-        result = map_segment(s_init_data, e_init_data,
-                             PageFlags{.readable = true, .writable = true, .executable = false});
-        if (!result)
-            return result;
-        return map_segment(s_init_bss, e_init_bss,
-                           PageFlags{.readable = true, .writable = true, .executable = false});
+        TAY_TRYV(map_segment(s_text, e_text,
+                             PageFlags{.readable = true, .writable = false, .executable = true}));
+        TAY_TRYV(map_segment(s_rodata, e_rodata,
+                             PageFlags{.readable = true, .writable = false, .executable = false}));
+        TAY_TRYV(map_segment(s_data, e_data,
+                             PageFlags{.readable = true, .writable = true, .executable = false}));
+        TAY_TRYV(map_segment(__bsp_stack_bottom, __bsp_stack_top,
+                             PageFlags{.readable = true, .writable = true, .executable = false}));
+        TAY_TRYV(map_segment(s_bss, e_bss,
+                             PageFlags{.readable = true, .writable = true, .executable = false}));
+        TAY_TRYV(map_segment(s_init_text, e_init_text,
+                             PageFlags{.readable = true, .writable = false, .executable = true}));
+        TAY_TRYV(map_segment(s_init_rodata, e_init_rodata,
+                             PageFlags{.readable = true, .writable = false, .executable = false}));
+        TAY_TRYV(map_segment(s_init_data, e_init_data,
+                             PageFlags{.readable = true, .writable = true, .executable = false}));
+        TAY_TRYV(map_segment(s_init_bss, e_init_bss,
+                             PageFlags{.readable = true, .writable = true, .executable = false}));
+        return {};
     }
 }  // namespace memory::detail

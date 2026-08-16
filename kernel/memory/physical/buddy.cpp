@@ -21,12 +21,12 @@
 
 namespace memory {
     namespace {
-        constinit kernel::synchronized<Buddy> __buddy;
+        constinit kernel::synchronized<Buddy> global_buddy;
         constexpr u64_t BUDDY_METADATA_OWNER = 0x42554444594D4554ULL;
     }  // namespace
 
     kernel::locked_ref<Buddy> buddy() noexcept {
-        return __buddy.lock();
+        return global_buddy.lock();
     }
 
     size_t Buddy::ceil_order(size_t pages) noexcept {
@@ -155,7 +155,7 @@ namespace memory {
             kernel::log::panic("无法分配 Buddy 描述符池");
         }
 
-        PageAllocation backing{PhyAddr(*allocation), DESCRIPTOR_POOL_PAGES};
+        PageAllocation backing{.base = PhyAddr(*allocation), .pages = DESCRIPTOR_POOL_PAGES};
         const PhyArea backing_area(backing.base, backing.base + backing.pages * PAGE_SIZE);
         if (!page_database().claim(backing_area, PageKind::METADATA, BUDDY_METADATA_OWNER))
             kernel::log::panic("无法认领 Buddy 描述符池物理页");
@@ -294,11 +294,8 @@ namespace memory {
 
     tay::expected<PageAllocation, tay::error_code> Buddy::try_gfp_in_order(size_t order) noexcept {
         ensure_descriptor_capacity();
-        auto result = allocate_block(order);
-        if (!result) {
-            return tay::Err(result.error());
-        }
-        return PageAllocation{PhyAddr(*result), size_t{1} << order};
+        const addr_t result = TAY_TRY(allocate_block(order));
+        return PageAllocation{.base = PhyAddr(result), .pages = size_t{1} << order};
     }
 
     tay::expected<PageAllocation, tay::error_code> Buddy::try_get_free_pages(
@@ -313,16 +310,13 @@ namespace memory {
         }
 
         ensure_descriptor_capacity();
-        auto result = allocate_block(allocation_order);
-        if (!result) {
-            return tay::Err(result.error());
-        }
+        const addr_t result          = TAY_TRY(allocate_block(allocation_order));
         const size_t allocated_pages = size_t{1} << allocation_order;
         if (allocated_pages > pages) {
             // Buddy 只能按二次幂取块，多出的尾部立即拆解归还。
-            release_range(*result + pages * PAGE_SIZE, allocated_pages - pages);
+            release_range(result + pages * PAGE_SIZE, allocated_pages - pages);
         }
-        return PageAllocation{PhyAddr(*result), pages};
+        return PageAllocation{.base = PhyAddr(result), .pages = pages};
     }
 
     void Buddy::put_pages(PageAllocation allocation) noexcept {

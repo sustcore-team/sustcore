@@ -26,7 +26,7 @@ namespace memory {
 
         auto result = kernel_mm().unload_kernel_layouts_in(KvaAddr(init_vbegin), bytes);
         if (!result)
-            kernel::log::panic("无法通过 KernelMM 卸载 .init 布局");
+            kernel::log::panic("无法通过 KernelMM 卸载 .init 布局: {}", result.error());
 
         page_database().release_boot_reclaimable(init_area);
         buddy()->put_range(init_area);

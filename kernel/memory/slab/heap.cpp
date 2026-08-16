@@ -94,7 +94,7 @@ namespace memory {
         if (!small) {
             global_allocator.trim();
             phase.store(HeapPhase::OFFLINE, std::memory_order_release);
-            return tay::Err(small.error());
+            return TAY_ERR(small);
         }
         global_allocator.deallocate(*small);
 
@@ -102,7 +102,7 @@ namespace memory {
         if (!large) {
             global_allocator.trim();
             phase.store(HeapPhase::OFFLINE, std::memory_order_release);
-            return tay::Err(large.error());
+            return TAY_ERR(large);
         }
         global_allocator.deallocate(*large);
         phase.store(HeapPhase::READY, std::memory_order_release);

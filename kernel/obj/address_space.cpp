@@ -37,15 +37,32 @@ namespace task {
             }
             return false;
         }
+
+        [[nodiscard]] memory::PageFlags segment_allowed_flags(u64_t rights) noexcept {
+            return memory::PageFlags{
+                .readable   = (rights & cap::RIGHT_READ) != 0,
+                .writable   = (rights & cap::RIGHT_WRITE) != 0,
+                .executable = false,
+                .user       = true,
+                .global     = false,
+            };
+        }
+
+        [[nodiscard]] AddressSpaceError page_table_error(
+            VirAddr page, const memory::PagingError &error) noexcept {
+            return AddressSpaceError::PageTableFailed(page, error.code());
+        }
     }  // namespace
 
-    tay::expected<cap::ObjectRef<AddressSpace>, tay::error_code> AddressSpace::create() noexcept {
-        auto client = tay::create_unique<memory::ClientSpace, tay::error_code>();
+    tay::expected<cap::ObjectRef<AddressSpace>, AddressSpaceError> AddressSpace::create() noexcept {
+        auto client = tay::create_unique<memory::ClientSpace, memory::PagingError>();
         if (!client)
-            return tay::Err(client.error());
+            return tay::Err(client.error().code() == kernel::KernelError::PagingError::OUT_OF_MEMORY
+                                ? AddressSpaceError::OutOfMemory()
+                                : page_table_error({}, client.error()));
         auto *object = new (std::nothrow) AddressSpace(std::move(*client));
         if (object == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(AddressSpaceError::OutOfMemory());
         return cap::ObjectRef<AddressSpace>(*object);
     }
 
@@ -63,25 +80,35 @@ namespace task {
         }
     }
 
-    tay::expected<VMA *, tay::error_code> AddressSpace::add_vma(
+    tay::expected<VMA *, AddressSpaceError> AddressSpace::add_vma(
         const cap::CapabilityRef<memory::MemorySegment> &segment, VirArea area,
         size_t segment_offset, memory::PageFlags flags) noexcept {
-        if (!segment || segment.object() == nullptr || area.nullable() ||
-            !area.begin.aligned<PAGE_SIZE>() || !area.end.aligned<PAGE_SIZE>() ||
-            !is_user_vaddr(area.begin) || !is_user_vaddr(area.end - 1) || !valid_flags(flags) ||
-            (flags.writable && !segment.allows(cap::RIGHT_WRITE)) ||
-            (flags.readable && !segment.allows(cap::RIGHT_READ)) ||
-            segment_offset > segment.object()->size() ||
-            area.size() > segment.object()->size() - segment_offset)
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        if (!segment || segment.object() == nullptr)
+            return tay::Err(AddressSpaceError::InvalidSegment());
+        if (area.nullable() || !area.begin.aligned<PAGE_SIZE>() || !area.end.aligned<PAGE_SIZE>() ||
+            !is_user_vaddr(area.begin) || !is_user_vaddr(area.end - 1))
+            return tay::Err(AddressSpaceError::InvalidArea(area));
+        if (!valid_flags(flags))
+            return tay::Err(AddressSpaceError::InvalidFlags(flags));
+        const auto allowed = segment_allowed_flags(segment.rights());
+        if ((flags.writable && !allowed.writable) || (flags.readable && !allowed.readable))
+            return tay::Err(AddressSpaceError::AccessDenied(
+                flags.writable ? memory::FaultAccess::WRITE : memory::FaultAccess::READ, allowed));
+        const size_t segment_size = segment.object()->size();
+        if (segment_offset > segment_size)
+            return tay::Err(
+                AddressSpaceError::SegmentOffsetOutOfRange(segment_offset, segment_size));
+        if (area.size() > segment_size - segment_offset)
+            return tay::Err(AddressSpaceError::MappingExceedsSegment(segment_offset, area.size(),
+                                                                     segment_size));
         kernel::lock_guard<tay::spinlock> guard(lock_);
         for (auto iterator = vmas_.begin(); iterator != vmas_.end(); ++iterator) {
             if (tay::is_intersecting((*iterator)->area(), area))
-                return tay::Err(tay::error_code::INVALID_ARGUMENT);
+                return tay::Err(AddressSpaceError::VmaOverlap(area, (*iterator)->area()));
             if ((*iterator)->area().begin >= area.begin) {
                 auto *vma = new (std::nothrow) VMA(segment, area, segment_offset, flags);
                 if (vma == nullptr)
-                    return tay::Err(tay::error_code::OUT_OF_MEMORY);
+                    return tay::Err(AddressSpaceError::OutOfMemory());
                 vmas_.insert(iterator, vma);
                 ++vma_generation_;
                 state_ = AddressSpaceState::CONFIGURING;
@@ -90,24 +117,31 @@ namespace task {
         }
         auto *vma = new (std::nothrow) VMA(segment, area, segment_offset, flags);
         if (vma == nullptr)
-            return tay::Err(tay::error_code::OUT_OF_MEMORY);
+            return tay::Err(AddressSpaceError::OutOfMemory());
         vmas_.push_back(vma);
         ++vma_generation_;
         state_ = AddressSpaceState::CONFIGURING;
         return vma;
     }
 
-    tay::expected<void, tay::error_code> AddressSpace::remove_vma(VMA &vma) noexcept {
+    tay::expected<void, AddressSpaceError> AddressSpace::remove_vma(VMA &vma) noexcept {
         kernel::lock_guard<tay::spinlock> guard(lock_);
-        if (!vma.linked())
-            return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        bool owned = false;
+        for (auto iterator = vmas_.begin(); iterator != vmas_.end(); ++iterator) {
+            if (*iterator != &vma)
+                continue;
+            owned = true;
+            break;
+        }
+        if (!owned)
+            return tay::Err(AddressSpaceError::VmaNotOwned());
         const auto area = vma.area();
         for (VirAddr address = area.begin; address < area.end; address += PAGE_SIZE) {
             auto mapping = space_->query(address);
             if (mapping) {
                 auto unmapped = space_->unmap(address, PAGE_SIZE);
                 if (!unmapped)
-                    return tay::Err(unmapped.error());
+                    return tay::Err(page_table_error(address, unmapped.error()));
             }
         }
         (void)vmas_.remove(&vma);
@@ -130,17 +164,30 @@ namespace task {
         return nullptr;
     }
 
-    tay::expected<void, tay::error_code> AddressSpace::handle_page_fault(
+    tay::expected<memory::PageMapping, AddressSpaceError> AddressSpace::query(
+        VirAddr address) const noexcept {
+        auto result = space_->query(address);
+        if (!result)
+            return tay::Err(page_table_error(address, result.error()));
+        return *result;
+    }
+
+    tay::expected<void, AddressSpaceError> AddressSpace::handle_page_fault(
         VirAddr address, memory::FaultAccess access) noexcept {
         const VirAddr page = address.page_align_down();
         FaultSnapshot snapshot{};
         {
             kernel::lock_guard<tay::spinlock> guard(lock_);
             auto *vma = locate_locked(address);
-            if (vma == nullptr || !allows(vma->flags(), access))
-                return tay::Err(tay::error_code::OUT_OF_RANGE);
-            if (space_->query(page))
+            if (vma == nullptr)
+                return tay::Err(AddressSpaceError::UnmappedAddress(address));
+            if (!allows(vma->flags(), access))
+                return tay::Err(AddressSpaceError::AccessDenied(access, vma->flags()));
+            auto existing = space_->query(page);
+            if (existing)
                 return {};
+            if (!existing.error().is<memory::PagingError::MissingMapping>())
+                return tay::Err(page_table_error(page, existing.error()));
             snapshot = FaultSnapshot{
                 .memory         = vma->memory(),
                 .area           = vma->area(),
@@ -153,7 +200,8 @@ namespace task {
         const size_t offset = snapshot.segment_offset + (page - snapshot.area.begin);
         auto physical       = snapshot.memory.object()->ensure_page(offset);
         if (!physical)
-            return tay::Err(physical.error());
+            return tay::Err(
+                AddressSpaceError::BackingAllocationFailed(offset, physical.error().code()));
 
         kernel::lock_guard<tay::spinlock> guard(lock_);
         auto *current = locate_locked(address);
@@ -162,10 +210,16 @@ namespace task {
             current->segment_offset() != snapshot.segment_offset ||
             current->memory().object() != snapshot.memory.object() ||
             current->flags() != snapshot.flags || !allows(current->flags(), access))
-            return tay::Err(tay::error_code::OUT_OF_RANGE);
-        if (space_->query(page))
+            return tay::Err(AddressSpaceError::MappingChanged(page, snapshot.generation));
+        auto existing = space_->query(page);
+        if (existing)
             return {};
-        return space_->map(page, *physical, PAGE_SIZE, snapshot.flags);
+        if (!existing.error().is<memory::PagingError::MissingMapping>())
+            return tay::Err(page_table_error(page, existing.error()));
+        auto mapped = space_->map(page, *physical, PAGE_SIZE, snapshot.flags);
+        if (!mapped)
+            return tay::Err(page_table_error(page, mapped.error()));
+        return {};
     }
 
     void AddressSpace::activate() noexcept {

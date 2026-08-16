@@ -10,12 +10,17 @@
  */
 
 #include <tay/algo/sort.h>
+#include <tay/utility.h>
+
+#include <functional>
 
 namespace {
     struct record {
         int key;
         int payload;
     };
+
+    using record_key_less = tay::projected_compare<std::ranges::less, int record::*>;
 
     constexpr bool sort_works() {
         int values[] = {4, 1, 3, 2};
@@ -37,6 +42,8 @@ namespace {
 static_assert(std::sortable<int *>);
 static_assert(std::sortable<record *, std::ranges::less, decltype(&record::key)>);
 static_assert(!std::sortable<const int *>);
+static_assert(record_key_less(std::ranges::less{}, &record::key)(record{.key = 1},
+                                                                 record{.key = 2}));
 static_assert(sort_works());
 
 int main() {

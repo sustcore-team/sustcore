@@ -14,33 +14,21 @@
 #include <obj/cspace.h>
 #include <obj/kernel_object.h>
 #include <obj/objfwd.h>
+#include <obj/thread.h>
+#include <task/process_error.h>
+#include <task/state.h>
 #include <tay/expected.h>
 #include <tay/list.h>
 
 namespace task {
-    enum class ProcessState : u8_t {
-        CREATED,
-        SUBMITTED,
-        STOPPING,
-        DEAD,
-    };
-
-    struct ProcessThreadHookLocator {
-        using Hook = tay::intrusive_list_hook<Thread *, Thread *>;
-        [[nodiscard]] Hook &operator()(Thread &thread) const noexcept;
-        [[nodiscard]] const Hook &operator()(const Thread &thread) const noexcept;
-    };
-
     class ProcessManager;
-    struct ProcessManagerHookLocator;
 
     class Process final : public cap::TypedKernelObject<Process, cap::ObjectType::PROCESS> {
     public:
         static constexpr cap::ObjectType TYPE = cap::ObjectType::PROCESS;
 
-        [[nodiscard]] static tay::expected<cap::ObjectRef<Process>, tay::error_code>
-        create() noexcept;
-        [[nodiscard]] static tay::expected<cap::ObjectRef<Process>, tay::error_code>
+        [[nodiscard]] static tay::expected<cap::ObjectRef<Process>, ProcessError> create() noexcept;
+        [[nodiscard]] static tay::expected<cap::ObjectRef<Process>, ProcessError>
         create_kernel() noexcept;
 
         Process(const Process &)            = delete;
@@ -49,10 +37,10 @@ namespace task {
         Process &operator=(Process &&)      = delete;
         ~Process() noexcept;
 
-        [[nodiscard]] tay::expected<void, tay::error_code> set_address_space(
+        [[nodiscard]] tay::expected<void, ProcessError> set_address_space(
             AddressSpace &address_space) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> set_cspace(cap::CSpace &cspace) noexcept;
-        [[nodiscard]] tay::expected<void, tay::error_code> submit() noexcept;
+        [[nodiscard]] tay::expected<void, ProcessError> set_cspace(cap::CSpace &cspace) noexcept;
+        [[nodiscard]] tay::expected<void, ProcessError> submit() noexcept;
 
         [[nodiscard]] u64_t id() const noexcept {
             return id_;
@@ -78,20 +66,20 @@ namespace task {
     private:
         friend class ProcessManager;
         friend class Thread;
-        friend struct ProcessManagerHookLocator;
 
         explicit Process(bool kernel) noexcept;
         [[nodiscard]] bool attach_thread(Thread &thread) noexcept;
         void detach_thread(Thread &thread) noexcept;
 
-        using manager_hook = tay::intrusive_list_hook<Process *, Process *>;
-        using thread_list  = tay::intrusive_list<Thread, ProcessThreadHookLocator>;
+        using thread_list = tay::intrusive_list<
+            Thread, tay::locate_member<Thread, Thread::process_hook, &Thread::process_hook_>>;
 
         cap::ObjectRef<AddressSpace> address_space_{};
         cap::ObjectRef<cap::CSpace> cspace_{};
         cap::ObjectRef<Process> manager_ref_{};
-        thread_list threads_{};
+        using manager_hook = tay::intrusive_list_hook<Process *, Process *>;
         manager_hook manager_hook_{};
+        thread_list threads_{};
         u64_t id_           = 0;
         ProcessState state_ = ProcessState::CREATED;
         bool kernel_        = false;
@@ -99,7 +87,7 @@ namespace task {
 
     class ProcessManager final {
     public:
-        [[nodiscard]] tay::expected<void, tay::error_code> submit(Process &process) noexcept;
+        [[nodiscard]] tay::expected<void, ProcessError> submit(Process &process) noexcept;
         [[nodiscard]] size_t size() const noexcept {
             return processes_.size();
         }
@@ -111,6 +99,6 @@ namespace task {
     };
 
     [[nodiscard]] ProcessManager &process_manager() noexcept;
-    [[nodiscard]] tay::expected<void, tay::error_code> initialize_kernel_process() noexcept;
+    [[nodiscard]] tay::expected<void, ProcessError> initialize_kernel_process() noexcept;
     [[nodiscard]] Process &kernel_process() noexcept;
 }  // namespace task
