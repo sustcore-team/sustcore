@@ -6,7 +6,7 @@
 #pragma once
 
 #include <error.h>
-#include <memory/virtual/paging_error.h>
+#include <error/paging.h>
 #include <sustcore/addr.h>
 #include <tay/utility.h>
 #include <tay/variant.h>

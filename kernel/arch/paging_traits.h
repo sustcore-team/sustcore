@@ -20,4 +20,4 @@
 #error unsupported architecture
 #endif
 
-static_assert(hal::PageTableTraits<hal::PageTableOps>);
+static_assert(hal::PageTableTraits<hal::PtOps>);

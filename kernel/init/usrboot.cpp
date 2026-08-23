@@ -8,11 +8,11 @@
  * @copyright Copyright (c) 2026
  */
 
-#include <init/usrboot_error.h>
+#include <error/usrboot.h>
 #include <log.h>
-#include <memory/virtual/page_flags.h>
-#include <obj/address_space.h>
-#include <obj/memory_segment.h>
+#include <memory/virtual/flags.h>
+#include <obj/addr_space.h>
+#include <obj/mem_seg.h>
 #include <obj/process.h>
 #include <obj/thread.h>
 #include <scheduler/scheduler.h>
@@ -25,7 +25,7 @@ extern "C" const std::byte s_usrboot[];
 extern "C" const std::byte e_usrboot[];
 
 namespace init {
-    namespace {
+    namespace detail::usrboot {
         [[nodiscard]] bool add_overflow(u64_t lhs, u64_t rhs, u64_t &result) noexcept {
             if (rhs > UINT64_MAX - lhs)
                 return true;
@@ -42,8 +42,7 @@ namespace init {
                     UsrbootError::InvalidSegmentSize(kind, segment.memsz, segment.filesz));
 
             if (add_overflow(segment.vaddr, segment.memsz, end))
-                return tay::Err(
-                    UsrbootError::SegmentAddressOverflow(kind, segment.vaddr, segment.memsz));
+                return tay::Err(UsrbootError::SegAddrOverflow(kind, segment.vaddr, segment.memsz));
 
             if (segment.vaddr >= KPA_START || end > KPA_START)
                 return tay::Err(UsrbootError::SegmentOutsideUserRange(kind, segment.vaddr, end));
@@ -61,7 +60,7 @@ namespace init {
             return {};
         }
 
-    }  // namespace
+    }  // namespace detail::usrboot
 
     tay::expected<void, UsrbootError> start_usrboot() noexcept {
         const auto *begin = s_usrboot;
@@ -78,55 +77,55 @@ namespace init {
             return tay::Err(UsrbootError::InvalidHeader(size, header.body_size, header.entry));
         kernel::log::info("usrboot header: size={}, rx_off={}, rw_off={}, ro_off={}", size,
                           header.seg_rx.off, header.seg_rw.off, header.seg_ro.off);
-        TAY_TRYV(validate_segment(UsrbootError::Segment::RX, header.seg_rx, size));
-        TAY_TRYV(validate_segment(UsrbootError::Segment::RW, header.seg_rw, size));
-        TAY_TRYV(validate_segment(UsrbootError::Segment::RO, header.seg_ro, size));
+        TAY_TRYV(detail::usrboot::validate_segment(UsrbootError::Segment::RX, header.seg_rx, size));
+        TAY_TRYV(detail::usrboot::validate_segment(UsrbootError::Segment::RW, header.seg_rw, size));
+        TAY_TRYV(detail::usrboot::validate_segment(UsrbootError::Segment::RO, header.seg_ro, size));
 
-        auto address_space = task::AddressSpace::create();
-        if (!address_space)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::ADDRESS_SPACE,
-                                                               address_space.error().code()));
+        auto addr_space = task::AddrSpace::create();
+        if (!addr_space)
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::ADDRESS_SPACE,
+                                                             addr_space.error().code()));
         auto process = task::Process::create();
         if (!process)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::PROCESS,
-                                                               process.error().code()));
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::PROCESS,
+                                                             process.error().code()));
         auto cspace = cap::CSpace::create();
         if (!cspace)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::CSPACE,
-                                                               cspace.error().code()));
-        if (auto configured = (*process)->set_address_space(**address_space); !configured)
-            return tay::Err(UsrbootError::ProcessConfigurationFailed(configured.error().code()));
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::CSPACE,
+                                                             cspace.error().code()));
+        if (auto configured = (*process)->set_addr_space(**addr_space); !configured)
+            return tay::Err(UsrbootError::ProcessConfigFailed(configured.error().code()));
         if (auto configured = (*process)->set_cspace(**cspace); !configured)
-            return tay::Err(UsrbootError::ProcessConfigurationFailed(configured.error().code()));
+            return tay::Err(UsrbootError::ProcessConfigFailed(configured.error().code()));
 
-        auto rx = memory::MemorySegment::create(header.seg_rx.memsz);
-        auto rw = memory::MemorySegment::create(header.seg_rw.memsz);
-        auto ro = memory::MemorySegment::create(header.seg_ro.memsz);
+        auto rx = memory::MemSeg::create(header.seg_rx.memsz);
+        auto rw = memory::MemSeg::create(header.seg_rw.memsz);
+        auto ro = memory::MemSeg::create(header.seg_ro.memsz);
         if (!rx)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
-                                                               rx.error().code()));
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                             rx.error().code()));
         if (!rw)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
-                                                               rw.error().code()));
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                             rw.error().code()));
         if (!ro)
-            return tay::Err(UsrbootError::ObjectCreationFailed(UsrbootError::Object::MEMORY_SEGMENT,
-                                                               ro.error().code()));
+            return tay::Err(UsrbootError::ObjectCreateFailed(UsrbootError::Object::MEMORY_SEGMENT,
+                                                             ro.error().code()));
         const auto segment_rights = static_cast<u64_t>(cap::RIGHT_READ | cap::RIGHT_WRITE);
         const auto rx_bytes       = page_align_up(header.seg_rx.memsz);
         const auto rw_bytes       = page_align_up(header.seg_rw.memsz);
         const auto ro_bytes       = page_align_up(header.seg_ro.memsz);
-        auto rx_vma               = (*address_space)
-                          ->add_vma(cap::CapabilityRef<memory::MemorySegment>(*rx, segment_rights),
+        auto rx_vma               = (*addr_space)
+                          ->add_vma(cap::CRef<memory::MemSeg>(*rx, segment_rights),
                                     VirArea{VirAddr(header.seg_rx.vaddr),
                                             VirAddr(header.seg_rx.vaddr + rx_bytes)},
                                     0, memory::PageFlags{.readable = true, .executable = true});
-        auto rw_vma = (*address_space)
-                          ->add_vma(cap::CapabilityRef<memory::MemorySegment>(*rw, segment_rights),
+        auto rw_vma = (*addr_space)
+                          ->add_vma(cap::CRef<memory::MemSeg>(*rw, segment_rights),
                                     VirArea{VirAddr(header.seg_rw.vaddr),
                                             VirAddr(header.seg_rw.vaddr + rw_bytes)},
                                     0, memory::PageFlags{.readable = true, .writable = true});
-        auto ro_vma = (*address_space)
-                          ->add_vma(cap::CapabilityRef<memory::MemorySegment>(*ro, segment_rights),
+        auto ro_vma = (*addr_space)
+                          ->add_vma(cap::CRef<memory::MemSeg>(*ro, segment_rights),
                                     VirArea{VirAddr(header.seg_ro.vaddr),
                                             VirAddr(header.seg_ro.vaddr + ro_bytes)},
                                     0, memory::PageFlags{.readable = true});
@@ -154,12 +153,12 @@ namespace init {
 
         constexpr addr_t STACK_TOP   = 0x0000000000800000ULL;
         constexpr size_t STACK_BYTES = 64 * 1024;
-        auto stack                   = memory::MemorySegment::create(STACK_BYTES);
+        auto stack                   = memory::MemSeg::create(STACK_BYTES);
         if (!stack)
             return tay::Err(UsrbootError::InitialStackFailed(stack.error().code()));
         auto stack_vma =
-            (*address_space)
-                ->add_vma(cap::CapabilityRef<memory::MemorySegment>(*stack, segment_rights),
+            (*addr_space)
+                ->add_vma(cap::CRef<memory::MemSeg>(*stack, segment_rights),
                           VirArea{VirAddr(STACK_TOP - STACK_BYTES), VirAddr(STACK_TOP)}, 0,
                           memory::PageFlags{.readable = true, .writable = true});
         if (!stack_vma)
@@ -173,10 +172,10 @@ namespace init {
         if (!thread)
             return tay::Err(UsrbootError::ThreadCreationFailed(thread.error().code()));
         if (auto result = (*thread)->configure_user(header.entry, STACK_TOP - 16); !result)
-            return tay::Err(UsrbootError::UserContextConfigurationFailed(result.error().code()));
+            return tay::Err(UsrbootError::UserCtxConfigFailed(result.error().code()));
         if (auto result = (*process)->submit(); !result)
             return tay::Err(UsrbootError::ProcessSubmissionFailed(result.error().code()));
-        if (auto result = scheduler::instance().attach(**thread); !result) {
+        if (auto result = scheduler::attach(**thread); !result) {
             return tay::Err(UsrbootError::ThreadAttachFailed(result.error().code()));
         }
         kernel::log::info("usrboot 已装载并提交首个用户 Thread");

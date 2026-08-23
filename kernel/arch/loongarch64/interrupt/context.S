@@ -9,9 +9,10 @@
  *
  */
 
-#include <arch/loongarch64/context_offsets.h>
+#include <arch/loongarch64/ctx_offsets.h>
 #include <arch/loongarch64/valdef.h>
 #include <arch/loongarch64/interrupt/offsets.h>
+#include <cpu/offsets.h>
 
     .section .text.scheduler.context, "ax", @progbits
     .align 4
@@ -51,9 +52,10 @@ __switch_to:
     .global _ZN11loongarch643hal10enter_userERNS0_9TrapFrameEm
     .type _ZN11loongarch643hal10enter_userERNS0_9TrapFrameEm, @function
 _ZN11loongarch643hal10enter_userERNS0_9TrapFrameEm:
-    # a0 指向初始 TrapFrame；SAVE0 保存用户异常进入时要切换到的内核栈顶。
+    # a0 指向初始 TrapFrame；CpuLocal 发布当前线程的内核栈顶。
     move $t8, $a1
-    csrwr $t8, CSR_SAVE0
+    st.d $t8, $r2, CPU_LOCAL_CURRENT_KERNEL_STACK_TOP
+    csrwr $r2, CSR_SAVE1
     move $t8, $a0
     ld.d $t0, $t8, LA_TF_ERA
     csrwr $t0, CSR_ERA

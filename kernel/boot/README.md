@@ -13,7 +13,7 @@ The common early path is split by responsibility:
   complete FDT structure and reserved physical coverage before derived data is consumed;
 - `early.cpp` copies the validated BootInfo into init storage, constructs the per-page metadata,
   publishes calculated usable areas to Buddy, enables SLUB, runs ordinary constructors, activates
-  the final KernelSpace, and reclaims boot memory before transferring control to permanent
+  the final KernelVm, and reclaims boot memory before transferring control to permanent
   `bsp_main()`;
 - `context.cpp` owns the permanent BootInfo/FDT copies and the boot/init reclaim transitions.
 
@@ -31,19 +31,19 @@ The BSP startup order is deliberately linear:
 
 1. `RESET -> EARLT_CPPRT`: normal and init BSS are clear, early traps are installed, and only the
    constant-initialized C++ bootstrap runtime is available. Ordinary constructors have not run.
-2. `EARLT_CPPRT -> MEMORY_READY`: BootInfo has been validated, PageDatabase is initialized, Buddy's
+2. `EARLT_CPPRT -> MEMORY_READY`: BootInfo has been validated, PageDb is initialized, Buddy's
    permanent descriptor pool is attached, and usable physical pages are published. The boot page
    table still supplies the KPA direct map.
 3. `MEMORY_READY -> HEAP_READY`: the constant-initialized global `MixedSlabsAllocator` is probed and
    published. Allocation ABI entry points may now use SLUB/Buddy.
 4. `HEAP_READY -> GLOBAL_CTORS_READY`: `.preinit_array` and `.init_array` are executed exactly once.
-   Constructors may allocate, but must not assume KernelSpace or KernelMM is ready.
-5. `GLOBAL_CTORS_READY -> VIRTUAL_MEMORY_READY`: BootInfo/FDT are persisted, KernelSpace adopts its
+   Constructors may allocate, but must not assume KernelVm or KernelMM is ready.
+5. `GLOBAL_CTORS_READY -> VIRTUAL_MEMORY_READY`: BootInfo/FDT are persisted, KernelVm adopts its
    allocated roots, KernelMM loads kernel and HHDM layouts, every managed physical region is checked
    for final HHDM coverage, and the final root is activated.
 
 Boot-time heap allocations are valid before the final root is active because both architecture boot
-page tables provide the KPA direct map. KernelMM must map every PageDatabase parent region before root
+page tables provide the KPA direct map. KernelMM must map every PageDb parent region before root
 activation, which preserves those allocations across the transition.
 
 ## Pre-heap global object rule
@@ -54,7 +54,7 @@ compile-time requirement, not merely a startup-order convention. Such an object 
 
 - require an `.init_array` entry before it can be used;
 - allocate memory or perform dynamic destructor registration as part of becoming usable;
-- depend on BootInfo-derived state, KernelSpace, KernelMM, or another later singleton;
+- depend on BootInfo-derived state, KernelVm, KernelMM, or another later singleton;
 - hide dynamic initialization behind a function-local static.
 
 Ordinary dynamic initialization belongs to the `HEAP_READY -> GLOBAL_CTORS_READY` phase. The kernel
@@ -72,9 +72,9 @@ an explicit readiness state publishes when its runtime resources have been attac
 The direct-static set is now:
 
 - the global `MixedSlabsAllocator`, initialized as an empty allocator and published by `init_heap()`;
-- `KernelSpace`, initialized with an empty locked PageTable and completed by adopting allocated roots;
+- `KernelVm`, initialized with an empty locked PageTable and completed by adopting allocated roots;
 - `KernelMM`, initialized with empty layout state and published after all bootstrap layouts load;
-- the existing Buddy, including its permanent embedded descriptor pool, plus PageDatabase, logger,
+- the existing Buddy, including its permanent embedded descriptor pool, plus PageDb, logger,
   boot Context, early console, milestone/owner counters, and static-destructor registry.
 
 There are no remaining byte-storage singleton indirections recommended for conversion in the current

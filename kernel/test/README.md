@@ -6,9 +6,11 @@
 
 当前阶段如下：
 
-- `POST_TIMER_INITIALIZATION`：IRQ、timer 和内核堆已经可用，但 init 内存尚未回收；
-- `POST_SCHEDULER_INITIALIZATION`：kernel process、kinit Thread 和 Scheduler 已发布；
+- `POST_TIMER_INIT`：IRQ、timer 和内核堆已经可用，但 init 内存尚未回收；
+- `POST_SCHED_INIT`：kernel process、kinit Thread 和 Scheduler 已发布；
 - `POST_WORK_QUEUE_INITIALIZATION`：永久 BSP WorkQueue 已启动，可执行实际 timer completion；
+- `POST_SMP_INIT`：SMP 状态机已提交 online 集合；在 BSP-only 固件上验证降级路径，
+  具备 AP 启动能力的固件上才覆盖远端 wake、AP timer 和真实 acknowledgement；
 - `PRE_IDLE`：usrboot 已提交，kinit 即将转为 idle Thread。
 
 新增用例时应：

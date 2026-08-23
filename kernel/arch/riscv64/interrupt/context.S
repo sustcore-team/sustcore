@@ -9,8 +9,9 @@
  *
  */
 
-#include <arch/riscv64/context_offsets.h>
+#include <arch/riscv64/ctx_offsets.h>
 #include <arch/riscv64/interrupt/offsets.h>
+#include <cpu/offsets.h>
 
     .section .text.scheduler.context, "ax", @progbits
     .align 4
@@ -54,8 +55,9 @@ __switch_to:
     .global _ZN7riscv643hal10enter_userERNS0_9TrapFrameEm
     .type _ZN7riscv643hal10enter_userERNS0_9TrapFrameEm, @function
 _ZN7riscv643hal10enter_userERNS0_9TrapFrameEm:
-    # a0 指向只使用一次的初始 TrapFrame；sscratch 保存该线程的内核栈顶。
-    csrw sscratch, a1
+    # a0 指向只使用一次的初始 TrapFrame；CpuLocal 发布当前线程的内核栈顶。
+    sd a1, CPU_LOCAL_CURRENT_KERNEL_STACK_TOP(tp)
+    csrw sscratch, tp
     mv t6, a0
     ld t0, RV_TF_SEPC(t6)
     csrw sepc, t0

@@ -9,6 +9,7 @@
  *
  */
 
+#include <exec_ctx.h>
 #include <log.h>
 #include <memory/physical/gfp.h>
 #include <memory/slab/slub.h>
@@ -97,7 +98,7 @@ namespace memory::detail {
         if (addr < KPA_START || addr >= KVA_START)
             kernel::log::panic("堆指针不在 HHDM 范围内");
         const PhyAddr pointer_page(page_align_down(KPA2PA(addr)));
-        const auto *descriptor = page_database().lookup(pointer_page);
+        const auto *descriptor = page_db().lookup(pointer_page);
         if (descriptor == nullptr || descriptor->state != PageState::CLAIMED ||
             descriptor->kind != PageKind::KERNEL_HEAP || descriptor->owner_id != KERNEL_HEAP_OWNER)
             kernel::log::panic("堆指针不属于内核堆物理页");
@@ -310,10 +311,11 @@ namespace memory::detail {
     }
 
     tay::expected<void *, tay::error_code> SlubCore::try_allocate() noexcept {
+        kernel::assert_task_ctx();
         if (uses_large_path()) {
             auto *result     = TAY_TRY(allocate_large(slot_sz_, slot_align_, this));
             const auto pages = header_for(result)->extent.pages;
-            state_.lock()->account_large_allocation(pages);
+            state_.lock()->note_large_alloc(pages);
             return result;
         }
 
@@ -351,7 +353,7 @@ namespace memory::detail {
                                                           std::memory_order_relaxed));
     }
 
-    PageAllocation SlubCore::MutableState::detach_chunk(SlubChunk &chunk) noexcept {
+    PageAlloc SlubCore::MutableState::detach_chunk(SlubChunk &chunk) noexcept {
         if (chunk.allocated_cnt != 0 ||
             chunk.remote_free.load(std::memory_order_relaxed) != nullptr)
         {
@@ -371,13 +373,13 @@ namespace memory::detail {
         return allocation;
     }
 
-    PageAllocation SlubCore::MutableState::detach_excess_empty(SlubChunk &chunk) noexcept {
+    PageAlloc SlubCore::MutableState::detach_spare(SlubChunk &chunk) noexcept {
         if (chunk.state != ChunkState::EMPTY || empty_.size() <= 1)
             return {};
         return detach_chunk(chunk);
     }
 
-    PageAllocation SlubCore::MutableState::detach_empty() noexcept {
+    PageAlloc SlubCore::MutableState::detach_empty() noexcept {
         if (empty_.empty())
             return {};
         return detach_chunk(*empty_.front());
@@ -411,14 +413,14 @@ namespace memory::detail {
         }
     }
 
-    void SlubCore::MutableState::account_large_allocation(size_t pages) noexcept {
+    void SlubCore::MutableState::note_large_alloc(size_t pages) noexcept {
         ++chunks_;
         ++objects_in_use_;
         ++objects_total_;
         large_pages_ += pages;
     }
 
-    void SlubCore::MutableState::account_large_release(size_t pages) noexcept {
+    void SlubCore::MutableState::note_large_free(size_t pages) noexcept {
         if (chunks_ == 0 || objects_in_use_ == 0 || objects_total_ == 0 || large_pages_ < pages) {
             kernel::log::panic("大对象 SLUB 记账下溢");
         }
@@ -438,6 +440,7 @@ namespace memory::detail {
     }
 
     void SlubCore::deallocate(void *ptr) noexcept {
+        kernel::assert_task_ctx();
         if (ptr == nullptr)
             return;
         auto *header = header_for(ptr);
@@ -448,7 +451,7 @@ namespace memory::detail {
             auto *owner      = header->owner;
             const auto pages = header->extent.pages;
             if (owner != nullptr) {
-                owner->state_.lock()->account_large_release(pages);
+                owner->state_.lock()->note_large_free(pages);
             }
             release_large(*header, ptr);
             return;
@@ -464,11 +467,11 @@ namespace memory::detail {
             return;
         }
 
-        PageAllocation allocation{};
+        PageAlloc allocation{};
         {
             auto state = state_.lock();
             state->deallocate_to(chunk, ptr);
-            allocation = state->detach_excess_empty(chunk);
+            allocation = state->detach_spare(chunk);
         }
         if (allocation) {
             OwnedPages::resume(allocation, PageKind::KERNEL_HEAP, KERNEL_HEAP_OWNER).release();
@@ -476,6 +479,7 @@ namespace memory::detail {
     }
 
     void SlubCore::trim() noexcept {
+        kernel::assert_task_ctx();
         if (uses_large_path())
             return;
         {
@@ -483,7 +487,7 @@ namespace memory::detail {
             state->drain_remote_frees();
         }
         while (true) {
-            PageAllocation allocation{};
+            PageAlloc allocation{};
             {
                 auto state = state_.lock();
                 allocation = state->detach_empty();

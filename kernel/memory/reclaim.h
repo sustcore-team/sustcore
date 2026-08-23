@@ -14,5 +14,5 @@
 
 namespace memory {
     /** @brief 移除 .init 高地址映射并将其物理页归还 Buddy。 */
-    [[nodiscard]] size_t reclaim_init_memory() noexcept;
+    [[nodiscard]] size_t reclaim_init() noexcept;
 }  // namespace memory

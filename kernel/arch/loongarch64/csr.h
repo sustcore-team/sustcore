@@ -38,6 +38,7 @@ namespace loongarch64::hal::csr {
         TLBRENTRY  = 0x88,
         TLBRRERA   = 0x8a,
         TLBRSAVE   = 0x8b,
+        SAVE1      = 0x31,
         DMWIN0     = 0x180,
         DMWIN1     = 0x181,
         DMWIN2     = 0x182,
@@ -84,6 +85,12 @@ namespace loongarch64::hal::csr {
     [[nodiscard]] inline u64_t iocsr_read64(addr_t addr) noexcept {
         u64_t value;
         asm volatile("iocsrrd.d %0, %1" : "=r"(value) : "r"(addr));
+        return value;
+    }
+
+    [[nodiscard]] inline u32_t iocsr_read32(addr_t addr) noexcept {
+        u32_t value;
+        asm volatile("iocsrrd.w %0, %1" : "=r"(value) : "r"(addr));
         return value;
     }
 

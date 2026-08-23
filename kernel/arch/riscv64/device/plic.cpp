@@ -38,23 +38,23 @@ namespace riscv64::device::interrupt {
         return reinterpret_cast<volatile u32_t *>(mmio_->kernel_base().arith() + offset);
     }
 
-    volatile u32_t *Plic::enable_reg(u32_t hardware_irq) const noexcept {
-        const size_t word = hardware_irq / ENABLE_WORD_BITS;
-        return reg(ENABLE_BASE + context_id_ * ENABLE_STRIDE + word * sizeof(u32_t));
+    volatile u32_t *Plic::enable_reg(u32_t hw_irq) const noexcept {
+        const size_t word = hw_irq / ENABLE_WORD_BITS;
+        return reg(ENABLE_BASE + ctx_id_ * ENABLE_STRIDE + word * sizeof(u32_t));
     }
 
-    tay::expected<void, PlicError> Plic::validate(u32_t hardware_irq) const noexcept {
+    tay::expected<void, PlicError> Plic::validate(u32_t hw_irq) const noexcept {
         if (!mmio_ || !mmio_->mapped())
             return tay::Err(PlicError::MissingMmio());
-        if (hardware_irq == 0 || hardware_irq > MAX_SOURCES)
-            return tay::Err(PlicError::SourceOutOfRange(hardware_irq, MAX_SOURCES));
+        if (hw_irq == 0 || hw_irq > MAX_SOURCES)
+            return tay::Err(PlicError::SourceOutOfRange(hw_irq, MAX_SOURCES));
         return {};
     }
 
     tay::expected<void, PlicError> Plic::validate(const IrqClaim &claim) const noexcept {
-        if (claim.domain != this || claim.generation == 0)
+        if (claim.domain != this || claim.gen == 0)
             return tay::Err(PlicError::InvalidClaim());
-        return validate(claim.hardware_irq);
+        return validate(claim.hw_irq);
     }
 
     tay::expected<void, PlicError> Plic::initialize() noexcept {
@@ -69,14 +69,14 @@ namespace riscv64::device::interrupt {
             area_size <= CONTEXT_BASE ? 0 : (area_size - CONTEXT_BASE) / CONTEXT_STRIDE;
         if (context_count == 0)
             return tay::Err(PlicError::MissingContext());
-        if (context_id_ >= context_count)
+        if (ctx_id_ >= context_count)
             return tay::Err(PlicError::ContextOutOfRange(
-                context_id_,
+                ctx_id_,
                 static_cast<u32_t>(context_count > UINT32_MAX ? UINT32_MAX : context_count)));
 
-        *reg(CONTEXT_BASE + context_id_ * CONTEXT_STRIDE) = 0;
+        *reg(CONTEXT_BASE + ctx_id_ * CONTEXT_STRIDE) = 0;
         for (u32_t irq = 1; irq <= MAX_SOURCES; ++irq) {
-            TAY_TRYV(set_priority_detailed(irq, 1));
+            TAY_TRYV(set_priority_impl(irq, 1));
             TAY_TRYV(mask_detailed(irq));
         }
         (void)hal::csr::set_bits<hal::csr::CSR::SIE>(xlen_t{1} << 9);
@@ -93,8 +93,8 @@ namespace riscv64::device::interrupt {
     tay::expected<u32_t, PlicError> Plic::claim_detailed() noexcept {
         if (!mmio_ || !mmio_->mapped())
             return tay::Err(PlicError::MissingMmio());
-        auto locked         = register_lock_.lock();
-        const u32_t claimed = *reg(CONTEXT_BASE + context_id_ * CONTEXT_STRIDE + CLAIM_OFFSET);
+        kernel::irq_lock_guard<tay::ticket_spinlock> locked(register_lock_);
+        const u32_t claimed = *reg(CONTEXT_BASE + ctx_id_ * CONTEXT_STRIDE + CLAIM_OFFSET);
         if (claimed > MAX_SOURCES)
             return tay::Err(PlicError::SourceOutOfRange(claimed, MAX_SOURCES));
         return claimed;
@@ -119,61 +119,57 @@ namespace riscv64::device::interrupt {
 
     tay::expected<void, PlicError> Plic::complete_detailed(const IrqClaim &claim) noexcept {
         TAY_TRYV(validate(claim));
-        auto locked                                                      = register_lock_.lock();
-        *reg(CONTEXT_BASE + context_id_ * CONTEXT_STRIDE + CLAIM_OFFSET) = claim.hardware_irq;
+        kernel::irq_lock_guard<tay::ticket_spinlock> locked(register_lock_);
+        *reg(CONTEXT_BASE + ctx_id_ * CONTEXT_STRIDE + CLAIM_OFFSET) = claim.hw_irq;
         return {};
     }
 
-    tay::expected<void, tay::error_code> Plic::mask(u32_t hardware_irq) noexcept {
-        return mask_detailed(hardware_irq).transform_error([](const PlicError &error) noexcept {
-            return to_tay_error(error);
-        });
+    tay::expected<void, tay::error_code> Plic::mask(u32_t hw_irq) noexcept {
+        return mask_detailed(hw_irq).transform_error(
+            [](const PlicError &error) noexcept { return to_tay_error(error); });
     }
 
-    tay::expected<void, PlicError> Plic::mask_detailed(u32_t hardware_irq) noexcept {
-        TAY_TRYV(validate(hardware_irq));
-        auto locked  = register_lock_.lock();
-        auto *entry  = enable_reg(hardware_irq);
-        *entry      &= ~enable_mask(hardware_irq);
+    tay::expected<void, PlicError> Plic::mask_detailed(u32_t hw_irq) noexcept {
+        TAY_TRYV(validate(hw_irq));
+        kernel::irq_lock_guard<tay::ticket_spinlock> locked(register_lock_);
+        auto *entry  = enable_reg(hw_irq);
+        *entry      &= ~enable_mask(hw_irq);
         return {};
     }
 
-    tay::expected<void, tay::error_code> Plic::unmask(u32_t hardware_irq) noexcept {
-        return unmask_detailed(hardware_irq).transform_error([](const PlicError &error) noexcept {
-            return to_tay_error(error);
-        });
+    tay::expected<void, tay::error_code> Plic::unmask(u32_t hw_irq) noexcept {
+        return unmask_detailed(hw_irq).transform_error(
+            [](const PlicError &error) noexcept { return to_tay_error(error); });
     }
 
-    tay::expected<void, PlicError> Plic::unmask_detailed(u32_t hardware_irq) noexcept {
-        TAY_TRYV(validate(hardware_irq));
-        auto locked  = register_lock_.lock();
-        auto *entry  = enable_reg(hardware_irq);
-        *entry      |= enable_mask(hardware_irq);
+    tay::expected<void, PlicError> Plic::unmask_detailed(u32_t hw_irq) noexcept {
+        TAY_TRYV(validate(hw_irq));
+        kernel::irq_lock_guard<tay::ticket_spinlock> locked(register_lock_);
+        auto *entry  = enable_reg(hw_irq);
+        *entry      |= enable_mask(hw_irq);
         return {};
     }
 
-    tay::expected<void, tay::error_code> Plic::set_priority(u32_t hardware_irq,
-                                                            u32_t priority) noexcept {
-        return set_priority_detailed(hardware_irq, priority)
+    tay::expected<void, tay::error_code> Plic::set_priority(u32_t hw_irq, u32_t priority) noexcept {
+        return set_priority_impl(hw_irq, priority)
             .transform_error([](const PlicError &error) noexcept { return to_tay_error(error); });
     }
 
-    tay::expected<void, PlicError> Plic::set_priority_detailed(u32_t hardware_irq,
-                                                               u32_t priority) noexcept {
-        TAY_TRYV(validate(hardware_irq));
+    tay::expected<void, PlicError> Plic::set_priority_impl(u32_t hw_irq, u32_t priority) noexcept {
+        TAY_TRYV(validate(hw_irq));
         if (priority > MAX_PRIORITY)
             return tay::Err(PlicError::InvalidPriority(priority, MAX_PRIORITY));
-        auto locked                                        = register_lock_.lock();
-        *reg(PRIORITY_BASE + hardware_irq * sizeof(u32_t)) = priority;
+        kernel::irq_lock_guard<tay::ticket_spinlock> locked(register_lock_);
+        *reg(PRIORITY_BASE + hw_irq * sizeof(u32_t)) = priority;
         return {};
     }
 
-    tay::expected<void, tay::error_code> Plic::initialize_from_catalog() noexcept {
+    tay::expected<void, tay::error_code> Plic::init_catalog() noexcept {
         if (plic_instance)
             return {};
 
         const auto &devices = catalog();
-        for (auto it = devices.controllers_begin(); it != devices.controllers_end(); ++it) {
+        for (auto it = devices.irq_ctrl_begin(); it != devices.irq_ctrl_end(); ++it) {
             if (!compatible(it->compatible) || !it->first_mmio.present)
                 continue;
 
@@ -183,13 +179,13 @@ namespace riscv64::device::interrupt {
                 kernel::log::error("PLIC 初始化失败: {}", error);
                 return tay::Err(to_tay_error(error));
             }
-            u32_t context_id = 0;
+            u32_t ctx_id = 0;
             if (const auto *bsp = devices.bsp(); bsp != nullptr) {
-                const u64_t candidate = bsp->hardware_id * 2 + 1;
+                const u64_t candidate = bsp->hw_id * 2 + 1;
                 if (candidate <= UINT32_MAX)
-                    context_id = static_cast<u32_t>(candidate);
+                    ctx_id = static_cast<u32_t>(candidate);
             }
-            auto *driver = new (std::nothrow) Plic(it->id, context_id, std::move(*mmio));
+            auto *driver = new (std::nothrow) Plic(it->id, ctx_id, std::move(*mmio));
             if (driver == nullptr) {
                 PlicError error =
                     PlicError::PlicAllocationFailed(kernel::KernelError::TayError::OUT_OF_MEMORY);
@@ -212,8 +208,8 @@ namespace riscv64::device::interrupt {
                 return tay::Err(to_tay_error(error));
             }
             plic_instance = std::move(owner);
-            kernel::log::info("PLIC IRQ domain 已初始化: controller={:#x}, context={}, lines={}",
-                              it->id.local_id, context_id, Plic::MAX_SOURCES);
+            kernel::log::info("PLIC IRQ domain 已初始化: ctrl={:#x}, context={}, lines={}",
+                              it->id.local_id, ctx_id, Plic::MAX_SOURCES);
             return {};
         }
         PlicError error = PlicError::ControllerNotFound();

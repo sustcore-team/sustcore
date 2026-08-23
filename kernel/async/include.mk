@@ -1,1 +1,1 @@
-src-y += worklet.cpp work_queue.cpp
+src-y += worklet.cpp queue.cpp

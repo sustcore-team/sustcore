@@ -10,7 +10,7 @@
  */
 
 #include <arch/loongarch64/valdef.h>
-#include <boot/laboot/arch/loongarch64/early_paging.h>
+#include <boot/laboot/arch/loongarch64/paging.h>
 #include <tay/bits.h>
 
 #include <cstddef>
@@ -146,7 +146,7 @@ namespace laboot {
         }
     }
 
-    LABOOT_BOOT_TEXT void map_kpa_range_in_2m(addr_t root, addr_t pa_s, addr_t pa_e) {
+    LABOOT_BOOT_TEXT void map_kpa_2m(addr_t root, addr_t pa_s, addr_t pa_e) {
         if (pa_e <= pa_s) {
             return;
         }
@@ -159,17 +159,16 @@ namespace laboot {
         }
     }
 
-    LABOOT_BOOT_TEXT void map_identity_and_kpa(addr_t root, addr_t pa_s, addr_t pa_e) {
+    LABOOT_BOOT_TEXT void map_boot_aliases(addr_t root, addr_t pa_s, addr_t pa_e) {
         if ((pa_s & PAGING_ALIGNMENT_MASK) != 0 || (pa_e & PAGING_ALIGNMENT_MASK) != 0) {
             LABOOT_PANIC(LABOOT_MISALIGNED_KPA_MSG);
         }
 
         map_range_in_2m(root, pa_s, pa_e, pa_s);
-        map_kpa_range_in_2m(root, pa_s, pa_e);
+        map_kpa_2m(root, pa_s, pa_e);
     }
 
-    LABOOT_BOOT_TEXT void init_boot_info(addr_t root_page_table, addr_t kernel_start,
-                                         addr_t kernel_end) {
+    LABOOT_BOOT_TEXT void init_boot_info(addr_t root_pt, addr_t kernel_start, addr_t kernel_end) {
         boot_info.bsp_phys_id          = __laboot_bsp_phys_id;
         boot_info.dtb_phys             = 0;
         boot_info.dtb_virt             = 0;
@@ -178,8 +177,8 @@ namespace laboot {
         boot_info.kernel_virt_base     = KERNEL_VIRT_BASE;
         boot_info.kernel_phys_end      = kernel_end;
         boot_info.kernel_virt_end      = kernel_end + LABOOT_KVA_START;
-        boot_info.root_page_table_phys = root_page_table;
-        boot_info.root_page_table_virt = KPA_START + root_page_table;
+        boot_info.root_page_table_phys = root_pt;
+        boot_info.root_page_table_virt = KPA_START + root_pt;
         boot_info.cmdline_phys         = __laboot_cmdline_phys;
         boot_info.system_table_phys    = __laboot_system_table_phys;
         boot_info.cmdline_virt         = KPA_START + boot_info.cmdline_phys;
@@ -187,9 +186,9 @@ namespace laboot {
         (void)kernel_start;
     }
 
-    LABOOT_BOOT_TEXT void setup_switch_context(addr_t root) {
+    LABOOT_BOOT_TEXT void setup_switch(addr_t root) {
         // C++ 只组装切换上下文，汇编入口按固定布局写 CSR 并跨越地址空间切换。
-        setup.root_page_table    = root;
+        setup.root_pt            = root;
         setup.pwctl0             = PWCTL0_4LEVEL;
         setup.pwctl1             = PWCTL1_4LEVEL;
         setup.stlbpgsize         = STLBPGSIZE_4K;
@@ -243,26 +242,26 @@ namespace laboot {
         auto aligned_kernel_start =
             kernel_start_arith & ~static_cast<addr_t>(PAGING_ALIGNMENT_MASK);
         auto kernel_kva_limit = kernel_end_arith + LABOOT_KVA_START;
-        auto root_page_table  = page_alloc();
+        auto root_pt          = page_alloc();
 
         // 阶段二：同时保留切换所需恒等映射，并建立 KPA 与内核高半区映射。
-        map_identity_and_kpa(root_page_table, PA_START, PA_LIMIT);
-        map_range_in_2m(root_page_table, aligned_kernel_start + LABOOT_KVA_START, kernel_kva_limit,
+        map_boot_aliases(root_pt, PA_START, PA_LIMIT);
+        map_range_in_2m(root_pt, aligned_kernel_start + LABOOT_KVA_START, kernel_kva_limit,
                         aligned_kernel_start);
 
-        init_boot_info(root_page_table, aligned_kernel_start, kernel_end_arith);
+        init_boot_info(root_pt, aligned_kernel_start, kernel_end_arith);
 
         if (boot_info.system_table_phys != 0) {
-            map_kpa_range_in_2m(root_page_table, boot_info.system_table_phys,
+            map_kpa_2m(root_pt, boot_info.system_table_phys,
                                 boot_info.system_table_phys + PAGE_SIZE);
         }
         if (boot_info.cmdline_phys != 0) {
-            map_kpa_range_in_2m(root_page_table, boot_info.cmdline_phys,
+            map_kpa_2m(root_pt, boot_info.cmdline_phys,
                                 boot_info.cmdline_phys + PAGE_SIZE);
         }
 
         // 阶段三：将页表根、CSR 配置和高半区入口打包给汇编 trampoline。
-        setup_switch_context(root_page_table);
+        setup_switch(root_pt);
 
         serial_puts(LABOOT_PAGING_READY_MSG);
         return &setup;

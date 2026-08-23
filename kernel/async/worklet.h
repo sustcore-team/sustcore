@@ -17,7 +17,7 @@
 #include <type_traits>
 
 namespace kernel::timer {
-    class PrecisionTimerEngine;
+    class HRTQueue;
 }
 
 namespace kernel::async {
@@ -84,9 +84,9 @@ namespace kernel::async {
          */
         virtual void run() noexcept = 0;
 
-        [[nodiscard]] bool try_reserve_for_timer(WorkQueue &queue) noexcept;
-        [[nodiscard]] bool try_claim_for_queue(WorkQueue &queue) noexcept;
-        [[nodiscard]] bool try_claim_reserved_for_queue(WorkQueue &queue) noexcept;
+        [[nodiscard]] bool try_reserve_timer(WorkQueue &queue) noexcept;
+        [[nodiscard]] bool try_claim(WorkQueue &queue) noexcept;
+        [[nodiscard]] bool try_claim_reserved(WorkQueue &queue) noexcept;
         [[nodiscard]] bool try_claim(State expected, State desired, WorkQueue &queue) noexcept;
 
         /**
@@ -95,14 +95,14 @@ namespace kernel::async {
          * acquire 观察 producer 发布的派生类字段。转换完成后 WorkQueue 只能执行
          * run()，并且在虚调用返回后不得再访问 this。
          */
-        void release_to_dispatch() noexcept;
+        void begin_dispatch() noexcept;
 
         std::atomic<State> state_{State::IDLE};
         // 仅保存稳定的 queue 身份，不表示 Worklet 拥有或延长 WorkQueue 生命周期。
         std::atomic<WorkQueue *> queue_{nullptr};
 
         friend class WorkQueue;
-        friend class kernel::timer::PrecisionTimerEngine;
+        friend class kernel::timer::HRTQueue;
         friend struct WorkletHookLocator;
     };
 

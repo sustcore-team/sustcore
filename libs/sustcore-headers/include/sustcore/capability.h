@@ -112,7 +112,7 @@ namespace cap {
      * @param page_count CNode 占用的页数。
      * @return 页数为允许范围内的二次幂时返回 true。
      */
-    [[nodiscard]] constexpr bool is_supported_cnode_page_count(size_t page_count) noexcept {
+    [[nodiscard]] constexpr bool valid_cnode_pages(size_t page_count) noexcept {
         return tay::is_power_of_two(page_count) && page_count >= CNODE_MIN_PAGE_COUNT &&
                page_count <= CNODE_MAX_PAGE_COUNT;
     }
@@ -120,9 +120,9 @@ namespace cap {
     /**
      * @brief 计算指定页数下除 metadata cell 外的 Capability 容量。
      * @return 可用于 Capability 的 slot 数量。
-     * @pre `page_count` 已通过 `is_supported_cnode_page_count()` 校验。
+     * @pre `page_count` 已通过 `valid_cnode_pages()` 校验。
      */
-    [[nodiscard]] constexpr size_t cnode_capacity_for_pages(size_t page_count) noexcept {
+    [[nodiscard]] constexpr size_t cnode_capacity(size_t page_count) noexcept {
         return page_count * (CNODE_PAGE_SIZE / CNODE_CELL_SIZE) - 1;
     }
 
@@ -133,18 +133,18 @@ namespace cap {
         const auto cell_count = capacity + 1;
         if (cell_count % (CNODE_PAGE_SIZE / CNODE_CELL_SIZE) != 0)
             return false;
-        return is_supported_cnode_page_count(cell_count * CNODE_CELL_SIZE / CNODE_PAGE_SIZE);
+        return valid_cnode_pages(cell_count * CNODE_CELL_SIZE / CNODE_PAGE_SIZE);
     }
 
-    inline constexpr size_t CNODE_1_PAGE_CAPACITY  = cnode_capacity_for_pages(1);
-    inline constexpr size_t CNODE_2_PAGE_CAPACITY  = cnode_capacity_for_pages(2);
-    inline constexpr size_t CNODE_4_PAGE_CAPACITY  = cnode_capacity_for_pages(4);
-    inline constexpr size_t CNODE_8_PAGE_CAPACITY  = cnode_capacity_for_pages(8);
-    inline constexpr size_t CNODE_16_PAGE_CAPACITY = cnode_capacity_for_pages(16);
-    inline constexpr size_t CNODE_32_PAGE_CAPACITY = cnode_capacity_for_pages(32);
+    inline constexpr size_t CNODE_1_PAGE_CAPACITY  = cnode_capacity(1);
+    inline constexpr size_t CNODE_2_PAGE_CAPACITY  = cnode_capacity(2);
+    inline constexpr size_t CNODE_4_PAGE_CAPACITY  = cnode_capacity(4);
+    inline constexpr size_t CNODE_8_PAGE_CAPACITY  = cnode_capacity(8);
+    inline constexpr size_t CNODE_16_PAGE_CAPACITY = cnode_capacity(16);
+    inline constexpr size_t CNODE_32_PAGE_CAPACITY = cnode_capacity(32);
     inline constexpr size_t CNODE_MAX_CAPACITY     = CNODE_32_PAGE_CAPACITY;
 
-    /** @name CapToken 位域布局
+    /** @name CToken 位域布局
      * @{ */
     inline constexpr u8_t CAP_TOKEN_SLOT_BITS       = 16;
     inline constexpr u8_t CAP_TOKEN_CNODE_BITS      = 8;
@@ -159,7 +159,7 @@ namespace cap {
     inline constexpr u8_t CAP_TOKEN_COOKIE_SHIFT =
         CAP_TOKEN_GENERATION_SHIFT + CAP_TOKEN_GENERATION_BITS;
 
-    /** @brief 生成 CapToken 单个位域使用的低位掩码。 */
+    /** @brief 生成 CToken 单个位域使用的低位掩码。 */
     [[nodiscard]] constexpr u64_t cap_token_mask(u8_t bits) noexcept {
         return (u64_t{1} << bits) - 1;
     }
@@ -181,15 +181,15 @@ namespace cap {
      * @brief 用户可见的固定宽度 Capability 凭证。
      * @note token 只在所属 CSpace 中有意义，不能据此跨进程查找对象。
      */
-    struct CapToken {
-        u64_t raw                                                          = 0;
-        constexpr auto operator==(const CapToken &) const noexcept -> bool = default;
+    struct CToken {
+        u64_t raw                                                        = 0;
+        constexpr auto operator==(const CToken &) const noexcept -> bool = default;
     };
 
-    static_assert(sizeof(CapToken) == CAP_TOKEN_SIZE);
+    static_assert(sizeof(CToken) == CAP_TOKEN_SIZE);
 
-    /** @brief `CapToken` 解码后的字段和基础结构有效性。 */
-    struct CapTokenFields {
+    /** @brief `CToken` 解码后的字段和基础结构有效性。 */
+    struct CTokenFields {
         u16_t cspace_cookie = 0;
         u32_t generation    = 0;
         u8_t cnode_index    = 0;
@@ -201,9 +201,9 @@ namespace cap {
      * @brief 将 CSpace cookie、generation、CNode index 和 slot index 编码为 token。
      * @note 本函数只负责截取和编码位域；调用者必须保证 generation 与 slot 均非零。
      */
-    [[nodiscard]] constexpr CapToken encode_token(u16_t cookie, u32_t generation, u8_t cnode_index,
-                                                  u16_t slot_index) noexcept {
-        return CapToken{
+    [[nodiscard]] constexpr CToken encode_token(u16_t cookie, u32_t generation, u8_t cnode_index,
+                                                u16_t slot_index) noexcept {
+        return CToken{
             ((static_cast<u64_t>(cookie) & CAP_TOKEN_COOKIE_MASK) << CAP_TOKEN_COOKIE_SHIFT) |
             ((static_cast<u64_t>(generation) & CAP_TOKEN_GENERATION_MASK)
              << CAP_TOKEN_GENERATION_SHIFT) |
@@ -215,12 +215,12 @@ namespace cap {
      * @brief 解码 token，并完成与对象状态无关的基础有效性检查。
      * @return `valid` 仅表示 raw、generation 和 slot 非零；cookie、范围、类型与权限仍须由内核校验。
      */
-    [[nodiscard]] constexpr CapTokenFields decode_token(CapToken token) noexcept {
+    [[nodiscard]] constexpr CTokenFields decode_token(CToken token) noexcept {
         const auto generation = static_cast<u32_t>((token.raw >> CAP_TOKEN_GENERATION_SHIFT) &
                                                    CAP_TOKEN_GENERATION_MASK);
         const auto slot =
             static_cast<u16_t>((token.raw >> CAP_TOKEN_SLOT_SHIFT) & CAP_TOKEN_SLOT_MASK);
-        return CapTokenFields{
+        return CTokenFields{
             .cspace_cookie =
                 static_cast<u16_t>((token.raw >> CAP_TOKEN_COOKIE_SHIFT) & CAP_TOKEN_COOKIE_MASK),
             .generation = generation,

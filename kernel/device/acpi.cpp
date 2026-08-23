@@ -13,7 +13,7 @@
 
 namespace device::acpi {
     tay::expected<void, tay::error_code> Enumerator::enumerate(CatalogBuilder &,
-                                                               FirmwareInput input) noexcept {
+                                                               FwInput input) noexcept {
         // BootInfo 扩展为 tagged firmware blob、RSDP 校验和静态表解析完成后再启用。
         (void)input;
         return tay::Err(tay::error_code::INVALID_ARGUMENT);

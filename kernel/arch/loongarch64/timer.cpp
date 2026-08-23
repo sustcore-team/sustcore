@@ -75,13 +75,18 @@ namespace loongarch64::hal {
         }
     }  // namespace
 
-    constinit CpuClock CpuClock::instance_;
+    constinit Clock Clock::instance_;
 
-    CpuClock &CpuClock::instance() noexcept {
+    Clock &Clock::instance() noexcept {
         return instance_;
     }
 
-    void CpuClock::initialize(u64_t frequency_hz) noexcept {
+    void Clock::initialize(u64_t frequency_hz) noexcept {
+        init_freq(frequency_hz);
+        initialize_local();
+    }
+
+    void Clock::init_freq(u64_t frequency_hz) noexcept {
         const u64_t hardware_frequency = counter_frequency();
         if (frequency_hz == 0)
             frequency_hz = hardware_frequency;
@@ -90,42 +95,49 @@ namespace loongarch64::hal {
                                frequency_hz, hardware_frequency);
         if (frequency_hz == 0 || frequency_hz > MAX_FREQUENCY)
             kernel::log::panic("无效的 LoongArch timebase-frequency: {}", frequency_hz);
-        if (frequency_hz_ != 0 && frequency_hz_ != frequency_hz)
+        const auto published = frequency_hz_.load(std::memory_order_acquire);
+        if (published != 0 && published != frequency_hz)
             kernel::log::panic("LoongArch timebase-frequency 在初始化后发生变化");
 
-        frequency_hz_ = frequency_hz;
+        frequency_hz_.store(frequency_hz, std::memory_order_release);
+    }
+
+    void Clock::initialize_local() noexcept {
+        if (!available())
+            kernel::log::panic("LoongArch Clock 本地初始化前未发布时基频率");
         disarm_timer();
         (void)csr::set_bits<csr::CSR::ECFG>(ECFG_TIMER);
     }
 
-    units::time CpuClock::current_time() const noexcept {
+    units::time Clock::now() const noexcept {
         if (!available())
-            kernel::log::panic("LoongArch CpuClock 尚未初始化");
+            kernel::log::panic("LoongArch Clock 尚未初始化");
         return units::time::from_nanoseconds(
-            ticks_to_nanos(raw_timestamp_counter(), frequency_hz_));
+            ticks_to_nanos(raw_ticks(), frequency_hz_.load(std::memory_order_acquire)));
     }
 
-    void CpuClock::set_timer_deadline(CpuClockDeadline deadline) noexcept {
+    void Clock::set_deadline(TimerDeadline deadline) noexcept {
         if (!deadline.armed) {
             disarm_timer();
             return;
         }
         if (!available())
-            kernel::log::panic("LoongArch CpuClock 尚未初始化");
+            kernel::log::panic("LoongArch Clock 尚未初始化");
 
-        const u64_t now            = current_time().to_nanoseconds();
+        const u64_t now_ns         = now().to_nanoseconds();
         const u64_t deadline_nanos = deadline.when.to_nanoseconds();
-        const u64_t delta          = deadline_nanos > now ? deadline_nanos - now : 0;
-        const u64_t ticks          = clamp_initval(nanos_to_ticks(delta, frequency_hz_));
+        const u64_t delta          = deadline_nanos > now_ns ? deadline_nanos - now_ns : 0;
+        const u64_t ticks =
+            clamp_initval(nanos_to_ticks(delta, frequency_hz_.load(std::memory_order_acquire)));
         csr::write<csr::CSR::TICLR>(TICLR_CLR);
         csr::write<csr::CSR::TCFG>((ticks << TCFG_INITVAL_SHIFT) | TCFG_EN);
     }
 
-    bool CpuClock::available() const noexcept {
-        return frequency_hz_ != 0;
+    bool Clock::available() const noexcept {
+        return frequency_hz_.load(std::memory_order_acquire) != 0;
     }
 
-    u64_t CpuClock::raw_timestamp_counter() const noexcept {
+    u64_t Clock::raw_ticks() const noexcept {
         u64_t counter;
         u64_t timer_id;
         asm volatile("rdtime.d %0, %1" : "=r"(counter), "=r"(timer_id));

@@ -127,10 +127,16 @@ SECTIONS
 
     e_init = .;
 
+    . = ALIGN(4K);
     s_text = .;
-    .text : {
+    s_smp_trampoline = .;
+    .smp.trampoline : {
+        KEEP(*(.smp.trampoline .smp.trampoline.*))
         . = ALIGN(4K);
-        KEEP(*(.text.smp_entry .text.smp_entry.*))
+        e_smp_trampoline = .;
+    }
+
+    .text : {
         *(.text.entry)
         *(.text)
         *(.text.*)
@@ -198,6 +204,10 @@ SECTIONS
     ASSERT((s_init & 0xFFF) == 0, "init section must be page aligned")
     ASSERT((e_init & 0xFFF) == 0, "init section end must be page aligned")
     ASSERT(s_text == e_init, "permanent text must immediately follow init")
+    ASSERT(s_smp_trampoline == s_text,
+           "AP trampoline must begin the permanent text mapping")
     ASSERT((laboot_secondary_trampoline & 0xFFF) == 0,
            "LABOOT AP trampoline must be page aligned")
+    ASSERT((e_smp_trampoline - s_smp_trampoline) == 0x1000,
+           "LABOOT AP trampoline must occupy exactly one page")
 }

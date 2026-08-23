@@ -11,6 +11,7 @@
 
 // Itanium C++ ABI: DSO 析构函数登记与逆序调用。
 #include <runtime/cxa_dso.h>
+#include <synchronized.h>
 #include <tay/lock.h>
 #include <tay/spinlock.h>
 
@@ -28,8 +29,8 @@ namespace __cxa {
     constinit DestructorRecord destructors[DESTRUCTOR_CAPACITY];
     constinit tay::ticket_spinlock destructor_lock;
 
-    int register_destructor(void (*function)(void *), void *argument, void *dso) {
-        tay::lock_guard guard(destructor_lock);
+    int register_dtor(void (*function)(void *), void *argument, void *dso) {
+        kernel::lock_guard<tay::ticket_spinlock> guard(destructor_lock);
         for (auto &record : destructors) {
             if (!record.active) {
                 record = DestructorRecord{
@@ -40,12 +41,12 @@ namespace __cxa {
         return -1;
     }
 
-    int finalize_destructors(void *dso) {
+    int run_destructors(void *dso) {
         while (true) {
             void (*function)(void *) = nullptr;
             void *argument           = nullptr;
             {
-                tay::lock_guard guard(destructor_lock);
+                kernel::lock_guard<tay::ticket_spinlock> guard(destructor_lock);
                 // 在锁内先将记录标为失效，再在锁外逆序调用，允许析构函数再次登记或 finalize。
                 for (size_t idx = DESTRUCTOR_CAPACITY; idx > 0; --idx) {
                     auto &record = destructors[idx - 1];
@@ -67,10 +68,10 @@ namespace __cxa {
 
 extern "C" {
 int __cxa_atexit(void (*function)(void *), void *argument, void *dso) {
-    return __cxa::register_destructor(function, argument, dso);
+    return __cxa::register_dtor(function, argument, dso);
 }
 
 void __cxa_finalize(void *dso) {
-    __cxa::finalize_destructors(dso);
+    __cxa::run_destructors(dso);
 }
 }  // extern "C"

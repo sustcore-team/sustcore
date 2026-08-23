@@ -10,7 +10,7 @@
  */
 
 #include <boot/common/bytes.h>
-#include <boot/early_internal.h>
+#include <boot/early_priv.h>
 #include <boot/sections.h>
 #include <log.h>
 #include <tay/array.h>

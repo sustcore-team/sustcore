@@ -12,18 +12,18 @@
 #pragma once
 
 #include <device/mmio_error.h>
-#include <obj/kernel_object.h>
+#include <obj/kobject.h>
 #include <sustcore/addr.h>
 #include <tay/expected.h>
 
 #include <cstddef>
 
 namespace device {
-    class MmioObject final : public cap::TypedKernelObject<MmioObject, cap::ObjectType::MMIO> {
+    class MmioObject final : public cap::TypedKObject<MmioObject, cap::ObjectType::MMIO> {
     public:
         static constexpr cap::ObjectType TYPE = cap::ObjectType::MMIO;
 
-        [[nodiscard]] static tay::expected<cap::ObjectRef<MmioObject>, MmioError> create(
+        [[nodiscard]] static tay::expected<cap::KObjectRef<MmioObject>, MmioError> create(
             PhyArea area) noexcept;
 
         MmioObject(const MmioObject &)            = delete;

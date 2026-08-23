@@ -1,2 +1,2 @@
-src-y += kernel_object.cpp cspace.cpp memory_segment.cpp
-src-y += address_space.cpp process.cpp thread.cpp
+src-y += kobject.cpp cspace.cpp mem_seg.cpp
+src-y += addr_space.cpp process.cpp thread.cpp

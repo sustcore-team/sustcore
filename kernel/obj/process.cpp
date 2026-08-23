@@ -1,7 +1,7 @@
 /**
  * @file process.cpp
  * @author theflysong (song_of_the_fly@163.com)
- * @brief Process 资源绑定、提交事务与 kernel_process 初始化。
+ * @brief Process 资源绑定、提交事务与 kernel_proc 初始化。
  * @version 0.1.0-dev.1
  * @date 2026-08-12
  *
@@ -9,7 +9,7 @@
  */
 
 #include <log.h>
-#include <memory/virtual/client/client_space.h>
+#include <memory/virtual/user/vm.h>
 #include <obj/process.h>
 #include <tay/counter.h>
 
@@ -19,115 +19,149 @@
 namespace task {
     namespace {
         constinit tay::counter<u64_t> process_ids{1};
-        ProcessManager manager;
-        cap::ObjectRef<Process> kernel_process_ref;
+        ProcTable manager;
+        cap::KObjectRef<Process> kernel_process_ref;
     }  // namespace
 
     Process::Process(bool kernel) noexcept
         : id_(kernel ? 0 : process_ids.next()), kernel_(kernel) {}
 
-    tay::expected<cap::ObjectRef<Process>, ProcessError> Process::create() noexcept {
+    tay::expected<cap::KObjectRef<Process>, ProcessError> Process::create() noexcept {
         auto *process = new (std::nothrow) Process(false);
         if (process == nullptr)
             return tay::Err(ProcessError::OutOfMemory());
-        return cap::ObjectRef<Process>(*process);
+        return cap::KObjectRef<Process>(*process);
     }
 
-    tay::expected<cap::ObjectRef<Process>, ProcessError> Process::create_kernel() noexcept {
+    tay::expected<cap::KObjectRef<Process>, ProcessError> Process::create_kernel() noexcept {
         auto *process = new (std::nothrow) Process(true);
         if (process == nullptr)
             return tay::Err(ProcessError::OutOfMemory());
-        process->state_ = ProcessState::SUBMITTED;
-        return cap::ObjectRef<Process>(*process);
+        process->state_.lock()->lifecycle = ProcessState::SUBMITTED;
+        return cap::KObjectRef<Process>(*process);
     }
 
     Process::~Process() noexcept {
-        if (manager_hook_.in_list || !threads_.empty())
+        auto state = state_.lock();
+        if (manager_hook_.in_list || !state->threads.empty())
             kernel::log::panic("销毁仍已发布或仍含 Thread 的 Process");
-        state_ = ProcessState::DEAD;
+        state->lifecycle = ProcessState::DEAD;
     }
 
-    tay::expected<void, ProcessError> Process::set_address_space(
-        AddressSpace &address_space) noexcept {
+    tay::expected<void, ProcessError> Process::set_addr_space(AddrSpace &addr_space) noexcept {
         if (kernel_)
             return tay::Err(ProcessError::KernelProcessOperation());
-        if (state_ != ProcessState::CREATED)
-            return tay::Err(ProcessError::InvalidState(state_));
-        if (address_space_)
+        auto state = state_.lock();
+        if (state->lifecycle != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(state->lifecycle));
+        if (state->addr_space)
             return tay::Err(ProcessError::AddressSpaceAlreadySet());
-        address_space_ = cap::ObjectRef<AddressSpace>(address_space);
+        state->addr_space = cap::KObjectRef<AddrSpace>(addr_space);
         return {};
     }
 
     tay::expected<void, ProcessError> Process::set_cspace(cap::CSpace &cspace) noexcept {
         if (kernel_)
             return tay::Err(ProcessError::KernelProcessOperation());
-        if (state_ != ProcessState::CREATED)
-            return tay::Err(ProcessError::InvalidState(state_));
-        if (cspace_)
+        auto state = state_.lock();
+        if (state->lifecycle != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(state->lifecycle));
+        if (state->cspace)
             return tay::Err(ProcessError::CSpaceAlreadySet());
-        cspace_ = cap::ObjectRef<cap::CSpace>(cspace);
+        state->cspace = cap::KObjectRef<cap::CSpace>(cspace);
         return {};
     }
 
     tay::expected<void, ProcessError> Process::submit() noexcept {
-        return process_manager().submit(*this);
+        return proc_table().submit(*this);
     }
 
     bool Process::attach_thread(Thread &thread) noexcept {
-        if (state_ == ProcessState::STOPPING || state_ == ProcessState::DEAD ||
-            threads_.linked(&thread))
+        auto state = state_.lock();
+        if (state->lifecycle == ProcessState::STOPPING || state->lifecycle == ProcessState::DEAD ||
+            state->threads.linked(&thread))
             return false;
-        threads_.push_back(&thread);
+        state->threads.push_back(&thread);
         return true;
     }
 
     void Process::detach_thread(Thread &thread) noexcept {
-        if (threads_.linked(&thread))
-            (void)threads_.remove(&thread);
+        auto state = state_.lock();
+        if (state->threads.linked(&thread))
+            (void)state->threads.remove(&thread);
     }
 
-    void Process::activate_address_space() noexcept {
+    void Process::activate_vm() noexcept {
         if (kernel_) {
-            memory::activate_kernel_space();
+            memory::activate_kernel_vm();
             return;
         }
-        if (!address_space_)
-            kernel::log::panic("用户 Process 没有 AddressSpace");
-        address_space_->activate();
+        AddrSpace *addr_space = nullptr;
+        {
+            auto state = state_.lock();
+            addr_space = state->addr_space.get();
+        }
+        if (addr_space == nullptr)
+            kernel::log::panic("用户 Process 没有 AddrSpace");
+        // 资源绑定仅允许 CREATED -> SUBMITTED 的单向转换；释放 Process 锁后才进入
+        // AddrSpace，避免把 Process 同步域带入页表路径。
+        addr_space->activate();
     }
 
-    tay::expected<void, ProcessError> ProcessManager::submit(Process &process) noexcept {
+    ProcessState Process::state() const noexcept {
+        return state_.lock()->lifecycle;
+    }
+
+    bool Process::submitted() const noexcept {
+        return state() == ProcessState::SUBMITTED;
+    }
+
+    AddrSpace *Process::addr_space() const noexcept {
+        return state_.lock()->addr_space.get();
+    }
+
+    cap::CSpace *Process::cspace() const noexcept {
+        return state_.lock()->cspace.get();
+    }
+
+    tay::expected<void, ProcessError> ProcTable::submit(Process &process) noexcept {
         if (process.kernel_)
             return tay::Err(ProcessError::KernelProcessOperation());
-        if (processes_.linked(&process) || process.state_ == ProcessState::SUBMITTED)
+        auto manager_state = state_.lock();
+        auto process_state = process.state_.lock();
+        if (manager_state->processes.linked(&process) ||
+            process_state->lifecycle == ProcessState::SUBMITTED)
             return tay::Err(ProcessError::AlreadySubmitted());
-        if (process.state_ != ProcessState::CREATED)
-            return tay::Err(ProcessError::InvalidState(process.state_));
-        if (!process.address_space_)
+        if (process_state->lifecycle != ProcessState::CREATED)
+            return tay::Err(ProcessError::InvalidState(process_state->lifecycle));
+        if (!process_state->addr_space)
             return tay::Err(ProcessError::MissingAddressSpace());
-        if (!process.cspace_)
+        if (!process_state->cspace)
             return tay::Err(ProcessError::MissingCSpace());
-        process.manager_ref_ = cap::ObjectRef<Process>(process);
-        processes_.push_back(&process);
-        process.state_ = ProcessState::SUBMITTED;
+        process.manager_ref_ = cap::KObjectRef<Process>(process);
+        manager_state->processes.push_back(&process);
+        process_state->lifecycle = ProcessState::SUBMITTED;
         return {};
     }
 
-    ProcessManager &process_manager() noexcept {
+    size_t ProcTable::size() const noexcept {
+        return state_.lock()->processes.size();
+    }
+
+    ProcTable &proc_table() noexcept {
         return manager;
     }
 
-    tay::expected<void, ProcessError> initialize_kernel_process() noexcept {
+    tay::expected<void, ProcessError> init_kernel_proc() noexcept {
         if (kernel_process_ref)
             return tay::Err(ProcessError::AlreadySubmitted());
         kernel_process_ref = TAY_TRY(Process::create_kernel());
         return {};
     }
 
-    Process &kernel_process() noexcept {
+    Process &kernel_proc() noexcept {
         if (!kernel_process_ref)
-            kernel::log::panic("kernel_process 尚未初始化");
+            kernel::log::panic("kernel_proc 尚未初始化");
         return *kernel_process_ref;
     }
 }  // namespace task

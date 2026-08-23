@@ -14,7 +14,7 @@
 #include <libfdt.h>
 #include <log.h>
 #include <memory/physical/gfp.h>
-#include <memory/physical/page_database.h>
+#include <memory/physical/page_db.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
 
@@ -83,7 +83,7 @@ namespace boot {
         (void)fdt_allocation->detach();
     }
 
-    size_t reclaim_boot_memory() noexcept {
+    size_t reclaim_memory() noexcept {
         if (saved_context.info == nullptr || saved_context.reclaimed) {
             kernel::log::panic("无效的 BootContext 回收状态转换");
         }
@@ -97,16 +97,14 @@ namespace boot {
         const PhyArea init_area{PhyAddr(init_begin), PhyAddr(init_end)};
 
         // 只沿各 FREE parent 的 reservation chain 回收，避免把 parent 本身误当成碎片。
-        for (size_t parent_idx = 0; parent_idx < memory::page_database().region_count();
-             ++parent_idx)
-        {
+        for (size_t parent_idx = 0; parent_idx < memory::page_db().region_count(); ++parent_idx) {
             size_t child_idx = regions[parent_idx].rsvd_idx;
             while (child_idx != parent_idx) {
                 const auto &child = regions[child_idx];
                 if (child.type == MemoryType::BOOT_RECLAIMABLE) {
                     if (!is_intersecting(child.area, init_area)) {
-                        memory::page_database().release_boot_reclaimable(child.area);
-                        memory::buddy()->put_range(child.area);
+                        memory::page_db().release_reclaim(child.area);
+                        memory::buddy()->add_range(child.area);
                         reclaimed += child.area.size() / PAGE_SIZE;
                     } else {
                         const PhyArea diffs[] = {forward_diff(child.area, init_area),
@@ -114,8 +112,8 @@ namespace boot {
                         for (const auto &diff : diffs) {
                             if (diff.nullable())
                                 continue;
-                            memory::page_database().release_boot_reclaimable(diff);
-                            memory::buddy()->put_range(diff);
+                            memory::page_db().release_reclaim(diff);
+                            memory::buddy()->add_range(diff);
                             reclaimed += diff.size() / PAGE_SIZE;
                         }
                     }

@@ -12,13 +12,14 @@
 #pragma once
 
 #include <boot/boot.h>
-#include <device/catalog_error.h>
-#include <device/catalog_types.h>
+#include <device/fw.h>
+#include <error/catalog.h>
 #include <sustcore/addr.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 #include <tay/static_vector.h>
 
+#include <atomic>
 #include <cstddef>
 
 namespace boot {
@@ -26,63 +27,63 @@ namespace boot {
 }
 
 namespace device {
-    constexpr size_t MAX_FIRMWARE_DEVICES      = 128;
-    constexpr size_t MAX_FIRMWARE_CPUS         = 64;
-    constexpr size_t MAX_INTERRUPT_CONTROLLERS = 32;
-    constexpr size_t MAX_DEVICE_NAME           = 64;
-    constexpr size_t MAX_COMPATIBLE_NAME       = 96;
+    constexpr size_t MAX_FW_DEVICES      = 128;
+    constexpr size_t MAX_FW_CPUS         = 64;
+    constexpr size_t MAX_IRQ_CTRLS       = 32;
+    constexpr size_t MAX_DEVICE_NAME     = 64;
+    constexpr size_t MAX_COMPATIBLE_NAME = 96;
 
-    enum class DeviceClass : u8_t { GENERIC, INTERRUPT_CONTROLLER, TIMER, RTC };
-    enum class BindingPolicy : u8_t {
+    enum class DeviceClass : u8_t { GENERIC, IRQ_CTRL, TIMER, RTC };
+    enum class BindPolicy : u8_t {
         USER_PREFERRED,
         USER_ONLY,
         KERNEL_PREFERRED,
         KERNEL_REQUIRED,
     };
-    enum class ControllerRole : u8_t { CPU_LOCAL, ROOT, CASCADED, MSI, IOMMU };
+    enum class IrqCtrlRole : u8_t { CPU_LOCAL, ROOT, CASCADED, MSI, IOMMU };
 
-    struct MmioResource {
+    struct MmioRes {
         PhyArea area{};
         bool present = false;
     };
 
-    struct DeviceDescriptor {
-        FirmwareId id{};
-        FirmwareId parent{};
-        DeviceClass device_class     = DeviceClass::GENERIC;
-        BindingPolicy binding_policy = BindingPolicy::USER_PREFERRED;
-        bool enabled                 = false;
+    struct DeviceDesc {
+        FwId id{};
+        FwId parent{};
+        DeviceClass kind       = DeviceClass::GENERIC;
+        BindPolicy bind_policy = BindPolicy::USER_PREFERRED;
+        bool enabled           = false;
         char name[MAX_DEVICE_NAME]{};
         char compatible[MAX_COMPATIBLE_NAME]{};
-        MmioResource first_mmio{};
+        MmioRes first_mmio{};
     };
 
-    struct CpuDescriptor {
-        u32_t logical_id  = 0;
-        u64_t hardware_id = 0;
-        FirmwareId firmware_id{};
+    struct CpuDesc {
+        u32_t cpu_id = 0;
+        u64_t hw_id  = 0;
+        FwId fw_id{};
         bool enabled = false;
         char model[MAX_DEVICE_NAME]{};
     };
 
-    struct InterruptControllerDescriptor {
-        FirmwareId id{};
-        ControllerRole role = ControllerRole::ROOT;
-        FirmwareId parent{};
-        u32_t interrupt_cells = 0;
+    struct IrqCtrlDesc {
+        FwId id{};
+        IrqCtrlRole role = IrqCtrlRole::ROOT;
+        FwId parent{};
+        u32_t irq_cells = 0;
         char compatible[MAX_COMPATIBLE_NAME]{};
-        MmioResource first_mmio{};
+        MmioRes first_mmio{};
     };
 
     /** @brief 启动器已经规范化的内存图和固件提供的全局时基。 */
     struct PlatformFacts {
-        const MemoryRegion *memory_regions = nullptr;
-        size_t memory_region_count         = 0;
-        u64_t timebase_frequency_hz        = 0;
+        const MemoryRegion *mem_regions = nullptr;
+        size_t mem_region_count         = 0;
+        u64_t timebase_hz               = 0;
     };
 
-    struct FirmwareInput {
-        FirmwareKind kind                 = FirmwareKind::NONE;
+    struct FwInput {
+        FwKind kind                       = FwKind::NONE;
         const void *data                  = nullptr;
         size_t size                       = 0;
         const boot::Context *boot_context = nullptr;
@@ -95,66 +96,67 @@ namespace device {
     class Catalog final {
     public:
         // Builder 与实现文件共享的启动期存储；对普通消费者只暴露只读查询 API。
-        struct State {
-            tay::static_vector<DeviceDescriptor, MAX_FIRMWARE_DEVICES> devices;
-            tay::static_vector<CpuDescriptor, MAX_FIRMWARE_CPUS> cpus;
-            tay::static_vector<InterruptControllerDescriptor, MAX_INTERRUPT_CONTROLLERS>
-                controllers;
+        struct Data {
+            tay::static_vector<DeviceDesc, MAX_FW_DEVICES> devices;
+            tay::static_vector<CpuDesc, MAX_FW_CPUS> cpus;
+            tay::static_vector<IrqCtrlDesc, MAX_IRQ_CTRLS> irq_ctrls;
             PlatformFacts platform{};
-            u32_t bsp_logical_id = 0;
-            bool ready           = false;
+            u32_t bsp_cpu_id = 0;
         };
 
         [[nodiscard]] bool ready() const noexcept;
-        [[nodiscard]] const DeviceDescriptor *find_device(FirmwareId id) const noexcept;
-        [[nodiscard]] const CpuDescriptor *cpu(u32_t logical_id) const noexcept;
-        [[nodiscard]] const CpuDescriptor *bsp() const noexcept;
-        [[nodiscard]] const InterruptControllerDescriptor *find_controller(
-            FirmwareId id) const noexcept;
+        [[nodiscard]] const DeviceDesc *find_device(FwId id) const noexcept;
+        [[nodiscard]] const CpuDesc *cpu(u32_t cpu_id) const noexcept;
+        [[nodiscard]] const CpuDesc *bsp() const noexcept;
+        [[nodiscard]] const IrqCtrlDesc *find_irq_ctrl(FwId id) const noexcept;
         [[nodiscard]] const PlatformFacts &platform() const noexcept;
         [[nodiscard]] size_t device_count() const noexcept;
         [[nodiscard]] size_t cpu_count() const noexcept;
-        [[nodiscard]] size_t controller_count() const noexcept;
+        [[nodiscard]] size_t irq_ctrl_count() const noexcept;
 
-        [[nodiscard]] const DeviceDescriptor *devices_begin() const noexcept;
-        [[nodiscard]] const DeviceDescriptor *devices_end() const noexcept;
-        [[nodiscard]] const CpuDescriptor *cpus_begin() const noexcept;
-        [[nodiscard]] const CpuDescriptor *cpus_end() const noexcept;
-        [[nodiscard]] const InterruptControllerDescriptor *controllers_begin() const noexcept;
-        [[nodiscard]] const InterruptControllerDescriptor *controllers_end() const noexcept;
+        [[nodiscard]] const DeviceDesc *devices_begin() const noexcept;
+        [[nodiscard]] const DeviceDesc *devices_end() const noexcept;
+        [[nodiscard]] const CpuDesc *cpus_begin() const noexcept;
+        [[nodiscard]] const CpuDesc *cpus_end() const noexcept;
+        [[nodiscard]] const IrqCtrlDesc *irq_ctrl_begin() const noexcept;
+        [[nodiscard]] const IrqCtrlDesc *irq_ctrl_end() const noexcept;
 
     private:
-        [[nodiscard]] State &state() noexcept;
-        [[nodiscard]] const State &state() const noexcept;
+        [[nodiscard]] Data &state() noexcept;
+        [[nodiscard]] const Data &state() const noexcept;
+
+        Data state_{};
+        std::atomic<bool> published_{false};
 
         friend class CatalogBuilder;
+        friend tay::expected<void, CatalogError> initialize() noexcept;
     };
 
     /** @brief 仅在启动枚举 transaction 内可写的目录构造器。 */
     class CatalogBuilder final {
     public:
         [[nodiscard]] tay::expected<void, CatalogError> add_device(
-            const DeviceDescriptor &device) noexcept;
-        [[nodiscard]] tay::expected<void, CatalogError> add_cpu(const CpuDescriptor &cpu) noexcept;
-        [[nodiscard]] tay::expected<void, CatalogError> add_controller(
-            const InterruptControllerDescriptor &controller) noexcept;
+            const DeviceDesc &device) noexcept;
+        [[nodiscard]] tay::expected<void, CatalogError> add_cpu(const CpuDesc &cpu) noexcept;
+        [[nodiscard]] tay::expected<void, CatalogError> add_irq_ctrl(
+            const IrqCtrlDesc &irq_ctrl) noexcept;
         void set_platform(PlatformFacts platform) noexcept;
-        void set_bsp(u32_t logical_id) noexcept;
+        void set_bsp(u32_t cpu_id) noexcept;
 
     private:
-        explicit CatalogBuilder(Catalog::State &state) noexcept : state_(state) {}
+        explicit CatalogBuilder(Catalog::Data &state) noexcept : state_(state) {}
 
-        Catalog::State &state_;
+        Catalog::Data &state_;
 
         friend tay::expected<void, CatalogError> initialize() noexcept;
     };
 
     /** @brief FDT、ACPI 等后端共同实现的固件输入合同。 */
-    class FirmwareEnumerator {
+    class FwEnumerator {
     public:
-        virtual ~FirmwareEnumerator() = default;
-        [[nodiscard]] virtual tay::expected<void, tay::error_code> enumerate(
-            CatalogBuilder &, FirmwareInput) noexcept = 0;
+        virtual ~FwEnumerator() = default;
+        [[nodiscard]] virtual tay::expected<void, tay::error_code> enumerate(CatalogBuilder &,
+                                                                             FwInput) noexcept = 0;
     };
 
     /**

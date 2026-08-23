@@ -181,7 +181,7 @@ namespace memory {
 
     /**
      * @brief 探测并发布常量初始化的永久全局内核堆。
-     * @note 仅允许 BSP 在 PageDatabase、Buddy 和启动 KPA 直映就绪后调用一次。
+     * @note 仅允许 BSP 在 PageDb、Buddy 和启动 KPA 直映就绪后调用一次。
      */
     [[nodiscard]] tay::expected<void, tay::error_code> init_heap() noexcept;
 

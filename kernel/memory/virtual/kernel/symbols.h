@@ -16,6 +16,7 @@ namespace memory::detail {
     extern "C" char s_init_rodata[], e_init_rodata[];
     extern "C" char s_init_data[], e_init_data[];
     extern "C" char s_init_bss[], e_init_bss[];
+    extern "C" char s_smp_trampoline[], e_smp_trampoline[];
     extern "C" char s_text[], e_text[];
     extern "C" char s_rodata[], e_rodata[];
     extern "C" char s_data[], e_data[];

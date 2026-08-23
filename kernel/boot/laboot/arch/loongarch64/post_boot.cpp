@@ -10,8 +10,8 @@
  */
 
 #include <boot/boot.h>
-#include <boot/common/bootinfo_builder.h>
-#include <boot/laboot/arch/loongarch64/early_paging.h>
+#include <boot/common/bootinfo.h>
+#include <boot/laboot/arch/loongarch64/paging.h>
 #include <tay/bits.h>
 
 #define LABOOT_BOOT_POST_STRING(x) LABOOT_BOOT_POST_RODATA constexpr const char x[]
@@ -157,7 +157,7 @@ namespace laboot {
         return nullptr;
     }
 
-    LABOOT_BOOT_POST_TEXT void find_dtb_from_system_table(LabootInfo &boot_info) noexcept {
+    LABOOT_BOOT_POST_TEXT void find_dtb(LabootInfo &boot_info) noexcept {
         if (boot_info.dtb_virt != 0)
             return;
         auto *dtb_table = find_config_table(boot_info, EFI_DTB_TABLE_GUID);
@@ -171,9 +171,9 @@ namespace laboot {
 
     [[nodiscard]] LABOOT_BOOT_POST_TEXT BootInfoHeader *build_bootinfo(LabootInfo *laboot_info,
                                                                        addr_t cursor) noexcept {
-        find_dtb_from_system_table(*laboot_info);
+        find_dtb(*laboot_info);
         bootinfo_builder.reset(reinterpret_cast<const void *>(laboot_info->dtb_virt), 2);
-        bootinfo_builder.collect_fdt_regions();
+        bootinfo_builder.collect_fdt_areas();
         const auto dtb_sz = bootinfo_builder.dtb_sz();
         if (dtb_sz > addr_t(-1) - laboot_info->dtb_phys)
             bootinfo_panic(boot::BootInfoBuildError::INVALID_REGION);

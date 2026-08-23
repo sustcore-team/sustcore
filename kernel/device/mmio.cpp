@@ -11,12 +11,13 @@
 
 #include <device/mmio.h>
 #include <log.h>
-#include <memory/virtual/kernel/kernel_space.h>
+#include <memory/virtual/kernel/vm.h>
 
 #include <new>
 
 namespace device {
-    tay::expected<cap::ObjectRef<MmioObject>, MmioError> MmioObject::create(PhyArea area) noexcept {
+    tay::expected<cap::KObjectRef<MmioObject>, MmioError> MmioObject::create(
+        PhyArea area) noexcept {
         if (area.nullable() || area.begin >= area.end)
             return tay::Err(MmioError::InvalidPhysicalArea(area));
         if (area.end.arith() > KPA_START - (PAGE_SIZE - 1))
@@ -29,7 +30,7 @@ namespace device {
         auto *object = new (std::nothrow) MmioObject(area, aligned);
         if (object == nullptr)
             return tay::Err(MmioError::OutOfMemory());
-        return cap::ObjectRef<MmioObject>(*object);
+        return cap::KObjectRef<MmioObject>(*object);
     }
 
     MmioObject::~MmioObject() noexcept {
@@ -43,7 +44,7 @@ namespace device {
     tay::expected<KvaAddr, MmioError> MmioObject::map_to_kernel() noexcept {
         if (mapped_)
             return tay::Err(MmioError::MappingConflict(area_));
-        auto *space = memory::try_kernel_space();
+        auto *space = memory::try_kernel_vm();
         if (space == nullptr)
             return tay::Err(MmioError::KernelSpaceUnavailable());
         auto mapped = space->map_device(aligned_area_.begin, aligned_area_.size(),
@@ -61,7 +62,7 @@ namespace device {
     tay::expected<void, MmioError> MmioObject::unmap_from_kernel() noexcept {
         if (!mapped_)
             return tay::Err(MmioError::NotMapped());
-        auto *space = memory::try_kernel_space();
+        auto *space = memory::try_kernel_vm();
         if (space == nullptr)
             return tay::Err(MmioError::KernelSpaceUnavailable());
         auto result = space->unmap_device(aligned_area_.begin, aligned_area_.size());

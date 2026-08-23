@@ -10,8 +10,8 @@
  */
 
 #include <boot/boot.h>
-#include <boot/common/bootinfo_builder.h>
-#include <boot/sbi/arch/riscv64/early_paging.h>
+#include <boot/common/bootinfo.h>
+#include <boot/sbi/arch/riscv64/paging.h>
 #include <sbi/sbi.h>
 #include <tay/attribute.h>
 
@@ -65,7 +65,7 @@ namespace sbi {
     [[nodiscard]] SBI_BOOT_POST_TEXT BootInfoHeader *build_bootinfo(addr_t dtb_ptr,
                                                                     addr_t cursor) noexcept {
         bootinfo_builder.reset(reinterpret_cast<const void *>(dtb_ptr), 1);
-        bootinfo_builder.collect_fdt_regions();
+        bootinfo_builder.collect_fdt_areas();
         const auto dtb_sz = bootinfo_builder.dtb_sz();
         if (dtb_sz > addr_t(-1) - dtb_ptr)
             bootinfo_panic(boot::BootInfoBuildError::INVALID_REGION);

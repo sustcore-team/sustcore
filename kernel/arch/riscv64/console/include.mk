@@ -1,1 +1,1 @@
-src-$(is-riscv64) += early_console.cpp
+src-$(is-riscv64) += early.cpp

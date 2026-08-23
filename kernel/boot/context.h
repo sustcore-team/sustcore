@@ -48,5 +48,5 @@ namespace boot {
      * @brief 将 BOOT_RECLAIMABLE 页归还 Buddy，但保留当前执行所需的 init 区域。
      * @return 本次实际回收的物理页数。
      */
-    size_t reclaim_boot_memory() noexcept;
+    size_t reclaim_memory() noexcept;
 }  // namespace boot

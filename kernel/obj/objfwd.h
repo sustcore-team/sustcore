@@ -1,7 +1,7 @@
 /**
  * @file objfwd.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief KernelObject 体系的集中前向声明。
+ * @brief KObject 体系的集中前向声明。
  * @version 0.1.0-dev.1
  * @date 2026-08-17
  *
@@ -11,16 +11,16 @@
 #pragma once
 
 namespace cap {
-    class KernelObject;
+    class KObject;
     class CSpace;
 }  // namespace cap
 
 namespace memory {
-    class MemorySegment;
+    class MemSeg;
 }  // namespace memory
 
 namespace task {
-    class AddressSpace;
+    class AddrSpace;
     class Process;
     class Thread;
 }  // namespace task

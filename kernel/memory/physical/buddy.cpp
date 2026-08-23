@@ -10,9 +10,10 @@
  */
 
 #include <arch/interrupt.h>
+#include <exec_ctx.h>
 #include <log.h>
 #include <memory/physical/buddy.h>
-#include <memory/physical/page_database.h>
+#include <memory/physical/page_db.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
 
@@ -39,13 +40,13 @@ namespace memory {
         return order;
     }
 
-    void Buddy::init_pool(DescPool &pool, PageAllocation backing) noexcept {
+    void Buddy::init_pool(DescPool &pool, PageAlloc backing) noexcept {
         pool.previous = nullptr;
         pool.next     = nullptr;
         pool.backing  = backing;
         pool.used     = 0;
         for (auto &word : pool.bitmap) word = 0;
-        for (size_t i = 0; i < DESCRIPTORS_PER_POOL; ++i) {
+        for (size_t i = 0; i < DESCS_PER_POOL; ++i) {
             auto &block    = pool.blocks[i];
             block.previous = nullptr;
             block.next     = nullptr;
@@ -68,18 +69,18 @@ namespace memory {
         pool_tail_ = &pool;
     }
 
-    size_t Buddy::available_descriptors() const noexcept {
+    size_t Buddy::free_descs() const noexcept {
         size_t available = 0;
         for (auto *pool = pool_head_; pool != nullptr; pool = pool->next) {
-            available += DESCRIPTORS_PER_POOL - pool->used;
+            available += DESCS_PER_POOL - pool->used;
         }
         return available;
     }
 
     Buddy::FreeBlock *Buddy::allocate_from_pool(DescPool &pool) noexcept {
-        if (pool.used == DESCRIPTORS_PER_POOL)
+        if (pool.used == DESCS_PER_POOL)
             return nullptr;
-        for (size_t word_index = 0; word_index < DESCRIPTOR_BITMAP_WORDS; ++word_index) {
+        for (size_t word_index = 0; word_index < DESC_BITMAP_WORDS; ++word_index) {
             auto word = pool.bitmap[word_index];
             if (word == static_cast<u64_t>(-1))
                 continue;
@@ -102,10 +103,10 @@ namespace memory {
         return nullptr;
     }
 
-    Buddy::FreeBlock *Buddy::allocate_descriptor() noexcept {
+    Buddy::FreeBlock *Buddy::alloc_desc() noexcept {
         // 预留足够 descriptor，使一次高阶块拆分不会在扩容途中耗尽元数据。
-        if (!expanding_pool_ && available_descriptors() <= DESCRIPTOR_RESERVE) {
-            ensure_descriptor_capacity();
+        if (!expanding_pool_ && free_descs() <= DESCRIPTOR_RESERVE) {
+            ensure_descs();
         }
         for (auto *pool = pool_head_; pool != nullptr; pool = pool->next) {
             if (auto *block = allocate_from_pool(*pool); block != nullptr) {
@@ -115,9 +116,9 @@ namespace memory {
         kernel::log::panic("Buddy 描述符池已耗尽");
     }
 
-    void Buddy::free_descriptor(FreeBlock &block) noexcept {
+    void Buddy::free_desc(FreeBlock &block) noexcept {
         if (block.magic != DESCRIPTOR_MAGIC || block.pool == nullptr ||
-            block.slot >= DESCRIPTORS_PER_POOL)
+            block.slot >= DESCS_PER_POOL)
         {
             kernel::log::panic("无效的 Buddy 描述符");
         }
@@ -136,8 +137,8 @@ namespace memory {
         block.magic    = 0;
     }
 
-    void Buddy::ensure_descriptor_capacity() noexcept {
-        if (expanding_pool_ || available_descriptors() > DESCRIPTOR_RESERVE) {
+    void Buddy::ensure_descs() noexcept {
+        if (expanding_pool_ || free_descs() > DESCRIPTOR_RESERVE) {
             return;
         }
         add_runtime_pool();
@@ -149,15 +150,15 @@ namespace memory {
         }
         expanding_pool_ = true;
         // descriptor pool 自身也来自 Buddy；标志位阻止该分配递归触发再次扩容。
-        auto allocation = allocate_block(ceil_order(DESCRIPTOR_POOL_PAGES));
+        auto allocation = allocate_block(ceil_order(DESC_POOL_PAGES));
         expanding_pool_ = false;
         if (!allocation) {
             kernel::log::panic("无法分配 Buddy 描述符池");
         }
 
-        PageAllocation backing{.base = PhyAddr(*allocation), .pages = DESCRIPTOR_POOL_PAGES};
+        PageAlloc backing{.base = PhyAddr(*allocation), .pages = DESC_POOL_PAGES};
         const PhyArea backing_area(backing.base, backing.base + backing.pages * PAGE_SIZE);
-        if (!page_database().claim(backing_area, PageKind::METADATA, BUDDY_METADATA_OWNER))
+        if (!page_db().claim(backing_area, PageKind::METADATA, BUDDY_METADATA_OWNER))
             kernel::log::panic("无法认领 Buddy 描述符池物理页");
         // PA2KPA 提供可访问别名，placement new 在原始物理页上建立 DescPool 对象生命周期。
         auto *pool = reinterpret_cast<DescPool *>(PA2KPA(*allocation));
@@ -188,7 +189,7 @@ namespace memory {
             kernel::log::panic("Buddy 在 {} 处发生重复释放", physical);
         }
 
-        auto *node     = allocate_descriptor();
+        auto *node     = alloc_desc();
         node->physical = physical;
         node->order    = static_cast<u32_t>(order);
         node->previous = previous;
@@ -212,7 +213,7 @@ namespace memory {
         if (block.next != nullptr)
             block.next->previous = block.previous;
         free_pages_ -= size_t{1} << block.order;
-        free_descriptor(block);
+        free_desc(block);
     }
 
     void Buddy::release_block(addr_t physical, size_t order) noexcept {
@@ -280,7 +281,8 @@ namespace memory {
         initialized_ = true;
     }
 
-    void Buddy::put_range(PhyArea area) noexcept {
+    void Buddy::add_range(PhyArea area) noexcept {
+        kernel::assert_task_ctx();
         if (!initialized_) {
             kernel::log::panic("Buddy 永久描述符池初始化前就添加了区域");
         }
@@ -292,14 +294,16 @@ namespace memory {
         release_range(area.begin.arith(), (area.end.arith() - area.begin.arith()) / PAGE_SIZE);
     }
 
-    tay::expected<PageAllocation, tay::error_code> Buddy::try_gfp_in_order(size_t order) noexcept {
-        ensure_descriptor_capacity();
+    tay::expected<PageAlloc, tay::error_code> Buddy::try_alloc_order(size_t order) noexcept {
+        kernel::assert_task_ctx();
+        ensure_descs();
         const addr_t result = TAY_TRY(allocate_block(order));
-        return PageAllocation{.base = PhyAddr(result), .pages = size_t{1} << order};
+        return PageAlloc{.base = PhyAddr(result), .pages = size_t{1} << order};
     }
 
-    tay::expected<PageAllocation, tay::error_code> Buddy::try_get_free_pages(
+    tay::expected<PageAlloc, tay::error_code> Buddy::try_alloc_pages(
         size_t pages, size_t alignment_pages) noexcept {
+        kernel::assert_task_ctx();
         if (pages == 0 || alignment_pages == 0 || (alignment_pages & (alignment_pages - 1)) != 0) {
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
@@ -309,20 +313,21 @@ namespace memory {
             return tay::Err(tay::error_code::OUT_OF_MEMORY);
         }
 
-        ensure_descriptor_capacity();
+        ensure_descs();
         const addr_t result          = TAY_TRY(allocate_block(allocation_order));
         const size_t allocated_pages = size_t{1} << allocation_order;
         if (allocated_pages > pages) {
             // Buddy 只能按二次幂取块，多出的尾部立即拆解归还。
             release_range(result + pages * PAGE_SIZE, allocated_pages - pages);
         }
-        return PageAllocation{.base = PhyAddr(result), .pages = pages};
+        return PageAlloc{.base = PhyAddr(result), .pages = pages};
     }
 
-    void Buddy::put_pages(PageAllocation allocation) noexcept {
+    void Buddy::free_pages(PageAlloc allocation) noexcept {
+        kernel::assert_task_ctx();
         if (!allocation)
             return;
-        ensure_descriptor_capacity();
+        ensure_descs();
         release_range(allocation.base.arith(), allocation.pages);
     }
 

@@ -66,6 +66,19 @@
 
 较新的小文件有时只保留 `@file` 和 `@brief`。文件头应说明文件职责，而不是重复文件名。
 
+### 文件与目录命名
+
+- 文件名使用小写 `snake_case`，并利用目录表达子系统和对象类别，不重复目录已经提供的词根。
+  例如使用 `memory/virtual/kernel/vm.h`、`memory/virtual/pt.h` 和 `obj/kobject.h`，不使用
+  `kernel/kernel_space.h`、`virtual/page_table.h` 等重复组合。
+- 稳定缩写可直接用于文件名，例如 `pt`、`vm`、`mm`、`fw`、`ctx`、`sched`、`mem_seg`。
+- 内核领域错误头集中在 `kernel/error/`，文件名只保留领域词，例如 `error/paging.h`、
+  `error/mem_seg.h` 和 `error/work_queue.h`；错误类型仍保留在各自 namespace 中。
+- `internal` 只在无法通过目录或 `detail` namespace 表达边界时使用；私有实现文件优先使用
+  `_priv` 后缀。
+- 新增头文件的 basename 通常不超过 13 个字符。超过时应先检查能否利用目录、稳定缩写或拆分职责，
+  不能单纯删除会影响语义或协议的信息。
+
 ### 头文件保护
 
 - C/C++ 头文件使用 `#pragma once`。
@@ -82,7 +95,7 @@
 项目内部头文件通常也使用尖括号，例如：
 
 ```cpp
-#include <memory/virtual/page_table.h>
+#include <memory/virtual/pt.h>
 #include <tay/expected.h>
 
 #include <cstddef>
@@ -110,10 +123,10 @@
 内核对象、领域数据结构和公开概念通常使用 `UpperCamelCase`：
 
 ```cpp
-class KernelSpace;
-class ClientSpace;
-struct PageAllocation;
-enum class PageTableKind;
+class KernelVm;
+class UserVm;
+struct PageAlloc;
+enum class PtKind;
 ```
 
 类型别名如果表达领域对象或标识符，也通常使用 `UpperCamelCase`：
@@ -137,7 +150,7 @@ kernel::synchronized
 kernel::locked_ref
 ```
 
-是否属于工具类型由用途决定，而不是由其是否为模板决定。`PageTable`、`ClientSpace`、
+是否属于工具类型由用途决定，而不是由其是否为模板决定。`PageTable`、`UserVm`、
 `Slub` 和 `BootInfoBuilder` 等表达内核领域职责的类型仍使用 `UpperCamelCase`。
 
 #### 工具类型与实现别名的边界
@@ -146,7 +159,7 @@ kernel::locked_ref
 `UpperCamelCase`：
 
 - concept 与 traits，例如 `ContextTrait`、`EarlyConsoleTraits` 和 `PageTableTraits`；
-- 静态策略和架构操作集合，例如 `PageTableOps`；
+- 静态策略和架构操作集合，例如 `PtOps`；
 - locator、adapter 和 callback 类型，例如 `ChunkHookLocator`、`RQHookLocator`、
   `LeafVisitor` 和 `kernel::log::Output`；
 - 普通机械别名和函数指针别名，例如 `EntryType`、`PteType`、`initializer_t`、
@@ -168,8 +181,8 @@ kernel::locked_ref
 
 上述规则不按名称后缀机械套用。下列类型继续使用 `UpperCamelCase`：
 
-- 具有对象身份、所有权或生命周期的子系统对象，例如 `KernelSpace`、`ClientSpace`、
-  `PageTable`、`KernelMM`、`Buddy`、`PageDatabase` 和 `EarlyConsole`；
+- 具有对象身份、所有权或生命周期的子系统对象，例如 `KernelVm`、`UserVm`、
+  `PageTable`、`KernelMM`、`Buddy`、`PageDb` 和 `EarlyConsole`；
 - 表达协议、状态、错误或领域值的类型，例如 `RootBinding`、`PageFlags`、`TrapInfo`、
   `KernelLayout`、`BootInfoHeader` 以及各种 `...Id`；
 - 虽然名称包含 `Allocator`、`Builder`、`Pool`、`Walker` 或 `Sink`，但封装了明确领域不变量
@@ -200,6 +213,20 @@ tay::lock_guard
 - 可能失败且具有非失败对应操作的接口常使用 `try_` 前缀，例如 `try_allocate()`、`try_create()`。
 - 工厂接口常使用 `create()`，并通过返回类型表达失败。
 - 初始化接口使用 `initialize()` 或 `init()`；同一子系统内应保持一致，不在局部重新发明名称。
+
+### 内核稳定缩写词根
+
+跨文件和跨子系统接口应复用下列稳定词根，避免同一概念同时出现全称、半缩写和临时缩写：
+
+- `addr`、`alloc`、`config`、`ctx`、`desc`、`fw`、`gen`、`mem`、`phys`、`resv`、
+  `sched`、`seg`、`stats`；
+- `irq`、`ipi`、`smp`、`tlb`、`vma`、`pte`、`mmio`、`fdt`、`acpi`、`asid`、
+  `bsp`、`ap`、`rcu`、`kva`、`hva`、`kpa`、`gfp`、`slub` 等内核惯用缩写；
+- 页表组合名使用 `Pt`，例如 `PtKind`、`PtOwnerId`、`PtOps`；Capability 的短类型族在
+  `cap` namespace 中使用 `C` 前缀，例如 `CTree`、`CToken`、`CPin`、`CRef`。
+
+公开的独立动作和查询不机械缩写，例如 `allocate()`、`initialize()` 和 `generation()` 可以保留；
+组合名、字段、参数和私有 helper 优先使用上述词根。缩写只有在领域含义稳定且不会造成歧义时采用。
 
 ### 成员变量
 

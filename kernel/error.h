@@ -52,10 +52,10 @@
     X(INVALID_PHYSICAL_ADDRESS)        \
     X(INVALID_FLAGS)                   \
     X(MISSING_MAPPING)                 \
-    X(MAPPING_ALREADY_PRESENT)         \
+    X(ALREADY_MAPPED)                  \
     X(UNEXPECTED_ENTRY)                \
     X(UNSUPPORTED_LEAF_LEVEL)          \
-    X(PAGE_TABLE_ALLOCATION_FAILED)    \
+    X(PT_ALLOC_FAILED)                 \
     X(OUT_OF_MEMORY)
 
 #define KERNEL_MEMORY_SEGMENT_ERROR_REASONS(X) \
@@ -64,15 +64,15 @@
     X(OFFSET_OUT_OF_RANGE)                     \
     X(PAGE_NOT_ALLOCATED)                      \
     X(INVALID_SOURCE_BUFFER)                   \
-    X(PHYSICAL_ALLOCATION_FAILED)              \
-    X(PAGE_INDEX_INSERT_FAILED)                \
+    X(PHYS_ALLOC_FAILED)                       \
+    X(PAGE_INSERT_FAILED)                      \
     X(OUT_OF_MEMORY)
 
 #define KERNEL_ADDRESS_SPACE_ERROR_REASONS(X) \
     X(INVALID_SEGMENT)                        \
     X(INVALID_AREA)                           \
     X(INVALID_FLAGS)                          \
-    X(SEGMENT_OFFSET_OUT_OF_RANGE)            \
+    X(SEG_OFFSET_OUT_OF_RANGE)                \
     X(MAPPING_EXCEEDS_SEGMENT)                \
     X(ACCESS_DENIED)                          \
     X(VMA_OVERLAP)                            \
@@ -83,22 +83,22 @@
     X(PAGE_TABLE_FAILED)                      \
     X(OUT_OF_MEMORY)
 
-#define KERNEL_LAYOUT_ERROR_REASONS(X)  \
-    X(INITIALIZATION_ALREADY_ATTEMPTED) \
-    X(DEPENDENCY_NOT_READY)             \
-    X(INVALID_KERNEL_LAYOUT)            \
-    X(INVALID_HHDM_LAYOUT)              \
-    X(INVALID_RESERVED_LAYOUT)          \
-    X(LAYOUT_CONFLICT)                  \
-    X(HHDM_CONFLICT)                    \
-    X(KERNEL_LAYOUT_NOT_FOUND)          \
-    X(HHDM_LAYOUT_NOT_FOUND)            \
-    X(RESERVED_LAYOUT_NOT_FOUND)        \
-    X(HHDM_COVERAGE_MISSING)            \
-    X(RESERVATION_OWNED_BY_KERNEL)      \
-    X(RESERVATIONS_PRESENT)             \
-    X(OWNERSHIP_MISMATCH)               \
-    X(NODE_ALLOCATION_FAILED)           \
+#define KERNEL_LAYOUT_ERROR_REASONS(X) \
+    X(INIT_ALREADY_ATTEMPTED)          \
+    X(DEPENDENCY_NOT_READY)            \
+    X(INVALID_KERNEL_LAYOUT)           \
+    X(INVALID_HHDM_LAYOUT)             \
+    X(INVALID_RESERVED_LAYOUT)         \
+    X(LAYOUT_CONFLICT)                 \
+    X(HHDM_CONFLICT)                   \
+    X(KERNEL_LAYOUT_NOT_FOUND)         \
+    X(HHDM_LAYOUT_NOT_FOUND)           \
+    X(RESERVED_LAYOUT_NOT_FOUND)       \
+    X(HHDM_COVERAGE_MISSING)           \
+    X(RESERVATION_OWNED_BY_KERNEL)     \
+    X(RESERVATIONS_PRESENT)            \
+    X(OWNERSHIP_MISMATCH)              \
+    X(NODE_ALLOCATION_FAILED)          \
     X(PAGING_FAILED)
 
 #define KERNEL_PROCESS_ERROR_REASONS(X) \
@@ -142,7 +142,7 @@
     X(INVALID_BLOCK_TOKEN)                \
     X(NO_RUNNABLE_THREAD)                 \
     X(IDLE_THREAD_OPERATION)              \
-    X(DEADLINE_SINK_ALREADY_INSTALLED)    \
+    X(PREEMPT_SINK_ALREADY_SET)           \
     X(INVALID_DEADLINE_SINK)
 
 #define KERNEL_TIMER_ERROR_REASONS(X) \
@@ -150,43 +150,44 @@
     X(ENGINE_NOT_INITIALIZED)         \
     X(NODE_NOT_IDLE)                  \
     X(NODE_ALREADY_LINKED)            \
-    X(COMPLETION_NOT_RESERVABLE)
+    X(COMPLETION_BUSY)
 
 #define KERNEL_WORK_QUEUE_ERROR_REASONS(X) \
     X(ALREADY_STARTED)                     \
     X(PENDING_WORK)                        \
-    X(WORKER_CREATION_FAILED)              \
+    X(WORKER_CREATE_FAILED)                \
     X(WORKER_ATTACH_FAILED)                \
     X(NOT_STARTED)                         \
     X(PERMANENT_QUEUE)                     \
     X(CALLED_BY_WORKER)
 
-#define KERNEL_USRBOOT_ERROR_REASONS(X)  \
-    X(IMAGE_TOO_SMALL)                   \
-    X(INVALID_MAGIC)                     \
-    X(INVALID_HEADER)                    \
-    X(INVALID_SEGMENT_SIZE)              \
-    X(SEGMENT_ADDRESS_OVERFLOW)          \
-    X(SEGMENT_OUTSIDE_USER_RANGE)        \
-    X(SEGMENT_FILE_RANGE_INVALID)        \
-    X(SEGMENT_UNALIGNED)                 \
-    X(OBJECT_CREATION_FAILED)            \
-    X(PROCESS_CONFIGURATION_FAILED)      \
-    X(VMA_CREATION_FAILED)               \
-    X(SEGMENT_WRITE_FAILED)              \
-    X(INITIAL_STACK_FAILED)              \
-    X(THREAD_CREATION_FAILED)            \
-    X(USER_CONTEXT_CONFIGURATION_FAILED) \
-    X(PROCESS_SUBMISSION_FAILED)         \
+#define KERNEL_USRBOOT_ERROR_REASONS(X) \
+    X(IMAGE_TOO_SMALL)                  \
+    X(INVALID_MAGIC)                    \
+    X(INVALID_HEADER)                   \
+    X(INVALID_SEGMENT_SIZE)             \
+    X(SEG_ADDR_OVERFLOW)                \
+    X(SEGMENT_OUTSIDE_USER_RANGE)       \
+    X(SEGMENT_FILE_RANGE_INVALID)       \
+    X(SEGMENT_UNALIGNED)                \
+    X(OBJECT_CREATE_FAILED)             \
+    X(PROCESS_CONFIG_FAILED)            \
+    X(VMA_CREATION_FAILED)              \
+    X(SEGMENT_WRITE_FAILED)             \
+    X(INITIAL_STACK_FAILED)             \
+    X(THREAD_CREATION_FAILED)           \
+    X(USER_CTX_CONFIG_FAILED)           \
+    X(PROCESS_SUBMISSION_FAILED)        \
     X(THREAD_ATTACH_FAILED)
 
 #define KERNEL_CATALOG_ERROR_REASONS(X) \
     X(INVALID_DESCRIPTOR)               \
     X(DUPLICATE_FIRMWARE_ID)            \
     X(DUPLICATE_LOGICAL_CPU)            \
+    X(DUPLICATE_HARDWARE_CPU)           \
     X(PARENT_NOT_FOUND)                 \
     X(RESOURCE_OVERLAP)                 \
-    X(INTERRUPT_CONTROLLER_NOT_FOUND)   \
+    X(IRQ_CTRL_NOT_FOUND)               \
     X(CAPACITY_EXHAUSTED)               \
     X(NO_CPU_DISCOVERED)                \
     X(BACKEND_FAILED)                   \
@@ -198,7 +199,7 @@
     X(MISSING_PROPERTY)             \
     X(INVALID_PROPERTY)             \
     X(CELL_COUNT_UNSUPPORTED)       \
-    X(ADDRESS_TRANSLATION_FAILED)   \
+    X(ADDR_TRANSLATE_FAILED)        \
     X(INTEGER_OVERFLOW)             \
     X(BOOT_CPU_NOT_FOUND)           \
     X(CATALOG_REJECTED)
@@ -255,15 +256,15 @@ namespace kernel {
 
 #define KERNEL_DECLARE_REASON(name) name,
         enum class TayError : u8_t { KERNEL_TAY_ERROR_REASONS(KERNEL_DECLARE_REASON) };
-        enum class CapError : u8_t { KERNEL_CAP_ERROR_REASONS(KERNEL_DECLARE_REASON) };
+        enum class CError : u8_t { KERNEL_CAP_ERROR_REASONS(KERNEL_DECLARE_REASON) };
         enum class PagingError : u8_t { KERNEL_PAGING_ERROR_REASONS(KERNEL_DECLARE_REASON) };
-        enum class MemorySegmentError : u8_t {
+        enum class MemSegError : u8_t {
             KERNEL_MEMORY_SEGMENT_ERROR_REASONS(KERNEL_DECLARE_REASON)
         };
-        enum class AddressSpaceError : u8_t {
+        enum class AddrSpaceError : u8_t {
             KERNEL_ADDRESS_SPACE_ERROR_REASONS(KERNEL_DECLARE_REASON)
         };
-        enum class KernelLayoutError : u8_t { KERNEL_LAYOUT_ERROR_REASONS(KERNEL_DECLARE_REASON) };
+        enum class KernelMapError : u8_t { KERNEL_LAYOUT_ERROR_REASONS(KERNEL_DECLARE_REASON) };
         enum class ProcessError : u8_t { KERNEL_PROCESS_ERROR_REASONS(KERNEL_DECLARE_REASON) };
         enum class ThreadError : u8_t { KERNEL_THREAD_ERROR_REASONS(KERNEL_DECLARE_REASON) };
         enum class SchedulerError : u8_t { KERNEL_SCHEDULER_ERROR_REASONS(KERNEL_DECLARE_REASON) };
@@ -280,11 +281,11 @@ namespace kernel {
     constexpr KernelError(reason_type reason) noexcept     \
         : type_(Type::type_value), reason_(static_cast<u8_t>(reason)) {}
         KERNEL_REASON_CONSTRUCTOR(TayError, TAY_ERROR)
-        KERNEL_REASON_CONSTRUCTOR(CapError, CAP_ERROR)
+        KERNEL_REASON_CONSTRUCTOR(CError, CAP_ERROR)
         KERNEL_REASON_CONSTRUCTOR(PagingError, PAGING_ERROR)
-        KERNEL_REASON_CONSTRUCTOR(MemorySegmentError, MEMORY_SEGMENT_ERROR)
-        KERNEL_REASON_CONSTRUCTOR(AddressSpaceError, ADDRESS_SPACE_ERROR)
-        KERNEL_REASON_CONSTRUCTOR(KernelLayoutError, KERNEL_LAYOUT_ERROR)
+        KERNEL_REASON_CONSTRUCTOR(MemSegError, MEMORY_SEGMENT_ERROR)
+        KERNEL_REASON_CONSTRUCTOR(AddrSpaceError, ADDRESS_SPACE_ERROR)
+        KERNEL_REASON_CONSTRUCTOR(KernelMapError, KERNEL_LAYOUT_ERROR)
         KERNEL_REASON_CONSTRUCTOR(ProcessError, PROCESS_ERROR)
         KERNEL_REASON_CONSTRUCTOR(ThreadError, THREAD_ERROR)
         KERNEL_REASON_CONSTRUCTOR(SchedulerError, SCHEDULER_ERROR)
@@ -319,25 +320,22 @@ namespace kernel {
 
         [[nodiscard]] constexpr const char *reason_name() const noexcept {
             switch (type_) {
-                case Type::TAY_ERROR:    return name(static_cast<TayError>(reason_));
-                case Type::CAP_ERROR:    return name(static_cast<CapError>(reason_));
-                case Type::PAGING_ERROR: return name(static_cast<PagingError>(reason_));
-                case Type::MEMORY_SEGMENT_ERROR:
-                    return name(static_cast<MemorySegmentError>(reason_));
-                case Type::ADDRESS_SPACE_ERROR:
-                    return name(static_cast<AddressSpaceError>(reason_));
-                case Type::KERNEL_LAYOUT_ERROR:
-                    return name(static_cast<KernelLayoutError>(reason_));
-                case Type::PROCESS_ERROR:    return name(static_cast<ProcessError>(reason_));
-                case Type::THREAD_ERROR:     return name(static_cast<ThreadError>(reason_));
-                case Type::SCHEDULER_ERROR:  return name(static_cast<SchedulerError>(reason_));
-                case Type::TIMER_ERROR:      return name(static_cast<TimerError>(reason_));
-                case Type::WORK_QUEUE_ERROR: return name(static_cast<WorkQueueError>(reason_));
-                case Type::USRBOOT_ERROR:    return name(static_cast<UsrbootError>(reason_));
-                case Type::CATALOG_ERROR:    return name(static_cast<CatalogError>(reason_));
-                case Type::FDT_ERROR:        return name(static_cast<FdtError>(reason_));
-                case Type::MMIO_ERROR:       return name(static_cast<MmioError>(reason_));
-                case Type::PLIC_ERROR:       return name(static_cast<PlicError>(reason_));
+                case Type::TAY_ERROR:            return name(static_cast<TayError>(reason_));
+                case Type::CAP_ERROR:            return name(static_cast<CError>(reason_));
+                case Type::PAGING_ERROR:         return name(static_cast<PagingError>(reason_));
+                case Type::MEMORY_SEGMENT_ERROR: return name(static_cast<MemSegError>(reason_));
+                case Type::ADDRESS_SPACE_ERROR:  return name(static_cast<AddrSpaceError>(reason_));
+                case Type::KERNEL_LAYOUT_ERROR:  return name(static_cast<KernelMapError>(reason_));
+                case Type::PROCESS_ERROR:        return name(static_cast<ProcessError>(reason_));
+                case Type::THREAD_ERROR:         return name(static_cast<ThreadError>(reason_));
+                case Type::SCHEDULER_ERROR:      return name(static_cast<SchedulerError>(reason_));
+                case Type::TIMER_ERROR:          return name(static_cast<TimerError>(reason_));
+                case Type::WORK_QUEUE_ERROR:     return name(static_cast<WorkQueueError>(reason_));
+                case Type::USRBOOT_ERROR:        return name(static_cast<UsrbootError>(reason_));
+                case Type::CATALOG_ERROR:        return name(static_cast<CatalogError>(reason_));
+                case Type::FDT_ERROR:            return name(static_cast<FdtError>(reason_));
+                case Type::MMIO_ERROR:           return name(static_cast<MmioError>(reason_));
+                case Type::PLIC_ERROR:           return name(static_cast<PlicError>(reason_));
             }
             return "UNKNOWN";
         }
@@ -345,11 +343,11 @@ namespace kernel {
         [[nodiscard]] static constexpr const char *name(Type type) noexcept {
             switch (type) {
                 case Type::TAY_ERROR:            return "TayError";
-                case Type::CAP_ERROR:            return "CapError";
+                case Type::CAP_ERROR:            return "CError";
                 case Type::PAGING_ERROR:         return "PagingError";
-                case Type::MEMORY_SEGMENT_ERROR: return "MemorySegmentError";
-                case Type::ADDRESS_SPACE_ERROR:  return "AddressSpaceError";
-                case Type::KERNEL_LAYOUT_ERROR:  return "KernelLayoutError";
+                case Type::MEMORY_SEGMENT_ERROR: return "MemSegError";
+                case Type::ADDRESS_SPACE_ERROR:  return "AddrSpaceError";
+                case Type::KERNEL_LAYOUT_ERROR:  return "KernelMapError";
                 case Type::PROCESS_ERROR:        return "ProcessError";
                 case Type::THREAD_ERROR:         return "ThreadError";
                 case Type::SCHEDULER_ERROR:      return "SchedulerError";
@@ -375,11 +373,11 @@ namespace kernel {
         return "UNKNOWN";                                                          \
     }
         KERNEL_DECLARE_REASON_NAME(TayError, KERNEL_TAY_ERROR_REASONS)
-        KERNEL_DECLARE_REASON_NAME(CapError, KERNEL_CAP_ERROR_REASONS)
+        KERNEL_DECLARE_REASON_NAME(CError, KERNEL_CAP_ERROR_REASONS)
         KERNEL_DECLARE_REASON_NAME(PagingError, KERNEL_PAGING_ERROR_REASONS)
-        KERNEL_DECLARE_REASON_NAME(MemorySegmentError, KERNEL_MEMORY_SEGMENT_ERROR_REASONS)
-        KERNEL_DECLARE_REASON_NAME(AddressSpaceError, KERNEL_ADDRESS_SPACE_ERROR_REASONS)
-        KERNEL_DECLARE_REASON_NAME(KernelLayoutError, KERNEL_LAYOUT_ERROR_REASONS)
+        KERNEL_DECLARE_REASON_NAME(MemSegError, KERNEL_MEMORY_SEGMENT_ERROR_REASONS)
+        KERNEL_DECLARE_REASON_NAME(AddrSpaceError, KERNEL_ADDRESS_SPACE_ERROR_REASONS)
+        KERNEL_DECLARE_REASON_NAME(KernelMapError, KERNEL_LAYOUT_ERROR_REASONS)
         KERNEL_DECLARE_REASON_NAME(ProcessError, KERNEL_PROCESS_ERROR_REASONS)
         KERNEL_DECLARE_REASON_NAME(ThreadError, KERNEL_THREAD_ERROR_REASONS)
         KERNEL_DECLARE_REASON_NAME(SchedulerError, KERNEL_SCHEDULER_ERROR_REASONS)
@@ -400,15 +398,15 @@ namespace kernel {
         [[nodiscard]] static consteval Type type_of() noexcept {
             if constexpr (std::same_as<Reason, TayError>)
                 return Type::TAY_ERROR;
-            else if constexpr (std::same_as<Reason, CapError>)
+            else if constexpr (std::same_as<Reason, CError>)
                 return Type::CAP_ERROR;
             else if constexpr (std::same_as<Reason, PagingError>)
                 return Type::PAGING_ERROR;
-            else if constexpr (std::same_as<Reason, MemorySegmentError>)
+            else if constexpr (std::same_as<Reason, MemSegError>)
                 return Type::MEMORY_SEGMENT_ERROR;
-            else if constexpr (std::same_as<Reason, AddressSpaceError>)
+            else if constexpr (std::same_as<Reason, AddrSpaceError>)
                 return Type::ADDRESS_SPACE_ERROR;
-            else if constexpr (std::same_as<Reason, KernelLayoutError>)
+            else if constexpr (std::same_as<Reason, KernelMapError>)
                 return Type::KERNEL_LAYOUT_ERROR;
             else if constexpr (std::same_as<Reason, ProcessError>)
                 return Type::PROCESS_ERROR;
@@ -440,11 +438,10 @@ namespace kernel {
 
     template <typename T>
     concept KernelErrorReason =
-        std::same_as<T, KernelError::TayError> || std::same_as<T, KernelError::CapError> ||
-        std::same_as<T, KernelError::PagingError> ||
-        std::same_as<T, KernelError::MemorySegmentError> ||
-        std::same_as<T, KernelError::AddressSpaceError> ||
-        std::same_as<T, KernelError::KernelLayoutError> ||
+        std::same_as<T, KernelError::TayError> || std::same_as<T, KernelError::CError> ||
+        std::same_as<T, KernelError::PagingError> || std::same_as<T, KernelError::MemSegError> ||
+        std::same_as<T, KernelError::AddrSpaceError> ||
+        std::same_as<T, KernelError::KernelMapError> ||
         std::same_as<T, KernelError::ProcessError> || std::same_as<T, KernelError::ThreadError> ||
         std::same_as<T, KernelError::SchedulerError> || std::same_as<T, KernelError::TimerError> ||
         std::same_as<T, KernelError::WorkQueueError> ||
@@ -509,14 +506,14 @@ namespace kernel {
                 return tay::error_code::OUT_OF_RANGE;
         }
         if (error.type() == Type::ADDRESS_SPACE_ERROR) {
-            const auto reason = *error.reason<KernelError::AddressSpaceError>();
-            if (reason == KernelError::AddressSpaceError::BACKING_ALLOCATION_FAILED ||
-                reason == KernelError::AddressSpaceError::OUT_OF_MEMORY)
+            const auto reason = *error.reason<KernelError::AddrSpaceError>();
+            if (reason == KernelError::AddrSpaceError::BACKING_ALLOCATION_FAILED ||
+                reason == KernelError::AddrSpaceError::OUT_OF_MEMORY)
                 return tay::error_code::OUT_OF_MEMORY;
-            if (reason == KernelError::AddressSpaceError::SEGMENT_OFFSET_OUT_OF_RANGE ||
-                reason == KernelError::AddressSpaceError::MAPPING_EXCEEDS_SEGMENT ||
-                reason == KernelError::AddressSpaceError::VMA_NOT_OWNED ||
-                reason == KernelError::AddressSpaceError::UNMAPPED_ADDRESS)
+            if (reason == KernelError::AddrSpaceError::SEG_OFFSET_OUT_OF_RANGE ||
+                reason == KernelError::AddrSpaceError::MAPPING_EXCEEDS_SEGMENT ||
+                reason == KernelError::AddrSpaceError::VMA_NOT_OWNED ||
+                reason == KernelError::AddrSpaceError::UNMAPPED_ADDRESS)
                 return tay::error_code::OUT_OF_RANGE;
         }
         return tay::error_code::INVALID_ARGUMENT;

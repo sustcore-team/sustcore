@@ -13,13 +13,21 @@
 #include <test/framework.h>
 
 namespace kernel::test::cases {
-    void run_error_model(Context &context) noexcept;
-    void run_interrupt_registry(Context &context) noexcept;
-    void run_capability(Context &context) noexcept;
-    void run_scheduler_park(Context &context) noexcept;
-    void run_rr_preemption(Context &context) noexcept;
-    void run_work_queue(Context &context) noexcept;
-    void run_precision_timer(Context &context) noexcept;
-    void run_periodic_timer_probe(Context &context) noexcept;
-    void run_fifo_handoff(Context &context) noexcept;
+    void run_error_model(Context &ctx) noexcept;
+    void run_irq_registry(Context &ctx) noexcept;
+    void run_preempt_guard(Context &ctx) noexcept;
+    void run_cpu_topology(Context &ctx) noexcept;
+    void run_ipi_mailbox(Context &ctx) noexcept;
+    void run_tlb_shootdown(Context &ctx) noexcept;
+    void run_capability(Context &ctx) noexcept;
+    void run_scheduler_park(Context &ctx) noexcept;
+    void run_rr_preemption(Context &ctx) noexcept;
+    void run_work_queue(Context &ctx) noexcept;
+    void run_precise_timer(Context &ctx) noexcept;
+    void run_timer_probe(Context &ctx) noexcept;
+    void run_remote_wake(Context &ctx) noexcept;
+    void run_smp_threads(Context &ctx) noexcept;
+    void run_smp_irq_queue(Context &ctx) noexcept;
+    void run_alloc_stress(Context &ctx) noexcept;
+    void run_fifo_handoff(Context &ctx) noexcept;
 }  // namespace kernel::test::cases

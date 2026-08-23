@@ -5,16 +5,18 @@
 
 #include <arch/interrupt.h>
 #include <arch/paging_traits.h>
+#include <arch/smp.h>
 #include <device/interrupt.h>
 #include <log.h>
-#include <memory/virtual/client/client_space.h>
+#include <memory/virtual/user/vm.h>
 #include <obj/process.h>
 #include <scheduler/scheduler.h>
+#include <smp/ipi.h>
 #include <syscall.h>
 #include <trap/dispatcher.h>
 
 namespace kernel::trap {
-    namespace {
+    namespace detail::dispatcher {
         [[nodiscard]] const char *access_name(memory::FaultAccess access) noexcept {
             switch (access) {
                 case memory::FaultAccess::READ:    return "read";
@@ -40,73 +42,79 @@ namespace kernel::trap {
             if (!hal::is_user_syscall(info))
                 return false;
 
-            const auto number = hal::syscall_number(frame);
+            const auto number = hal::syscall_nr(frame);
             if (number == syscall::EC_WRITE_SYSCALL) {
-                auto result = syscall::ec_write(
-                    reinterpret_cast<const char *>(hal::syscall_argument(frame, 0)),
-                    static_cast<size_t>(hal::syscall_argument(frame, 1)));
-                hal::set_syscall_result(
+                auto result =
+                    syscall::ec_write(reinterpret_cast<const char *>(hal::syscall_arg(frame, 0)),
+                                      static_cast<size_t>(hal::syscall_arg(frame, 1)));
+                hal::set_syscall_ret(
                     frame, result ? static_cast<xlen_t>(*result) : static_cast<xlen_t>(-1));
                 hal::advance_syscall(frame);
                 return true;
             }
             if (number == syscall::YIELD_SYSCALL) {
-                hal::set_syscall_result(frame, 0);
+                hal::set_syscall_ret(frame, 0);
                 hal::advance_syscall(frame);
                 syscall::yield();
                 return true;
             }
-            kernel::log::panic("未知系统调用: number={}, pc={:#x}", number,
-                               hal::program_counter(frame));
+            kernel::log::panic("未知系统调用: number={}, pc={:#x}", number, hal::pc(frame));
         }
 
-        [[nodiscard]] bool dispatch_user_page_fault(hal::TrapFrame &frame,
-                                                    const hal::TrapInfo &info) noexcept {
+        [[nodiscard]] bool handle_user_fault(hal::TrapFrame &frame,
+                                               const hal::TrapInfo &info) noexcept {
             if (!info.user || !hal::is_page_fault(info))
                 return false;
-            auto *current = scheduler::instance().current();
+            auto *current = scheduler::current();
             if (current == nullptr || current->process().kernel() ||
-                current->process().address_space() == nullptr)
+                current->process().addr_space() == nullptr)
                 return false;
             auto address = VirAddr::try_from(info.bad_address);
             if (!address)
                 return false;
-            auto handled =
-                current->process().address_space()->handle_page_fault(*address, info.access);
+            auto handled = current->process().addr_space()->handle_fault(*address, info.access);
             if (handled)
                 return true;
             kernel::log::panic(
                 "用户缺页处理失败: name={}, access={}, pc={:#x}, bad={:#x}, code={}, "
                 "subcode={}, error={}",
-                hal::trap_name(info), access_name(info.access), hal::program_counter(frame),
-                info.bad_address, info.code, hal::trap_subcode(info), handled.error());
+                hal::trap_name(info), access_name(info.access), hal::pc(frame), info.bad_address,
+                info.code, hal::trap_subcode(info), handled.error());
         }
 
-        [[nodiscard]] bool repair_kernel_mapping(const hal::TrapInfo &info) noexcept {
-            if (info.user || !hal::is_page_fault(info) ||
-                !hal::PageTableOps::canonical(info.bad_address))
+        [[nodiscard]] bool fix_kernel_map(const hal::TrapInfo &info) noexcept {
+            if (info.user || !hal::is_page_fault(info) || !hal::PtOps::canonical(info.bad_address))
                 return false;
-            if constexpr (!hal::PageTableOps::SHARES_HIGH_ROOT)
+            if constexpr (!hal::PtOps::SHARES_HIGH_ROOT)
                 return false;
             auto address = HvaAddr::try_from(info.bad_address);
-            auto *client = memory::active_client_space();
+            auto *client = memory::active_user_vm();
             if (!address || client == nullptr || client->binding().role != memory::RootRole::CLIENT)
                 return false;
-            auto repaired = client->repair_missing_borrowed_kernel_slot(*address);
+            auto repaired = client->fix_borrowed_slot(*address);
             if (!repaired)
                 kernel::log::panic("高半区根项所有权损坏: {}", repaired.error());
-            if (*repaired == memory::BorrowedSlotRepair::REPAIRED)
+            if (*repaired == memory::BorrowedSlotFix::REPAIRED)
                 return true;
-            if (*repaired == memory::BorrowedSlotRepair::GLOBAL_SLOT_ABSENT)
+            if (*repaired == memory::BorrowedSlotFix::GLOBAL_SLOT_ABSENT)
                 kernel::log::panic("内核高半区地址没有全局映射: {:#x}", info.bad_address);
             return false;
         }
-    }  // namespace
+    }  // namespace detail::dispatcher
 
     void dispatch(hal::TrapFrame &frame) noexcept {
         const auto info = hal::decode_trap(frame);
-        bool handled    = dispatch_syscall(frame, info) || dispatch_user_page_fault(frame, info) ||
-                       repair_kernel_mapping(info);
+        bool handled    = detail::dispatcher::dispatch_syscall(frame, info) ||
+                       detail::dispatcher::handle_user_fault(frame, info) ||
+                       detail::dispatcher::fix_kernel_map(info);
+        if (!handled && info.kind == hal::TrapKind::SOFTWARE) {
+            {
+                cpu::irq_context_guard interrupt_context;
+                hal::ack_ipi();
+                smp::dispatch_ipi();
+            }
+            handled = true;
+        }
         if (!handled && info.kind != hal::TrapKind::SYNCHRONOUS)
             handled =
                 device::interrupt::dispatch(info) == device::interrupt::DispatchResult::HANDLED;
@@ -115,12 +123,12 @@ namespace kernel::trap {
             kernel::log::panic(
                 "未处理的 trap: name={}, kind={}, mode={}, code={}, subcode={}, raw={:#x}, "
                 "access={}, pc={:#x}, bad={:#x}",
-                hal::trap_name(info), kind_name(info.kind), info.user ? "user" : "kernel",
-                info.code, hal::trap_subcode(info), info.raw_cause, access_name(info.access),
-                hal::program_counter(frame), info.bad_address);
+                hal::trap_name(info), detail::dispatcher::kind_name(info.kind),
+                info.user ? "user" : "kernel", info.code, hal::trap_subcode(info), info.raw_cause,
+                detail::dispatcher::access_name(info.access), hal::pc(frame), info.bad_address);
 
         // 所有可恢复 trap 都在状态确认完成后经过同一调度安全点；IRQ 与唤醒路径只发布
-        // RunQueueFlags::NEED_RESCHED，是否重新选择和切换完全由 SchedulerCore 决定。
-        scheduler::instance().schedule();
+        // RunQueueFlags::NEED_RESCHED，是否重新选择和切换完全由 SchedCore 决定。
+        scheduler::local().schedule();
     }
 }  // namespace kernel::trap

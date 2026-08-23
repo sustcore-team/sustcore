@@ -13,7 +13,7 @@
 #include <arch/paging.h>
 
 namespace riscv64::hal {
-    struct PageTableOps final {
+    struct PtOps final {
         using EntryType                               = u64_t;
         static constexpr size_t ENTRIES_PER_TABLE     = PAGE_SIZE / sizeof(EntryType);
         static constexpr size_t TOP_LEVEL             = 2;
@@ -42,5 +42,6 @@ namespace riscv64::hal {
         [[nodiscard]] static bool canonical(addr_t address) noexcept;
         static void activate_binding(const memory::RootBinding &binding) noexcept;
         static void flush_tlb() noexcept;
+        [[nodiscard]] static u64_t debug_flushes() noexcept;
     };
 }  // namespace riscv64::hal

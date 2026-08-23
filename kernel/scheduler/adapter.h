@@ -1,6 +1,6 @@
 /**
  * @file adapter.h
- * @brief 在 SchedulerCore 边界恢复 SchedEntity 所属 Thread。
+ * @brief 在 SchedCore 边界恢复 SchedEntity 所属 Thread。
  */
 
 #pragma once
@@ -9,7 +9,7 @@
 #include <scheduler/entity.h>
 
 namespace scheduler {
-    struct ThreadSchedAdapter final {
+    struct ThreadSchedOps final {
         using Owner = task::Thread;
 
         static void initialize(Owner &thread, ClassType class_type = ClassType::RR) noexcept {

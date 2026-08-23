@@ -11,6 +11,7 @@
 #include <cap/capability.h>
 #include <memory/slab/heap.h>
 #include <tay/counter.h>
+#include <tay/guard.h>
 #include <tay/utility.h>
 
 #include <cstddef>
@@ -21,39 +22,38 @@ namespace cap {
         constinit tay::counter<u64_t> node_ids{1};
     }  // namespace
 
-    tay::expected<CNode *, CapError> CNode::create_pages(size_t page_count,
-                                                         CNodeKind kind) noexcept {
-        if (!is_supported_cnode_page_count(page_count))
-            return tay::Err(CapError::OperationRejected(CapError::Operation::INVALID_CNODE_SIZE));
+    tay::expected<CNode *, CError> CNode::create_pages(size_t page_count, CNodeKind kind) noexcept {
+        if (!valid_cnode_pages(page_count))
+            return tay::Err(CError::OperationRejected(CError::Operation::INVALID_CNODE_SIZE));
 
-        const auto capacity = static_cast<u16_t>(cnode_capacity_for_pages(page_count));
+        const auto capacity = static_cast<u16_t>(cnode_capacity(page_count));
         const auto bytes    = (static_cast<size_t>(capacity) + 1) * CNODE_CELL_SIZE;
         auto storage        = memory::alloc(bytes, CNODE_PAGE_SIZE);
         if (!storage)
-            return tay::Err(CapError::OutOfMemory());
+            return tay::Err(CError::OutOfMemory());
+        tay::guard storage_guard([pointer = *storage]() noexcept { memory::dealloc(pointer); });
 
         auto *cells = static_cast<CNodeCell *>(*storage);
         auto *node  = new (std::nothrow)
             CNode(cells, capacity, static_cast<u8_t>(page_count), kind, node_ids.next());
-        if (node == nullptr) {
-            memory::dealloc(*storage);
-            return tay::Err(CapError::OutOfMemory());
-        }
+        if (node == nullptr)
+            return tay::Err(CError::OutOfMemory());
+        storage_guard.release();
         return node;
     }
 
-    tay::expected<CNode *, CapError> CNode::create_small() noexcept {
+    tay::expected<CNode *, CError> CNode::create_small() noexcept {
         auto storage = memory::alloc(SMALL_CNODE_SIZE, CNODE_CELL_ALIGNMENT);
         if (!storage)
-            return tay::Err(CapError::OutOfMemory());
+            return tay::Err(CError::OutOfMemory());
+        tay::guard storage_guard([pointer = *storage]() noexcept { memory::dealloc(pointer); });
 
         auto *cells = static_cast<CNodeCell *>(*storage);
         auto *node  = new (std::nothrow) CNode(cells, static_cast<u16_t>(SMALL_CNODE_CAPACITY), 0,
                                                CNodeKind::SMALL, node_ids.next());
-        if (node == nullptr) {
-            memory::dealloc(*storage);
-            return tay::Err(CapError::OutOfMemory());
-        }
+        if (node == nullptr)
+            return tay::Err(CError::OutOfMemory());
+        storage_guard.release();
         return node;
     }
 
@@ -70,7 +70,7 @@ namespace cap {
     CNode::~CNode() noexcept {
         state_.store(CNodeState::DESTROYING, std::memory_order_release);
         for (u16_t slot = 1; slot <= metadata().capacity; ++slot) {
-            destroy_cell_locked(slot);
+            drop_cell_locked(slot);
         }
         cells_[0].metadata.~CNodeMetadata();
         cells_[0].~CNodeCell();
@@ -101,12 +101,12 @@ namespace cap {
         return static_cast<u16_t>((address - base) / CNODE_CELL_SIZE);
     }
 
-    tay::expected<u16_t, CapError> CNode::reserve_slot_locked(u16_t requested_slot,
-                                                              u8_t cnode_index) noexcept {
+    tay::expected<u16_t, CError> CNode::reserve_locked(u16_t requested_slot,
+                                                            u8_t cnode_index) noexcept {
         u16_t selected = 0;
         if (requested_slot != 0) {
             if (requested_slot > metadata().capacity || occupied(requested_slot))
-                return tay::Err(CapError::InvalidSlot({}, requested_slot));
+                return tay::Err(CError::InvalidSlot({}, requested_slot));
             u16_t previous = 0;
             for (u16_t current = metadata().free_head; current != 0;
                  current       = cells_[current].free_slot.next_free())
@@ -124,35 +124,35 @@ namespace cap {
                 break;
             }
             if (selected == 0)
-                return tay::Err(CapError::InvalidSlot({}, requested_slot));
+                return tay::Err(CError::InvalidSlot({}, requested_slot));
         } else {
             selected = metadata().free_head;
             if (selected == 0)
-                return tay::Err(CapError::NoSlots(cnode_index));
+                return tay::Err(CError::NoSlots(cnode_index));
             metadata().free_head = cells_[selected].free_slot.next_free();
         }
         ++metadata().used_count;
         return selected;
     }
 
-    void CNode::publish_locked(u16_t slot, KernelObject &object, u64_t rights, u64_t badge,
+    void CNode::publish_locked(u16_t slot, KObject &object, u64_t rights, u64_t badge,
                                u32_t generation, Capability *parent) noexcept {
         cells_[slot].free_slot.~FreeSlot();
         new (&cells_[slot].capability) Capability(object, rights, badge, generation);
         auto &capability = cells_[slot].capability;
         if (parent == nullptr)
             return;
-        CapabilityDerivTree tree;
+        CTree tree;
         tree.link_front(*parent, capability);
     }
 
-    ObjectRef<KernelObject> CNode::erase_locked(u16_t slot, bool reparent_children) noexcept {
+    KObjectRef<KObject> CNode::erase_locked(u16_t slot, bool reparent_children) noexcept {
         if (!occupied(slot))
             return {};
         auto &capability = cells_[slot].capability;
         auto object      = std::move(capability.object);
         auto *parent     = capability.deriv.parent;
-        CapabilityDerivTree tree;
+        CTree tree;
 
         if (reparent_children && capability.deriv.first_child != nullptr) {
             while (capability.deriv.first_child != nullptr) {
@@ -173,7 +173,7 @@ namespace cap {
         return object;
     }
 
-    CNode::Cell CNode::cell(u16_t slot) noexcept {
+    CNode::CellRef CNode::cell(u16_t slot) noexcept {
         if (slot > metadata().capacity)
             return {};
         switch (cell_flags(cells_[slot])) {
@@ -183,7 +183,7 @@ namespace cap {
         }
     }
 
-    CNode::CCell CNode::cell(u16_t slot) const noexcept {
+    CNode::ConstCellRef CNode::cell(u16_t slot) const noexcept {
         if (slot > metadata().capacity)
             return {};
         switch (cell_flags(cells_[slot])) {
@@ -195,7 +195,7 @@ namespace cap {
         }
     }
 
-    void CNode::destroy_cell_locked(u16_t slot) noexcept {
+    void CNode::drop_cell_locked(u16_t slot) noexcept {
         if (slot == 0 || slot > metadata().capacity)
             return;
         auto current = cell(slot);

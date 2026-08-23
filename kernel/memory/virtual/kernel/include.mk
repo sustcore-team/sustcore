@@ -1,2 +1,2 @@
-src-y += kernel_space.cpp
-src-y += kernel_mm.cpp
+src-y += vm.cpp
+src-y += mm.cpp

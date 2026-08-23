@@ -57,7 +57,7 @@ namespace memory {
             AllocationKind kind = AllocationKind::SLAB;
             u32_t reserved      = 0;
             SlubCore *owner     = nullptr;
-            PageAllocation extent{};
+            PageAlloc extent{};
             size_t slot_sz  = 0;
             size_t capacity = 0;
         };
@@ -131,12 +131,12 @@ namespace memory {
                 [[nodiscard]] void *allocate_from(SlubChunk &chunk) noexcept;
                 void deallocate_to(SlubChunk &chunk, void *ptr) noexcept;
 
-                [[nodiscard]] PageAllocation detach_excess_empty(SlubChunk &chunk) noexcept;
-                [[nodiscard]] PageAllocation detach_empty() noexcept;
+                [[nodiscard]] PageAlloc detach_spare(SlubChunk &chunk) noexcept;
+                [[nodiscard]] PageAlloc detach_empty() noexcept;
                 void drain_remote_frees() noexcept;
 
-                void account_large_allocation(size_t pages) noexcept;
-                void account_large_release(size_t pages) noexcept;
+                void note_large_alloc(size_t pages) noexcept;
+                void note_large_free(size_t pages) noexcept;
                 [[nodiscard]] SlubStats stats(bool large_path) const noexcept;
 
             private:
@@ -152,7 +152,7 @@ namespace memory {
                 void move_to_full(SlubChunk &chunk) noexcept;
                 void move_to_empty(SlubChunk &chunk) noexcept;
                 void drain_remote(SlubChunk &chunk) noexcept;
-                [[nodiscard]] PageAllocation detach_chunk(SlubChunk &chunk) noexcept;
+                [[nodiscard]] PageAlloc detach_chunk(SlubChunk &chunk) noexcept;
             };
 
             size_t slot_sz_;

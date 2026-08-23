@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <init/usrboot_error.h>
+#include <error/usrboot.h>
 #include <tay/err.h>
 #include <tay/expected.h>
 

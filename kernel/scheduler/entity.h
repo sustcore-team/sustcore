@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cpu/local.h>
 #include <tay/bits.h>
 #include <tay/list.h>
 #include <tay/units.h>
@@ -17,13 +18,8 @@
 
 namespace scheduler {
     class RunQueue;
-    struct ThreadSchedAdapter;
-
-    struct CpuId final {
-        u32_t value = 0;
-
-        [[nodiscard]] friend constexpr bool operator==(CpuId left, CpuId right) noexcept = default;
-    };
+    struct ThreadSchedOps;
+    using cpu::CpuId;
 
     inline constexpr auto RR_TIME_SLICE = 10_ms;
 
@@ -50,7 +46,7 @@ namespace scheduler {
 
         void *pointer_ = nullptr;
 
-        friend struct ThreadSchedAdapter;
+        friend struct ThreadSchedOps;
     };
 
     struct SchedEntity;
@@ -66,7 +62,7 @@ namespace scheduler {
     private:
         OwnerToken owner_{};
 
-        friend struct ThreadSchedAdapter;
+        friend struct ThreadSchedOps;
     };
 
     struct SchedStatistics final {
@@ -99,13 +95,13 @@ namespace scheduler {
 
     using PolicyStorage = tay::variant<IdleEntity, FairEntity, RrEntity, RtEntity>;
 
-    struct SchedulerStorage final {
+    struct SchedStorage final {
         SchedEntity entity{};
         SchedStatistics statistics{};
         PolicyStorage policy{RrEntity{}};
     };
 
-    inline void initialize_policy(SchedulerStorage &storage, ClassType class_type) noexcept {
+    inline void initialize_policy(SchedStorage &storage, ClassType class_type) noexcept {
         storage.entity.class_type = class_type;
         switch (class_type) {
             case ClassType::IDLE: storage.policy = PolicyStorage{IdleEntity{}}; break;

@@ -80,39 +80,48 @@ namespace loongarch64::hal {
 
     }  // namespace
 
-    interrupt_guard::interrupt_guard() noexcept
+    irq_guard::irq_guard() noexcept
         // 保存旧中断位并原子清除，使嵌套 guard 只由最外层恢复中断状态。
         : previous_(csr::clear_bits<csr::CSR::CRMD>(CRMD_IE)) {}
 
-    interrupt_guard::~interrupt_guard() noexcept {
+    irq_guard::~irq_guard() noexcept {
         if ((previous_ & CRMD_IE) != 0) {
             (void)csr::set_bits<csr::CSR::CRMD>(CRMD_IE);
         }
+        preempt_checkpoint();
     }
 
-    void disable_interrupts() noexcept {
+    void cli() noexcept {
         (void)csr::clear_bits<csr::CSR::CRMD>(CRMD_IE);
     }
 
-    void install_exception_vectors() noexcept {
+    void set_exc_vectors() noexcept {
         csr::write<csr::CSR::EENTRY>(reinterpret_cast<addr_t>(&_loongarch_early_trap_entry));
         csr::write<csr::CSR::TLBRENTRY>(reinterpret_cast<addr_t>(&_loongarch_kernel_tlb_refill) -
                                         KVA_START);
     }
 
-    void enable_interrupts() noexcept {
+    void sti() noexcept {
         (void)csr::set_bits<csr::CSR::CRMD>(CRMD_IE);
     }
 
-    bool interrupts_enabled() noexcept {
+    bool irq_enabled() noexcept {
         return (csr::read<csr::CSR::CRMD>() & CRMD_IE) != 0;
     }
 
-    void install_early_exception_vectors() noexcept {
-        install_exception_vectors();
+    void bind_cpu_local() noexcept {
+        const auto pointer = reinterpret_cast<xlen_t>(&cpu::local());
+        csr::write<csr::CSR::SAVE1>(pointer);
+        asm volatile("move $r2, %0" : : "r"(pointer) : "memory");
     }
 
-    void install_runtime_exception_vectors() noexcept {
+    void set_early_vectors() noexcept {
+        bind_cpu_local();
+        set_exc_vectors();
+    }
+
+    void set_trap_vectors() noexcept {
+        bind_cpu_local();
         csr::write<csr::CSR::EENTRY>(reinterpret_cast<addr_t>(&_loongarch_runtime_trap_entry));
     }
 
@@ -154,11 +163,11 @@ namespace loongarch64::hal {
         return (frame.prmd & PRMD_PPLV_MASK) == PLV_USER;
     }
 
-    addr_t program_counter(const TrapFrame &frame) noexcept {
+    addr_t pc(const TrapFrame &frame) noexcept {
         return static_cast<addr_t>(frame.era);
     }
 
-    void set_program_counter(TrapFrame &frame, addr_t value) noexcept {
+    void set_pc(TrapFrame &frame, addr_t value) noexcept {
         frame.era = static_cast<xlen_t>(value);
     }
 
@@ -171,11 +180,11 @@ namespace loongarch64::hal {
                (info.code == ECODE_PIL || info.code == ECODE_PIS || info.code == ECODE_PIF);
     }
 
-    xlen_t syscall_number(const TrapFrame &frame) noexcept {
+    xlen_t syscall_nr(const TrapFrame &frame) noexcept {
         return frame.a7;
     }
 
-    xlen_t syscall_argument(const TrapFrame &frame, size_t index) noexcept {
+    xlen_t syscall_arg(const TrapFrame &frame, size_t index) noexcept {
         switch (index) {
             case 0:  return frame.a0;
             case 1:  return frame.a1;
@@ -183,12 +192,12 @@ namespace loongarch64::hal {
         }
     }
 
-    void set_syscall_result(TrapFrame &frame, xlen_t value) noexcept {
+    void set_syscall_ret(TrapFrame &frame, xlen_t value) noexcept {
         frame.a0 = value;
     }
 
     void advance_syscall(TrapFrame &frame) noexcept {
-        set_program_counter(frame, program_counter(frame) + 4);
+        set_pc(frame, pc(frame) + 4);
     }
 
     const char *trap_name(const TrapInfo &info) noexcept {
@@ -200,8 +209,8 @@ namespace loongarch64::hal {
         return exception_subcode(info.raw_cause);
     }
 
-    void initialize_user_frame(TrapFrame &frame, addr_t entry, addr_t stack_pointer,
-                               addr_t argument) noexcept {
+    void init_user_frame(TrapFrame &frame, addr_t entry, addr_t stack_pointer,
+                         addr_t argument) noexcept {
         frame      = TrapFrame{};
         frame.era  = entry;
         frame.sp   = stack_pointer;
@@ -209,7 +218,7 @@ namespace loongarch64::hal {
         frame.prmd = PRMD_USER;
     }
 
-    void wait_for_interrupt() noexcept {
+    void wfi() noexcept {
         asm volatile("idle 0" ::: "memory");
     }
 

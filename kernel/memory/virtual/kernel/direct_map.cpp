@@ -8,20 +8,20 @@
  * @copyright Copyright (c) 2026
  */
 
-#include <memory/physical/page_database.h>
-#include <memory/virtual/kernel/kernel_space_internal.h>
+#include <memory/physical/page_db.h>
+#include <memory/virtual/kernel/vm_priv.h>
 #include <sustcore/addrspace.h>
 #include <tay/static_vector.h>
 
 namespace memory::detail {
     tay::expected<void, tay::error_code> map_direct_regions(
-        KernelSpace &space, const BootInfoHeader &bootinfo) noexcept {
+        KernelVm &space, const BootInfoHeader &bootinfo) noexcept {
         using exclusion_list = tay::static_vector<PhyArea, MAX_BOOTINFO_REGIONS>;
         const auto *regions  = bootinfo_regions(&bootinfo);
         const PhyArea kernel_image(kernel_start_paddr(), kernel_end_paddr());
 
-        for (size_t parent_idx = 0; parent_idx < page_database().region_count(); ++parent_idx) {
-            const auto &parent = page_database().region(parent_idx).parent;
+        for (size_t parent_idx = 0; parent_idx < page_db().region_count(); ++parent_idx) {
+            const auto &parent = page_db().region(parent_idx).parent;
             exclusion_list exclusions;
             const auto kernel_overlap = intersection(parent, kernel_image);
             if (!kernel_overlap.nullable() && !exclusions.push_back(kernel_overlap))

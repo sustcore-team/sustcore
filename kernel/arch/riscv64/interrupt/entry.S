@@ -10,6 +10,7 @@
  */
 
 #include <arch/riscv64/interrupt/offsets.h>
+#include <cpu/offsets.h>
 
     .section .text.trap.early, "ax", @progbits
     .align 4
@@ -24,28 +25,32 @@ _riscv_early_trap_entry:
     .align 4
     .global _riscv_runtime_trap_entry
 _riscv_runtime_trap_entry:
-    # 用户 trap 通过 sscratch 切换到 Thread 内核栈；内核 trap 保持当前栈。
-    csrrw sp, sscratch, sp
-    bnez sp, .Lriscv_user_trap
-    csrrw sp, sscratch, sp
-    j .Lriscv_stack_ready
-.Lriscv_user_trap:
-    addi sp, sp, -RV_TF_SIZE
-    sd ra, RV_TF_RA(sp)
-    sd t0, RV_TF_T0(sp)
-    csrr t0, sscratch
-    sd t0, RV_TF_SP(sp)
-    csrw sscratch, zero
-    j .Lriscv_save_rest
+    # sscratch 永久指向 CpuLocal。先用 CpuLocal 的临时槽保存会被入口覆盖的寄存器，
+    # 再依据前态选择用户栈对应的 kstack_top；内核 trap 保持当前栈。
+    csrrw t0, sscratch, t0
+    csrrw tp, sscratch, tp
+    sd    tp, CPU_LOCAL_TRAP_SAVED_T0(t0)
+    csrrw t1, sscratch, t1
+    sd    t1, CPU_LOCAL_TRAP_SAVED_TP(t0)
+    csrr  t1, sscratch
+    sd    t1, CPU_LOCAL_TRAP_SAVED_T1(t0)
+    sd    sp, CPU_LOCAL_TRAP_SAVED_SP(t0)
+    csrr  t1, sstatus
+    andi  t1, t1, 0x100
+    mv    tp, t0
+    bnez  t1, .Lriscv_stack_ready
+    ld    sp, CPU_LOCAL_CURRENT_KERNEL_STACK_TOP(t0)
 .Lriscv_stack_ready:
     addi sp, sp, -RV_TF_SIZE
     sd ra, RV_TF_RA(sp)
-    sd t0, RV_TF_T0(sp)
-    addi t0, sp, RV_TF_SIZE
-    sd t0, RV_TF_SP(sp)
-.Lriscv_save_rest:
+    ld t1, CPU_LOCAL_TRAP_SAVED_T0(tp)
+    sd t1, RV_TF_T0(sp)
+    ld t1, CPU_LOCAL_TRAP_SAVED_SP(tp)
+    sd t1, RV_TF_SP(sp)
     sd gp, RV_TF_GP(sp)
-    sd tp, RV_TF_TP(sp)
+    ld t1, CPU_LOCAL_TRAP_SAVED_TP(tp)
+    sd t1, RV_TF_TP(sp)
+    ld t1, CPU_LOCAL_TRAP_SAVED_T1(tp)
     sd t1, RV_TF_T1(sp)
     sd t2, RV_TF_T2(sp)
     sd s0, RV_TF_S0(sp)
@@ -80,6 +85,7 @@ _riscv_runtime_trap_entry:
     sd t0, RV_TF_STVAL(sp)
     csrr t0, scause
     sd t0, RV_TF_SCAUSE(sp)
+    csrw sscratch, tp
     mv a0, sp
     call arch_runtime_trap_handler
     # C++ 可修改返回 PC 和状态，因此先回写 CSR，再恢复通用寄存器。
@@ -87,12 +93,7 @@ _riscv_runtime_trap_entry:
     csrw sepc, t0
     ld t0, RV_TF_SSTATUS(sp)
     csrw sstatus, t0
-    # 返回用户态时重新发布该 Thread 的内核栈顶；内核返回保持 sscratch 为零。
-    andi t0, t0, 0x100
-    bnez t0, .Lriscv_scratch_ready
-    addi t0, sp, RV_TF_SIZE
-    csrw sscratch, t0
-.Lriscv_scratch_ready:
+    # sscratch 始终保持 CpuLocal；用户 TLS 只从 TrapFrame 恢复到 tp。
     ld ra, RV_TF_RA(sp)
     ld gp, RV_TF_GP(sp)
     ld tp, RV_TF_TP(sp)

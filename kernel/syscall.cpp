@@ -64,9 +64,9 @@ namespace kernel::syscall {
             return size_t{0};
         if (data == nullptr)
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
-        auto *thread = scheduler::instance().current();
+        auto *thread = scheduler::current();
         if (thread == nullptr || thread->process().kernel() ||
-            thread->process().address_space() == nullptr)
+            thread->process().addr_space() == nullptr)
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
         const addr_t start = reinterpret_cast<addr_t>(data);
@@ -76,10 +76,10 @@ namespace kernel::syscall {
         if (start >= KPA_START || end > KPA_START)
             return tay::Err(tay::error_code::OUT_OF_RANGE);
 
-        auto *space = thread->process().address_space();
+        auto *space = thread->process().addr_space();
         for (addr_t page = page_align_down(start); page < end; page += PAGE_SIZE) {
             const VirAddr address = TAY_TRY(VirAddr::try_from(page));
-            auto mapped           = space->handle_page_fault(address, memory::FaultAccess::READ);
+            auto mapped           = space->handle_fault(address, memory::FaultAccess::READ);
             if (!mapped)
                 return tay::Err(kernel::to_tay_error(mapped.error().code()));
             if (page > UINT64_MAX - PAGE_SIZE)

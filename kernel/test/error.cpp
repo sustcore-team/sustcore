@@ -8,25 +8,25 @@
  * @copyright Copyright (c) 2026
  */
 
-#include <async/work_queue_error.h>
-#include <cap/error.h>
-#include <device/catalog_error.h>
-#include <device/fdt_error.h>
 #include <device/mmio_error.h>
 #include <error.h>
-#include <init/usrboot_error.h>
-#include <memory/memory_segment_error.h>
-#include <memory/virtual/kernel/kernel_layout_error.h>
-#include <memory/virtual/paging_error.h>
-#include <scheduler/error.h>
-#include <task/address_space_error.h>
+#include <error/addr_space.h>
+#include <error/cap.h>
+#include <error/catalog.h>
+#include <error/fdt.h>
+#include <error/kernel_map.h>
+#include <error/mem_seg.h>
+#include <error/paging.h>
+#include <error/sched.h>
+#include <error/timer.h>
+#include <error/usrboot.h>
+#include <error/work_queue.h>
 #include <task/process_error.h>
 #include <task/thread_error.h>
 #include <test/cases.h>
-#include <timer/error.h>
 
 #if defined(__ARCH_RISCV64__)
-#include <arch/riscv64/device/plic_error.h>
+#include <error/plic.h>
 #endif
 
 #include <type_traits>
@@ -52,12 +52,12 @@ namespace kernel::test::cases {
         static_assert(maps_to(tay::error_code::ALLOCATION_SIZE_OVERFLOW,
                               KernelError::TayError::ALLOCATION_SIZE_OVERFLOW));
         constexpr KernelError CAP_INVALID_TOKEN =
-            KernelError::CapError(KernelError::CapError::INVALID_TOKEN);
+            KernelError::CError(KernelError::CError::INVALID_TOKEN);
         static_assert(CAP_INVALID_TOKEN.type() == KernelError::Type::CAP_ERROR);
-        static_assert(*CAP_INVALID_TOKEN.reason<KernelError::CapError>() ==
-                      KernelError::CapError::INVALID_TOKEN);
+        static_assert(*CAP_INVALID_TOKEN.reason<KernelError::CError>() ==
+                      KernelError::CError::INVALID_TOKEN);
 
-        [[nodiscard]] constexpr KernelError::Type expected_type(const cap::CapError &) noexcept {
+        [[nodiscard]] constexpr KernelError::Type expected_type(const cap::CError &) noexcept {
             return KernelError::Type::CAP_ERROR;
         }
         [[nodiscard]] constexpr KernelError::Type expected_type(
@@ -65,15 +65,15 @@ namespace kernel::test::cases {
             return KernelError::Type::PAGING_ERROR;
         }
         [[nodiscard]] constexpr KernelError::Type expected_type(
-            const memory::MemorySegmentError &) noexcept {
+            const memory::MemSegError &) noexcept {
             return KernelError::Type::MEMORY_SEGMENT_ERROR;
         }
         [[nodiscard]] constexpr KernelError::Type expected_type(
-            const task::AddressSpaceError &) noexcept {
+            const task::AddrSpaceError &) noexcept {
             return KernelError::Type::ADDRESS_SPACE_ERROR;
         }
         [[nodiscard]] constexpr KernelError::Type expected_type(
-            const memory::KernelLayoutError &) noexcept {
+            const memory::KernelMapError &) noexcept {
             return KernelError::Type::KERNEL_LAYOUT_ERROR;
         }
         [[nodiscard]] constexpr KernelError::Type expected_type(
@@ -148,7 +148,7 @@ namespace kernel::test::cases {
             return formatted && equals(sink, expected);
         }
 
-        [[nodiscard]] bool kernel_formatter_matches(KernelError error) noexcept {
+        [[nodiscard]] bool kernel_fmt_matches(KernelError error) noexcept {
             FormatSink sink;
             const auto formatted = tay::format_to(sink, "{}", error);
             if (!formatted)
@@ -164,7 +164,7 @@ namespace kernel::test::cases {
             return index == sink.size;
         }
 
-        [[nodiscard]] bool reason_formatter_matches(KernelError error) noexcept {
+        [[nodiscard]] bool reason_fmt_matches(KernelError error) noexcept {
 #define MATCH_REASON(TypeName, ReasonName)                            \
     case KernelError::Type::TypeName: {                               \
         const auto reason = *error.reason<KernelError::ReasonName>(); \
@@ -172,18 +172,18 @@ namespace kernel::test::cases {
     }
             switch (error.type()) {
                 MATCH_REASON(TAY_ERROR, TayError)
-                MATCH_REASON(CAP_ERROR, CapError)
+                MATCH_REASON(CAP_ERROR, CError)
                 MATCH_REASON(PAGING_ERROR, PagingError)
                 case KernelError::Type::MEMORY_SEGMENT_ERROR: {
-                    const auto reason = *error.reason<KernelError::MemorySegmentError>();
+                    const auto reason = *error.reason<KernelError::MemSegError>();
                     return formatter_matches(reason, error.reason_name());
                 }
                 case KernelError::Type::ADDRESS_SPACE_ERROR: {
-                    const auto reason = *error.reason<KernelError::AddressSpaceError>();
+                    const auto reason = *error.reason<KernelError::AddrSpaceError>();
                     return formatter_matches(reason, error.reason_name());
                 }
                 case KernelError::Type::KERNEL_LAYOUT_ERROR: {
-                    const auto reason = *error.reason<KernelError::KernelLayoutError>();
+                    const auto reason = *error.reason<KernelError::KernelMapError>();
                     return formatter_matches(reason, error.reason_name());
                 }
                     MATCH_REASON(PROCESS_ERROR, ProcessError)
@@ -204,8 +204,7 @@ namespace kernel::test::cases {
             return false;
         }
 
-        [[nodiscard]] bool reason_matches_alternative(const char *reason,
-                                                      const char *alternative) noexcept {
+        [[nodiscard]] bool reason_matches(const char *reason, const char *alternative) noexcept {
             while (*reason != '\0' || *alternative != '\0') {
                 while (*reason == '_') ++reason;
                 if (*reason == '\0' || *alternative == '\0')
@@ -232,10 +231,10 @@ namespace kernel::test::cases {
             const auto code = error.code();
             kernel::test::require(code.type() == expected_type(error),
                                   "领域错误 KernelError type 映射错误");
-            kernel::test::require(reason_matches_alternative(code.reason_name(), alternative),
+            kernel::test::require(reason_matches(code.reason_name(), alternative),
                                   "领域错误 KernelError reason 映射错误");
-            kernel::test::require(kernel_formatter_matches(code), "KernelError formatter 输出错误");
-            kernel::test::require(reason_formatter_matches(code),
+            kernel::test::require(kernel_fmt_matches(code), "KernelError formatter 输出错误");
+            kernel::test::require(reason_fmt_matches(code),
                                   "KernelError reason formatter 输出错误");
             FormatSink domain_sink;
             FormatSink code_sink;
@@ -255,34 +254,32 @@ namespace kernel::test::cases {
 
         void verify_p0_errors() noexcept {
             const auto token = cap::encode_token(1, 2, 3, 4);
-            VERIFY_ERROR(cap::CapError, InvalidToken, cap::CapError::InvalidToken(token),
+            VERIFY_ERROR(cap::CError, InvalidToken, cap::CError::InvalidToken(token),
                          INVALID_ARGUMENT);
-            VERIFY_ERROR(cap::CapError, MissingCNode, cap::CapError::MissingCNode(token, 3),
-                         NOT_FOUND);
-            VERIFY_ERROR(cap::CapError, InvalidSlot, cap::CapError::InvalidSlot(token, 4),
+            VERIFY_ERROR(cap::CError, MissingCNode, cap::CError::MissingCNode(token, 3), NOT_FOUND);
+            VERIFY_ERROR(cap::CError, InvalidSlot, cap::CError::InvalidSlot(token, 4),
                          OUT_OF_RANGE);
-            const cap::CapError stale = cap::CapError::StaleToken(token, 9);
-            VERIFY_ERROR(cap::CapError, StaleToken, stale, STALE);
+            const cap::CError stale = cap::CError::StaleToken(token, 9);
+            VERIFY_ERROR(cap::CError, StaleToken, stale, STALE);
             bool stale_payload = false;
             stale.visit([&](const auto &value) noexcept {
                 using Value = std::remove_cvref_t<decltype(value)>;
-                if constexpr (std::is_same_v<Value, cap::CapError::StaleToken>)
+                if constexpr (std::is_same_v<Value, cap::CError::StaleToken>)
                     stale_payload = value.token == token && value.observed_generation == 9;
             });
             kernel::test::require(stale_payload, "StaleToken payload 丢失");
-            VERIFY_ERROR(cap::CapError, TypeMismatch,
-                         cap::CapError::TypeMismatch(token, cap::ObjectType::THREAD,
-                                                     cap::ObjectType::PROCESS),
-                         INVALID_ARGUMENT);
             VERIFY_ERROR(
-                cap::CapError, InsufficientRights,
-                cap::CapError::InsufficientRights(token, cap::RIGHT_WRITE, cap::RIGHT_READ),
-                ACCESS_DENIED);
-            VERIFY_ERROR(cap::CapError, NoSlots, cap::CapError::NoSlots(2), RESOURCE_EXHAUSTED);
-            VERIFY_ERROR(cap::CapError, Busy, cap::CapError::Busy(2), BUSY);
-            VERIFY_ERROR(cap::CapError, OutOfMemory, cap::CapError::OutOfMemory(), OUT_OF_MEMORY);
-            VERIFY_ERROR(cap::CapError, OperationRejected,
-                         cap::CapError::OperationRejected(cap::CapError::Operation::ROOT_DETACH),
+                cap::CError, TypeMismatch,
+                cap::CError::TypeMismatch(token, cap::ObjectType::THREAD, cap::ObjectType::PROCESS),
+                INVALID_ARGUMENT);
+            VERIFY_ERROR(cap::CError, InsufficientRights,
+                         cap::CError::InsufficientRights(token, cap::RIGHT_WRITE, cap::RIGHT_READ),
+                         ACCESS_DENIED);
+            VERIFY_ERROR(cap::CError, NoSlots, cap::CError::NoSlots(2), RESOURCE_EXHAUSTED);
+            VERIFY_ERROR(cap::CError, Busy, cap::CError::Busy(2), BUSY);
+            VERIFY_ERROR(cap::CError, OutOfMemory, cap::CError::OutOfMemory(), OUT_OF_MEMORY);
+            VERIFY_ERROR(cap::CError, OperationRejected,
+                         cap::CError::OperationRejected(cap::CError::Operation::ROOT_DETACH),
                          INVALID_STATE);
 
             using Paging = memory::PagingError;
@@ -312,17 +309,16 @@ namespace kernel::test::cases {
                 Paging::InvalidFlags(memory::PageFlags{.writable = true, .executable = true}),
                 INVALID_ARGUMENT);
             VERIFY_ERROR(Paging, MissingMapping, Paging::MissingMapping(0x4000), NOT_FOUND);
-            VERIFY_ERROR(Paging, MappingAlreadyPresent, Paging::MappingAlreadyPresent(0x4000),
-                         ALREADY_EXISTS);
+            VERIFY_ERROR(Paging, AlreadyMapped, Paging::AlreadyMapped(0x4000), ALREADY_EXISTS);
             VERIFY_ERROR(Paging, UnexpectedEntry, Paging::UnexpectedEntry(0x4000, 2), CONFLICT);
             VERIFY_ERROR(Paging, UnsupportedLeafLevel, Paging::UnsupportedLeafLevel(0x4000, 3),
                          UNSUPPORTED);
-            VERIFY_ERROR(Paging, PageTableAllocationFailed,
-                         Paging::PageTableAllocationFailed(2, KernelError::TayError::OUT_OF_MEMORY),
+            VERIFY_ERROR(Paging, PtAllocFailed,
+                         Paging::PtAllocFailed(2, KernelError::TayError::OUT_OF_MEMORY),
                          OUT_OF_MEMORY);
             VERIFY_ERROR(Paging, OutOfMemory, Paging::OutOfMemory(), OUT_OF_MEMORY);
 
-            using SegmentError = memory::MemorySegmentError;
+            using SegmentError = memory::MemSegError;
             VERIFY_ERROR(SegmentError, ZeroSize, SegmentError::ZeroSize(), INVALID_ARGUMENT);
             VERIFY_ERROR(SegmentError, SizeOverflow, SegmentError::SizeOverflow(size_t(-1)),
                          RESOURCE_EXHAUSTED);
@@ -332,18 +328,17 @@ namespace kernel::test::cases {
                          NOT_FOUND);
             VERIFY_ERROR(SegmentError, InvalidSourceBuffer, SegmentError::InvalidSourceBuffer(),
                          INVALID_ARGUMENT);
-            VERIFY_ERROR(
-                SegmentError, PhysicalAllocationFailed,
-                SegmentError::PhysicalAllocationFailed(7, KernelError::TayError::OUT_OF_MEMORY),
-                OUT_OF_MEMORY);
-            VERIFY_ERROR(SegmentError, PageIndexInsertFailed,
-                         SegmentError::PageIndexInsertFailed(7, KernelError::TayError::INTERNAL),
+            VERIFY_ERROR(SegmentError, PhysAllocFailed,
+                         SegmentError::PhysAllocFailed(7, KernelError::TayError::OUT_OF_MEMORY),
+                         OUT_OF_MEMORY);
+            VERIFY_ERROR(SegmentError, PageInsertFailed,
+                         SegmentError::PageInsertFailed(7, KernelError::TayError::INTERNAL),
                          CONFLICT);
             VERIFY_ERROR(SegmentError, OutOfMemory, SegmentError::OutOfMemory(), OUT_OF_MEMORY);
 
             const VirArea user_a{VirAddr(0x1000), VirAddr(0x3000)};
             const VirArea user_b{VirAddr(0x2000), VirAddr(0x4000)};
-            using AddressError = task::AddressSpaceError;
+            using AddressError = task::AddrSpaceError;
             VERIFY_ERROR(AddressError, InvalidSegment, AddressError::InvalidSegment(),
                          INVALID_ARGUMENT);
             VERIFY_ERROR(AddressError, InvalidArea, AddressError::InvalidArea(user_a),
@@ -352,8 +347,8 @@ namespace kernel::test::cases {
                 AddressError, InvalidFlags,
                 AddressError::InvalidFlags(memory::PageFlags{.writable = true, .executable = true}),
                 INVALID_ARGUMENT);
-            VERIFY_ERROR(AddressError, SegmentOffsetOutOfRange,
-                         AddressError::SegmentOffsetOutOfRange(9, 8), OUT_OF_RANGE);
+            VERIFY_ERROR(AddressError, SegOffsetOutOfRange, AddressError::SegOffsetOutOfRange(9, 8),
+                         OUT_OF_RANGE);
             VERIFY_ERROR(AddressError, MappingExceedsSegment,
                          AddressError::MappingExceedsSegment(4, 8, 10), OUT_OF_RANGE);
             VERIFY_ERROR(AddressError, AccessDenied,
@@ -384,8 +379,8 @@ namespace kernel::test::cases {
                 CONFLICT);
             VERIFY_ERROR(AddressError, OutOfMemory, AddressError::OutOfMemory(), OUT_OF_MEMORY);
 
-            using LayoutError = memory::KernelLayoutError;
-            const memory::KernelLayoutSpec kernel_layout{
+            using LayoutError = memory::KernelMapError;
+            const memory::KernelMapSpec kernel_layout{
                 .virtual_base  = KvaAddr(KVA_START),
                 .physical_base = PhyAddr(0x1000),
                 .bytes         = PAGE_SIZE,
@@ -405,8 +400,8 @@ namespace kernel::test::cases {
                                         KvaAddr(KVA_START + PAGE_SIZE * 2)};
             const PhyArea phy_a{PhyAddr(0x1000), PhyAddr(0x2000)};
             const PhyArea phy_b{PhyAddr(0x2000), PhyAddr(0x3000)};
-            VERIFY_ERROR(LayoutError, InitializationAlreadyAttempted,
-                         LayoutError::InitializationAlreadyAttempted(), INVALID_STATE);
+            VERIFY_ERROR(LayoutError, InitAlreadyAttempted, LayoutError::InitAlreadyAttempted(),
+                         INVALID_STATE);
             VERIFY_ERROR(LayoutError, DependencyNotReady,
                          LayoutError::DependencyNotReady(LayoutError::Dependency::HEAP),
                          INVALID_STATE);
@@ -441,7 +436,7 @@ namespace kernel::test::cases {
                          LayoutError::PagingFailed(Paging::MissingMapping(KVA_START)), NOT_FOUND);
         }
 
-        void verify_task_runtime_errors() noexcept {
+        void verify_task_errors() noexcept {
             using Process = task::ProcessError;
             VERIFY_ERROR(Process, OutOfMemory, Process::OutOfMemory(), OUT_OF_MEMORY);
             VERIFY_ERROR(Process, InvalidState, Process::InvalidState(task::ProcessState::DEAD),
@@ -499,8 +494,8 @@ namespace kernel::test::cases {
             VERIFY_ERROR(Scheduler, NoRunnableThread, Scheduler::NoRunnableThread(), NOT_FOUND);
             VERIFY_ERROR(Scheduler, IdleThreadOperation, Scheduler::IdleThreadOperation(),
                          ACCESS_DENIED);
-            VERIFY_ERROR(Scheduler, DeadlineSinkAlreadyInstalled,
-                         Scheduler::DeadlineSinkAlreadyInstalled(), ALREADY_EXISTS);
+            VERIFY_ERROR(Scheduler, PreemptSinkAlreadySet, Scheduler::PreemptSinkAlreadySet(),
+                         ALREADY_EXISTS);
             VERIFY_ERROR(Scheduler, InvalidDeadlineSink, Scheduler::InvalidDeadlineSink(),
                          INVALID_ARGUMENT);
 
@@ -508,15 +503,15 @@ namespace kernel::test::cases {
             VERIFY_ERROR(Timer, WorkQueueNotAccepting, Timer::WorkQueueNotAccepting(), BUSY);
             VERIFY_ERROR(Timer, EngineNotInitialized, Timer::EngineNotInitialized(), INVALID_STATE);
             VERIFY_ERROR(Timer, NodeNotIdle,
-                         Timer::NodeNotIdle(kernel::timer::PrecisionTimerState::QUEUED), BUSY);
+                         Timer::NodeNotIdle(kernel::timer::HRTState::QUEUED), BUSY);
             VERIFY_ERROR(Timer, NodeAlreadyLinked, Timer::NodeAlreadyLinked(), CONFLICT);
-            VERIFY_ERROR(Timer, CompletionNotReservable, Timer::CompletionNotReservable(), BUSY);
+            VERIFY_ERROR(Timer, CompletionBusy, Timer::CompletionBusy(), BUSY);
 
             using Queue = kernel::async::WorkQueueError;
             VERIFY_ERROR(Queue, AlreadyStarted, Queue::AlreadyStarted(), ALREADY_EXISTS);
             VERIFY_ERROR(Queue, PendingWork, Queue::PendingWork(), BUSY);
-            VERIFY_ERROR(Queue, WorkerCreationFailed,
-                         Queue::WorkerCreationFailed(KernelError::TayError::OUT_OF_MEMORY),
+            VERIFY_ERROR(Queue, WorkerCreateFailed,
+                         Queue::WorkerCreateFailed(KernelError::TayError::OUT_OF_MEMORY),
                          OUT_OF_MEMORY);
             VERIFY_ERROR(Queue, WorkerAttachFailed,
                          Queue::WorkerAttachFailed(KernelError::TayError::INTERNAL), INVALID_STATE);
@@ -525,16 +520,15 @@ namespace kernel::test::cases {
             VERIFY_ERROR(Queue, CalledByWorker, Queue::CalledByWorker(), BUSY);
         }
 
-        void verify_usrboot_errors() noexcept {
+        void verify_usrboot() noexcept {
             using Error = init::UsrbootError;
             VERIFY_ERROR(Error, ImageTooSmall, Error::ImageTooSmall(4, 120), MALFORMED_INPUT);
             VERIFY_ERROR(Error, InvalidMagic, Error::InvalidMagic(0), MALFORMED_INPUT);
             VERIFY_ERROR(Error, InvalidHeader, Error::InvalidHeader(120, 1, 0), MALFORMED_INPUT);
             VERIFY_ERROR(Error, InvalidSegmentSize,
                          Error::InvalidSegmentSize(Error::Segment::RX, 1, 2), MALFORMED_INPUT);
-            VERIFY_ERROR(Error, SegmentAddressOverflow,
-                         Error::SegmentAddressOverflow(Error::Segment::RW, addr_t(-1), 2),
-                         OUT_OF_RANGE);
+            VERIFY_ERROR(Error, SegAddrOverflow,
+                         Error::SegAddrOverflow(Error::Segment::RW, addr_t(-1), 2), OUT_OF_RANGE);
             VERIFY_ERROR(
                 Error, SegmentOutsideUserRange,
                 Error::SegmentOutsideUserRange(Error::Segment::RO, KPA_START, KPA_START + 1),
@@ -544,12 +538,12 @@ namespace kernel::test::cases {
                          MALFORMED_INPUT);
             VERIFY_ERROR(Error, SegmentUnaligned, Error::SegmentUnaligned(Error::Segment::RW, 3),
                          MALFORMED_INPUT);
-            VERIFY_ERROR(Error, ObjectCreationFailed,
-                         Error::ObjectCreationFailed(Error::Object::PROCESS,
-                                                     KernelError::TayError::OUT_OF_MEMORY),
+            VERIFY_ERROR(Error, ObjectCreateFailed,
+                         Error::ObjectCreateFailed(Error::Object::PROCESS,
+                                                   KernelError::TayError::OUT_OF_MEMORY),
                          OUT_OF_MEMORY);
-            VERIFY_ERROR(Error, ProcessConfigurationFailed,
-                         Error::ProcessConfigurationFailed(KernelError::TayError::INTERNAL),
+            VERIFY_ERROR(Error, ProcessConfigFailed,
+                         Error::ProcessConfigFailed(KernelError::TayError::INTERNAL),
                          INVALID_STATE);
             VERIFY_ERROR(
                 Error, VmaCreationFailed,
@@ -565,10 +559,9 @@ namespace kernel::test::cases {
             VERIFY_ERROR(Error, ThreadCreationFailed,
                          Error::ThreadCreationFailed(KernelError::TayError::OUT_OF_MEMORY),
                          OUT_OF_MEMORY);
-            VERIFY_ERROR(
-                Error, UserContextConfigurationFailed,
-                Error::UserContextConfigurationFailed(KernelError::TayError::INVALID_ARGUMENT),
-                INVALID_ARGUMENT);
+            VERIFY_ERROR(Error, UserCtxConfigFailed,
+                         Error::UserCtxConfigFailed(KernelError::TayError::INVALID_ARGUMENT),
+                         INVALID_ARGUMENT);
             VERIFY_ERROR(Error, ProcessSubmissionFailed,
                          Error::ProcessSubmissionFailed(KernelError::TayError::INTERNAL),
                          INVALID_STATE);
@@ -576,26 +569,26 @@ namespace kernel::test::cases {
                          Error::ThreadAttachFailed(KernelError::TayError::INTERNAL), INVALID_STATE);
         }
 
-        void verify_device_errors() noexcept {
-            const device::FirmwareId id{
-                .kind = device::FirmwareKind::FDT, .namespace_id = 1, .local_id = 2};
-            const device::FirmwareId parent{
-                .kind = device::FirmwareKind::FDT, .namespace_id = 1, .local_id = 1};
+        void verify_device() noexcept {
+            const device::FwId id{.kind = device::FwKind::FDT, .namespace_id = 1, .local_id = 2};
+            const device::FwId parent{
+                .kind = device::FwKind::FDT, .namespace_id = 1, .local_id = 1};
             const PhyArea phy_a{PhyAddr(0x1000), PhyAddr(0x2000)};
             const PhyArea phy_b{PhyAddr(0x1800), PhyAddr(0x2800)};
 
             using Catalog = device::CatalogError;
-            VERIFY_ERROR(Catalog, InvalidDescriptor,
-                         Catalog::InvalidDescriptor(device::FirmwareId{}), INVALID_ARGUMENT);
+            VERIFY_ERROR(Catalog, InvalidDescriptor, Catalog::InvalidDescriptor(device::FwId{}),
+                         INVALID_ARGUMENT);
             VERIFY_ERROR(Catalog, DuplicateFirmwareId, Catalog::DuplicateFirmwareId(id),
                          ALREADY_EXISTS);
             VERIFY_ERROR(Catalog, DuplicateLogicalCpu, Catalog::DuplicateLogicalCpu(2),
                          ALREADY_EXISTS);
+            VERIFY_ERROR(Catalog, DuplicateHardwareCpu, Catalog::DuplicateHardwareCpu(2),
+                         ALREADY_EXISTS);
             VERIFY_ERROR(Catalog, ParentNotFound, Catalog::ParentNotFound(id, parent), NOT_FOUND);
             VERIFY_ERROR(Catalog, ResourceOverlap, Catalog::ResourceOverlap(id, phy_a, phy_b),
                          CONFLICT);
-            VERIFY_ERROR(Catalog, InterruptControllerNotFound,
-                         Catalog::InterruptControllerNotFound(id, parent), NOT_FOUND);
+            VERIFY_ERROR(Catalog, IrqCtrlNotFound, Catalog::IrqCtrlNotFound(id, parent), NOT_FOUND);
             VERIFY_ERROR(Catalog, CapacityExhausted,
                          Catalog::CapacityExhausted(Catalog::EntryKind::DEVICE),
                          RESOURCE_EXHAUSTED);
@@ -613,8 +606,7 @@ namespace kernel::test::cases {
                          MALFORMED_INPUT);
             VERIFY_ERROR(Fdt, CellCountUnsupported, Fdt::CellCountUnsupported(3, 4, 2),
                          UNSUPPORTED);
-            VERIFY_ERROR(Fdt, AddressTranslationFailed, Fdt::AddressTranslationFailed(3),
-                         OUT_OF_RANGE);
+            VERIFY_ERROR(Fdt, AddrTranslateFailed, Fdt::AddrTranslateFailed(3), OUT_OF_RANGE);
             VERIFY_ERROR(Fdt, IntegerOverflow, Fdt::IntegerOverflow(3, device::PropertyId::REG),
                          OUT_OF_RANGE);
             VERIFY_ERROR(Fdt, BootCpuNotFound, Fdt::BootCpuNotFound(7), NOT_FOUND);
@@ -671,9 +663,9 @@ namespace kernel::test::cases {
             maps_to(tay::error_code::OUT_OF_MEMORY, KernelError::TayError::OUT_OF_MEMORY),
             "tay::error_code::OUT_OF_MEMORY 归类错误");
         verify_p0_errors();
-        verify_task_runtime_errors();
-        verify_usrboot_errors();
-        verify_device_errors();
+        verify_task_errors();
+        verify_usrboot();
+        verify_device();
 
         tay::expected<void, scheduler::SchedulerError> direct_alternative =
             tay::Err(scheduler::SchedulerError::AlreadyReady());

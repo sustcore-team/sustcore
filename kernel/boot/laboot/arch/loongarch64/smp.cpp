@@ -12,18 +12,16 @@
 #include <arch/csr.h>
 #include <arch/loongarch64/valdef.h>
 #include <boot/smp.h>
-#include <cpu/smp.h>
-#include <cpu/storage.h>
 #include <sustcore/addrspace.h>
-#include <tay/bits.h>
 
 #include <atomic>
 #include <cstddef>
 
 extern "C" char laboot_secondary_trampoline[];
 
-namespace loongarch64::boot::smp {
-    struct SecondaryStartupData {
+namespace boot::smp {
+    using namespace hal;
+    struct ApStartupData {
         xlen_t pwctl0;
         xlen_t pwctl1;
         xlen_t stlbpgsize;
@@ -37,26 +35,26 @@ namespace loongarch64::boot::smp {
         addr_t stack_top;
         addr_t cpu_local;
         addr_t arguments;
-        addr_t entry;
+        addr_t entry_pc;
     };
 
-    static_assert(offsetof(SecondaryStartupData, pwctl0) == 0);
-    static_assert(offsetof(SecondaryStartupData, pwctl1) == 8);
-    static_assert(offsetof(SecondaryStartupData, stlbpgsize) == 16);
-    static_assert(offsetof(SecondaryStartupData, pgdl) == 24);
-    static_assert(offsetof(SecondaryStartupData, pgdh) == 32);
-    static_assert(offsetof(SecondaryStartupData, dmw0) == 40);
-    static_assert(offsetof(SecondaryStartupData, dmw1) == 48);
-    static_assert(offsetof(SecondaryStartupData, dmw2) == 56);
-    static_assert(offsetof(SecondaryStartupData, dmw3) == 64);
-    static_assert(offsetof(SecondaryStartupData, tlbrentry) == 72);
-    static_assert(offsetof(SecondaryStartupData, stack_top) == 80);
-    static_assert(offsetof(SecondaryStartupData, cpu_local) == 88);
-    static_assert(offsetof(SecondaryStartupData, arguments) == 96);
-    static_assert(offsetof(SecondaryStartupData, entry) == 104);
-    static_assert(sizeof(SecondaryStartupData) == 112);
-    static_assert(alignof(SecondaryStartupData) <= 16);
-    static_assert(sizeof(SecondaryStartupData) <= cpu::SECONDARY_ARCH_DATA_SZ);
+    static_assert(offsetof(ApStartupData, pwctl0) == 0);
+    static_assert(offsetof(ApStartupData, pwctl1) == 8);
+    static_assert(offsetof(ApStartupData, stlbpgsize) == 16);
+    static_assert(offsetof(ApStartupData, pgdl) == 24);
+    static_assert(offsetof(ApStartupData, pgdh) == 32);
+    static_assert(offsetof(ApStartupData, dmw0) == 40);
+    static_assert(offsetof(ApStartupData, dmw1) == 48);
+    static_assert(offsetof(ApStartupData, dmw2) == 56);
+    static_assert(offsetof(ApStartupData, dmw3) == 64);
+    static_assert(offsetof(ApStartupData, tlbrentry) == 72);
+    static_assert(offsetof(ApStartupData, stack_top) == 80);
+    static_assert(offsetof(ApStartupData, cpu_local) == 88);
+    static_assert(offsetof(ApStartupData, arguments) == 96);
+    static_assert(offsetof(ApStartupData, entry_pc) == 104);
+    static_assert(sizeof(ApStartupData) == 112);
+    static_assert(alignof(ApStartupData) <= 16);
+    static_assert(sizeof(ApStartupData) <= AP_ARCH_DATA_SIZE);
 
     [[nodiscard]] addr_t kernel_physical(const void *ptr) noexcept {
         return reinterpret_cast<addr_t>(ptr) - KVA_START;
@@ -66,55 +64,59 @@ namespace loongarch64::boot::smp {
         const u64_t command = IOCSR_MBUF_SEND_BLOCKING | (cpu << IOCSR_MBUF_SEND_CPU_SHIFT);
         const u64_t box_hi  = ((mailbox * 2 + 1) << IOCSR_MBUF_SEND_BOX_SHIFT);
         const u64_t box_lo  = ((mailbox * 2) << IOCSR_MBUF_SEND_BOX_SHIFT);
-        hal::csr::iocsr_write64(IOCSR_MBUF_SEND,
-                                command | box_hi | (value & 0xffffffff00000000ULL));
-        hal::csr::iocsr_write64(IOCSR_MBUF_SEND, command | box_lo | (value << 32));
+        csr::iocsr_write64(IOCSR_MBUF_SEND, command | box_hi | (value & 0xffffffff00000000ULL));
+        csr::iocsr_write64(IOCSR_MBUF_SEND, command | box_lo | (value << 32));
     }
 
-    bool supports_secondary_start() noexcept {
+    bool supports_ap_start() noexcept {
         // LABOOT/QEMU starts an AP through IOCSR MBUF0 and IPI action zero.
         // This hand-off is a boot-protocol contract, rather than an FDT CPU
         // enable-method, so its absence from the DTB is expected.
         return true;
     }
 
-    tay::expected<void, tay::error_code> start_secondary(cpu::cpu_hwid_t hardware_id,
-                                                         PhyAddr arguments_physical) noexcept {
-        if (hardware_id.value > 0xffffU || arguments_physical.arith() == 0)
+    tay::expected<void, tay::error_code> start_ap(cpu::CpuHwId hw_id,
+                                                  PhyAddr arguments_physical) noexcept {
+        if (hw_id.value > 0xffffU || arguments_physical.arith() == 0)
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
         // The common layer stores arguments in permanent kernel BSS. That
         // range intentionally has no KPA alias in the final kernel page table,
         // so the BSP must inspect it through its high-half mapping.
-        auto *arguments = reinterpret_cast<const cpu::SecondaryBootArgs *>(
-            arguments_physical.arith() + KVA_START);
-        const auto index = arguments->cpu_id.value;
-        if (index == 0 || index >= cpu::MAX_CPUS || arguments->magic != cpu::SECONDARY_BOOT_MAGIC) {
+        auto *resources = reinterpret_cast<ApBootRes *>(arguments_physical.arith() + KVA_START);
+        const auto *arguments = &resources->arguments;
+        const auto index      = arguments->cpu_id.value;
+        if (index == 0 || index >= cpu::MAX_CPUS || arguments->magic != AP_BOOT_MAGIC ||
+            arguments->abi_version != AP_BOOT_ABI_VERSION)
+        {
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
         }
 
-        auto &resources = cpu::storage_for(cpu::cpu_id_t{static_cast<u32_t>(index)}).secondary;
-        auto *data      = reinterpret_cast<SecondaryStartupData *>(
-            static_cast<void *>(resources.architecture_data));
-        *data = SecondaryStartupData{
-            .pwctl0     = hal::csr::read<hal::csr::CSR::PWCTL0>(),
-            .pwctl1     = hal::csr::read<hal::csr::CSR::PWCTL1>(),
-            .stlbpgsize = hal::csr::read<hal::csr::CSR::STLBPGSIZE>(),
-            .pgdl       = hal::csr::read<hal::csr::CSR::PGDL>(),
-            .pgdh       = hal::csr::read<hal::csr::CSR::PGDH>(),
-            .dmw0       = hal::csr::read<hal::csr::CSR::DMWIN0>(),
-            .dmw1       = hal::csr::read<hal::csr::CSR::DMWIN1>(),
-            .dmw2       = hal::csr::read<hal::csr::CSR::DMWIN2>(),
-            .dmw3       = hal::csr::read<hal::csr::CSR::DMWIN3>(),
-            .tlbrentry  = hal::csr::read<hal::csr::CSR::TLBRENTRY>(),
+        auto *data             = reinterpret_cast<ApStartupData *>(resources->arch_data);
+        // 恒等 trampoline 映射安装在 KernelVm 的永久 root；BSP 当前 PGDL 可能是
+        // kernel guard_root，不能直接复制给尚未进入 C++ 的 AP。过渡阶段让低、高地址都从
+        // 同一个 kernel root 查找，进入 ap_main() 后再安装正式绑定。
+        const auto kernel_root = arguments->root_pt.arith();
+        const ApStartupData startup_data{
+            .pwctl0     = csr::read<csr::CSR::PWCTL0>(),
+            .pwctl1     = csr::read<csr::CSR::PWCTL1>(),
+            .stlbpgsize = csr::read<csr::CSR::STLBPGSIZE>(),
+            .pgdl       = kernel_root,
+            .pgdh       = kernel_root,
+            .dmw0       = csr::read<csr::CSR::DMWIN0>(),
+            .dmw1       = csr::read<csr::CSR::DMWIN1>(),
+            .dmw2       = csr::read<csr::CSR::DMWIN2>(),
+            .dmw3       = csr::read<csr::CSR::DMWIN3>(),
+            .tlbrentry  = csr::read<csr::CSR::TLBRENTRY>(),
             .stack_top  = arguments->stack_top,
             .cpu_local  = arguments->cpu_local,
             .arguments  = reinterpret_cast<addr_t>(arguments),
-            .entry      = arguments->entry,
+            .entry_pc   = arguments->entry_pc,
         };
+        *data = startup_data;
         std::atomic_thread_fence(std::memory_order_release);
 
-        const auto target = static_cast<u64_t>(hardware_id.value);
+        const auto target = static_cast<u64_t>(hw_id.value);
         // The AP enters MBUF0 before it has established paging. The final
         // page table retains an identity mapping for this trampoline page,
         // allowing execution to continue across the CRMD.PG transition.
@@ -124,11 +126,11 @@ namespace loongarch64::boot::smp {
         send_mail(target, 1, kernel_physical(data));
         const auto command =
             static_cast<u32_t>(IOCSR_IPI_SEND_BLOCKING | (target << IOCSR_IPI_SEND_CPU_SHIFT));
-        hal::csr::iocsr_write32(IOCSR_IPI_SEND, command);
+        csr::iocsr_write32(IOCSR_IPI_SEND, command);
         return {};
     }
 
-    PhyAddr identity_trampoline_page() noexcept {
+    PhyAddr trampoline_page() noexcept {
         return PhyAddr(kernel_physical(laboot_secondary_trampoline) & ~addr_t{PAGE_SIZE - 1});
     }
-}  // namespace loongarch64::boot::smp
+}  // namespace boot::smp

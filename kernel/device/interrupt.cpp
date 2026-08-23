@@ -12,6 +12,7 @@
 #include <arch/cpu.h>
 #include <device/catalog.h>
 #include <device/interrupt.h>
+#include <synchronized.h>
 #include <tay/lock.h>
 #include <tay/rcu.h>
 #include <tay/static_vector.h>
@@ -22,8 +23,8 @@
 #include <utility>
 
 namespace device::interrupt {
-    namespace {
-        constexpr size_t MAX_INTERRUPT_HANDLERS = 32;
+    namespace detail {
+        constexpr size_t MAX_TRAP_HANDLERS      = 32;
         constexpr size_t MAX_IRQ_DOMAINS        = 8;
         constexpr size_t MAX_IRQ_HANDLERS       = 128;
         constexpr size_t MAX_CLAIMS_PER_TRAP    = 256;
@@ -32,18 +33,18 @@ namespace device::interrupt {
         constexpr size_t MAX_RETIRED_REGISTRIES = 8;
 
         struct Slot {
-            Line line{};
-            Handler handler  = nullptr;
-            void *context    = nullptr;
-            u32_t generation = 0;
+            TrapLine line{};
+            Handler handler   = nullptr;
+            void *handler_ctx = nullptr;
+            u32_t gen         = 0;
         };
 
         struct Registry : tay::rcu_retired_node {
             struct IrqSlot {
                 IrqLine line{};
                 IrqHandler handler = nullptr;
-                void *context      = nullptr;
-                u32_t generation   = 0;
+                void *handler_ctx  = nullptr;
+                u32_t gen          = 0;
             };
             struct DomainSlot {
                 IrqDomain *domain = nullptr;
@@ -63,24 +64,24 @@ namespace device::interrupt {
                   irq_slots(other.irq_slots),
                   domains(other.domains),
                   cascades(other.cascades),
-                  next_generation(other.next_generation) {}
+                  next_gen(other.next_gen) {}
 
-            tay::static_vector<Slot, MAX_INTERRUPT_HANDLERS> slots;
+            tay::static_vector<Slot, MAX_TRAP_HANDLERS> slots;
             tay::static_vector<IrqSlot, MAX_IRQ_HANDLERS> irq_slots;
             tay::static_vector<DomainSlot, MAX_IRQ_DOMAINS> domains;
             tay::static_vector<CascadeSlot, MAX_CASCADE_BINDINGS> cascades;
-            u32_t next_generation = 1;
+            u32_t next_gen = 1;
         };
 
         struct FlowState {
-            CascadeFrame frames[MAX_CASCADE_DEPTH]{};
+            IrqCascadeFrame frames[MAX_CASCADE_DEPTH]{};
             size_t claims       = 0;
             bool claimed_any    = false;
             bool all_handled    = true;
             u32_t next_claim_id = 1;
         };
 
-        class InterruptRcuPolicy final {
+        class IrqRcuPolicy final {
         public:
             void enter_read() noexcept {
                 readers_.fetch_add(1, std::memory_order_seq_cst);
@@ -105,7 +106,7 @@ namespace device::interrupt {
         constinit Registry initial_registry{};
         constinit std::atomic<Registry *> published_registry{&initial_registry};
         constinit tay::spinlock registry_writer_lock;
-        constinit tay::rcu_domain<InterruptRcuPolicy, MAX_RETIRED_REGISTRIES> registry_rcu;
+        constinit tay::rcu_domain<IrqRcuPolicy, MAX_RETIRED_REGISTRIES> registry_rcu;
 
         [[nodiscard]] Registry *current_registry() noexcept {
             // reader counter 与快照指针共享 seq_cst 全序；能观察旧快照的 reader
@@ -131,7 +132,7 @@ namespace device::interrupt {
         template <class Mutator>
         [[nodiscard]] tay::expected<void, tay::error_code> mutate_registry(
             Mutator &&mutator) noexcept {
-            tay::lock_guard held{registry_writer_lock};
+            kernel::lock_guard<tay::spinlock> held{registry_writer_lock};
             auto *current = current_registry();
             auto *copy    = new (std::nothrow) Registry(*current);
             if (copy == nullptr)
@@ -149,6 +150,12 @@ namespace device::interrupt {
             return false;
         }
 
+        [[nodiscard]] tay::expected<u32_t, tay::error_code> alloc_gen(Registry &registry) noexcept {
+            if (registry.next_gen == 0 || registry.next_gen == UINT32_MAX)
+                return tay::Err(tay::error_code::OVERFLOW_ERROR);
+            return registry.next_gen++;
+        }
+
         [[nodiscard]] bool binding_for(const Registry &registry, IrqDomain &parent,
                                        u32_t parent_irq, IrqBinding &binding) noexcept {
             for (const auto &cascade : registry.cascades) {
@@ -156,8 +163,7 @@ namespace device::interrupt {
                     continue;
                 binding.kind         = IrqBindingKind::CASCADE;
                 binding.child_domain = cascade.child;
-                binding.line =
-                    IrqLine{.controller = parent.controller(), .hardware_irq = parent_irq};
+                binding.line         = IrqLine{.ctrl = parent.ctrl(), .hw_irq = parent_irq};
                 return true;
             }
             return false;
@@ -175,15 +181,15 @@ namespace device::interrupt {
             return root;
         }
 
-        [[nodiscard]] bool acknowledge_claim(const IrqClaim &claim) noexcept {
-            if (claim.domain == nullptr || claim.hardware_irq == 0 || claim.generation == 0)
+        [[nodiscard]] bool ack_claim(const IrqClaim &claim) noexcept {
+            if (claim.domain == nullptr || claim.hw_irq == 0 || claim.gen == 0)
                 return false;
             const auto acknowledged = claim.domain->ack(claim);
             return acknowledged.has_value();
         }
 
         [[nodiscard]] bool finish_claim(const IrqClaim &claim) noexcept {
-            if (claim.domain == nullptr || claim.hardware_irq == 0 || claim.generation == 0)
+            if (claim.domain == nullptr || claim.hw_irq == 0 || claim.gen == 0)
                 return false;
 
             // 即使 EOI 失败也尝试 complete，避免把控制器永久留在 in-service 状态。
@@ -199,7 +205,7 @@ namespace device::interrupt {
                 return false;
             }
 
-            for (;;) {
+            while (true) {
                 auto claimed = domain.claim();
                 if (!claimed) {
                     state.all_handled = false;
@@ -209,17 +215,16 @@ namespace device::interrupt {
                     return true;
 
                 state.claimed_any = true;
-                const IrqClaim claim{.domain       = &domain,
-                                     .hardware_irq = *claimed,
-                                     .generation   = state.next_claim_id++};
+                const IrqClaim claim{
+                    .domain = &domain, .hw_irq = *claimed, .gen = state.next_claim_id++};
                 if (++state.claims > MAX_CLAIMS_PER_TRAP) {
-                    (void)acknowledge_claim(claim);
+                    (void)ack_claim(claim);
                     (void)finish_claim(claim);
                     state.all_handled = false;
                     return false;
                 }
 
-                if (!acknowledge_claim(claim)) {
+                if (!ack_claim(claim)) {
                     (void)finish_claim(claim);
                     state.all_handled = false;
                     return false;
@@ -229,10 +234,10 @@ namespace device::interrupt {
                 if (binding_for(registry, domain, *claimed, binding)) {
                     const size_t child_claims = state.claims;
                     state.frames[depth] =
-                        CascadeFrame{.parent = claim, .child_domain = binding.child_domain};
+                        IrqCascadeFrame{.parent = claim, .child_domain = binding.child_domain};
                     const bool child_ok =
                         dispatch_domain(registry, *binding.child_domain, depth + 1, state);
-                    state.frames[depth] = CascadeFrame{};
+                    state.frames[depth] = IrqCascadeFrame{};
                     if (state.claims == child_claims)
                         state.all_handled = false;
                     if (!finish_claim(claim)) {
@@ -244,18 +249,18 @@ namespace device::interrupt {
                     continue;
                 }
 
-                const IrqLine line{.controller = domain.controller(), .hardware_irq = *claimed};
+                const IrqLine line{.ctrl = domain.ctrl(), .hw_irq = *claimed};
                 IrqHandler handler = nullptr;
-                void *context      = nullptr;
+                void *handler_ctx  = nullptr;
                 for (const auto &slot : registry.irq_slots) {
                     if (slot.line == line) {
-                        handler = slot.handler;
-                        context = slot.context;
+                        handler     = slot.handler;
+                        handler_ctx = slot.handler_ctx;
                         break;
                     }
                 }
                 if (handler != nullptr)
-                    handler(context, line);
+                    handler(handler_ctx, line);
                 else
                     state.all_handled = false;
 
@@ -266,11 +271,11 @@ namespace device::interrupt {
             }
         }
 
-        [[nodiscard]] bool source_for(const hal::TrapInfo &info, Source &source) noexcept {
+        [[nodiscard]] bool source_for(const hal::TrapInfo &info, IrqSource &source) noexcept {
             switch (info.kind) {
-                case hal::TrapKind::TIMER:       source = Source::TIMER; return true;
-                case hal::TrapKind::SOFTWARE:    source = Source::SOFTWARE; return true;
-                case hal::TrapKind::EXTERNAL:    source = Source::EXTERNAL; return true;
+                case hal::TrapKind::TIMER:       source = IrqSource::TIMER; return true;
+                case hal::TrapKind::SOFTWARE:    source = IrqSource::SOFTWARE; return true;
+                case hal::TrapKind::EXTERNAL:    source = IrqSource::EXTERNAL; return true;
                 case hal::TrapKind::SYNCHRONOUS: return false;
             }
             return false;
@@ -286,50 +291,49 @@ namespace device::interrupt {
             return state.claimed_any && state.all_handled ? DispatchResult::HANDLED
                                                           : DispatchResult::UNHANDLED;
         }
-    }  // namespace
+    }  // namespace detail
 
-    tay::expected<IrqLine, tay::error_code> resolve(FirmwareId controller,
-                                                    u32_t hardware_irq) noexcept {
-        if (!controller.valid() || catalog().find_controller(controller) == nullptr)
+    tay::expected<IrqLine, tay::error_code> resolve(FwId ctrl, u32_t hw_irq) noexcept {
+        if (!ctrl.valid() || catalog().find_irq_ctrl(ctrl) == nullptr)
             return tay::Err(tay::error_code::OUT_OF_RANGE);
 
-        auto read_guard      = registry_rcu.read_lock();
-        const auto &registry = *current_registry();
+        auto read_guard      = detail::registry_rcu.read_lock();
+        const auto &registry = *detail::current_registry();
         static_cast<void>(read_guard);
         for (const auto &slot : registry.domains) {
-            if (slot.domain->controller() == controller) {
-                if (hardware_irq == 0 || hardware_irq > slot.domain->line_count())
+            if (slot.domain->ctrl() == ctrl) {
+                if (hw_irq == 0 || hw_irq > slot.domain->line_count())
                     return tay::Err(tay::error_code::OUT_OF_RANGE);
-                return IrqLine{.controller = controller, .hardware_irq = hardware_irq};
+                return IrqLine{.ctrl = ctrl, .hw_irq = hw_irq};
             }
         }
         return tay::Err(tay::error_code::OUT_OF_RANGE);
     }
 
-    tay::expected<Subscription, tay::error_code> subscribe(Line line, Handler handler,
-                                                           void *context) noexcept {
+    tay::expected<TrapSub, tay::error_code> subscribe(TrapLine line, Handler handler,
+                                                      void *handler_ctx) noexcept {
         if (handler == nullptr)
             return tay::Err(tay::error_code::NULLPTR);
 
-        u32_t generation = 0;
-        TAY_TRYV(mutate_registry([&](Registry &registry) noexcept
-                                 -> tay::expected<void, tay::error_code> {
-            for (const auto &slot : registry.slots)
-                if (slot.line == line)
-                    return tay::Err(tay::error_code::INVALID_ARGUMENT);
+        u32_t gen = 0;
+        TAY_TRYV(detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+                for (const auto &slot : registry.slots)
+                    if (slot.line == line)
+                        return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
-            generation = registry.next_generation++;
-            return registry.slots.push_back(Slot{
-                .line = line, .handler = handler, .context = context, .generation = generation});
-        }));
-        return Subscription{.line = line, .generation = generation};
+                gen = TAY_TRY(detail::alloc_gen(registry));
+                return registry.slots.push_back(detail::Slot{
+                    .line = line, .handler = handler, .handler_ctx = handler_ctx, .gen = gen});
+            }));
+        return TrapSub{.line = line, .gen = gen};
     }
 
-    tay::expected<void, tay::error_code> unsubscribe(Subscription subscription) noexcept {
-        return mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+    tay::expected<void, tay::error_code> unsubscribe(TrapSub subscription) noexcept {
+        return detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
                 for (auto it = registry.slots.begin(); it != registry.slots.end(); ++it) {
-                    if (it->line == subscription.line && it->generation == subscription.generation)
+                    if (it->line == subscription.line && it->gen == subscription.gen)
                         return registry.slots.erase(it).transform([](auto) {});
                 }
                 return tay::Err(tay::error_code::OUT_OF_RANGE);
@@ -337,45 +341,45 @@ namespace device::interrupt {
     }
 
     tay::expected<void, tay::error_code> register_domain(IrqDomain &domain) noexcept {
-        return mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
-                if (!domain.controller().valid() || domain.line_count() == 0)
+        return detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+                if (!domain.ctrl().valid() || domain.line_count() == 0)
                     return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 for (const auto &existing : registry.domains)
-                    if (existing.domain->controller() == domain.controller())
+                    if (existing.domain->ctrl() == domain.ctrl())
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 for (const auto &existing : registry.domains)
                     if (existing.root)
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 return registry.domains.push_back(
-                    Registry::DomainSlot{.domain = &domain, .root = true});
+                    detail::Registry::DomainSlot{.domain = &domain, .root = true});
             });
     }
 
     tay::expected<void, tay::error_code> register_cascade(IrqDomain &parent, u32_t parent_irq,
                                                           IrqDomain &child) noexcept {
-        if (&parent == &child || !child.controller().valid() || child.line_count() == 0 ||
+        if (&parent == &child || !child.ctrl().valid() || child.line_count() == 0 ||
             parent_irq == 0 || parent_irq > parent.line_count())
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
-        return mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
-                if (!domain_registered(registry, parent) || domain_registered(registry, child))
+        return detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+                if (!detail::domain_registered(registry, parent) ||
+                    detail::domain_registered(registry, child))
                     return tay::Err(tay::error_code::OUT_OF_RANGE);
                 for (const auto &existing : registry.domains)
-                    if (existing.domain->controller() == child.controller())
+                    if (existing.domain->ctrl() == child.ctrl())
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 for (const auto &slot : registry.irq_slots)
-                    if (slot.line.controller == parent.controller() &&
-                        slot.line.hardware_irq == parent_irq)
+                    if (slot.line.ctrl == parent.ctrl() && slot.line.hw_irq == parent_irq)
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 for (const auto &cascade : registry.cascades)
                     if (cascade.parent == &parent && cascade.parent_irq == parent_irq)
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
                 TAY_TRYV(registry.domains.push_back(
-                    Registry::DomainSlot{.domain = &child, .root = false}));
-                return registry.cascades.push_back(Registry::CascadeSlot{
+                    detail::Registry::DomainSlot{.domain = &child, .root = false}));
+                return registry.cascades.push_back(detail::Registry::CascadeSlot{
                     .parent     = &parent,
                     .parent_irq = parent_irq,
                     .child      = &child,
@@ -384,10 +388,10 @@ namespace device::interrupt {
     }
 
     tay::expected<void, tay::error_code> unregister_domain(IrqDomain &domain) noexcept {
-        return mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+        return detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
                 for (const auto &slot : registry.irq_slots)
-                    if (slot.line.controller == domain.controller())
+                    if (slot.line.ctrl == domain.ctrl())
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
                 for (const auto &cascade : registry.cascades)
                     if (cascade.parent == &domain || cascade.child == &domain)
@@ -400,33 +404,33 @@ namespace device::interrupt {
             });
     }
 
-    tay::expected<IrqSubscription, tay::error_code> subscribe_irq(IrqLine line, IrqHandler handler,
-                                                                  void *context) noexcept {
+    tay::expected<IrqSub, tay::error_code> subscribe_irq(IrqLine line, IrqHandler handler,
+                                                         void *handler_ctx) noexcept {
         if (handler == nullptr)
             return tay::Err(tay::error_code::NULLPTR);
 
-        u32_t generation = 0;
-        TAY_TRYV(mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+        u32_t gen = 0;
+        TAY_TRYV(detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
                 for (const auto &slot : registry.irq_slots)
                     if (slot.line == line)
                         return tay::Err(tay::error_code::INVALID_ARGUMENT);
-                generation = registry.next_generation++;
-                return registry.irq_slots.push_back(Registry::IrqSlot{
-                    .line       = line,
-                    .handler    = handler,
-                    .context    = context,
-                    .generation = generation,
+                gen = TAY_TRY(detail::alloc_gen(registry));
+                return registry.irq_slots.push_back(detail::Registry::IrqSlot{
+                    .line        = line,
+                    .handler     = handler,
+                    .handler_ctx = handler_ctx,
+                    .gen         = gen,
                 });
             }));
-        return IrqSubscription{.line = line, .generation = generation};
+        return IrqSub{.line = line, .gen = gen};
     }
 
-    tay::expected<void, tay::error_code> unsubscribe_irq(IrqSubscription subscription) noexcept {
-        return mutate_registry(
-            [&](Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
+    tay::expected<void, tay::error_code> unsubscribe_irq(IrqSub subscription) noexcept {
+        return detail::mutate_registry(
+            [&](detail::Registry &registry) noexcept -> tay::expected<void, tay::error_code> {
                 for (auto it = registry.irq_slots.begin(); it != registry.irq_slots.end(); ++it) {
-                    if (it->line == subscription.line && it->generation == subscription.generation)
+                    if (it->line == subscription.line && it->gen == subscription.gen)
                         return registry.irq_slots.erase(it).transform([](auto) {});
                 }
                 return tay::Err(tay::error_code::OUT_OF_RANGE);
@@ -434,31 +438,33 @@ namespace device::interrupt {
     }
 
     DispatchResult dispatch(const hal::TrapInfo &info) noexcept {
-        Source source{};
-        if (!source_for(info, source))
+        cpu::irq_context_guard interrupt_context;
+
+        IrqSource source{};
+        if (!detail::source_for(info, source))
             return DispatchResult::UNHANDLED;
 
-        auto read_guard      = registry_rcu.read_lock();
-        const auto &registry = *current_registry();
+        auto read_guard      = detail::registry_rcu.read_lock();
+        const auto &registry = *detail::current_registry();
         static_cast<void>(read_guard);
-        if (source == Source::EXTERNAL)
-            return dispatch_external(registry);
+        if (source == IrqSource::EXTERNAL)
+            return detail::dispatch_external(registry);
 
-        Handler handler = nullptr;
-        void *context   = nullptr;
-        const Line line =
-            source == Source::TIMER ? TIMER_LINE : Line{.source = source, .code = info.code};
+        Handler handler   = nullptr;
+        void *handler_ctx = nullptr;
+        const TrapLine line =
+            source == IrqSource::TIMER ? TIMER_LINE : TrapLine{.source = source, .code = info.code};
         for (const auto &slot : registry.slots) {
             if (slot.line == line) {
-                handler = slot.handler;
-                context = slot.context;
+                handler     = slot.handler;
+                handler_ctx = slot.handler_ctx;
                 break;
             }
         }
         if (handler == nullptr)
             return DispatchResult::UNHANDLED;
 
-        handler(context, Event{.line = line, .trap = info});
+        handler(handler_ctx, TrapEvent{.line = line, .trap = info});
         return DispatchResult::HANDLED;
     }
 }  // namespace device::interrupt

@@ -12,56 +12,56 @@
 #include <boot/context.h>
 #include <device/catalog.h>
 #include <device/fdt.h>
-#include <synchronized.h>
 
 namespace device {
     namespace {
-        constinit kernel::synchronized<Catalog::State> catalog_state;
-        Catalog catalog_instance;
+        constinit Catalog catalog_instance;
+        constinit const PlatformFacts empty_platform{};
 
-        [[nodiscard]] bool contains_device(const Catalog::State &state, FirmwareId id) noexcept {
+        [[nodiscard]] bool contains_device(const Catalog::Data &state, FwId id) noexcept {
             for (const auto &device : state.devices)
                 if (device.id == id)
                     return true;
             return false;
         }
 
-        [[nodiscard]] bool contains_cpu(const Catalog::State &state, u32_t logical_id) noexcept {
+        [[nodiscard]] bool contains_cpu(const Catalog::Data &state, u32_t cpu_id) noexcept {
             for (const auto &cpu : state.cpus)
-                if (cpu.logical_id == logical_id)
+                if (cpu.cpu_id == cpu_id)
                     return true;
             return false;
         }
 
-        [[nodiscard]] bool contains_cpu(const Catalog::State &state, FirmwareId id) noexcept {
+        [[nodiscard]] bool contains_cpu(const Catalog::Data &state, FwId id) noexcept {
             for (const auto &cpu : state.cpus)
-                if (cpu.firmware_id == id)
+                if (cpu.fw_id == id)
                     return true;
             return false;
         }
 
-        [[nodiscard]] bool contains_controller(const Catalog::State &state,
-                                               FirmwareId id) noexcept {
-            for (const auto &controller : state.controllers)
-                if (controller.id == id)
+        [[nodiscard]] bool contains_irq_ctrl(const Catalog::Data &state, FwId id) noexcept {
+            for (const auto &irq_ctrl : state.irq_ctrls)
+                if (irq_ctrl.id == id)
                     return true;
             return false;
         }
     }  // namespace
 
-    Catalog::State &Catalog::state() noexcept {
-        return *catalog_state.lock();
+    Catalog::Data &Catalog::state() noexcept {
+        return state_;
     }
 
-    const Catalog::State &Catalog::state() const noexcept {
-        return *catalog_state.lock();
+    const Catalog::Data &Catalog::state() const noexcept {
+        return state_;
     }
 
     bool Catalog::ready() const noexcept {
-        return state().ready;
+        return published_.load(std::memory_order_acquire);
     }
 
-    const DeviceDescriptor *Catalog::find_device(FirmwareId id) const noexcept {
+    const DeviceDesc *Catalog::find_device(FwId id) const noexcept {
+        if (!ready())
+            return nullptr;
         const auto &snapshot = state();
         for (const auto &device : snapshot.devices)
             if (device.id == id)
@@ -69,69 +69,77 @@ namespace device {
         return nullptr;
     }
 
-    const CpuDescriptor *Catalog::cpu(u32_t logical_id) const noexcept {
+    const CpuDesc *Catalog::cpu(u32_t cpu_id) const noexcept {
+        if (!ready())
+            return nullptr;
         const auto &snapshot = state();
         for (const auto &cpu : snapshot.cpus)
-            if (cpu.logical_id == logical_id)
+            if (cpu.cpu_id == cpu_id)
                 return &cpu;
         return nullptr;
     }
 
-    const CpuDescriptor *Catalog::bsp() const noexcept {
+    const CpuDesc *Catalog::bsp() const noexcept {
+        if (!ready())
+            return nullptr;
         const auto &snapshot = state();
-        return snapshot.ready ? cpu(snapshot.bsp_logical_id) : nullptr;
+        return cpu(snapshot.bsp_cpu_id);
     }
 
-    const InterruptControllerDescriptor *Catalog::find_controller(FirmwareId id) const noexcept {
+    const IrqCtrlDesc *Catalog::find_irq_ctrl(FwId id) const noexcept {
+        if (!ready())
+            return nullptr;
         const auto &snapshot = state();
-        for (const auto &controller : snapshot.controllers)
-            if (controller.id == id)
-                return &controller;
+        for (const auto &irq_ctrl : snapshot.irq_ctrls)
+            if (irq_ctrl.id == id)
+                return &irq_ctrl;
         return nullptr;
     }
 
     const PlatformFacts &Catalog::platform() const noexcept {
+        if (!ready())
+            return empty_platform;
         return state().platform;
     }
 
     size_t Catalog::device_count() const noexcept {
-        return state().devices.size();
+        return ready() ? state().devices.size() : 0;
     }
 
     size_t Catalog::cpu_count() const noexcept {
-        return state().cpus.size();
+        return ready() ? state().cpus.size() : 0;
     }
 
-    size_t Catalog::controller_count() const noexcept {
-        return state().controllers.size();
+    size_t Catalog::irq_ctrl_count() const noexcept {
+        return ready() ? state().irq_ctrls.size() : 0;
     }
 
-    const DeviceDescriptor *Catalog::devices_begin() const noexcept {
-        return state().devices.begin();
+    const DeviceDesc *Catalog::devices_begin() const noexcept {
+        return ready() ? state().devices.begin() : nullptr;
     }
 
-    const DeviceDescriptor *Catalog::devices_end() const noexcept {
-        return state().devices.end();
+    const DeviceDesc *Catalog::devices_end() const noexcept {
+        return ready() ? state().devices.end() : nullptr;
     }
 
-    const CpuDescriptor *Catalog::cpus_begin() const noexcept {
-        return state().cpus.begin();
+    const CpuDesc *Catalog::cpus_begin() const noexcept {
+        return ready() ? state().cpus.begin() : nullptr;
     }
 
-    const CpuDescriptor *Catalog::cpus_end() const noexcept {
-        return state().cpus.end();
+    const CpuDesc *Catalog::cpus_end() const noexcept {
+        return ready() ? state().cpus.end() : nullptr;
     }
 
-    const InterruptControllerDescriptor *Catalog::controllers_begin() const noexcept {
-        return state().controllers.begin();
+    const IrqCtrlDesc *Catalog::irq_ctrl_begin() const noexcept {
+        return ready() ? state().irq_ctrls.begin() : nullptr;
     }
 
-    const InterruptControllerDescriptor *Catalog::controllers_end() const noexcept {
-        return state().controllers.end();
+    const IrqCtrlDesc *Catalog::irq_ctrl_end() const noexcept {
+        return ready() ? state().irq_ctrls.end() : nullptr;
     }
 
     tay::expected<void, CatalogError> CatalogBuilder::add_device(
-        const DeviceDescriptor &device) noexcept {
+        const DeviceDesc &device) noexcept {
         if (!device.id.valid())
             return tay::Err(CatalogError::InvalidDescriptor(device.id));
         if (contains_device(state_, device.id))
@@ -144,13 +152,13 @@ namespace device {
             });
     }
 
-    tay::expected<void, CatalogError> CatalogBuilder::add_cpu(const CpuDescriptor &cpu) noexcept {
-        if (!cpu.firmware_id.valid())
-            return tay::Err(CatalogError::InvalidDescriptor(cpu.firmware_id));
-        if (contains_cpu(state_, cpu.firmware_id))
-            return tay::Err(CatalogError::DuplicateFirmwareId(cpu.firmware_id));
-        if (contains_cpu(state_, cpu.logical_id))
-            return tay::Err(CatalogError::DuplicateLogicalCpu(cpu.logical_id));
+    tay::expected<void, CatalogError> CatalogBuilder::add_cpu(const CpuDesc &cpu) noexcept {
+        if (!cpu.fw_id.valid())
+            return tay::Err(CatalogError::InvalidDescriptor(cpu.fw_id));
+        if (contains_cpu(state_, cpu.fw_id))
+            return tay::Err(CatalogError::DuplicateFirmwareId(cpu.fw_id));
+        if (contains_cpu(state_, cpu.cpu_id))
+            return tay::Err(CatalogError::DuplicateLogicalCpu(cpu.cpu_id));
         if (state_.cpus.full())
             return tay::Err(CatalogError::CapacityExhausted(CatalogError::EntryKind::CPU));
         return state_.cpus.push_back(cpu).transform_error(
@@ -159,19 +167,17 @@ namespace device {
             });
     }
 
-    tay::expected<void, CatalogError> CatalogBuilder::add_controller(
-        const InterruptControllerDescriptor &controller) noexcept {
-        if (!controller.id.valid())
-            return tay::Err(CatalogError::InvalidDescriptor(controller.id));
-        if (contains_controller(state_, controller.id))
-            return tay::Err(CatalogError::DuplicateFirmwareId(controller.id));
-        if (state_.controllers.full())
-            return tay::Err(
-                CatalogError::CapacityExhausted(CatalogError::EntryKind::INTERRUPT_CONTROLLER));
-        return state_.controllers.push_back(controller)
-            .transform_error([](tay::error_code) noexcept -> CatalogError {
-                return CatalogError::CapacityExhausted(
-                    CatalogError::EntryKind::INTERRUPT_CONTROLLER);
+    tay::expected<void, CatalogError> CatalogBuilder::add_irq_ctrl(
+        const IrqCtrlDesc &irq_ctrl) noexcept {
+        if (!irq_ctrl.id.valid())
+            return tay::Err(CatalogError::InvalidDescriptor(irq_ctrl.id));
+        if (contains_irq_ctrl(state_, irq_ctrl.id))
+            return tay::Err(CatalogError::DuplicateFirmwareId(irq_ctrl.id));
+        if (state_.irq_ctrls.full())
+            return tay::Err(CatalogError::CapacityExhausted(CatalogError::EntryKind::IRQ_CTRL));
+        return state_.irq_ctrls.push_back(irq_ctrl).transform_error(
+            [](tay::error_code) noexcept -> CatalogError {
+                return CatalogError::CapacityExhausted(CatalogError::EntryKind::IRQ_CTRL);
             });
     }
 
@@ -179,34 +185,44 @@ namespace device {
         state_.platform = platform;
     }
 
-    void CatalogBuilder::set_bsp(u32_t logical_id) noexcept {
-        state_.bsp_logical_id = logical_id;
+    void CatalogBuilder::set_bsp(u32_t cpu_id) noexcept {
+        state_.bsp_cpu_id = cpu_id;
     }
 
     tay::expected<void, CatalogError> initialize() noexcept {
-        auto locked = catalog_state.lock();
-        if (locked->ready)
+        auto &catalog = catalog_instance;
+        auto &state   = catalog.state();
+        if (catalog.ready())
             return {};
 
-        CatalogBuilder builder(*locked);
+        state.devices.clear();
+        state.cpus.clear();
+        state.irq_ctrls.clear();
+        state.platform = {};
+
+        CatalogBuilder builder(state);
         const auto &context = boot::context();
         fdt::Enumerator enumerator;
-        const auto result = enumerator.enumerate(builder, FirmwareInput{.kind = FirmwareKind::FDT,
-                                                                        .data = context.fdt,
-                                                                        .size = context.fdt_sz,
-                                                                        .boot_context = &context});
+        const auto result = enumerator.enumerate(builder, FwInput{.kind         = FwKind::FDT,
+                                                                  .data         = context.fdt,
+                                                                  .size         = context.fdt_sz,
+                                                                  .boot_context = &context});
         if (!result) {
-            locked->devices.clear();
-            locked->cpus.clear();
-            locked->controllers.clear();
-            locked->platform = {};
+            state.devices.clear();
+            state.cpus.clear();
+            state.irq_ctrls.clear();
+            state.platform   = {};
             const auto cause = kernel::from_tay_error(result.error());
             return tay::Err(CatalogError::BackendFailed(
                 cause ? *cause : kernel::KernelError::TayError::INTERNAL));
         }
-        if (locked->cpus.empty())
+        if (state.cpus.empty()) {
+            state.devices.clear();
+            state.irq_ctrls.clear();
+            state.platform = {};
             return tay::Err(CatalogError::NoCpuDiscovered());
-        locked->ready = true;
+        }
+        catalog.published_.store(true, std::memory_order_release);
         return {};
     }
 

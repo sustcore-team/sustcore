@@ -6,7 +6,7 @@
 #pragma once
 
 #include <arch/context_trait.h>
-#include <arch/riscv64/context_offsets.h>
+#include <arch/riscv64/ctx_offsets.h>
 
 #include <cstddef>
 

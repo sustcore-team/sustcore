@@ -1,7 +1,7 @@
 /**
  * @file smp_entry.S
  * @author theflysong (song_of_the_fly@163.com)
- * @brief SBI RISC-V 次级 CPU 汇编入口
+ * @brief SBI RISC-V AP 汇编入口
  * @version 0.1.0-dev.1
  * @date 2026-08-02
  *
@@ -9,15 +9,15 @@
  *
  */
 
-/* 常驻 SBI AP 入口。SBI HSM 在 a0 传 hart ID，在 a1 传 SecondaryBootArgs
+/* 常驻 SBI AP 入口。SBI HSM 在 a0 传 hart ID，在 a1 传 ApBootArgs
  * 的物理地址。 */
-.section .text.smp_entry, "ax", @progbits
+.section .smp.trampoline, "ax", @progbits
 .global sbi_secondary_trampoline
 .type sbi_secondary_trampoline, @function
 sbi_secondary_trampoline:
     /* 分页开启前先取出全部高半区目标，避免切换后继续解引用物理参数指针。 */
     mv      t6, a1
-    ld      t0, 24(t6)             /* root_page_table */
+    ld      t0, 24(t6)             /* root_pt */
     ld      t4, 32(t6)             /* high-half stack_top */
     ld      t5, 40(t6)             /* high-half CpuLocal */
     ld      t3, 48(t6)             /* high-half C++ entry */

@@ -11,25 +11,26 @@
 #pragma once
 
 #include <arch/timer.h>
+#include <cpu/local.h>
 #include <scheduler/scheduler.h>
-#include <tay/spinlock.h>
+#include <synchronized.h>
 
 namespace kernel::timer {
-    [[nodiscard]] constexpr units::time saturated_deadline_after(
-        units::time now, units::duration duration) noexcept {
+    [[nodiscard]] constexpr units::time deadline_after(units::time now,
+                                                       units::duration duration) noexcept {
         return units::saturated_add(now, duration);
     }
 
-    class DeadlineState;
+    class DeadlineMux;
 
     /** @brief 一次硬件 timer IRQ 的线性 session，必须恰好交给 end_interrupt()。 */
-    class DeadlineInterrupt final {
+    class DeadlineIrq final {
     public:
-        DeadlineInterrupt(const DeadlineInterrupt &)            = delete;
-        DeadlineInterrupt &operator=(const DeadlineInterrupt &) = delete;
-        DeadlineInterrupt(DeadlineInterrupt &&other) noexcept;
-        DeadlineInterrupt &operator=(DeadlineInterrupt &&other) noexcept;
-        ~DeadlineInterrupt() noexcept;
+        DeadlineIrq(const DeadlineIrq &)            = delete;
+        DeadlineIrq &operator=(const DeadlineIrq &) = delete;
+        DeadlineIrq(DeadlineIrq &&other) noexcept;
+        DeadlineIrq &operator=(DeadlineIrq &&other) noexcept;
+        ~DeadlineIrq() noexcept;
 
         [[nodiscard]] units::time now() const noexcept {
             return now_;
@@ -42,8 +43,8 @@ namespace kernel::timer {
         }
 
     private:
-        DeadlineInterrupt(DeadlineState &owner, u64_t sequence, units::time now, bool timer_due,
-                          bool preemption_due) noexcept
+        DeadlineIrq(DeadlineMux &owner, u64_t sequence, units::time now, bool timer_due,
+                    bool preemption_due) noexcept
             : owner_(&owner),
               sequence_(sequence),
               now_(now),
@@ -51,54 +52,63 @@ namespace kernel::timer {
               preemption_due_(preemption_due) {}
         void invalidate() noexcept;
 
-        DeadlineState *owner_ = nullptr;
-        u64_t sequence_       = 0;
+        DeadlineMux *owner_ = nullptr;
+        u64_t sequence_     = 0;
         units::time now_{};
         bool timer_due_      = false;
         bool preemption_due_ = false;
 
-        friend class DeadlineState;
+        friend class DeadlineMux;
     };
 
     /**
-     * @brief 当前 BSP 的两源 deadline 合并状态。
+     * @brief 当前 CPU 的两源 deadline 合并状态。
      *
      * scheduler/engine 可以在各自锁下向本对象发布，因此固定锁序为
-     * scheduler-or-engine -> DeadlineState。IRQ 调用 scheduler 前必须先结束本对象临界区。
+     * scheduler-or-engine -> DeadlineMux。AP 不使用 timer root；IRQ 调用 scheduler 前必须先
+     * 结束本对象临界区。
      */
-    class DeadlineState final {
+    class DeadlineMux final {
     public:
-        constexpr DeadlineState() noexcept              = default;
-        DeadlineState(const DeadlineState &)            = delete;
-        DeadlineState &operator=(const DeadlineState &) = delete;
+        constexpr DeadlineMux() noexcept            = default;
+        DeadlineMux(const DeadlineMux &)            = delete;
+        DeadlineMux &operator=(const DeadlineMux &) = delete;
 
-        void initialize(hal::CpuClock &clock) noexcept;
-        void publish_timer(hal::CpuClockDeadline deadline) noexcept;
-        void publish_preemption(hal::CpuClockDeadline deadline) noexcept;
+        void initialize(hal::Clock &clock) noexcept;
+        void publish_timer(hal::TimerDeadline deadline) noexcept;
+        void publish_preempt(hal::TimerDeadline deadline) noexcept;
 
-        [[nodiscard]] DeadlineInterrupt begin_interrupt(units::time now) noexcept;
-        void end_interrupt(DeadlineInterrupt &&interrupt) noexcept;
+        [[nodiscard]] DeadlineIrq begin_interrupt(units::time now) noexcept;
+        void end_interrupt(DeadlineIrq &&interrupt) noexcept;
 
-        [[nodiscard]] scheduler::PreemptionDeadlineSink preemption_sink() noexcept;
-        [[nodiscard]] hal::CpuClockDeadline timer_deadline() noexcept;
-        [[nodiscard]] hal::CpuClockDeadline preemption_deadline() noexcept;
-        [[nodiscard]] hal::CpuClockDeadline programmed_deadline() noexcept;
+        [[nodiscard]] scheduler::PreemptSink preemption_sink() noexcept;
+        [[nodiscard]] hal::TimerDeadline timer_deadline() noexcept;
+        [[nodiscard]] hal::TimerDeadline preempt_deadline() noexcept;
+        [[nodiscard]] hal::TimerDeadline armed_deadline() noexcept;
+        [[nodiscard]] bool initialized() const noexcept;
 
     private:
-        static void publish_preemption_from_scheduler(void *context,
-                                                      hal::CpuClockDeadline deadline) noexcept;
-        [[nodiscard]] hal::CpuClockDeadline merged_locked() const noexcept;
-        void program_locked(bool force) noexcept;
+        struct State final {
+            hal::Clock *clock = nullptr;
+            cpu::CpuId owner_cpu{cpu::INVALID_CPU};
+            hal::TimerDeadline timer_deadline   = hal::TimerDeadline::disarmed();
+            hal::TimerDeadline preempt_deadline = hal::TimerDeadline::disarmed();
+            hal::TimerDeadline armed_deadline   = hal::TimerDeadline::disarmed();
+            u64_t interrupt_sequence            = 0;
+            bool programmed_valid               = false;
+            bool interrupt_active               = false;
+        };
 
-        tay::spinlock lock_{};
-        hal::CpuClock *clock_                      = nullptr;
-        hal::CpuClockDeadline timer_deadline_      = hal::CpuClockDeadline::disarmed();
-        hal::CpuClockDeadline preemption_deadline_ = hal::CpuClockDeadline::disarmed();
-        hal::CpuClockDeadline programmed_deadline_ = hal::CpuClockDeadline::disarmed();
-        u64_t interrupt_sequence_                  = 0;
-        bool programmed_valid_                     = false;
-        bool interrupt_active_                     = false;
+        static void publish_sched(void *context, hal::TimerDeadline deadline) noexcept;
+        [[nodiscard]] static hal::TimerDeadline merged_locked(const State &state) noexcept;
+        static void program_locked(State &state, bool force) noexcept;
+
+        kernel::irq_simple_synchronized<State> state_{};
     };
 
-    [[nodiscard]] DeadlineState &bsp_deadline_state() noexcept;
+    [[nodiscard]] DeadlineMux &bsp_deadline_mux() noexcept;
+    /** @brief 仅供对应 AP 在 scheduler 发布前初始化其固定 deadline storage。 */
+    [[nodiscard]] DeadlineMux &init_deadline_mux(cpu::CpuId cpu, hal::Clock &clock) noexcept;
+    [[nodiscard]] DeadlineMux &local_deadline_mux() noexcept;
+    [[nodiscard]] DeadlineMux &deadline_mux(cpu::CpuId cpu) noexcept;
 }  // namespace kernel::timer

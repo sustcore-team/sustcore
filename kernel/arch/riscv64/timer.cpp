@@ -49,45 +49,57 @@ namespace riscv64::hal {
         }
     }  // namespace
 
-    constinit CpuClock CpuClock::instance_;
+    constinit Clock Clock::instance_;
 
-    CpuClock &CpuClock::instance() noexcept {
+    Clock &Clock::instance() noexcept {
         return instance_;
     }
 
-    void CpuClock::initialize(u64_t frequency_hz) noexcept {
+    void Clock::initialize(u64_t frequency_hz) noexcept {
+        init_freq(frequency_hz);
+        initialize_local();
+    }
+
+    void Clock::init_freq(u64_t frequency_hz) noexcept {
         if (frequency_hz == 0 || frequency_hz > MAX_FREQUENCY)
             kernel::log::panic("无效的 RISC-V timebase-frequency: {}", frequency_hz);
-        if (frequency_hz_ != 0 && frequency_hz_ != frequency_hz)
+        const auto published = frequency_hz_.load(std::memory_order_acquire);
+        if (published != 0 && published != frequency_hz)
             kernel::log::panic("RISC-V timebase-frequency 在初始化后发生变化");
 
-        frequency_hz_ = frequency_hz;
+        frequency_hz_.store(frequency_hz, std::memory_order_release);
+    }
+
+    void Clock::initialize_local() noexcept {
+        if (!available())
+            kernel::log::panic("RISC-V Clock 本地初始化前未发布时基频率");
         program_timer(MAX_U64);
         (void)csr::set_bits<csr::CSR::SIE>(SIE_STIE);
     }
 
-    units::time CpuClock::current_time() const noexcept {
+    units::time Clock::now() const noexcept {
         if (!available())
-            kernel::log::panic("RISC-V CpuClock 尚未初始化");
+            kernel::log::panic("RISC-V Clock 尚未初始化");
         return units::time::from_nanoseconds(
-            ticks_to_nanos(raw_timestamp_counter(), frequency_hz_));
+            ticks_to_nanos(raw_ticks(), frequency_hz_.load(std::memory_order_acquire)));
     }
 
-    void CpuClock::set_timer_deadline(CpuClockDeadline deadline) noexcept {
+    void Clock::set_deadline(TimerDeadline deadline) noexcept {
         if (!deadline.armed) {
             program_timer(MAX_U64);
             return;
         }
         if (!available())
-            kernel::log::panic("RISC-V CpuClock 尚未初始化");
-        program_timer(nanos_to_ticks(deadline.when.to_nanoseconds(), frequency_hz_));
+            kernel::log::panic("RISC-V Clock 尚未初始化");
+        program_timer(nanos_to_ticks(deadline.when.to_nanoseconds(),
+                                     frequency_hz_.load(std::memory_order_acquire)));
     }
 
-    bool CpuClock::available() const noexcept {
-        return frequency_hz_ != 0;
+    bool Clock::available() const noexcept {
+        return frequency_hz_.load(std::memory_order_acquire) != 0;
     }
 
-    u64_t CpuClock::raw_timestamp_counter() const noexcept {
+    u64_t Clock::raw_ticks() const noexcept {
         u64_t value;
         asm volatile("rdtime %0" : "=r"(value));
         return value;

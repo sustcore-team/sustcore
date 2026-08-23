@@ -17,9 +17,10 @@ namespace task {
 namespace kernel::test {
     /** @brief selftest 可运行的内核初始化阶段。 */
     enum class Phase {
-        POST_TIMER_INITIALIZATION,
-        POST_SCHEDULER_INITIALIZATION,
+        POST_TIMER_INIT,
+        POST_SCHED_INIT,
         POST_WORK_QUEUE_INITIALIZATION,
+        POST_SMP_INIT,
         PRE_IDLE,
     };
 

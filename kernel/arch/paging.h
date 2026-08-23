@@ -11,8 +11,8 @@
 #pragma once
 
 #include <arch/namespace.h>
-#include <memory/virtual/page_flags.h>
-#include <memory/virtual/root_binding.h>
+#include <memory/virtual/flags.h>
+#include <memory/virtual/pt_root.h>
 #include <sustcore/addr.h>
 #include <tay/err.h>
 #include <tay/expected.h>
@@ -22,7 +22,7 @@
 #include <type_traits>
 
 namespace memory {
-    class KernelSpace;
+    class KernelVm;
 }
 
 SUSTCORE_ARCH_NAMESPACE_BEGIN

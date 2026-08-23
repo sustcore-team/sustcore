@@ -13,15 +13,16 @@
 #include <boot/common/bytes.h>
 #include <boot/context.h>
 #include <boot/early.h>
-#include <boot/early_internal.h>
+#include <boot/early_priv.h>
 #include <boot/sections.h>
+#include <cpu/local.h>
 #include <init/milestones.h>
 #include <log.h>
 #include <memory/physical/buddy.h>
-#include <memory/physical/page_database.h>
+#include <memory/physical/page_db.h>
 #include <memory/slab/heap.h>
-#include <memory/virtual/kernel/kernel_mm.h>
-#include <memory/virtual/kernel/kernel_space.h>
+#include <memory/virtual/kernel/mm.h>
+#include <memory/virtual/kernel/vm.h>
 #include <sustcore/addrspace.h>
 #include <tay/bits.h>
 #include <tay/static_vector.h>
@@ -29,6 +30,7 @@
 #include <cstddef>
 
 extern "C" [[noreturn]] void bsp_main();
+extern "C" char __bsp_stack_top[];
 
 using area_vector = tay::static_vector<PhyArea, MAX_BOOTINFO_REGIONS>;
 
@@ -75,11 +77,11 @@ namespace boot {
         return saved_boot_hwid;
     }
 
-    BOOT_INIT_TEXT void publish_usable_areas(const BootInfoHeader &bootinfo) noexcept {
+    BOOT_INIT_TEXT void publish_areas(const BootInfoHeader &bootinfo) noexcept {
         area_vector usable;
         area_vector exclusions;
         const auto *regions  = bootinfo_regions(&bootinfo);
-        const auto &database = memory::page_database();
+        const auto &database = memory::page_db();
 
         for (size_t parent_idx = 0; parent_idx < database.region_count(); ++parent_idx) {
             exclusions.clear();
@@ -109,7 +111,7 @@ namespace boot {
                 append_area(usable, PhyArea(PhyAddr(cursor), physical_region.parent.end));
         }
 
-        // PageAllocation 目前以 PA 0 表示空值；在上层显式排除该页。
+        // PageAlloc 目前以 PA 0 表示空值；在上层显式排除该页。
         if (!usable.empty() && usable.front().begin.arith() == 0) {
             if (usable.front().size() == PAGE_SIZE) {
                 static_cast<void>(usable.erase(usable.begin()));
@@ -121,7 +123,7 @@ namespace boot {
         size_t total_pages = 0;
         auto allocator     = memory::buddy();
         for (const auto &area : usable) {
-            allocator->put_range(area);
+            allocator->add_range(area);
             total_pages += area.size() / PAGE_SIZE;
         }
         kernel::log::info("已向 Buddy 发布 {} 个可用区域 ({} 页)", usable.size(), total_pages);
@@ -132,9 +134,11 @@ extern "C" [[noreturn]] BOOT_INIT_TEXT void __bsp_early_main(
     size_t bsp_hwid, const BootInfoHeader *source_bootinfo) {
     // 阶段一：建立最小 C++ 运行环境，此前不得依赖全局构造或普通异常处理。
     boot::early_internal::clear_bss();
+    cpu::initialize_bsp(cpu::CpuHwId{bsp_hwid}, reinterpret_cast<addr_t>(&__bsp_stack_top));
+    hal::bind_cpu_local();
     kernel::log::info("进入高半区, BSS 已清零");
-    hal::disable_interrupts();
-    hal::install_early_exception_vectors();
+    hal::cli();
+    hal::set_early_vectors();
     kernel::log::info("异常向量已安装");
 
     init::advance(init::Milestone::RESET, init::Milestone::EARLT_CPPRT);
@@ -146,17 +150,17 @@ extern "C" [[noreturn]] BOOT_INIT_TEXT void __bsp_early_main(
     saved_boot_hwid = bsp_hwid;
     kernel::log::info("已校验并复制 BootInfo");
 
-    memory::page_database().initialize(*saved_bootinfo);
-    kernel::log::info("页数据库已初始化: {} 个物理区域", memory::page_database().region_count());
+    memory::page_db().initialize(*saved_bootinfo);
+    kernel::log::info("页数据库已初始化: {} 个物理区域", memory::page_db().region_count());
     memory::buddy()->initialize();
-    boot::publish_usable_areas(*saved_bootinfo);
+    boot::publish_areas(*saved_bootinfo);
     {
         auto allocator = memory::buddy();
-        auto probe     = allocator->try_gfp_in_order(0);
+        auto probe     = allocator->try_alloc_order(0);
         if (!probe) {
             kernel::log::panic("探测 Buddy order-0 分配失败: {}", probe.error());
         }
-        allocator->put_pages(*probe);
+        allocator->free_pages(*probe);
     }
     kernel::log::info("Buddy order-0 分配探测成功");
     kernel::log::info("Buddy 已就绪: {} 个空闲页", memory::buddy()->free_pages());
@@ -174,18 +178,18 @@ extern "C" [[noreturn]] BOOT_INIT_TEXT void __bsp_early_main(
 
     boot::preserve(*saved_bootinfo);
     kernel::log::info("已持久化 BootInfo");
-    memory::init_kernel_space(*boot::context().info);
+    memory::init_kernel_vm(*boot::context().info);
     auto kernel_mm = memory::KernelMM::initialize(*boot::context().info);
     if (!kernel_mm)
         kernel::log::panic("无法初始化 KernelMM: {}", kernel_mm.error());
-    for (size_t index = 0; index < memory::page_database().region_count(); ++index) {
-        const auto &area = memory::page_database().region(index).parent;
+    for (size_t index = 0; index < memory::page_db().region_count(); ++index) {
+        const auto &area = memory::page_db().region(index).parent;
         if (!memory::kernel_mm().hhdm_covers(area.begin, area.size()))
             kernel::log::panic("最终 HHDM 未覆盖物理区域 {}", index);
     }
-    memory::kernel_space().activate();
+    memory::kernel_vm().activate();
     init::advance(init::Milestone::GLOBAL_CTORS_READY, init::Milestone::VIRTUAL_MEMORY_READY);
-    const size_t boot_reclaimed = boot::reclaim_boot_memory();
+    const size_t boot_reclaimed = boot::reclaim_memory();
     kernel::log::info("已释放可回收启动内存: 共 {} 页", boot_reclaimed);
 
     bsp_main();

@@ -11,6 +11,7 @@
 
 #include <arch/loongarch64/valdef.h>
 #include <arch/loongarch64/interrupt/offsets.h>
+#include <cpu/offsets.h>
 
     .section .text.trap.early, "ax", @progbits
     .align 12
@@ -25,28 +26,29 @@ _loongarch_early_trap_entry:
     .align 12
     .global _loongarch_runtime_trap_entry
 _loongarch_runtime_trap_entry:
-    # 用户 trap 通过 SAVE0 切换到 Thread 内核栈；内核 trap 保持当前栈。
-    csrwr $sp, CSR_SAVE0
-    bnez $sp, .Lloongarch_user_trap
-    csrwr $sp, CSR_SAVE0
-    b .Lloongarch_stack_ready
-.Lloongarch_user_trap:
-    addi.d $sp, $sp, -LA_TF_SIZE
-    st.d $r1, $sp, LA_TF_RA
-    st.d $r2, $sp, LA_TF_TP
-    st.d $r12, $sp, LA_TF_T0
-    csrrd $r12, CSR_SAVE0
-    st.d $r12, $sp, LA_TF_SP
-    csrwr $zero, CSR_SAVE0
-    b .Lloongarch_save_rest
+    # SAVE1 永久指向 CpuLocal，SAVE0 只作为入口暂存原始 t1。用户 trap 通过
+    # CpuLocal 的 kstack_top 取得内核栈；内核 trap 保持当前栈。
+    csrwr   $r13, CSR_SAVE0
+    csrrd   $r13, CSR_SAVE1
+    st.d    $r12, $r13, CPU_LOCAL_TRAP_SAVED_T0
+    st.d    $r2,  $r13, CPU_LOCAL_TRAP_SAVED_TP
+    st.d    $sp,  $r13, CPU_LOCAL_TRAP_SAVED_SP
+    csrrd   $r12, CSR_PRMD
+    andi    $r12, $r12, PRMD_PPLV_MASK
+    move    $r2, $r13
+    beqz    $r12, .Lloongarch_stack_ready
+    ld.d    $sp, $r13, CPU_LOCAL_CURRENT_KERNEL_STACK_TOP
 .Lloongarch_stack_ready:
     addi.d $sp, $sp, -LA_TF_SIZE
     st.d $r1, $sp, LA_TF_RA
-    st.d $r2, $sp, LA_TF_TP
+    ld.d $r12, $r2, CPU_LOCAL_TRAP_SAVED_T0
     st.d $r12, $sp, LA_TF_T0
-    addi.d $r12, $sp, LA_TF_SIZE
+    ld.d $r12, $r2, CPU_LOCAL_TRAP_SAVED_SP
     st.d $r12, $sp, LA_TF_SP
-.Lloongarch_save_rest:
+    ld.d $r12, $r2, CPU_LOCAL_TRAP_SAVED_TP
+    st.d $r12, $sp, LA_TF_TP
+    csrrd $r12, CSR_SAVE0
+    st.d $r12, $sp, LA_TF_T1
     st.d $r4, $sp, LA_TF_A0
     st.d $r5, $sp, LA_TF_A1
     st.d $r6, $sp, LA_TF_A2
@@ -55,7 +57,6 @@ _loongarch_runtime_trap_entry:
     st.d $r9, $sp, LA_TF_A5
     st.d $r10, $sp, LA_TF_A6
     st.d $r11, $sp, LA_TF_A7
-    st.d $r13, $sp, LA_TF_T1
     st.d $r14, $sp, LA_TF_T2
     st.d $r15, $sp, LA_TF_T3
     st.d $r16, $sp, LA_TF_T4
@@ -82,6 +83,7 @@ _loongarch_runtime_trap_entry:
     st.d $r12, $sp, LA_TF_BADV
     csrrd $r12, CSR_ESTAT
     st.d $r12, $sp, LA_TF_ESTAT
+    csrwr $r2, CSR_SAVE1
     move $a0, $sp
     bl arch_runtime_trap_handler
     # C++ 可修改返回地址和前态，因此先回写 CSR，再恢复通用寄存器。
@@ -89,11 +91,7 @@ _loongarch_runtime_trap_entry:
     csrwr $r12, CSR_ERA
     ld.d $r12, $sp, LA_TF_PRMD
     csrwr $r12, CSR_PRMD
-    andi $r12, $r12, PRMD_PPLV_MASK
-    beqz $r12, .Lloongarch_save0_ready
-    addi.d $r12, $sp, LA_TF_SIZE
-    csrwr $r12, CSR_SAVE0
-.Lloongarch_save0_ready:
+    # SAVE1 始终保留 CpuLocal；用户 TLS 只从 TrapFrame 恢复到 tp。
     ld.d $r1, $sp, LA_TF_RA
     ld.d $r2, $sp, LA_TF_TP
     ld.d $r4, $sp, LA_TF_A0

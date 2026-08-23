@@ -1,2 +1,2 @@
-src-y += page_table_pool.cpp
-src-y += page_table_walker.cpp page_table.cpp
+src-y += pt_pool.cpp
+src-y += pt_walk.cpp pt.cpp

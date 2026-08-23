@@ -1,7 +1,7 @@
 /**
  * @file vma.h
  * @author theflysong (song_of_the_fly@163.com)
- * @brief AddressSpace 中的虚拟内存区域及其 MemorySegment backing capability。
+ * @brief AddrSpace 中的虚拟内存区域及其 MemSeg backing capability。
  * @version 0.1.0-dev.1
  * @date 2026-08-12
  *
@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include <memory/virtual/page_flags.h>
-#include <obj/kernel_object.h>
-#include <obj/memory_segment.h>
+#include <memory/virtual/flags.h>
+#include <obj/kobject.h>
+#include <obj/mem_seg.h>
 #include <sustcore/addr.h>
 #include <tay/list.h>
 
@@ -21,12 +21,9 @@
 namespace task {
     class VMA final {
     public:
-        VMA(cap::CapabilityRef<memory::MemorySegment> memory, VirArea area, size_t segment_offset,
+        VMA(cap::CRef<memory::MemSeg> memory, VirArea area, size_t seg_offset,
             memory::PageFlags flags) noexcept
-            : memory_(std::move(memory)),
-              area_(area),
-              segment_offset_(segment_offset),
-              flags_(flags) {}
+            : memory_(std::move(memory)), area_(area), segment_offset_(seg_offset), flags_(flags) {}
 
         VMA(const VMA &)            = delete;
         VMA &operator=(const VMA &) = delete;
@@ -36,10 +33,10 @@ namespace task {
         [[nodiscard]] VirArea area() const noexcept {
             return area_;
         }
-        [[nodiscard]] size_t segment_offset() const noexcept {
+        [[nodiscard]] size_t seg_offset() const noexcept {
             return segment_offset_;
         }
-        [[nodiscard]] const cap::CapabilityRef<memory::MemorySegment> &memory() const noexcept {
+        [[nodiscard]] const cap::CRef<memory::MemSeg> &memory() const noexcept {
             return memory_;
         }
         [[nodiscard]] memory::PageFlags flags() const noexcept {
@@ -51,7 +48,7 @@ namespace task {
 
     private:
         friend struct VMAHookLocator;
-        cap::CapabilityRef<memory::MemorySegment> memory_{};
+        cap::CRef<memory::MemSeg> memory_{};
         VirArea area_{};
         size_t segment_offset_ = 0;
         memory::PageFlags flags_{};

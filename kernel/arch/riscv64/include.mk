@@ -1,1 +1,1 @@
-src-$(is-riscv64) += entry.S timer.cpp
+src-$(is-riscv64) += entry.S timer.cpp ipi.cpp

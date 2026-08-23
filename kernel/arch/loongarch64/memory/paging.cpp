@@ -13,10 +13,16 @@
 #include <arch/loongarch64/pagedef.h>
 #include <arch/loongarch64/paging.h>
 #include <arch/loongarch64/valdef.h>
-#include <memory/virtual/kernel/kernel_space.h>
+#include <memory/virtual/kernel/vm.h>
 #include <sustcore/addrspace.h>
 
+#include <atomic>
+
 namespace loongarch64::hal {
+    namespace {
+        constinit std::atomic<u64_t> tlb_flushes{0};
+    }
+
     constexpr u64_t PTE_VALID          = LA_PAGE_VALID;
     constexpr u64_t PTE_DIRTY          = LA_PAGE_DIRTY;
     constexpr u64_t PTE_USER           = u64_t{3} << 2;
@@ -29,36 +35,36 @@ namespace loongarch64::hal {
     constexpr u64_t PTE_NO_EXECUTE     = u64_t{1} << 62;
     constexpr u64_t PHYSICAL_MASK      = LA_PPN_MASK;
 
-    PageTableOps::EntryType *PageTableOps::table(PhyAddr physical) noexcept {
+    PtOps::EntryType *PtOps::table(PhyAddr physical) noexcept {
         return reinterpret_cast<EntryType *>(PA2KPA(physical.arith()));
     }
 
-    PageTableOps::EntryType PageTableOps::load_entry(const EntryType *entry) noexcept {
+    PtOps::EntryType PtOps::load_entry(const EntryType *entry) noexcept {
         return __atomic_load_n(entry, __ATOMIC_ACQUIRE);
     }
 
-    void PageTableOps::store_leaf(EntryType *entry, EntryType value) noexcept {
+    void PtOps::store_leaf(EntryType *entry, EntryType value) noexcept {
         __atomic_store_n(entry, value, __ATOMIC_RELEASE);
     }
 
-    void PageTableOps::publish_table(EntryType *entry, EntryType value) noexcept {
+    void PtOps::publish_table(EntryType *entry, EntryType value) noexcept {
         __atomic_store_n(entry, value, __ATOMIC_RELEASE);
     }
 
-    bool PageTableOps::present(EntryType entry) noexcept {
+    bool PtOps::present(EntryType entry) noexcept {
         return entry != 0;
     }
-    bool PageTableOps::leaf(EntryType entry) noexcept {
+    bool PtOps::leaf(EntryType entry) noexcept {
         return (entry & PTE_VALID) != 0;
     }
-    PhyAddr PageTableOps::next_table(EntryType entry) noexcept {
+    PhyAddr PtOps::next_table(EntryType entry) noexcept {
         return PhyAddr(entry & PHYSICAL_MASK);
     }
-    PageTableOps::EntryType PageTableOps::make_table(PhyAddr physical) noexcept {
+    PtOps::EntryType PtOps::make_table(PhyAddr physical) noexcept {
         return physical.arith() & PHYSICAL_MASK;
     }
 
-    tay::expected<PageTableOps::EntryType, tay::error_code> PageTableOps::make_leaf(
+    tay::expected<PtOps::EntryType, tay::error_code> PtOps::make_leaf(
         PhyAddr physical, const memory::PageFlags &flags) noexcept {
         if (!physical.aligned<PAGE_SIZE>())
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
@@ -78,7 +84,7 @@ namespace loongarch64::hal {
         return (physical.arith() & PHYSICAL_MASK) | bits;
     }
 
-    memory::PageFlags PageTableOps::decode_flags(EntryType entry) noexcept {
+    memory::PageFlags PtOps::decode_flags(EntryType entry) noexcept {
         return memory::PageFlags{
             .readable   = (entry & PTE_NO_READ) == 0,
             .writable   = (entry & PTE_WRITE) != 0,
@@ -90,29 +96,34 @@ namespace loongarch64::hal {
         };
     }
 
-    PhyAddr PageTableOps::leaf_physical(EntryType entry, addr_t address, size_t level) noexcept {
+    PhyAddr PtOps::leaf_physical(EntryType entry, addr_t address, size_t level) noexcept {
         const addr_t offset_mask = (addr_t{1} << (12 + level * 9)) - 1;
         return PhyAddr((entry & PHYSICAL_MASK) | (address & offset_mask));
     }
 
-    bool PageTableOps::canonical(addr_t address) noexcept {
+    bool PtOps::canonical(addr_t address) noexcept {
         const addr_t upper = address >> 48;
         return upper == 0 || upper == 0xffff;
     }
 
-    void PageTableOps::activate_binding(const memory::RootBinding &binding) noexcept {
+    void PtOps::activate_binding(const memory::RootBinding &binding) noexcept {
         csr::write<csr::CSR::PWCTL0>(static_cast<xlen_t>(PWCTL0_4LEVEL));
         csr::write<csr::CSR::PWCTL1>(static_cast<xlen_t>(PWCTL1_4LEVEL));
         csr::write<csr::CSR::STLBPGSIZE>(static_cast<xlen_t>(STLBPGSIZE_4K));
         csr::write<csr::CSR::ASID>(static_cast<xlen_t>(binding.asid) & 0x03ffu);
         csr::write<csr::CSR::PGDL>(binding.private_root.arith());
-        csr::write<csr::CSR::PGDH>(memory::kernel_space().root().arith());
+        csr::write<csr::CSR::PGDH>(memory::kernel_vm().root().arith());
         flush_tlb();
         asm volatile("ibar 0\ndbar 0" ::: "memory");
     }
 
-    void PageTableOps::flush_tlb() noexcept {
+    void PtOps::flush_tlb() noexcept {
         asm volatile("invtlb 0, $zero, $zero" ::: "memory");
+        tlb_flushes.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    u64_t PtOps::debug_flushes() noexcept {
+        return tlb_flushes.load(std::memory_order_relaxed);
     }
 
 }  // namespace loongarch64::hal

@@ -9,11 +9,11 @@
  */
 
 #include <obj/cspace.h>
-#include <obj/memory_segment.h>
+#include <obj/mem_seg.h>
 #include <sustcore/addr.h>
 #include <sustcore/capability.h>
 #include <test/cases.h>
-#include <test/integer_object.h>
+#include <test/int_obj.h>
 
 #include <type_traits>
 
@@ -26,8 +26,8 @@ namespace kernel::test::cases {
             kernel::test::require(!result && result.error().template is<Alternative>(), message);
         }
 
-        cap::CapToken install_int(cap::CSpace &space, i64_t value, u64_t rights,
-                                  u8_t cnode = cap::ROOT_CNODE_INDEX) noexcept {
+        cap::CToken install_int(cap::CSpace &space, i64_t value, u64_t rights,
+                                u8_t cnode = cap::ROOT_CNODE_INDEX) noexcept {
             auto object = IntegerObject::create(value);
             kernel::test::require(object.has_value(), "无法创建 IntegerObject");
             auto token = space.install(**object, rights, 0, cnode);
@@ -40,26 +40,24 @@ namespace kernel::test::cases {
     }  // namespace
 
     void run_capability(Context &) noexcept {
-        static_assert(sizeof(cap::CapError) <= 32);
-        static_assert(std::is_nothrow_move_constructible_v<cap::CapError>);
+        static_assert(sizeof(cap::CError) <= 32);
+        static_assert(std::is_nothrow_move_constructible_v<cap::CError>);
         static_assert(sizeof(cap::Capability) == cap::CAPABILITY_SIZE);
         static_assert(alignof(cap::Capability) == cap::CAPABILITY_ALIGNMENT);
         static_assert(sizeof(cap::CNodeCell) == cap::CNODE_CELL_SIZE);
-        static_assert(sizeof(cap::CapToken) == cap::CAP_TOKEN_SIZE);
+        static_assert(sizeof(cap::CToken) == cap::CAP_TOKEN_SIZE);
         static_assert(cap::SMALL_CNODE_SIZE ==
                       (cap::SMALL_CNODE_CAPACITY + 1) * cap::CNODE_CELL_SIZE);
 
-        auto segment = memory::MemorySegment::create(PAGE_SIZE * 2 + 17);
-        kernel::test::require(segment.has_value(), "无法创建 MemorySegment");
-        kernel::test::require((*segment)->allocated_size() == 0,
-                              "MemorySegment 创建时提前分配物理页");
+        auto segment = memory::MemSeg::create(PAGE_SIZE * 2 + 17);
+        kernel::test::require(segment.has_value(), "无法创建 MemSeg");
+        kernel::test::require((*segment)->allocated_size() == 0, "MemSeg 创建时提前分配物理页");
         const std::byte payload[PAGE_SIZE + 3]{};
         auto written = (*segment)->write(PAGE_SIZE - 1, payload, sizeof(payload));
-        kernel::test::require(written && *written == sizeof(payload), "MemorySegment 跨页写入失败");
+        kernel::test::require(written && *written == sizeof(payload), "MemSeg 跨页写入失败");
         kernel::test::require((*segment)->allocated_size() == PAGE_SIZE * 3,
-                              "MemorySegment 懒分配页数错误");
-        kernel::test::require((*segment)->lookup_page(0).has_value(),
-                              "MemorySegment 未记录首个物理页");
+                              "MemSeg 懒分配页数错误");
+        kernel::test::require((*segment)->lookup_page(0).has_value(), "MemSeg 未记录首个物理页");
         segment->reset();
 
         constexpr auto encoded = cap::encode_token(0x1357, 0x2468, 3, 9);
@@ -67,7 +65,7 @@ namespace kernel::test::cases {
         static_assert(decoded.valid && decoded.cspace_cookie == 0x1357 &&
                       decoded.generation == 0x2468 && decoded.cnode_index == 3 &&
                       decoded.slot_index == 9);
-        static_assert(!cap::decode_token(cap::CapToken{}).valid);
+        static_assert(!cap::decode_token(cap::CToken{}).valid);
 
         kernel::test::require(IntegerObject::live_count() == 0, "IntegerObject 初始计数非零");
         auto created = cap::CSpace::create();
@@ -84,10 +82,10 @@ namespace kernel::test::cases {
         kernel::test::require(resolved->allows(cap::RIGHT_WRITE), "typed resolve 丢失权限快照");
 
         auto type_mismatch = space->resolve(root, cap::ObjectType::THREAD);
-        require_error<cap::CapError::TypeMismatch>(type_mismatch, "未拒绝错误对象类型");
+        require_error<cap::CError::TypeMismatch>(type_mismatch, "未拒绝错误对象类型");
         type_mismatch.error().visit([&](const auto &error) noexcept {
             using Error = std::remove_cvref_t<decltype(error)>;
-            if constexpr (std::is_same_v<Error, cap::CapError::TypeMismatch>) {
+            if constexpr (std::is_same_v<Error, cap::CError::TypeMismatch>) {
                 kernel::test::require(error.token == root &&
                                           error.expected == cap::ObjectType::THREAD &&
                                           error.actual == cap::ObjectType::INTEGER,
@@ -99,13 +97,13 @@ namespace kernel::test::cases {
             cap::encode_token(static_cast<u16_t>(space->cookie() + 1), fields.generation,
                               fields.cnode_index, fields.slot_index);
         auto invalid_token = space->resolve(foreign);
-        require_error<cap::CapError::InvalidToken>(invalid_token, "未拒绝错误 CSpace cookie");
+        require_error<cap::CError::InvalidToken>(invalid_token, "未拒绝错误 CSpace cookie");
         auto missing_node = space->resolve(
             cap::encode_token(space->cookie(), fields.generation, 255, fields.slot_index));
-        require_error<cap::CapError::MissingCNode>(missing_node, "未拒绝缺失 CNode");
+        require_error<cap::CError::MissingCNode>(missing_node, "未拒绝缺失 CNode");
         auto invalid_slot = space->resolve(
             cap::encode_token(space->cookie(), fields.generation, fields.cnode_index, 0xffff));
-        require_error<cap::CapError::InvalidSlot>(invalid_slot, "未拒绝非法 slot");
+        require_error<cap::CError::InvalidSlot>(invalid_slot, "未拒绝非法 slot");
 
         auto copied = space->copy(root);
         kernel::test::require(copied.has_value(), "copy 失败");
@@ -119,18 +117,18 @@ namespace kernel::test::cases {
         kernel::test::require(limited_view && limited_view->badge() == 0x55aa,
                               "mint badge 或只读权限错误");
         auto denied_write = space->resolve<IntegerObject>(*limited, cap::RIGHT_WRITE);
-        require_error<cap::CapError::InsufficientRights>(denied_write,
-                                                         "只读 capability 通过写权限检查");
+        require_error<cap::CError::InsufficientRights>(denied_write,
+                                                       "只读 capability 通过写权限检查");
         denied_write.error().visit([&](const auto &error) noexcept {
             using Error = std::remove_cvref_t<decltype(error)>;
-            if constexpr (std::is_same_v<Error, cap::CapError::InsufficientRights>) {
+            if constexpr (std::is_same_v<Error, cap::CError::InsufficientRights>) {
                 kernel::test::require(error.token == *limited &&
                                           error.required == cap::RIGHT_WRITE &&
                                           (error.available & cap::RIGHT_WRITE) == 0,
                                       "权限错误未保留请求和可用权限");
             }
         });
-        require_error<cap::CapError::InsufficientRights>(
+        require_error<cap::CError::InsufficientRights>(
             space->mint(*limited, cap::RIGHT_READ | cap::RIGHT_WRITE), "mint 允许 capability 扩权");
 
         const auto copied_fields = cap::decode_token(*copied);
@@ -142,10 +140,10 @@ namespace kernel::test::cases {
         kernel::test::require(replacement_fields.generation != copied_fields.generation,
                               "slot 复用未更新 generation");
         auto stale = space->resolve(*copied);
-        require_error<cap::CapError::StaleToken>(stale, "slot 复用后旧 token 重新生效");
+        require_error<cap::CError::StaleToken>(stale, "slot 复用后旧 token 重新生效");
         stale.error().visit([&](const auto &error) noexcept {
             using Error = std::remove_cvref_t<decltype(error)>;
-            if constexpr (std::is_same_v<Error, cap::CapError::StaleToken>) {
+            if constexpr (std::is_same_v<Error, cap::CError::StaleToken>) {
                 kernel::test::require(error.token == *copied && error.observed_generation ==
                                                                     replacement_fields.generation,
                                       "stale token 未保留观察到的 generation");
@@ -172,10 +170,9 @@ namespace kernel::test::cases {
         auto grandchild = space->mint(*child, cap::RIGHT_READ, 3);
         kernel::test::require(grandchild.has_value(), "创建 CDT grandchild 失败");
         kernel::test::require(space->revoke(root).has_value(), "revoke 派生树失败");
-        require_error<cap::CapError::InvalidSlot>(space->resolve(*child),
-                                                  "revoke 后 child 仍可解析");
-        require_error<cap::CapError::InvalidSlot>(space->resolve(*grandchild),
-                                                  "revoke 后 grandchild 仍可解析");
+        require_error<cap::CError::InvalidSlot>(space->resolve(*child), "revoke 后 child 仍可解析");
+        require_error<cap::CError::InvalidSlot>(space->resolve(*grandchild),
+                                                "revoke 后 grandchild 仍可解析");
         kernel::test::require(space->resolve<IntegerObject>(root, cap::RIGHT_READ).has_value(),
                               "revoke 错误删除 source capability");
 
@@ -185,7 +182,7 @@ namespace kernel::test::cases {
         kernel::test::require(attached && *attached != cap::ROOT_CNODE_INDEX,
                               "无法 attach SmallCNode");
         const auto small_token = install_int(*space, -1, cap::RIGHT_READ, *attached);
-        require_error<cap::CapError::Busy>(space->detach(*attached), "非空 CNode 被错误 detach");
+        require_error<cap::CError::Busy>(space->detach(*attached), "非空 CNode 被错误 detach");
         kernel::test::require(space->delete_cap(small_token).has_value(), "无法清空 SmallCNode");
         auto detached = space->detach(*attached);
         kernel::test::require(detached && *detached == *small, "detach 未返回原 CNode");

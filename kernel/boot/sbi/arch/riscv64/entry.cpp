@@ -9,7 +9,7 @@
  *
  */
 
-#include <boot/sbi/arch/riscv64/early_paging.h>
+#include <boot/sbi/arch/riscv64/paging.h>
 #include <sustcore/addr.h>
 #include <tay/attribute.h>
 
@@ -57,7 +57,7 @@ namespace sbi {
 
     static SBI_BOOT_BSS addr_t reclaimable_cursor;
     static SBI_BOOT_BSS addr_t reclaimable_limit;
-    static SBI_BOOT_BSS addr_t root_page_table;
+    static SBI_BOOT_BSS addr_t root_pt;
     static SBI_BOOT_BSS addr_t kernel_kva_limit;
 
     // 将初始 8000'0000 ~ C000'0000 区域 (1GB) 映射到 PA 与 KPA 中
@@ -133,7 +133,7 @@ namespace sbi {
         }
     }
 
-    SBI_BOOT_TEXT void map_identity_and_kpa(addr_t root, addr_t pa_s, addr_t pa_e) {
+    SBI_BOOT_TEXT void map_boot_aliases(addr_t root, addr_t pa_s, addr_t pa_e) {
         addr_t current = pa_s;
 
         if ((pa_s & PAGE_SIZE_1G_MASK) != 0 || (pa_e & PAGE_SIZE_1G_MASK) != 0) {
@@ -148,7 +148,7 @@ namespace sbi {
     }
 
     SBI_BOOT_TEXT size_t calc_satp() {
-        return SATP_SV39_BASE | TO_PPN(root_page_table);
+        return SATP_SV39_BASE | TO_PPN(root_pt);
     }
 
     SBI_BOOT_TEXT qword dtb_byte(size_t off) {
@@ -204,18 +204,18 @@ namespace sbi {
             SBI_BOOT_PANIC(SBI_INVALID_DTB_SIZE_MSG);
         }
 
-        root_page_table  = page_alloc();
+        root_pt          = page_alloc();
         kernel_kva_limit = kernel_end_arith + KVA_START;
 
         // 阶段二：恒等映射维持切换瞬间的执行流，KPA/高半区映射服务后续内核。
-        map_identity_and_kpa(root_page_table, PA_START, PA_LIMIT);
-        map_range_in_2m(root_page_table, aligned_kernel_start + KVA_START, kernel_kva_limit,
+        map_boot_aliases(root_pt, PA_START, PA_LIMIT);
+        map_range_in_2m(root_pt, aligned_kernel_start + KVA_START, kernel_kva_limit,
                         aligned_kernel_start);
 
         auto aligned_dtb_start = __sbi_dtb_phys & ~PAGING_ALIGNMENT_MASK;
         auto dtb_end           = __sbi_dtb_phys + dtb_sz;
         auto aligned_dtb_end   = (dtb_end + PAGING_ALIGNMENT_MASK) & ~PAGING_ALIGNMENT_MASK;
-        map_range_in_2m(root_page_table, aligned_dtb_start + KVA_START, aligned_dtb_end + KVA_START,
+        map_range_in_2m(root_pt, aligned_dtb_start + KVA_START, aligned_dtb_end + KVA_START,
                         aligned_dtb_start);
 
         // 阶段三：把已消耗的临时区边界交给高半区入口，供 BootInfo 标记回收范围。

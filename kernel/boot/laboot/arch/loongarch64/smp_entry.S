@@ -1,7 +1,7 @@
 /**
  * @file smp_entry.S
  * @author theflysong (song_of_the_fly@163.com)
- * @brief LABOOT LoongArch 次级 CPU 汇编入口
+ * @brief LABOOT LoongArch AP 汇编入口
  * @version 0.1.0-dev.1
  * @date 2026-08-02
  *
@@ -9,11 +9,11 @@
  *
  */
 
-/* 常驻 LABOOT AP 入口。兼容固件通过 MBUF1 传入 SecondaryStartupData
+/* 常驻 LABOOT AP 入口。兼容固件通过 MBUF1 传入 ApStartupData
  * 的物理地址。 */
 #include <arch/loongarch64/valdef.h>
 
-.section .text.smp_entry, "ax", @progbits
+.section .smp.trampoline, "ax", @progbits
 .global laboot_secondary_trampoline
 .type laboot_secondary_trampoline, @function
 laboot_secondary_trampoline:

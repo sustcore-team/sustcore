@@ -12,17 +12,17 @@
 #pragma once
 
 #include <device/catalog.h>
-#include <device/fdt_error.h>
+#include <error/fdt.h>
 
 namespace boot {
     struct Context;
 }
 
 namespace device::fdt {
-    class Enumerator final : public FirmwareEnumerator {
+    class Enumerator final : public FwEnumerator {
     public:
-        [[nodiscard]] tay::expected<void, tay::error_code> enumerate(
-            CatalogBuilder &, FirmwareInput) noexcept override;
+        [[nodiscard]] tay::expected<void, tay::error_code> enumerate(CatalogBuilder &,
+                                                                     FwInput) noexcept override;
     };
 
     [[nodiscard]] tay::expected<void, FdtError> enumerate(CatalogBuilder &builder,

@@ -4,7 +4,7 @@
  */
 
 #include <log.h>
-#include <memory/physical/page_database.h>
+#include <memory/physical/page_db.h>
 #include <memory/slab/heap.h>
 
 #include <atomic>
@@ -82,7 +82,7 @@ namespace memory {
     }
 
     tay::expected<void, tay::error_code> init_heap() noexcept {
-        if (page_database().region_count() == 0)
+        if (page_db().region_count() == 0)
             return tay::Err(tay::error_code::INVALID_ARGUMENT);
 
         HeapPhase expected = HeapPhase::OFFLINE;

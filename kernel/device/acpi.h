@@ -17,9 +17,9 @@
 #include <device/catalog.h>
 
 namespace device::acpi {
-    class Enumerator final : public FirmwareEnumerator {
+    class Enumerator final : public FwEnumerator {
     public:
         [[nodiscard]] tay::expected<void, tay::error_code> enumerate(
-            CatalogBuilder &, FirmwareInput input) noexcept override;
+            CatalogBuilder &, FwInput input) noexcept override;
     };
 }  // namespace device::acpi

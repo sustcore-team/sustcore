@@ -11,10 +11,16 @@
 #include <arch/csr.h>
 #include <arch/riscv64/namespace.h>
 #include <arch/riscv64/paging.h>
-#include <memory/virtual/kernel/kernel_space.h>
+#include <memory/virtual/kernel/vm.h>
 #include <sustcore/addrspace.h>
 
+#include <atomic>
+
 namespace riscv64::hal {
+    namespace {
+        constinit std::atomic<u64_t> tlb_flushes{0};
+    }
+
     constexpr u64_t PTE_VALID    = u64_t{1} << 0;
     constexpr u64_t PTE_READ     = u64_t{1} << 1;
     constexpr u64_t PTE_WRITE    = u64_t{1} << 2;
@@ -24,36 +30,36 @@ namespace riscv64::hal {
     constexpr u64_t PTE_ACCESSED = u64_t{1} << 6;
     constexpr u64_t PTE_DIRTY    = u64_t{1} << 7;
 
-    PageTableOps::EntryType *PageTableOps::table(PhyAddr physical) noexcept {
+    PtOps::EntryType *PtOps::table(PhyAddr physical) noexcept {
         return reinterpret_cast<EntryType *>(PA2KPA(physical.arith()));
     }
 
-    PageTableOps::EntryType PageTableOps::load_entry(const EntryType *entry) noexcept {
+    PtOps::EntryType PtOps::load_entry(const EntryType *entry) noexcept {
         return __atomic_load_n(entry, __ATOMIC_ACQUIRE);
     }
 
-    void PageTableOps::store_leaf(EntryType *entry, EntryType value) noexcept {
+    void PtOps::store_leaf(EntryType *entry, EntryType value) noexcept {
         __atomic_store_n(entry, value, __ATOMIC_RELEASE);
     }
 
-    void PageTableOps::publish_table(EntryType *entry, EntryType value) noexcept {
+    void PtOps::publish_table(EntryType *entry, EntryType value) noexcept {
         __atomic_store_n(entry, value, __ATOMIC_RELEASE);
     }
 
-    bool PageTableOps::present(EntryType entry) noexcept {
+    bool PtOps::present(EntryType entry) noexcept {
         return (entry & PTE_VALID) != 0;
     }
-    bool PageTableOps::leaf(EntryType entry) noexcept {
+    bool PtOps::leaf(EntryType entry) noexcept {
         return (entry & (PTE_READ | PTE_WRITE | PTE_EXECUTE)) != 0;
     }
-    PhyAddr PageTableOps::next_table(EntryType entry) noexcept {
+    PhyAddr PtOps::next_table(EntryType entry) noexcept {
         return PhyAddr((entry >> 10) << 12);
     }
-    PageTableOps::EntryType PageTableOps::make_table(PhyAddr physical) noexcept {
+    PtOps::EntryType PtOps::make_table(PhyAddr physical) noexcept {
         return (physical.arith() >> 2) | PTE_VALID;
     }
 
-    tay::expected<PageTableOps::EntryType, tay::error_code> PageTableOps::make_leaf(
+    tay::expected<PtOps::EntryType, tay::error_code> PtOps::make_leaf(
         PhyAddr physical, const memory::PageFlags &flags) noexcept {
         // RISC-V 的设备/正常内存属性由 PMA/PMP 决定，页表 PTE 不编码 cache mode；
         // 因此两种抽象属性都使用同一组访问位。
@@ -73,7 +79,7 @@ namespace riscv64::hal {
         return (physical.arith() >> 2) | bits;
     }
 
-    memory::PageFlags PageTableOps::decode_flags(EntryType entry) noexcept {
+    memory::PageFlags PtOps::decode_flags(EntryType entry) noexcept {
         return memory::PageFlags{
             .readable   = (entry & PTE_READ) != 0,
             .writable   = (entry & PTE_WRITE) != 0,
@@ -84,28 +90,32 @@ namespace riscv64::hal {
         };
     }
 
-    PhyAddr PageTableOps::leaf_physical(EntryType entry, addr_t address, size_t level) noexcept {
+    PhyAddr PtOps::leaf_physical(EntryType entry, addr_t address, size_t level) noexcept {
         const addr_t offset_mask = (addr_t{1} << (12 + level * 9)) - 1;
         return PhyAddr(next_table(entry).arith() | (address & offset_mask));
     }
 
-    bool PageTableOps::canonical(addr_t address) noexcept {
+    bool PtOps::canonical(addr_t address) noexcept {
         const addr_t upper = address >> 39;
         return upper == 0 || upper == ((addr_t{1} << 25) - 1);
     }
 
-    void PageTableOps::activate_binding(const memory::RootBinding &binding) noexcept {
+    void PtOps::activate_binding(const memory::RootBinding &binding) noexcept {
         constexpr xlen_t SV39 = xlen_t{8} << 60;
-        const PhyAddr root    = binding.role == memory::RootRole::KERNEL
-                                    ? memory::kernel_space().root()
-                                    : binding.private_root;
+        const PhyAddr root = binding.role == memory::RootRole::KERNEL ? memory::kernel_vm().root()
+                                                                      : binding.private_root;
         csr::write<csr::CSR::SATP>(SV39 | (static_cast<xlen_t>(binding.asid) << 44) |
                                    (root.arith() >> 12));
         flush_tlb();
     }
 
-    void PageTableOps::flush_tlb() noexcept {
+    void PtOps::flush_tlb() noexcept {
         asm volatile("sfence.vma zero, zero" ::: "memory");
+        tlb_flushes.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    u64_t PtOps::debug_flushes() noexcept {
+        return tlb_flushes.load(std::memory_order_relaxed);
     }
 
 }  // namespace riscv64::hal

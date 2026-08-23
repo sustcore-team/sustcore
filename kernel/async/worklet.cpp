@@ -21,15 +21,15 @@ namespace kernel::async {
         return state_.load(std::memory_order_acquire) != State::IDLE;
     }
 
-    bool Worklet::try_reserve_for_timer(WorkQueue &queue) noexcept {
+    bool Worklet::try_reserve_timer(WorkQueue &queue) noexcept {
         return try_claim(State::IDLE, State::RESERVED, queue);
     }
 
-    bool Worklet::try_claim_for_queue(WorkQueue &queue) noexcept {
+    bool Worklet::try_claim(WorkQueue &queue) noexcept {
         return try_claim(State::IDLE, State::QUEUED, queue);
     }
 
-    bool Worklet::try_claim_reserved_for_queue(WorkQueue &queue) noexcept {
+    bool Worklet::try_claim_reserved(WorkQueue &queue) noexcept {
         return try_claim(State::RESERVED, State::QUEUED, queue);
     }
 
@@ -50,7 +50,7 @@ namespace kernel::async {
         return false;
     }
 
-    void Worklet::release_to_dispatch() noexcept {
+    void Worklet::begin_dispatch() noexcept {
         if (queue_hook_.in_list)
             kernel::log::panic("dispatching a Worklet with inconsistent queue membership");
         auto expected = State::QUEUED;

@@ -11,11 +11,12 @@
 
 #pragma once
 
-#include <arch/riscv64/device/plic_error.h>
 #include <arch/riscv64/namespace.h>
 #include <device/interrupt.h>
 #include <device/mmio.h>
+#include <error/plic.h>
 #include <synchronized.h>
+#include <tay/spinlock.h>
 #include <tay/unique_ptr.h>
 
 namespace riscv64::device::interrupt {
@@ -23,8 +24,7 @@ namespace riscv64::device::interrupt {
     public:
         static constexpr u32_t MAX_SOURCES = 1023;
 
-        [[nodiscard]] static tay::expected<void, tay::error_code>
-        initialize_from_catalog() noexcept;
+        [[nodiscard]] static tay::expected<void, tay::error_code> init_catalog() noexcept;
 
         Plic(const Plic &)            = delete;
         Plic &operator=(const Plic &) = delete;
@@ -32,8 +32,8 @@ namespace riscv64::device::interrupt {
         Plic &operator=(Plic &&)      = delete;
         ~Plic() noexcept              = default;
 
-        [[nodiscard]] FirmwareId controller() const noexcept override {
-            return controller_;
+        [[nodiscard]] FwId ctrl() const noexcept override {
+            return ctrl_;
         }
 
         [[nodiscard]] u32_t line_count() const noexcept override {
@@ -47,12 +47,10 @@ namespace riscv64::device::interrupt {
             const IrqClaim &claim) noexcept override;
         [[nodiscard]] tay::expected<void, tay::error_code> complete(
             const IrqClaim &claim) noexcept override;
-        [[nodiscard]] tay::expected<void, tay::error_code> mask(
-            u32_t hardware_irq) noexcept override;
-        [[nodiscard]] tay::expected<void, tay::error_code> unmask(
-            u32_t hardware_irq) noexcept override;
+        [[nodiscard]] tay::expected<void, tay::error_code> mask(u32_t hw_irq) noexcept override;
+        [[nodiscard]] tay::expected<void, tay::error_code> unmask(u32_t hw_irq) noexcept override;
         [[nodiscard]] tay::expected<void, tay::error_code> set_priority(
-            u32_t hardware_irq, u32_t priority) noexcept override;
+            u32_t hw_irq, u32_t priority) noexcept override;
 
     private:
         static constexpr size_t PRIORITY_BASE   = 0x000000;
@@ -64,28 +62,28 @@ namespace riscv64::device::interrupt {
         static constexpr u32_t ENABLE_WORD_BITS = 32;
         static constexpr u32_t MAX_PRIORITY     = 7;
 
-        Plic(FirmwareId controller, u32_t context_id, cap::ObjectRef<MmioObject> mmio) noexcept
-            : controller_(controller), context_id_(context_id), mmio_(std::move(mmio)) {}
+        Plic(FwId ctrl, u32_t ctx_id, cap::KObjectRef<MmioObject> mmio) noexcept
+            : ctrl_(ctrl), ctx_id_(ctx_id), mmio_(std::move(mmio)) {}
 
         [[nodiscard]] tay::expected<void, PlicError> initialize() noexcept;
-        [[nodiscard]] tay::expected<void, PlicError> validate(u32_t hardware_irq) const noexcept;
+        [[nodiscard]] tay::expected<void, PlicError> validate(u32_t hw_irq) const noexcept;
         [[nodiscard]] tay::expected<void, PlicError> validate(const IrqClaim &claim) const noexcept;
         [[nodiscard]] tay::expected<u32_t, PlicError> claim_detailed() noexcept;
         [[nodiscard]] tay::expected<void, PlicError> complete_detailed(
             const IrqClaim &claim) noexcept;
-        [[nodiscard]] tay::expected<void, PlicError> mask_detailed(u32_t hardware_irq) noexcept;
-        [[nodiscard]] tay::expected<void, PlicError> unmask_detailed(u32_t hardware_irq) noexcept;
-        [[nodiscard]] tay::expected<void, PlicError> set_priority_detailed(u32_t hardware_irq,
-                                                                           u32_t priority) noexcept;
+        [[nodiscard]] tay::expected<void, PlicError> mask_detailed(u32_t hw_irq) noexcept;
+        [[nodiscard]] tay::expected<void, PlicError> unmask_detailed(u32_t hw_irq) noexcept;
+        [[nodiscard]] tay::expected<void, PlicError> set_priority_impl(u32_t hw_irq,
+                                                                       u32_t priority) noexcept;
         [[nodiscard]] volatile u32_t *reg(size_t offset) const noexcept;
-        [[nodiscard]] volatile u32_t *enable_reg(u32_t hardware_irq) const noexcept;
-        [[nodiscard]] u32_t enable_mask(u32_t hardware_irq) const noexcept {
-            return u32_t{1} << (hardware_irq % ENABLE_WORD_BITS);
+        [[nodiscard]] volatile u32_t *enable_reg(u32_t hw_irq) const noexcept;
+        [[nodiscard]] u32_t enable_mask(u32_t hw_irq) const noexcept {
+            return u32_t{1} << (hw_irq % ENABLE_WORD_BITS);
         }
 
-        FirmwareId controller_{};
-        u32_t context_id_ = 0;
-        cap::ObjectRef<MmioObject> mmio_{};
-        mutable kernel::synchronized<u8_t> register_lock_{};
+        FwId ctrl_{};
+        u32_t ctx_id_ = 0;
+        cap::KObjectRef<MmioObject> mmio_{};
+        mutable tay::ticket_spinlock register_lock_{};
     };
 }  // namespace riscv64::device::interrupt

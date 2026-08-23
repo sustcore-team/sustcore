@@ -32,9 +32,9 @@ namespace boot {
 
     /**
      * @brief 从 FREE parent 扣除 reservation 与 metadata 后发布全部可用区域。
-     * @note Buddy 只接收最终可用区，不解释 BootInfo 或 PageDescriptor。
+     * @note Buddy 只接收最终可用区，不解释 BootInfo 或 PageDesc。
      */
-    void publish_usable_areas(const BootInfoHeader &bootinfo) noexcept;
+    void publish_areas(const BootInfoHeader &bootinfo) noexcept;
 
 }  // namespace boot
 

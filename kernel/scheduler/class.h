@@ -47,8 +47,9 @@ namespace scheduler {
     };
 
     enum class RunQueueFlags : u32_t {
-        NONE         = 0,
-        NEED_RESCHED = 1U << 0,
+        NONE           = 0,
+        NEED_RESCHED   = 1U << 0,
+        DEADLINE_DIRTY = 1U << 1,
     };
 
     struct EnterContext final {
@@ -124,7 +125,7 @@ namespace scheduler {
         u64_t load                  = 0;
         RunQueueFlags flags         = RunQueueFlags::NONE;
         SelectReason resched_reason = SelectReason::NO_CURRENT;
-        u64_t transition_generation = 0;
+        u64_t transition_gen        = 0;
     };
 
     class RrClass final {
@@ -187,7 +188,7 @@ namespace scheduler {
             entity.run_queue   = &run_queue;
             ++run_queue.queued_count;
             run_queue.load = run_queue.queued_count;
-            ++run_queue.transition_generation;
+            ++run_queue.transition_gen;
             if (run_queue.current == nullptr || run_queue.current->class_type == ClassType::IDLE)
                 result.should_preempt = true;
             return result;
@@ -206,7 +207,7 @@ namespace scheduler {
             entity.queue_state = context.reason == LeaveReason::MIGRATE ? QueueState::MIGRATING
                                                                         : QueueState::DETACHED;
             entity.run_queue   = nullptr;
-            ++run_queue.transition_generation;
+            ++run_queue.transition_gen;
         }
 
         [[nodiscard]] SelectResult select(RunQueue &run_queue,

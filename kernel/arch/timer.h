@@ -14,48 +14,49 @@
 #include <tay/bits.h>
 #include <tay/units.h>
 
+#include <atomic>
 #include <concepts>
 
 SUSTCORE_ARCH_NAMESPACE_BEGIN
 namespace hal {
     /** @brief 以架构单调计数器 epoch 为基准的绝对 timer deadline。 */
-    struct CpuClockDeadline final {
+    struct TimerDeadline final {
         units::time when{};
         bool armed = false;
 
-        [[nodiscard]] static constexpr CpuClockDeadline at(units::time when) noexcept {
-            return CpuClockDeadline{.when = when, .armed = true};
+        [[nodiscard]] static constexpr TimerDeadline at(units::time when) noexcept {
+            return TimerDeadline{.when = when, .armed = true};
         }
 
-        [[nodiscard]] static constexpr CpuClockDeadline disarmed() noexcept {
-            return CpuClockDeadline{};
+        [[nodiscard]] static constexpr TimerDeadline disarmed() noexcept {
+            return TimerDeadline{};
         }
 
-        [[nodiscard]] constexpr bool operator==(const CpuClockDeadline &other) const noexcept {
+        [[nodiscard]] constexpr bool operator==(const TimerDeadline &other) const noexcept {
             return armed == other.armed && (!armed || when == other.when);
         }
 
-        [[nodiscard]] constexpr bool operator!=(const CpuClockDeadline &other) const noexcept {
+        [[nodiscard]] constexpr bool operator!=(const TimerDeadline &other) const noexcept {
             return !(*this == other);
         }
     };
 
     template <class T>
-    concept CpuClockTraits = requires(T &clock, CpuClockDeadline deadline) {
+    concept ClockTraits = requires(T &clock, TimerDeadline deadline) {
         {
             T::instance()
         } noexcept -> std::same_as<T &>;
         {
-            clock.current_time()
+            clock.now()
         } noexcept -> std::same_as<units::time>;
         {
-            clock.set_timer_deadline(deadline)
+            clock.set_deadline(deadline)
         } noexcept -> std::same_as<void>;
         {
             clock.available()
         } noexcept -> std::same_as<bool>;
         {
-            clock.raw_timestamp_counter()
+            clock.raw_ticks()
         } noexcept -> std::same_as<u64_t>;
     };
 
@@ -63,31 +64,35 @@ namespace hal {
      * @brief 当前架构的 per-CPU 时钟硬件入口。
      * @note 单例保存不可变的全局时基频率，硬件寄存器操作始终作用于当前 CPU。
      */
-    class CpuClock final {
+    class Clock final {
     public:
-        [[nodiscard]] static CpuClock &instance() noexcept;
+        [[nodiscard]] static Clock &instance() noexcept;
 
-        /** @brief 保存平台时基并打开当前 CPU 的本地 timer source。 */
+        /** @brief 兼容入口：发布全局频率并初始化当前 CPU timer。 */
         void initialize(u64_t frequency_hz) noexcept;
+        /** @brief BSP-only 发布不可变全局时基频率。 */
+        void init_freq(u64_t frequency_hz) noexcept;
+        /** @brief 初始化当前 CPU 的本地 timer source。 */
+        void initialize_local() noexcept;
 
-        [[nodiscard]] units::time current_time() const noexcept;
-        void set_timer_deadline(CpuClockDeadline deadline) noexcept;
+        [[nodiscard]] units::time now() const noexcept;
+        void set_deadline(TimerDeadline deadline) noexcept;
         [[nodiscard]] bool available() const noexcept;
-        [[nodiscard]] u64_t raw_timestamp_counter() const noexcept;
+        [[nodiscard]] u64_t raw_ticks() const noexcept;
 
-        CpuClock(const CpuClock &)            = delete;
-        CpuClock &operator=(const CpuClock &) = delete;
-        CpuClock(CpuClock &&)                 = delete;
-        CpuClock &operator=(CpuClock &&)      = delete;
+        Clock(const Clock &)            = delete;
+        Clock &operator=(const Clock &) = delete;
+        Clock(Clock &&)                 = delete;
+        Clock &operator=(Clock &&)      = delete;
 
     private:
-        constexpr CpuClock() noexcept = default;
+        constexpr Clock() noexcept = default;
 
-        static CpuClock instance_;
+        static Clock instance_;
 
-        u64_t frequency_hz_ = 0;
+        std::atomic<u64_t> frequency_hz_{0};
     };
 
-    static_assert(CpuClockTraits<CpuClock>);
+    static_assert(ClockTraits<Clock>);
 }  // namespace hal
 SUSTCORE_ARCH_NAMESPACE_END
